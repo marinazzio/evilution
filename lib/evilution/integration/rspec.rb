@@ -13,6 +13,7 @@ module Evilution
       end
 
       def call(mutation)
+        @original_content = nil
         ensure_rspec_loaded
         apply_mutation(mutation)
         run_rspec(mutation)
@@ -83,7 +84,21 @@ module Evilution
           return spec_dir if Dir.exist?(spec_dir)
         end
 
-        # For relative paths, fall back to CWD's spec/
+        # For absolute paths not under /lib/, walk up looking for spec/
+        if source_path == File.absolute_path(source_path)
+          dir = File.dirname(source_path)
+          loop do
+            spec_dir = File.join(dir, "spec")
+            return spec_dir if Dir.exist?(spec_dir)
+
+            parent = File.dirname(dir)
+            break if parent == dir
+
+            dir = parent
+          end
+        end
+
+        # Last resort: CWD's spec/
         return "spec" if Dir.exist?("spec")
 
         nil
