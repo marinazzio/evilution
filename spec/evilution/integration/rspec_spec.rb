@@ -21,6 +21,7 @@ RSpec.describe Evilution::Integration::RSpec do
   before do
     source_file.write(original_source)
     source_file.flush
+    allow(RSpec).to receive(:reset)
   end
 
   after do
@@ -81,9 +82,18 @@ RSpec.describe Evilution::Integration::RSpec do
       integration.call(mutation)
     end
 
-    it "defaults to spec/ directory when no test files given" do
+    it "resets RSpec between runs" do
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      integration.call(mutation)
+
+      expect(RSpec).to have_received(:reset)
+    end
+
+    it "defaults to spec/ directory when no test files given and no convention match" do
       integration_default = described_class.new
       allow(Dir).to receive(:exist?).with("spec").and_return(true)
+      allow(File).to receive(:exist?).and_return(false)
 
       expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec")
@@ -91,6 +101,53 @@ RSpec.describe Evilution::Integration::RSpec do
       end
 
       integration_default.call(mutation)
+    end
+  end
+
+  describe "convention-based test file detection" do
+    let(:lib_mutation) do
+      double(
+        "Mutation",
+        file_path: "lib/calculator.rb",
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+    end
+
+    subject(:integration_auto) { described_class.new }
+
+    it "maps lib/foo.rb to spec/foo_spec.rb when the file exists" do
+      allow(File).to receive(:read).with("lib/calculator.rb").and_return(original_source)
+      allow(File).to receive(:write)
+      allow(File).to receive(:exist?).and_return(false)
+      allow(File).to receive(:exist?).with("spec/calculator_spec.rb").and_return(true)
+
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/calculator_spec.rb")
+        0
+      end
+
+      integration_auto.call(lib_mutation)
+    end
+
+    it "maps lib/foo/bar.rb to spec/foo/bar_spec.rb" do
+      nested_mutation = double(
+        "Mutation",
+        file_path: "lib/foo/bar.rb",
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+      allow(File).to receive(:read).with("lib/foo/bar.rb").and_return(original_source)
+      allow(File).to receive(:write)
+      allow(File).to receive(:exist?).and_return(false)
+      allow(File).to receive(:exist?).with("spec/foo/bar_spec.rb").and_return(true)
+
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/foo/bar_spec.rb")
+        0
+      end
+
+      integration_auto.call(nested_mutation)
     end
   end
 end
