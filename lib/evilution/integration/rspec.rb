@@ -29,6 +29,8 @@ module Evilution
 
         require "rspec/core"
         @rspec_loaded = true
+      rescue LoadError => e
+        raise Evilution::Error, "rspec-core is required but not available: #{e.message}"
       end
 
       def apply_mutation(mutation)
@@ -66,10 +68,25 @@ module Evilution
         found = candidates.select { |f| File.exist?(f) }
         return found unless found.empty?
 
-        # Fallback: run all specs in spec/ if it exists
-        return ["spec"] if Dir.exist?("spec")
+        # Fallback: find spec/ directory relative to the mutation's project root
+        fallback = fallback_spec_dir(mutation.file_path)
+        return [fallback] if fallback
 
         []
+      end
+
+      def fallback_spec_dir(source_path)
+        # Derive spec/ from mutation's project, not CWD
+        if source_path.include?("/lib/")
+          project_root = source_path.split(%r{/lib/}, 2).first
+          spec_dir = File.join(project_root, "spec")
+          return spec_dir if Dir.exist?(spec_dir)
+        end
+
+        # For relative paths, fall back to CWD's spec/
+        return "spec" if Dir.exist?("spec")
+
+        nil
       end
 
       def spec_file_candidates(source_path)

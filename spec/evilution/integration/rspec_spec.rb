@@ -102,6 +102,14 @@ RSpec.describe Evilution::Integration::RSpec do
 
       integration_default.call(mutation)
     end
+
+    it "raises Evilution::Error when rspec-core is not available" do
+      integration_no_rspec = described_class.new(test_files: ["spec/some_spec.rb"])
+      integration_no_rspec.instance_variable_set(:@rspec_loaded, false)
+      allow(integration_no_rspec).to receive(:require).with("rspec/core").and_raise(LoadError, "cannot load such file -- rspec/core")
+
+      expect { integration_no_rspec.call(mutation) }.to raise_error(Evilution::Error, /rspec-core is required/)
+    end
   end
 
   describe "convention-based test file detection" do
@@ -144,6 +152,26 @@ RSpec.describe Evilution::Integration::RSpec do
 
       expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("/tmp/project/spec/calculator_spec.rb")
+        0
+      end
+
+      integration_auto.call(abs_mutation)
+    end
+
+    it "falls back to project spec/ dir for absolute paths when no convention match" do
+      abs_mutation = double(
+        "Mutation",
+        file_path: "/tmp/project/lib/calculator.rb",
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+      allow(File).to receive(:read).with("/tmp/project/lib/calculator.rb").and_return(original_source)
+      allow(File).to receive(:write)
+      allow(File).to receive(:exist?).and_return(false)
+      allow(Dir).to receive(:exist?).with("/tmp/project/spec").and_return(true)
+
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("/tmp/project/spec")
         0
       end
 
