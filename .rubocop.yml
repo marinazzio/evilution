@@ -1,8 +1,16 @@
 AllCops:
   TargetRubyVersion: 3.2
+  NewCops: enable
+  Exclude:
+    - "spec/support/fixtures/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "evilution.gemspec"
