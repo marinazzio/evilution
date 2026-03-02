@@ -3,6 +3,43 @@
 RSpec.describe Evilution::Mutator::Registry do
   let(:registry) { described_class.new }
 
+  describe ".default" do
+    it "returns a registry pre-loaded with all 18 operators" do
+      default_registry = described_class.default
+
+      expect(default_registry).to be_a(described_class)
+      expect(default_registry.operator_count).to eq(18)
+    end
+
+    it "includes all expected operator classes" do
+      default_registry = described_class.default
+      operators = default_registry.operators
+
+      expected_operators = [
+        Evilution::Mutator::Operator::ComparisonReplacement,
+        Evilution::Mutator::Operator::ArithmeticReplacement,
+        Evilution::Mutator::Operator::BooleanOperatorReplacement,
+        Evilution::Mutator::Operator::BooleanLiteralReplacement,
+        Evilution::Mutator::Operator::NilReplacement,
+        Evilution::Mutator::Operator::IntegerLiteral,
+        Evilution::Mutator::Operator::FloatLiteral,
+        Evilution::Mutator::Operator::StringLiteral,
+        Evilution::Mutator::Operator::ArrayLiteral,
+        Evilution::Mutator::Operator::HashLiteral,
+        Evilution::Mutator::Operator::SymbolLiteral,
+        Evilution::Mutator::Operator::ConditionalNegation,
+        Evilution::Mutator::Operator::ConditionalBranch,
+        Evilution::Mutator::Operator::StatementDeletion,
+        Evilution::Mutator::Operator::MethodBodyReplacement,
+        Evilution::Mutator::Operator::NegationInsertion,
+        Evilution::Mutator::Operator::ReturnValueRemoval,
+        Evilution::Mutator::Operator::CollectionReplacement
+      ]
+
+      expect(operators).to match_array(expected_operators)
+    end
+  end
+
   describe "#register" do
     it "adds an operator class" do
       dummy_operator = Class.new(Evilution::Mutator::Base)

@@ -16,7 +16,7 @@ module Evilution
     def initialize(config: Config.new)
       @config = config
       @parser = AST::Parser.new
-      @registry = Mutator::Registry.new
+      @registry = Mutator::Registry.default
       @isolator = Isolation::Fork.new
     end
 

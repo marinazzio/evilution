@@ -3,6 +3,31 @@
 module Evilution
   module Mutator
     class Registry
+      def self.default
+        registry = new
+        [
+          Operator::ComparisonReplacement,
+          Operator::ArithmeticReplacement,
+          Operator::BooleanOperatorReplacement,
+          Operator::BooleanLiteralReplacement,
+          Operator::NilReplacement,
+          Operator::IntegerLiteral,
+          Operator::FloatLiteral,
+          Operator::StringLiteral,
+          Operator::ArrayLiteral,
+          Operator::HashLiteral,
+          Operator::SymbolLiteral,
+          Operator::ConditionalNegation,
+          Operator::ConditionalBranch,
+          Operator::StatementDeletion,
+          Operator::MethodBodyReplacement,
+          Operator::NegationInsertion,
+          Operator::ReturnValueRemoval,
+          Operator::CollectionReplacement
+        ].each { |op| registry.register(op) }
+        registry
+      end
+
       def initialize
         @operators = []
       end

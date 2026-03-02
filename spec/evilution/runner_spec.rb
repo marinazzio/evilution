@@ -45,7 +45,7 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
       registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
@@ -80,7 +80,7 @@ RSpec.describe Evilution::Runner do
     end
 
     it "generates mutations for each subject" do
-      registry = Evilution::Mutator::Registry.new
+      registry = Evilution::Mutator::Registry.default
       expect(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
 
       runner.call
@@ -105,7 +105,7 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).and_return([])
 
       registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
     end
 
     it "returns an empty summary" do
@@ -131,7 +131,7 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).and_return([subject_obj])
 
       registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
