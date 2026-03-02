@@ -1,0 +1,145 @@
+# frozen_string_literal: true
+
+require "evilution/runner"
+
+RSpec.describe Evilution::Runner do
+  let(:config) do
+    Evilution::Config.new(
+      target_files: ["lib/example.rb"],
+      format: :json,
+      timeout: 5,
+      quiet: true
+    )
+  end
+
+  let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb") }
+
+  let(:mutation) do
+    double(
+      "Mutation",
+      subject: subject_obj,
+      operator_name: "comparison_replacement",
+      original_source: "a >= b",
+      mutated_source: "a > b",
+      file_path: "lib/example.rb",
+      line: 3,
+      column: 4,
+      diff: "- a >= b\n+ a > b"
+    )
+  end
+
+  let(:mutation_result) do
+    Evilution::Result::MutationResult.new(
+      mutation: mutation,
+      status: :killed,
+      duration: 0.1
+    )
+  end
+
+  subject(:runner) { described_class.new(config: config) }
+
+  describe "#call" do
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "returns a Summary" do
+      result = runner.call
+
+      expect(result).to be_a(Evilution::Result::Summary)
+    end
+
+    it "includes all mutation results" do
+      result = runner.call
+
+      expect(result.total).to eq(1)
+      expect(result.killed).to eq(1)
+    end
+
+    it "records total duration" do
+      result = runner.call
+
+      expect(result.duration).to be > 0
+    end
+
+    it "parses target files from config" do
+      parser = Evilution::AST::Parser.new
+      expect(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      runner.call
+    end
+
+    it "generates mutations for each subject" do
+      registry = Evilution::Mutator::Registry.new
+      expect(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      runner.call
+    end
+
+    it "runs each mutation through the isolator" do
+      isolator = Evilution::Isolation::Fork.new
+      expect(isolator).to receive(:call).with(
+        mutation: mutation,
+        test_command: anything,
+        timeout: 5
+      ).and_return(mutation_result)
+
+      runner.call
+    end
+  end
+
+  describe "#call with no mutations" do
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).and_return([])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+    end
+
+    it "returns an empty summary" do
+      result = runner.call
+
+      expect(result.total).to eq(0)
+      expect(result.score).to eq(0.0)
+    end
+  end
+
+  describe "#call with unknown integration" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        integration: :minitest,
+        quiet: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:new).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+    end
+
+    it "raises an error" do
+      expect { runner.call }.to raise_error(Evilution::Error, /unknown integration/)
+    end
+  end
+end
