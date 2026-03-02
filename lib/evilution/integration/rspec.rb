@@ -81,13 +81,19 @@ module Evilution
           spec_name = relative.sub(/\.rb$/, "_spec.rb")
           candidates << File.join("spec", spec_name)
           candidates << File.join("spec", "unit", spec_name)
+        elsif source_path.include?("/lib/")
+          # /absolute/path/lib/foo/bar.rb -> /absolute/path/spec/foo/bar_spec.rb
+          prefix, relative = source_path.split(%r{/lib/}, 2)
+          spec_name = relative.sub(/\.rb$/, "_spec.rb")
+          candidates << File.join(prefix, "spec", spec_name)
+          candidates << File.join(prefix, "spec", "unit", spec_name)
         end
 
         # Same directory: foo/bar.rb -> foo/bar_spec.rb
         sibling_spec = source_path.sub(/\.rb$/, "_spec.rb")
         candidates << sibling_spec
 
-        # Absolute path with spec/ variant
+        # Subdirectory spec/ variant: foo/bar.rb -> foo/spec/bar_spec.rb
         dir = File.dirname(source_path)
         base = File.basename(source_path, ".rb")
         candidates << File.join(dir, "spec", "#{base}_spec.rb")

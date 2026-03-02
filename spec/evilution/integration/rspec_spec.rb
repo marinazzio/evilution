@@ -130,6 +130,26 @@ RSpec.describe Evilution::Integration::RSpec do
       integration_auto.call(lib_mutation)
     end
 
+    it "maps absolute /path/lib/foo.rb to /path/spec/foo_spec.rb" do
+      abs_mutation = double(
+        "Mutation",
+        file_path: "/tmp/project/lib/calculator.rb",
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+      allow(File).to receive(:read).with("/tmp/project/lib/calculator.rb").and_return(original_source)
+      allow(File).to receive(:write)
+      allow(File).to receive(:exist?).and_return(false)
+      allow(File).to receive(:exist?).with("/tmp/project/spec/calculator_spec.rb").and_return(true)
+
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("/tmp/project/spec/calculator_spec.rb")
+        0
+      end
+
+      integration_auto.call(abs_mutation)
+    end
+
     it "maps lib/foo/bar.rb to spec/foo/bar_spec.rb" do
       nested_mutation = double(
         "Mutation",
