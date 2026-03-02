@@ -32,9 +32,10 @@ module Evilution
       end
 
       def score
-        return 0.0 if total.zero?
+        denominator = total - errors
+        return 0.0 if denominator.zero?
 
-        killed.to_f / (total - errors)
+        killed.to_f / denominator
       end
 
       def success?(min_score: 1.0)
