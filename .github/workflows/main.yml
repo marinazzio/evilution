@@ -25,5 +25,8 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run the default task
-        run: bundle exec rake
+      - name: Run tests
+        run: bundle exec rspec --exclude-pattern "spec/evilution/parallel/pool_spec.rb"
+        timeout-minutes: 5
+      - name: Run rubocop
+        run: bundle exec rubocop

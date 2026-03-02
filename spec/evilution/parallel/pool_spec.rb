@@ -31,6 +31,50 @@ RSpec.describe Evilution::Parallel::Pool do
 
   let(:mutations) { (1..4).map { |i| build_mutation(i) } }
 
+  describe "partition" do
+    def build_mutation_for_file(file, line)
+      subj = Evilution::Subject.new(
+        name: "Example#foo",
+        file_path: file,
+        line_number: line,
+        source: "def foo; end",
+        node: nil
+      )
+      Evilution::Mutation.new(
+        subject: subj,
+        operator_name: "comparison_replacement",
+        original_source: "a > b",
+        mutated_source: "a < b",
+        file_path: file,
+        line: line
+      )
+    end
+
+    it "groups mutations for the same file into the same chunk" do
+      file_a = (1..3).map { |i| build_mutation_for_file("lib/a.rb", i) }
+      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
+
+      chunks = pool.send(:partition, file_a + file_b, 2)
+
+      chunks.each do |chunk|
+        files = chunk.map(&:file_path).uniq
+        expect(files.size).to eq(1), "Expected chunk to contain only one file, got: #{files}"
+      end
+    end
+
+    it "balances chunks by assigning largest groups first" do
+      file_a = (1..4).map { |i| build_mutation_for_file("lib/a.rb", i) }
+      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
+      file_c = [build_mutation_for_file("lib/c.rb", 1)]
+
+      chunks = pool.send(:partition, file_a + file_b + file_c, 2)
+
+      sizes = chunks.map(&:size).sort
+      # file_a (4) in one chunk, file_b (2) + file_c (1) in other = [3, 4]
+      expect(sizes).to eq([3, 4])
+    end
+  end
+
   describe "#call" do
     context "with passing test commands" do
       let(:test_command_builder) do
