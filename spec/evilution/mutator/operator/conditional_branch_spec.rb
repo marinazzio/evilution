@@ -49,7 +49,7 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalBranch do
         muts = described_class.new.call(subj)
         muts.each do |mutation|
           expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
-            "Invalid Ruby produced for #{mutation}"
+                                                                 "Invalid Ruby produced for #{mutation}"
         end
       end
     end

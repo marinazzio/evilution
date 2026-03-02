@@ -7,7 +7,7 @@ module Evilution
         def visit_integer_node(node)
           value = node.value
 
-          if value == 0
+          if value.zero?
             add_mutation(
               offset: node.location.start_offset,
               length: node.location.length,

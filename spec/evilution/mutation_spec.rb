@@ -60,8 +60,8 @@ RSpec.describe Evilution::Mutation do
     it "returns a unified diff of the change" do
       result = mutation.diff
 
-      expect(result).to include("- " + "  @age >= 18")
-      expect(result).to include("+ " + "  @age > 18")
+      expect(result).to include("-   @age >= 18")
+      expect(result).to include("+   @age > 18")
     end
 
     it "returns empty string when sources are identical" do

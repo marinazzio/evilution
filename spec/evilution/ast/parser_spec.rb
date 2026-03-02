@@ -34,7 +34,7 @@ RSpec.describe Evilution::AST::Parser do
 
     it "sets correct line numbers" do
       subjects = parser.call(fixture_path)
-      lines = subjects.map { |s| [s.name, s.line_number] }.to_h
+      lines = subjects.to_h { |s| [s.name, s.line_number] }
 
       expect(lines["User#initialize"]).to eq(4)
       expect(lines["User#adult?"]).to eq(9)

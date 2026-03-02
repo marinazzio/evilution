@@ -31,7 +31,7 @@ RSpec.describe Evilution::Integration::RSpec do
 
   describe "#call" do
     it "writes the mutated source to disk before running" do
-      allow(::RSpec::Core::Runner).to receive(:run).and_return(1)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
       integration.call(mutation)
 
@@ -40,7 +40,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "returns passed: false when rspec exits non-zero" do
-      allow(::RSpec::Core::Runner).to receive(:run).and_return(1)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
       result = integration.call(mutation)
 
@@ -48,7 +48,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "returns passed: true when rspec exits zero" do
-      allow(::RSpec::Core::Runner).to receive(:run).and_return(0)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       result = integration.call(mutation)
 
@@ -56,7 +56,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "restores the original file even when runner raises" do
-      allow(::RSpec::Core::Runner).to receive(:run).and_raise("boom")
+      allow(RSpec::Core::Runner).to receive(:run).and_raise("boom")
 
       integration.call(mutation)
 
@@ -64,7 +64,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "returns error info when runner raises" do
-      allow(::RSpec::Core::Runner).to receive(:run).and_raise("boom")
+      allow(RSpec::Core::Runner).to receive(:run).and_raise("boom")
 
       result = integration.call(mutation)
 
@@ -73,7 +73,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "passes test files to the runner" do
-      expect(::RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec/some_spec.rb")
         0
       end
@@ -85,7 +85,7 @@ RSpec.describe Evilution::Integration::RSpec do
       integration_default = described_class.new
       allow(Dir).to receive(:exist?).with("spec").and_return(true)
 
-      expect(::RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec")
         0
       end

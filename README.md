@@ -1,43 +1,198 @@
 # Evilution
 
-TODO: Delete this and the text below, and describe your gem
+Free, MIT-licensed mutation testing for Ruby. Evilution validates your test suite quality by making small code changes (mutations) and checking whether your tests catch them.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/evilution`. To experiment with that code, run `bin/console` for an interactive prompt.
+Ruby is the only major language without a dominant free mutation testing tool. The existing `mutant` gem is commercially licensed. Evilution fills this gap as an MIT-licensed, AI-agent-first mutation testing engine using Prism (Ruby's official parser).
+
+## Features
+
+- **18 mutation operators** covering arithmetic, comparisons, booleans, literals, conditionals, and more
+- **Source-level surgery** via Prism AST byte offsets — preserves formatting perfectly
+- **Fork-based isolation** — each mutation runs in a child process, no test pollution
+- **Parallel execution** — distribute mutations across multiple workers
+- **Diff-based targeting** — only mutate code changed since a git ref
+- **JSON + CLI output** — machine-readable for AI agents, human-readable for developers
+- **Actionable suggestions** — tells you what test to write for each surviving mutant
+- **Zero heavy dependencies** — Prism (ships with Ruby 3.3+), diff-lcs, OptionParser (stdlib)
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add to your Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+gem "evilution", group: :test
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+Then run:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle install
 ```
 
-## Usage
+Or install directly:
 
-TODO: Write usage instructions here
+```bash
+gem install evilution
+```
 
-## Development
+Requires Ruby >= 3.2.0.
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+## Quick Start
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```bash
+# Run against specific files
+bundle exec evilution run lib/my_class.rb
+
+# Run with JSON output (for CI/AI agents)
+bundle exec evilution run lib/my_class.rb --format json
+
+# Only mutate code changed since last commit
+bundle exec evilution run lib/ --diff HEAD~1
+
+# Parallel execution with 4 workers
+bundle exec evilution run lib/ --jobs 4
+
+# Set a minimum mutation score threshold
+bundle exec evilution run lib/ --min-score 0.8
+```
+
+## CLI Usage
+
+```
+Usage: evilution [command] [options] [files...]
+
+Commands:
+  run       Run mutation testing (default)
+  init      Generate a default .evilution.yml config file
+  version   Print version
+
+Options:
+  -j, --jobs N           Number of parallel workers (default: CPU cores)
+  -t, --timeout N        Per-mutation timeout in seconds (default: 10)
+  -f, --format FORMAT    Output format: text, json (default: text)
+      --diff BASE        Only mutate code changed since BASE ref
+      --min-score FLOAT  Minimum mutation score to pass (0.0-1.0)
+      --no-coverage      Disable coverage-based test selection
+  -v, --verbose          Verbose output
+  -q, --quiet            Suppress output
+```
+
+## Configuration
+
+Generate a config file:
+
+```bash
+bundle exec evilution init
+```
+
+This creates `.evilution.yml`:
+
+```yaml
+# Evilution configuration
+# jobs: 4
+# timeout: 10
+# format: text
+# min_score: 0.0
+# integration: rspec
+# coverage: true
+```
+
+CLI flags override config file values.
+
+## Output Formats
+
+### Text (default)
+
+```
+Evilution v0.1.0 — Mutation Testing Results
+============================================
+
+Mutations: 42 total, 38 killed, 4 survived, 0 timed out
+Score: 90.48% (38/42)
+Duration: 12.34s
+
+Survived mutations:
+  comparison_replacement: lib/calculator.rb:15
+    - a >= b
+    + a > b
+
+Result: PASS (score 90.48% >= 80.00%)
+```
+
+### JSON
+
+```json
+{
+  "version": "0.1.0",
+  "summary": {
+    "total": 42,
+    "killed": 38,
+    "survived": 4,
+    "score": 0.9048,
+    "duration": 12.34
+  },
+  "survived": [
+    {
+      "operator": "comparison_replacement",
+      "file": "lib/calculator.rb",
+      "line": 15,
+      "diff": "- a >= b\n+ a > b"
+    }
+  ]
+}
+```
+
+## Mutation Operators
+
+| # | Operator | Example |
+|---|---|---|
+| 1 | ArithmeticReplacement | `a + b` -> `a - b` |
+| 2 | ComparisonReplacement | `a >= b` -> `a > b` |
+| 3 | BooleanOperatorReplacement | `a && b` -> `a \|\| b` |
+| 4 | BooleanLiteralReplacement | `true` -> `false` |
+| 5 | NilReplacement | `expr` -> `nil` |
+| 6 | IntegerLiteral | `n` -> `0`, `1`, `n+1`, `n-1` |
+| 7 | FloatLiteral | `f` -> `0.0`, `1.0` |
+| 8 | StringLiteral | `"str"` -> `""` |
+| 9 | ArrayLiteral | `[a, b]` -> `[]` |
+| 10 | HashLiteral | `{k: v}` -> `{}` |
+| 11 | SymbolLiteral | `:foo` -> `:__evilution_mutated__` |
+| 12 | ConditionalNegation | `if cond` -> `if true`/`if false` |
+| 13 | ConditionalBranch | Remove if/else branch |
+| 14 | StatementDeletion | Remove statements from method bodies |
+| 15 | MethodBodyReplacement | Method body -> `nil` |
+| 16 | NegationInsertion | `x.empty?` -> `!x.empty?` |
+| 17 | ReturnValueRemoval | `return x` -> `return` |
+| 18 | CollectionReplacement | `map` -> `each`, `select` <-> `reject` |
+
+## How It Works
+
+1. **Parse** — Prism parses target Ruby files into ASTs with exact byte offsets
+2. **Extract** — Methods are extracted as mutation subjects
+3. **Mutate** — Operators generate text replacements at precise byte offsets (source surgery)
+4. **Isolate** — Each mutation runs in a forked child process
+5. **Test** — RSpec runs against the mutated code
+6. **Report** — Results aggregated and reported as JSON or human-readable text
+
+## Exit Codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Mutation score meets threshold |
+| 1 | Mutation score below threshold |
+| 2 | Tool error (invalid config, parse failure, etc.) |
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/evilution. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/evilution/blob/master/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/marinazzio/evilution.
+
+1. Fork the repo
+2. Create your feature branch (`git checkout -b feature/my-feature`)
+3. Write tests for your changes
+4. Run `bundle exec rspec` to verify
+5. Commit and push
+6. Open a Pull Request
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the Evilution project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/evilution/blob/master/CODE_OF_CONDUCT.md).

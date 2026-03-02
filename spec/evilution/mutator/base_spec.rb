@@ -12,8 +12,8 @@ RSpec.describe Evilution::Mutator::Base do
   describe "#call" do
     it "returns an empty array when no mutations are generated" do
       subject_obj = double("Subject",
-        file_path: File.expand_path("../../support/fixtures/simple_class.rb", __dir__),
-        node: Prism.parse("def foo\n  42\nend").value.statements.body.first)
+                           file_path: File.expand_path("../../support/fixtures/simple_class.rb", __dir__),
+                           node: Prism.parse("def foo\n  42\nend").value.statements.body.first)
 
       base = described_class.new
       result = base.call(subject_obj)

@@ -45,9 +45,9 @@ module Evilution
       def self.operator_name
         class_name = name || "anonymous"
         class_name.split("::").last
-          .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-          .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-          .downcase
+                  .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+                  .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+                  .downcase
       end
     end
   end

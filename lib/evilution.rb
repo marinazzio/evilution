@@ -27,15 +27,25 @@ require_relative "evilution/mutator/operator/return_value_removal"
 require_relative "evilution/mutator/operator/collection_replacement"
 require_relative "evilution/mutator/registry"
 require_relative "evilution/isolation/fork"
+require_relative "evilution/parallel/worker"
+require_relative "evilution/parallel/pool"
+require_relative "evilution/diff/parser"
+require_relative "evilution/diff/file_filter"
 require_relative "evilution/integration/base"
 require_relative "evilution/integration/rspec"
 require_relative "evilution/result/mutation_result"
 require_relative "evilution/result/summary"
 require_relative "evilution/reporter/json"
 require_relative "evilution/reporter/cli"
+require_relative "evilution/reporter/suggestion"
+require_relative "evilution/coverage/collector"
+require_relative "evilution/coverage/test_map"
 require_relative "evilution/cli"
 require_relative "evilution/runner"
 
 module Evilution
   class Error < StandardError; end
+  class ConfigError < Error; end
+  class ParseError < Error; end
+  class IsolationError < Error; end
 end

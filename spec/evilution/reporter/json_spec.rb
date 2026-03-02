@@ -55,17 +55,17 @@ RSpec.describe Evilution::Reporter::JSON do
     it "returns valid JSON" do
       output = reporter.call(summary)
 
-      expect { ::JSON.parse(output) }.not_to raise_error
+      expect { JSON.parse(output) }.not_to raise_error
     end
 
     it "includes version" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
 
       expect(parsed["version"]).to eq(Evilution::VERSION)
     end
 
     it "includes summary stats" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
       stats = parsed["summary"]
 
       expect(stats["total"]).to eq(2)
@@ -75,7 +75,7 @@ RSpec.describe Evilution::Reporter::JSON do
     end
 
     it "includes survived mutations with details" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
       survived = parsed["survived"]
 
       expect(survived.length).to eq(1)
@@ -86,7 +86,7 @@ RSpec.describe Evilution::Reporter::JSON do
     end
 
     it "includes killed mutations" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
 
       expect(parsed["killed"].length).to eq(1)
       expect(parsed["killed"].first["status"]).to eq("killed")
@@ -94,7 +94,7 @@ RSpec.describe Evilution::Reporter::JSON do
 
     it "handles empty results" do
       empty_summary = Evilution::Result::Summary.new(results: [], duration: 0.0)
-      parsed = ::JSON.parse(reporter.call(empty_summary))
+      parsed = JSON.parse(reporter.call(empty_summary))
 
       expect(parsed["summary"]["total"]).to eq(0)
       expect(parsed["survived"]).to eq([])
@@ -102,13 +102,13 @@ RSpec.describe Evilution::Reporter::JSON do
     end
 
     it "includes timestamp" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
 
       expect(parsed["timestamp"]).to match(/\d{4}-\d{2}-\d{2}T/)
     end
 
     it "rounds duration values" do
-      parsed = ::JSON.parse(reporter.call(summary))
+      parsed = JSON.parse(reporter.call(summary))
 
       expect(parsed["summary"]["duration"]).to eq(0.6)
       expect(parsed["killed"].first["duration"]).to eq(0.456)

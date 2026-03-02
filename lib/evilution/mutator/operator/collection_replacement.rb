@@ -5,12 +5,12 @@ module Evilution
     module Operator
       class CollectionReplacement < Base
         REPLACEMENTS = {
-          :map => [:each],
-          :each => [:map],
-          :select => [:reject],
-          :reject => [:select],
-          :flat_map => [:map],
-          :collect => [:each]
+          map: [:each],
+          each: [:map],
+          select: [:reject],
+          reject: [:select],
+          flat_map: [:map],
+          collect: [:each]
         }.freeze
 
         def visit_call_node(node)

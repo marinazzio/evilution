@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "stringio"
+require "tmpdir"
 require "evilution/cli"
 
 RSpec.describe Evilution::CLI do
@@ -25,6 +26,16 @@ RSpec.describe Evilution::CLI do
     $stdout = original
   end
 
+  def capture_stderr
+    io = StringIO.new
+    original = $stderr
+    $stderr = io
+    yield
+    io.string
+  ensure
+    $stderr = original
+  end
+
   describe "version command" do
     it "outputs the gem version" do
       cli = described_class.new(["version"])
@@ -35,6 +46,49 @@ RSpec.describe Evilution::CLI do
     it "returns exit code 0" do
       cli = described_class.new(["version"])
       capture_stdout { expect(cli.call).to eq(0) }
+    end
+  end
+
+  describe "init command" do
+    around do |example|
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) { example.run }
+      end
+    end
+
+    it "creates .evilution.yml with default template" do
+      cli = described_class.new(["init"])
+      capture_stdout { cli.call }
+
+      expect(File.exist?(".evilution.yml")).to be true
+      content = File.read(".evilution.yml")
+      expect(content).to include("# Evilution configuration")
+    end
+
+    it "returns exit code 0" do
+      cli = described_class.new(["init"])
+      capture_stdout { expect(cli.call).to eq(0) }
+    end
+
+    it "outputs a confirmation message" do
+      cli = described_class.new(["init"])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("Created .evilution.yml")
+    end
+
+    it "returns exit code 1 if config file already exists" do
+      File.write(".evilution.yml", "existing content")
+      cli = described_class.new(["init"])
+      capture_stderr { expect(cli.call).to eq(1) }
+    end
+
+    it "does not overwrite existing config file" do
+      File.write(".evilution.yml", "existing content")
+      cli = described_class.new(["init"])
+      capture_stderr { cli.call }
+
+      expect(File.read(".evilution.yml")).to eq("existing content")
     end
   end
 
@@ -122,6 +176,22 @@ RSpec.describe Evilution::CLI do
         allow(summary).to receive(:success?).with(min_score: 0.9).and_return(false)
         cli = described_class.new(["--min-score", "0.9"])
         expect(cli.call).to eq(1)
+      end
+    end
+
+    describe "error handling" do
+      it "returns exit code 2 for Evilution::Error" do
+        allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+        cli = described_class.new([])
+        capture_stderr { expect(cli.call).to eq(2) }
+      end
+
+      it "prints the error message to stderr" do
+        allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+        cli = described_class.new([])
+        output = capture_stderr { cli.call }
+
+        expect(output).to include("Error: something failed")
       end
     end
 

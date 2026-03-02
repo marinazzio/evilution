@@ -29,12 +29,12 @@ module Evilution
 
       def execute_in_child(mutation, test_command)
         test_command.call(mutation)
-      rescue => e
+      rescue StandardError => e
         { passed: false, error: e.message }
       end
 
       def wait_for_result(pid, read_io, timeout)
-        if IO.select([read_io], nil, nil, timeout)
+        if read_io.wait_readable(timeout)
           data = read_io.read
           ::Process.wait(pid)
           return { timeout: false }.merge(Marshal.load(data)) unless data.empty? # rubocop:disable Security/MarshalLoad

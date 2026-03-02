@@ -83,9 +83,9 @@ RSpec.describe Evilution::Mutator::Registry do
       end
 
       subject_obj = double("Subject",
-        name: "User#initialize",
-        file_path: fixture_path,
-        node: first_def)
+                           name: "User#initialize",
+                           file_path: fixture_path,
+                           node: first_def)
 
       mutations = registry.mutations_for(subject_obj)
 
@@ -95,8 +95,8 @@ RSpec.describe Evilution::Mutator::Registry do
 
     it "returns empty array when no operators registered" do
       subject_obj = double("Subject",
-        file_path: File.expand_path("../../support/fixtures/simple_class.rb", __dir__),
-        node: Prism.parse("def foo; end").value.statements.body.first)
+                           file_path: File.expand_path("../../support/fixtures/simple_class.rb", __dir__),
+                           node: Prism.parse("def foo; end").value.statements.body.first)
 
       expect(registry.mutations_for(subject_obj)).to eq([])
     end

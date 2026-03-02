@@ -1,0 +1,28 @@
+version: 1
+swarm:
+  name: "Evilution Ruby gem Development Team"
+  main: architect
+
+  instances:
+    architect:
+      description: "Ruby architect coordinating full-stack development for Evilution Ruby gem"
+      directory: .
+      model: opus
+      connections: [tests, devops]
+      prompt_file: .claude/prompts/architect.md
+      vibe: true
+
+    tests:
+      description: "RSpec testing, factories, and test coverage specialist"
+      directory: ./spec
+      model: opus
+      allowed_tools: [Read, Edit, Write, Bash, Grep, Glob, LS]
+      prompt_file: .claude/prompts/tests.md
+
+    
+    devops:
+      description: "Deployment, Docker, CI/CD, and production configuration specialist"
+      directory: ./.github
+      model: opus
+      allowed_tools: [Read, Edit, Write, Bash, Grep, Glob, LS]
+      prompt_file: .claude/prompts/devops.md

@@ -1,6 +1,7 @@
 AllCops:
   TargetRubyVersion: 3.2
   NewCops: enable
+  SuggestExtensions: false
   Exclude:
     - "spec/support/fixtures/**/*"
 
@@ -10,7 +11,52 @@ Style/StringLiterals:
 Style/StringLiteralsInInterpolation:
   EnforcedStyle: double_quotes
 
+Style/Documentation:
+  Enabled: false
+
 Metrics/BlockLength:
   Exclude:
     - "spec/**/*"
     - "evilution.gemspec"
+
+Metrics/MethodLength:
+  Max: 30
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+
+Metrics/AbcSize:
+  Max: 35
+
+Metrics/CyclomaticComplexity:
+  Max: 12
+
+Metrics/PerceivedComplexity:
+  Max: 12
+
+Metrics/ParameterLists:
+  Max: 8
+
+Layout/LineLength:
+  Max: 140
+
+Naming/MethodParameterName:
+  MinNameLength: 1
+
+Lint/MissingSuper:
+  Enabled: false
+
+Lint/IneffectiveAccessModifier:
+  Enabled: false
+
+Lint/FloatComparison:
+  Exclude:
+    - "lib/evilution/mutator/operator/float_literal.rb"
+
+Lint/DuplicateBranch:
+  Exclude:
+    - "lib/evilution/mutator/operator/float_literal.rb"
+
+Naming/PredicateMethod:
+  Enabled: false

@@ -30,7 +30,7 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
 
     it "replaces > with >= and ==" do
       muts = mutations_for("teenager?")
-      greater_than_muts = muts.select { |m| m.mutated_source.include?("12") && !m.mutated_source.include?("> 12") }
+      muts.select { |m| m.mutated_source.include?("12") && !m.mutated_source.include?("> 12") }
 
       expect(muts.length).to eq(4)
     end
@@ -53,7 +53,7 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
       muts = mutations_for("at_most?")
 
       expect(muts.length).to eq(2)
-      replacements = muts.map { |m| m.mutated_source }
+      replacements = muts.map(&:mutated_source)
       expect(replacements).to include(
         a_string_including("< limit"),
         a_string_including("== limit")
@@ -65,7 +65,7 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
         muts = described_class.new.call(subj)
         muts.each do |mutation|
           expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
-            "Invalid Ruby produced for #{mutation}"
+                                                                 "Invalid Ruby produced for #{mutation}"
         end
       end
     end

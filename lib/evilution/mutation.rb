@@ -22,7 +22,7 @@ module Evilution
     def diff
       original_lines = original_source.lines
       mutated_lines = mutated_source.lines
-      diffs = Diff::LCS.diff(original_lines, mutated_lines)
+      diffs = ::Diff::LCS.diff(original_lines, mutated_lines)
 
       return "" if diffs.empty?
 

@@ -5,10 +5,10 @@ module Evilution
     module Operator
       class ComparisonReplacement < Base
         REPLACEMENTS = {
-          :> => [:>=, :==],
-          :< => [:<=, :==],
-          :>= => [:>, :==],
-          :<= => [:<, :==],
+          :> => %i[>= ==],
+          :< => %i[<= ==],
+          :>= => %i[> ==],
+          :<= => %i[< ==],
           :== => [:!=],
           :!= => [:==]
         }.freeze

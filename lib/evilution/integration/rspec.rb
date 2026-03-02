@@ -39,7 +39,7 @@ module Evilution
         status = ::RSpec::Core::Runner.run(args, out, err)
 
         { passed: status.zero? }
-      rescue => e
+      rescue StandardError => e
         { passed: false, error: e.message }
       end
 
