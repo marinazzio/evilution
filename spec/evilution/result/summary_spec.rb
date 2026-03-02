@@ -76,7 +76,7 @@ RSpec.describe Evilution::Result::Summary do
       s = described_class.new(results: all_errors)
 
       expect(s.score).to eq(0.0)
-      expect(s.score).not_to be_nan
+
     end
   end
 
