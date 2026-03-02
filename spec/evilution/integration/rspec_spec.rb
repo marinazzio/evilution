@@ -90,7 +90,7 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(RSpec).to have_received(:reset)
     end
 
-    it "defaults to spec/ directory when no test files given and no convention match" do
+    it "defaults to nearest spec/ directory when no convention match" do
       rel_mutation = double(
         "Mutation",
         file_path: "app/models/user.rb",
@@ -101,11 +101,15 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(File).to receive(:write)
 
       integration_default = described_class.new
-      allow(Dir).to receive(:exist?).with("spec").and_return(true)
+      allow(Dir).to receive(:exist?).and_return(false)
       allow(File).to receive(:exist?).and_return(false)
 
+      # The walk-up from expanded path will find spec/ at project root
+      expanded_spec = File.join(File.expand_path("."), "spec")
+      allow(Dir).to receive(:exist?).with(expanded_spec).and_return(true)
+
       expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
-        expect(args).to include("spec")
+        expect(args).to include(expanded_spec)
         0
       end
 
@@ -221,6 +225,30 @@ RSpec.describe Evilution::Integration::RSpec do
       end
 
       integration_auto.call(app_mutation)
+    end
+
+    it "walks up directories to find spec/ for relative paths in different subtrees" do
+      relative_mutation = double(
+        "Mutation",
+        file_path: "tmp/project/app/models/user.rb",
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+      allow(File).to receive(:read).with("tmp/project/app/models/user.rb").and_return(original_source)
+      allow(File).to receive(:write)
+      allow(File).to receive(:exist?).and_return(false)
+      allow(Dir).to receive(:exist?).and_return(false)
+
+      # The walk-up will check each parent; stub the one that matches
+      expected_spec = File.join(File.expand_path("tmp/project"), "spec")
+      allow(Dir).to receive(:exist?).with(expected_spec).and_return(true)
+
+      expect(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include(expected_spec)
+        0
+      end
+
+      integration_auto.call(relative_mutation)
     end
 
     it "maps lib/foo/bar.rb to spec/foo/bar_spec.rb" do

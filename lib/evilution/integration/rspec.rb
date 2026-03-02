@@ -77,29 +77,26 @@ module Evilution
       end
 
       def fallback_spec_dir(source_path)
+        expanded = File.expand_path(source_path)
+
         # Derive spec/ from mutation's project, not CWD
-        if source_path.include?("/lib/")
-          project_root = source_path.split(%r{/lib/}, 2).first
+        if expanded.include?("/lib/")
+          project_root = expanded.split(%r{/lib/}, 2).first
           spec_dir = File.join(project_root, "spec")
           return spec_dir if Dir.exist?(spec_dir)
         end
 
-        # For absolute paths not under /lib/, walk up looking for spec/
-        if source_path == File.absolute_path(source_path)
-          dir = File.dirname(source_path)
-          loop do
-            spec_dir = File.join(dir, "spec")
-            return spec_dir if Dir.exist?(spec_dir)
+        # Walk up from the file's directory looking for spec/
+        dir = File.dirname(expanded)
+        loop do
+          spec_dir = File.join(dir, "spec")
+          return spec_dir if Dir.exist?(spec_dir)
 
-            parent = File.dirname(dir)
-            break if parent == dir
+          parent = File.dirname(dir)
+          break if parent == dir
 
-            dir = parent
-          end
+          dir = parent
         end
-
-        # Last resort: CWD's spec/
-        return "spec" if Dir.exist?("spec")
 
         nil
       end
