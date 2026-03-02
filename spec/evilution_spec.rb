@@ -5,7 +5,7 @@ RSpec.describe Evilution do
     expect(Evilution::VERSION).not_to be nil
   end
 
-  it "does something useful" do
-    expect(false).to eq(true)
+  it "defines the Error class" do
+    expect(Evilution::Error).to be < StandardError
   end
 end
