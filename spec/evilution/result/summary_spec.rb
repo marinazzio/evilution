@@ -70,6 +70,14 @@ RSpec.describe Evilution::Result::Summary do
 
       expect(s.score).to eq(1.0 / 2)
     end
+
+    it "returns 0.0 when all mutations are errors (avoids NaN)" do
+      all_errors = [make_result(:error), make_result(:error)]
+      s = described_class.new(results: all_errors)
+
+      expect(s.score).to eq(0.0)
+      expect(s.score).not_to be_nan
+    end
   end
 
   describe "#success?" do
