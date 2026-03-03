@@ -72,7 +72,7 @@ module Evilution
           smallest.concat(group)
         end
 
-        chunks.reject(&:empty?)
+        chunks
       end
 
       # Runs a chunk of mutations sequentially inside a worker process.

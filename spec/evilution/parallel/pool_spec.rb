@@ -54,12 +54,25 @@ RSpec.describe Evilution::Parallel::Pool do
       file_a = (1..3).map { |i| build_mutation_for_file("lib/a.rb", i) }
       file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
 
-      chunks = pool.send(:partition, file_a + file_b, 2)
+      all_mutations = file_a + file_b
+      chunks = pool.send(:partition, all_mutations, 2)
 
-      chunks.each do |chunk|
-        files = chunk.map(&:file_path).uniq
-        expect(files.size).to eq(1), "Expected chunk to contain only one file, got: #{files}"
+      # For each file_path, collect the indices of chunks in which it appears
+      file_to_chunk_indices = Hash.new { |h, k| h[k] = [] }
+      chunks.each_with_index do |chunk, chunk_index|
+        chunk.each do |mutation|
+          file_to_chunk_indices[mutation.file_path] << chunk_index
+        end
       end
+
+      file_to_chunk_indices.each do |file, indices|
+        unique_indices = indices.uniq
+        expect(unique_indices.size).to eq(1),
+          "Expected all mutations for #{file} to be in a single chunk, but found in chunks #{unique_indices}"
+      end
+
+      # Ensure no mutations were lost or duplicated across chunks
+      expect(chunks.flatten).to match_array(all_mutations)
     end
 
     it "balances chunks by assigning largest groups first" do
