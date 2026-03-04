@@ -85,7 +85,7 @@ Use `--format json` for machine-readable output. Schema:
     "survived": "integer — mutations NOT detected (test passed = gap in coverage)",
     "timed_out": "integer — mutations that exceeded timeout",
     "errors": "integer   — mutations that caused unexpected errors",
-    "score": "float      — killed / (total - errored), range 0.0-1.0, rounded to 4 decimals",
+    "score": "float      — killed / (total - errors), range 0.0-1.0, rounded to 4 decimals",
     "duration": "float   — total wall-clock seconds, rounded to 4 decimals"
   },
   "survived": [
