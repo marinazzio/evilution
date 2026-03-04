@@ -1,11 +1,7 @@
 name: Ruby
 
 on:
-  push:
-    branches:
-      - master
-
-  pull_request:
+  push: {}
 
 jobs:
   build:
@@ -14,24 +10,27 @@ jobs:
     strategy:
       matrix:
         ruby:
+          - '3.3.10'
+          - '3.4.8'
           - '4.0.1'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@09a7688d3b55cf0e976497ff046b70949eeaccfd # v1.288.0
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
+      - name: Run linter
+        run: bundle exec rubocop
+
       - name: Run tests
         run: |
           if [ "${{ env.SKIP_PARALLEL_POOL_SPEC }}" = "1" ]; then
             bundle exec rspec --exclude-pattern "spec/evilution/parallel/pool_spec.rb"
           else
-            bundle exec rspec
+            bundle exec rspec spec
           fi
         timeout-minutes: 5
-      - name: Run rubocop
-        run: bundle exec rubocop
