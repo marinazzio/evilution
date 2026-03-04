@@ -42,7 +42,7 @@ evilution [command] [options] [files...]
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
 | `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
-| `--no-coverage`         | Boolean | false        | Disable coverage-based test selection.             |
+| `--no-coverage`         | Boolean | false        | Reserved; currently has no effect.                |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
 
@@ -144,7 +144,7 @@ Parse JSON output. Exit code 0 = pass, 1 = surviving mutants to address.
 bundle exec evilution run lib/ --format json --diff main --min-score 0.9
 ```
 
-Only mutates code changed since `main`. Use this for incremental checks — it's fast and focused on new/changed code.
+Mutates methods whose definition (starting) line is changed compared to `main` (the diff filter is based on the method’s first line, not any line in its body). Use this for incremental checks — it's fast and focused on newly added or moved methods and changed signatures.
 
 ### 3. Single-file targeted scan
 
@@ -170,7 +170,7 @@ bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
 # Exit code 0 = pass, 1 = fail, 2 = error
 ```
 
-Use `--quiet` in CI to suppress text output when you only need the exit code and JSON.
+Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only when you care about the exit code and do not need JSON output.
 
 ## Internals (for context, not for direct use)
 
