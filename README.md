@@ -77,27 +77,30 @@ Use `--format json` for machine-readable output. Schema:
 
 ```json
 {
-  "version": "string",
+  "version": "string   — gem version",
+  "timestamp": "string — ISO 8601 timestamp of the report",
   "summary": {
     "total": "integer    — total mutations generated",
     "killed": "integer   — mutations detected by tests (test failed = good)",
     "survived": "integer — mutations NOT detected (test passed = gap in coverage)",
     "timed_out": "integer — mutations that exceeded timeout",
-    "errored": "integer  — mutations that caused unexpected errors",
-    "score": "float      — killed / (total - errored), range 0.0–1.0",
-    "duration": "float   — total wall-clock seconds"
+    "errors": "integer   — mutations that caused unexpected errors",
+    "score": "float      — killed / (total - errored), range 0.0-1.0, rounded to 4 decimals",
+    "duration": "float   — total wall-clock seconds, rounded to 4 decimals"
   },
   "survived": [
     {
-      "operator": "string   — mutation operator name (see Operators table)",
-      "file": "string       — relative path to mutated file",
-      "line": "integer      — line number of the mutation",
-      "original": "string   — original source fragment",
-      "replacement": "string — mutated source fragment",
-      "diff": "string       — unified diff snippet",
-      "suggestion": "string — what test to write to kill this mutant"
+      "operator": "string — mutation operator name (see Operators table)",
+      "file": "string    — relative path to mutated file",
+      "line": "integer   — line number of the mutation",
+      "status": "string  — result status: 'survived', 'killed', 'timeout', or 'error'",
+      "duration": "float — seconds this mutation took, rounded to 4 decimals",
+      "diff": "string    — unified diff snippet"
     }
-  ]
+  ],
+  "killed": ["... same shape as survived entries ..."],
+  "timed_out": ["... same shape as survived entries ..."],
+  "errors": ["... same shape as survived entries ..."]
 }
 ```
 
