@@ -1,0 +1,30 @@
+name: Bundle Audit
+
+on:
+  push: {}
+
+jobs:
+  bundle-audit:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        ruby:
+          - '3.3.10'
+          - '3.4.8'
+          - '4.0.1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@09a7688d3b55cf0e976497ff046b70949eeaccfd # v1.288.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Perform bundle audit
+        run: bundle exec bundle-audit check
