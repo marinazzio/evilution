@@ -15,7 +15,7 @@ Gem::Specification.new do |spec|
                      "diff-based targeting, and coverage-based test selection."
   spec.homepage = "https://github.com/marinazzio/evilution"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
