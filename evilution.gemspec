@@ -7,21 +7,26 @@ Gem::Specification.new do |spec|
   spec.version = Evilution::VERSION
   spec.authors = ["Denis Kiselev"]
   spec.email = ["denis.kiselyov@gmail.com"]
-
+  spec.license = "MIT"
   spec.summary = "Free, MIT-licensed mutation testing for Ruby"
+  spec.homepage = "https://github.com/marinazzio/evilution"
+
+  spec.required_ruby_version = ">= 3.3.0"
+
   spec.description = "Evilution is a mutation testing tool for Ruby. " \
                      "It validates test suite quality by making small code changes and " \
                      "checking if tests catch them. AI-agent-first design with JSON output, " \
                      "diff-based targeting, and coverage-based test selection."
-  spec.homepage = "https://github.com/marinazzio/evilution"
-  spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.3.0"
 
-  spec.metadata["allowed_push_host"] = "https://rubygems.org"
-  spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = spec.homepage
-  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/master/CHANGELOG.md"
-  spec.metadata["rubygems_mfa_required"] = "true"
+  spec.metadata = {
+    "allowed_push_host" => "https://rubygems.org",
+    "bug_tracker_uri" => "https://github.com/marinazzio/evilution/issues",
+    "documentation_uri" => "https://github.com/marinazzio/evilution/blob/master/README.md",
+
+    "homepage_uri" => spec.homepage,
+    "rubygems_mfa_required" => "true",
+    "source_code_uri" => spec.homepage
+  }
 
   gemspec = File.basename(__FILE__)
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
