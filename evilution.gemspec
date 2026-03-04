@@ -20,8 +20,8 @@ Gem::Specification.new do |spec|
 
   spec.metadata = {
     "allowed_push_host" => "https://rubygems.org",
-    'bug_tracker_uri' => 'https://github.com/marinazzio/evilution/issues',
-    'documentation_uri' => 'https://github.com/marinazzio/evilution/blob/master/README.md',
+    "bug_tracker_uri" => "https://github.com/marinazzio/evilution/issues",
+    "documentation_uri" => "https://github.com/marinazzio/evilution/blob/master/README.md",
 
     "homepage_uri" => spec.homepage,
     "rubygems_mfa_required" => "true",
