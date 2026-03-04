@@ -67,8 +67,10 @@ RSpec.describe Evilution::Parallel::Pool do
 
       file_to_chunk_indices.each do |file, indices|
         unique_indices = indices.uniq
-        expect(unique_indices.size).to eq(1),
+        expect(unique_indices.size).to(
+          eq(1),
           "Expected all mutations for #{file} to be in a single chunk, but found in chunks #{unique_indices}"
+        )
       end
 
       # Ensure no mutations were lost or duplicated across chunks
