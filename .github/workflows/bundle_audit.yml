@@ -2,6 +2,7 @@ name: Bundle Audit
 
 on:
   push: {}
+  pull_request: {}
 
 jobs:
   bundle-audit:
