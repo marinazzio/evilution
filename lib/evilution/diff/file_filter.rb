@@ -22,9 +22,7 @@ module Evilution
       private
 
       def build_lookup(changed_ranges)
-        changed_ranges.each_with_object({}) do |entry, hash|
-          hash[entry[:file]] = entry[:lines]
-        end
+        changed_ranges.to_h { [_1[:file], _1[:lines]] }
       end
     end
   end
