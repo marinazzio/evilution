@@ -40,7 +40,7 @@ evilution [command] [options] [files...]
 | `-j`, `--jobs N`        | Integer | CPU cores    | Parallel worker count. Use `1` for sequential.    |
 | `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
-| `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate lines changed since BASE.    |
+| `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--no-coverage`         | Boolean | false        | Disable coverage-based test selection.             |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
