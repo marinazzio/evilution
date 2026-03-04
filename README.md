@@ -1,198 +1,186 @@
-# Evilution
+# Evilution — Mutation Testing for Ruby
 
-Free, MIT-licensed mutation testing for Ruby. Evilution validates your test suite quality by making small code changes (mutations) and checking whether your tests catch them.
+> **Purpose**: Validate test suite quality by injecting small code changes (mutations) and checking whether tests detect them. Surviving mutations indicate gaps in test coverage.
 
-Ruby is the only major language without a dominant free mutation testing tool. The existing `mutant` gem is commercially licensed. Evilution fills this gap as an MIT-licensed, AI-agent-first mutation testing engine using Prism (Ruby's official parser).
-
-## Features
-
-- **18 mutation operators** covering arithmetic, comparisons, booleans, literals, conditionals, and more
-- **Source-level surgery** via Prism AST byte offsets — preserves formatting perfectly
-- **Fork-based isolation** — each mutation runs in a child process, no test pollution
-- **Parallel execution** — distribute mutations across multiple workers
-- **Diff-based targeting** — only mutate code changed since a git ref
-- **JSON + CLI output** — machine-readable for AI agents, human-readable for developers
-- **Actionable suggestions** — tells you what test to write for each surviving mutant
-- **Zero heavy dependencies** — Prism (ships with Ruby 3.3+), diff-lcs, OptionParser (stdlib)
+**License**: MIT (free, no commercial restrictions)
+**Language**: Ruby >= 3.2
+**Parser**: Prism (Ruby's official AST parser, ships with Ruby 3.3+)
+**Test framework**: RSpec (currently the only supported integration)
 
 ## Installation
 
-Add to your Gemfile:
+Add to `Gemfile`:
 
 ```ruby
 gem "evilution", group: :test
 ```
 
-Then run:
+Then: `bundle install`
 
-```bash
-bundle install
-```
+Or standalone: `gem install evilution`
 
-Or install directly:
-
-```bash
-gem install evilution
-```
-
-Requires Ruby >= 3.2.0.
-
-## Quick Start
-
-```bash
-# Run against specific files
-bundle exec evilution run lib/my_class.rb
-
-# Run with JSON output (for CI/AI agents)
-bundle exec evilution run lib/my_class.rb --format json
-
-# Only mutate code changed since last commit
-bundle exec evilution run lib/ --diff HEAD~1
-
-# Parallel execution with 4 workers
-bundle exec evilution run lib/ --jobs 4
-
-# Set a minimum mutation score threshold
-bundle exec evilution run lib/ --min-score 0.8
-```
-
-## CLI Usage
+## Command Reference
 
 ```
-Usage: evilution [command] [options] [files...]
-
-Commands:
-  run       Run mutation testing (default)
-  init      Generate a default .evilution.yml config file
-  version   Print version
-
-Options:
-  -j, --jobs N           Number of parallel workers (default: CPU cores)
-  -t, --timeout N        Per-mutation timeout in seconds (default: 10)
-  -f, --format FORMAT    Output format: text, json (default: text)
-      --diff BASE        Only mutate code changed since BASE ref
-      --min-score FLOAT  Minimum mutation score to pass (0.0-1.0)
-      --no-coverage      Disable coverage-based test selection
-  -v, --verbose          Verbose output
-  -q, --quiet            Suppress output
+evilution [command] [options] [files...]
 ```
+
+### Commands
+
+| Command   | Description                              | Default |
+|-----------|------------------------------------------|---------|
+| `run`     | Execute mutation testing against files   | Yes     |
+| `init`    | Generate `.evilution.yml` config file    |         |
+| `version` | Print version string                     |         |
+
+### Options (for `run` command)
+
+| Flag                    | Type    | Default      | Description                                       |
+|-------------------------|---------|--------------|---------------------------------------------------|
+| `-j`, `--jobs N`        | Integer | CPU cores    | Parallel worker count. Use `1` for sequential.    |
+| `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
+| `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
+| `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate lines changed since BASE.    |
+| `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
+| `--no-coverage`         | Boolean | false        | Disable coverage-based test selection.             |
+| `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
+| `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
+
+### Exit Codes
+
+| Code | Meaning                                       | Agent action                          |
+|------|-----------------------------------------------|---------------------------------------|
+| 0    | Mutation score meets or exceeds `--min-score` | Success. No action needed.            |
+| 1    | Mutation score below `--min-score`            | Parse output, fix surviving mutants.  |
+| 2    | Tool error (bad config, parse failure, etc.)  | Check stderr, fix invocation.         |
 
 ## Configuration
 
-Generate a config file:
+Generate default config: `bundle exec evilution init`
 
-```bash
-bundle exec evilution init
-```
-
-This creates `.evilution.yml`:
+Creates `.evilution.yml`:
 
 ```yaml
-# Evilution configuration
-# jobs: 4
-# timeout: 10
-# format: text
-# min_score: 0.0
-# integration: rspec
-# coverage: true
+# jobs: 4            # parallel workers
+# timeout: 10        # seconds per mutation
+# format: text       # text | json
+# min_score: 0.0     # 0.0–1.0
+# integration: rspec # test framework
+# coverage: true     # coverage-based test selection
 ```
 
-CLI flags override config file values.
+**Precedence**: CLI flags override `.evilution.yml` values.
 
-## Output Formats
+## JSON Output Schema
 
-### Text (default)
-
-```
-Evilution v0.1.0 — Mutation Testing Results
-============================================
-
-Mutations: 42 total, 38 killed, 4 survived, 0 timed out
-Score: 90.48% (38/42)
-Duration: 12.34s
-
-Survived mutations:
-  comparison_replacement: lib/calculator.rb:15
-    - a >= b
-    + a > b
-
-Result: PASS (score 90.48% >= 80.00%)
-```
-
-### JSON
+Use `--format json` for machine-readable output. Schema:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "string",
   "summary": {
-    "total": 42,
-    "killed": 38,
-    "survived": 4,
-    "score": 0.9048,
-    "duration": 12.34
+    "total": "integer    — total mutations generated",
+    "killed": "integer   — mutations detected by tests (test failed = good)",
+    "survived": "integer — mutations NOT detected (test passed = gap in coverage)",
+    "timed_out": "integer — mutations that exceeded timeout",
+    "errored": "integer  — mutations that caused unexpected errors",
+    "score": "float      — killed / (total - errored), range 0.0–1.0",
+    "duration": "float   — total wall-clock seconds"
   },
   "survived": [
     {
-      "operator": "comparison_replacement",
-      "file": "lib/calculator.rb",
-      "line": 15,
-      "diff": "- a >= b\n+ a > b"
+      "operator": "string   — mutation operator name (see Operators table)",
+      "file": "string       — relative path to mutated file",
+      "line": "integer      — line number of the mutation",
+      "original": "string   — original source fragment",
+      "replacement": "string — mutated source fragment",
+      "diff": "string       — unified diff snippet",
+      "suggestion": "string — what test to write to kill this mutant"
     }
   ]
 }
 ```
 
-## Mutation Operators
+**Key metric**: `summary.score` — the mutation score. Higher is better. 1.0 means all mutations were caught.
 
-| # | Operator | Example |
-|---|---|---|
-| 1 | ArithmeticReplacement | `a + b` -> `a - b` |
-| 2 | ComparisonReplacement | `a >= b` -> `a > b` |
-| 3 | BooleanOperatorReplacement | `a && b` -> `a \|\| b` |
-| 4 | BooleanLiteralReplacement | `true` -> `false` |
-| 5 | NilReplacement | `expr` -> `nil` |
-| 6 | IntegerLiteral | `n` -> `0`, `1`, `n+1`, `n-1` |
-| 7 | FloatLiteral | `f` -> `0.0`, `1.0` |
-| 8 | StringLiteral | `"str"` -> `""` |
-| 9 | ArrayLiteral | `[a, b]` -> `[]` |
-| 10 | HashLiteral | `{k: v}` -> `{}` |
-| 11 | SymbolLiteral | `:foo` -> `:__evilution_mutated__` |
-| 12 | ConditionalNegation | `if cond` -> `if true`/`if false` |
-| 13 | ConditionalBranch | Remove if/else branch |
-| 14 | StatementDeletion | Remove statements from method bodies |
-| 15 | MethodBodyReplacement | Method body -> `nil` |
-| 16 | NegationInsertion | `x.empty?` -> `!x.empty?` |
-| 17 | ReturnValueRemoval | `return x` -> `return` |
-| 18 | CollectionReplacement | `map` -> `each`, `select` <-> `reject` |
+## Mutation Operators (18 total)
 
-## How It Works
+Each operator name is stable and appears in JSON output under `survived[].operator`.
 
-1. **Parse** — Prism parses target Ruby files into ASTs with exact byte offsets
-2. **Extract** — Methods are extracted as mutation subjects
-3. **Mutate** — Operators generate text replacements at precise byte offsets (source surgery)
-4. **Isolate** — Each mutation runs in a forked child process
-5. **Test** — RSpec runs against the mutated code
-6. **Report** — Results aggregated and reported as JSON or human-readable text
+| Operator                  | What it does                              | Example                            |
+|---------------------------|-------------------------------------------|------------------------------------|
+| `arithmetic_replacement`  | Swap arithmetic operators                 | `a + b` -> `a - b`                |
+| `comparison_replacement`  | Swap comparison operators                 | `a >= b` -> `a > b`               |
+| `boolean_operator_replacement` | Swap `&&` / `\|\|`                   | `a && b` -> `a \|\| b`            |
+| `boolean_literal_replacement`  | Flip boolean literals                 | `true` -> `false`                  |
+| `nil_replacement`         | Replace expression with `nil`             | `expr` -> `nil`                    |
+| `integer_literal`         | Boundary-value integer mutations          | `n` -> `0`, `1`, `n+1`, `n-1`     |
+| `float_literal`           | Boundary-value float mutations            | `f` -> `0.0`, `1.0`               |
+| `string_literal`          | Empty the string                          | `"str"` -> `""`                    |
+| `array_literal`           | Empty the array                           | `[a, b]` -> `[]`                   |
+| `hash_literal`            | Empty the hash                            | `{k: v}` -> `{}`                  |
+| `symbol_literal`          | Replace with sentinel symbol              | `:foo` -> `:__evilution_mutated__` |
+| `conditional_negation`    | Replace condition with `true`/`false`     | `if cond` -> `if true`            |
+| `conditional_branch`      | Remove if/else branch                     | Deletes branch body                |
+| `statement_deletion`      | Remove statements from method bodies      | Deletes a statement                |
+| `method_body_replacement` | Replace entire method body with `nil`     | Method body -> `nil`               |
+| `negation_insertion`      | Negate predicate methods                  | `x.empty?` -> `!x.empty?`         |
+| `return_value_removal`    | Strip return values                       | `return x` -> `return`            |
+| `collection_replacement`  | Swap collection methods                   | `map` -> `each`, `select` <-> `reject` |
 
-## Exit Codes
+## Recommended Workflows for AI Agents
 
-| Code | Meaning |
-|---|---|
-| 0 | Mutation score meets threshold |
-| 1 | Mutation score below threshold |
-| 2 | Tool error (invalid config, parse failure, etc.) |
+### 1. Full project scan
 
-## Contributing
+```bash
+bundle exec evilution run lib/ --format json --jobs 4 --min-score 0.8
+```
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/marinazzio/evilution.
+Parse JSON output. Exit code 0 = pass, 1 = surviving mutants to address.
 
-1. Fork the repo
-2. Create your feature branch (`git checkout -b feature/my-feature`)
-3. Write tests for your changes
-4. Run `bundle exec rspec` to verify
-5. Commit and push
-6. Open a Pull Request
+### 2. PR / diff-only scan (fast feedback)
 
-## License
+```bash
+bundle exec evilution run lib/ --format json --diff main --min-score 0.9
+```
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
+Only mutates code changed since `main`. Use this for incremental checks — it's fast and focused on new/changed code.
+
+### 3. Single-file targeted scan
+
+```bash
+bundle exec evilution run lib/specific_file.rb --format json
+```
+
+Use when you know which file was modified and want to verify its test coverage.
+
+### 4. Fixing surviving mutants
+
+For each entry in `survived[]`:
+1. Read `file` at `line` to understand the code context
+2. Read `operator` to understand what was changed
+3. Read `suggestion` for a hint on what test to write
+4. Write a test that would fail if the mutation were applied
+5. Re-run evilution on just that file to verify the mutant is now killed
+
+### 5. CI gate
+
+```bash
+bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
+# Exit code 0 = pass, 1 = fail, 2 = error
+```
+
+Use `--quiet` in CI to suppress text output when you only need the exit code and JSON.
+
+## Internals (for context, not for direct use)
+
+1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
+2. **Extract** — Methods are identified as mutation subjects
+3. **Mutate** — Operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
+4. **Isolate** — Each mutation runs in a `fork()`-ed child process (no test pollution)
+5. **Test** — RSpec executes against the mutated source
+6. **Report** — Results aggregated into text or JSON
+
+## Repository
+
+https://github.com/marinazzio/evilution
