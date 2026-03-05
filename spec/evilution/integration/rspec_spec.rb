@@ -82,6 +82,44 @@ RSpec.describe Evilution::Integration::RSpec do
       integration.call(mutation)
     end
 
+    it "produces independent results across consecutive calls" do
+      passing_mutation = double(
+        "Mutation",
+        file_path: source_file.path,
+        original_source: original_source,
+        mutated_source: original_source
+      )
+      failing_mutation = double(
+        "Mutation",
+        file_path: source_file.path,
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+
+      call_count = 0
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        call_count += 1
+        call_count == 1 ? 0 : 1
+      end
+
+      first_result = integration.call(passing_mutation)
+      second_result = integration.call(failing_mutation)
+
+      expect(first_result[:passed]).to be true
+      expect(second_result[:passed]).to be false
+      expect(call_count).to eq(2)
+    end
+
+    it "calls RSpec.reset before each run to clear world state" do
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # Verify reset was called before the runner executes
+        expect(RSpec).to have_received(:reset)
+        0
+      end
+
+      integration.call(mutation)
+    end
+
     it "resets RSpec between runs" do
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
