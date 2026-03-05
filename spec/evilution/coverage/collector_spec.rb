@@ -13,30 +13,51 @@ RSpec.describe Evilution::Coverage::Collector do
     end
 
     it "returns coverage data keyed by absolute file paths" do
-      fixture = Tempfile.new(["coverage_fixture", ".rb"])
-      fixture.write("x = 1 + 1\n")
-      fixture.flush
+      source = Tempfile.new(["source", ".rb"])
+      source.write("def _cov_test_keyed; 42; end\n")
+      source.flush
 
-      result = collector.call(test_files: [fixture.path])
+      spec_file = Tempfile.new(["spec", "_spec.rb"])
+      spec_file.write(<<~RUBY)
+        require "#{source.path}"
+        RSpec.describe "_cov_test_keyed" do
+          it("works") { expect(_cov_test_keyed).to eq(42) }
+        end
+      RUBY
+      spec_file.flush
+
+      result = collector.call(test_files: [spec_file.path])
 
       expect(result.keys).to all(be_a(String))
+      expect(result[source.path]).to be_a(Array)
     ensure
-      fixture.close!
+      source&.close!
+      spec_file&.close!
     end
 
-    it "records line-level hit counts for an executed file" do
-      fixture = Tempfile.new(["coverage_fixture", ".rb"])
-      fixture.write("x = 1 + 1\n")
-      fixture.flush
+    it "records line-level hit counts for code exercised by specs" do
+      source = Tempfile.new(["source", ".rb"])
+      source.write("def _cov_test_hits; 99; end\n")
+      source.flush
 
-      result = collector.call(test_files: [fixture.path])
+      spec_file = Tempfile.new(["spec", "_spec.rb"])
+      spec_file.write(<<~RUBY)
+        require "#{source.path}"
+        RSpec.describe "_cov_test_hits" do
+          it("calls the method") { expect(_cov_test_hits).to eq(99) }
+        end
+      RUBY
+      spec_file.flush
 
-      line_data = result[fixture.path]
+      result = collector.call(test_files: [spec_file.path])
+
+      line_data = result[source.path]
       expect(line_data).to be_a(Array)
-      # The single executable line should have been hit once
-      expect(line_data.compact.first).to eq(1)
+      # The single executable line should have been hit
+      expect(line_data.compact.first).to be >= 1
     ensure
-      fixture.close!
+      source&.close!
+      spec_file&.close!
     end
 
     it "returns an empty hash when no test files are given" do
@@ -46,17 +67,26 @@ RSpec.describe Evilution::Coverage::Collector do
     end
 
     it "isolates coverage collection from the parent process" do
-      # Calling the collector should not leave Coverage running in the parent
-      fixture = Tempfile.new(["coverage_fixture", ".rb"])
-      fixture.write("y = 2\n")
-      fixture.flush
+      source = Tempfile.new(["source", ".rb"])
+      source.write("def _cov_test_iso; 2; end\n")
+      source.flush
 
-      collector.call(test_files: [fixture.path])
+      spec_file = Tempfile.new(["spec", "_spec.rb"])
+      spec_file.write(<<~RUBY)
+        require "#{source.path}"
+        RSpec.describe "_cov_test_iso" do
+          it("works") { expect(_cov_test_iso).to eq(2) }
+        end
+      RUBY
+      spec_file.flush
+
+      collector.call(test_files: [spec_file.path])
 
       # Coverage should not be running in the parent process after the call
       expect(Coverage.running?).to be false
     ensure
-      fixture.close!
+      source&.close!
+      spec_file&.close!
     end
   end
 end
