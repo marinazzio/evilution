@@ -83,6 +83,9 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(survived.first["file"]).to eq("lib/user.rb")
       expect(survived.first["line"]).to eq(9)
       expect(survived.first["diff"]).to include(">= 10")
+      expect(survived.first["suggestion"]).to eq(
+        "Add a test for the boundary condition where the comparison operand equals the threshold exactly"
+      )
     end
 
     it "includes killed mutations" do
@@ -90,6 +93,12 @@ RSpec.describe Evilution::Reporter::JSON do
 
       expect(parsed["killed"].length).to eq(1)
       expect(parsed["killed"].first["status"]).to eq("killed")
+    end
+
+    it "does not include suggestion for killed mutations" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("suggestion")
     end
 
     it "handles empty results" do
