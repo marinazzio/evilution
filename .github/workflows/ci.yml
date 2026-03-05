@@ -6,7 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Ruby ${{ matrix.ruby }}
+    name: Test on Ruby ${{ matrix.ruby }}
     strategy:
       matrix:
         ruby:
@@ -27,10 +27,5 @@ jobs:
         run: bundle exec rubocop
 
       - name: Run tests
-        run: |
-          if [ "${{ env.SKIP_PARALLEL_POOL_SPEC }}" = "1" ]; then
-            bundle exec rspec --exclude-pattern "spec/evilution/parallel/pool_spec.rb"
-          else
-            bundle exec rspec spec
-          fi
+        run: bundle exec rspec spec
         timeout-minutes: 5
