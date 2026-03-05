@@ -44,7 +44,14 @@ module Evilution
       end
 
       def run_rspec(mutation)
-        # Reset RSpec world between runs so each mutation gets a clean slate
+        # When used via the Runner with Isolation::Fork, each mutation is executed
+        # in its own forked child process, so RSpec state (loaded example groups,
+        # world, configuration) cannot accumulate across mutation runs — the child
+        # process exits after each run.
+        #
+        # This integration can also be invoked directly (e.g. in specs or alternative
+        # runners) without fork isolation. RSpec.reset is called here as
+        # defense-in-depth to clear RSpec state between mutation runs in those cases.
         ::RSpec.reset
 
         out = StringIO.new
