@@ -60,13 +60,19 @@ module Evilution
 
       attr_reader :jobs
 
-      # Divides mutations into N roughly equal chunks.
+      # Divides mutations into N chunks, grouping by file path so no two
+      # workers mutate the same file simultaneously (which would corrupt it).
       def partition(mutations, n)
+        by_file = mutations.group_by(&:file_path)
         chunks = Array.new(n) { [] }
-        mutations.each_with_index do |mutation, index|
-          chunks[index % n] << mutation
+
+        # Assign each file's mutations to the least-loaded chunk
+        by_file.values.sort_by { |group| -group.size }.each do |group|
+          smallest = chunks.min_by(&:size)
+          smallest.concat(group)
         end
-        chunks.reject(&:empty?)
+
+        chunks
       end
 
       # Runs a chunk of mutations sequentially inside a worker process.

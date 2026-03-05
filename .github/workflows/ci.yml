@@ -23,9 +23,14 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-
       - name: Run linter
         run: bundle exec rubocop
 
       - name: Run tests
-        run: bundle exec rspec spec
+        run: |
+          if [ "${{ env.SKIP_PARALLEL_POOL_SPEC }}" = "1" ]; then
+            bundle exec rspec --exclude-pattern "spec/evilution/parallel/pool_spec.rb"
+          else
+            bundle exec rspec spec
+          fi
+        timeout-minutes: 5

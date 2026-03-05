@@ -31,6 +31,65 @@ RSpec.describe Evilution::Parallel::Pool do
 
   let(:mutations) { (1..4).map { |i| build_mutation(i) } }
 
+  describe "partition" do
+    def build_mutation_for_file(file, line)
+      subj = Evilution::Subject.new(
+        name: "Example#foo",
+        file_path: file,
+        line_number: line,
+        source: "def foo; end",
+        node: nil
+      )
+      Evilution::Mutation.new(
+        subject: subj,
+        operator_name: "comparison_replacement",
+        original_source: "a > b",
+        mutated_source: "a < b",
+        file_path: file,
+        line: line
+      )
+    end
+
+    it "groups mutations for the same file into the same chunk" do
+      file_a = (1..3).map { |i| build_mutation_for_file("lib/a.rb", i) }
+      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
+
+      all_mutations = file_a + file_b
+      chunks = pool.send(:partition, all_mutations, 2)
+
+      # For each file_path, collect the indices of chunks in which it appears
+      file_to_chunk_indices = Hash.new { |h, k| h[k] = [] }
+      chunks.each_with_index do |chunk, chunk_index|
+        chunk.each do |mutation|
+          file_to_chunk_indices[mutation.file_path] << chunk_index
+        end
+      end
+
+      file_to_chunk_indices.each do |file, indices|
+        unique_indices = indices.uniq
+        expect(unique_indices.size).to(
+          eq(1),
+          "Expected all mutations for #{file} to be in a single chunk, but found in chunks #{unique_indices}"
+        )
+      end
+
+      # Ensure no mutations were lost or duplicated across chunks
+      expect(chunks.flatten).to match_array(all_mutations)
+    end
+
+    it "balances chunks by assigning largest groups first" do
+      file_a = (1..4).map { |i| build_mutation_for_file("lib/a.rb", i) }
+      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
+      file_c = [build_mutation_for_file("lib/c.rb", 1)]
+
+      chunks = pool.send(:partition, file_a + file_b + file_c, 2)
+
+      sizes = chunks.map(&:size).sort
+      # file_a (4) in one chunk, file_b (2) + file_c (1) in other = [3, 4]
+      expect(sizes).to eq([3, 4])
+    end
+  end
+
   describe "#call" do
     context "with passing test commands" do
       let(:test_command_builder) do
@@ -109,8 +168,31 @@ RSpec.describe Evilution::Parallel::Pool do
       # Each mutation sleeps 0.3s. With 2 workers handling 2 mutations each in parallel,
       # wall-clock time should be ~0.6s — significantly less than the 1.2s that sequential
       # execution (4 × 0.3s) would take.
+      #
+      # Mutations must have distinct file_paths so partition spreads them across workers
+      # (same-file mutations are grouped into a single chunk to avoid concurrent writes).
       let(:sleep_duration) { 0.3 }
-      let(:sequential_lower_bound) { mutations.size * sleep_duration } # 1.2s
+      let(:sequential_lower_bound) { parallel_mutations.size * sleep_duration } # 1.2s
+
+      let(:parallel_mutations) do
+        (1..4).map do |i|
+          subj = Evilution::Subject.new(
+            name: "Example#foo",
+            file_path: "lib/example_#{i}.rb",
+            line_number: 1,
+            source: "def foo; end",
+            node: nil
+          )
+          Evilution::Mutation.new(
+            subject: subj,
+            operator_name: "comparison_replacement",
+            original_source: "a > b",
+            mutated_source: "a < b",
+            file_path: "lib/example_#{i}.rb",
+            line: 1
+          )
+        end
+      end
 
       let(:test_command_builder) do
         duration = sleep_duration
@@ -124,7 +206,7 @@ RSpec.describe Evilution::Parallel::Pool do
 
       it "completes faster than sequential execution would" do
         start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        results = pool.call(mutations: mutations, test_command_builder: test_command_builder, timeout: 10)
+        results = pool.call(mutations: parallel_mutations, test_command_builder: test_command_builder, timeout: 10)
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
         expect(results.size).to eq(4)
