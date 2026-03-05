@@ -301,7 +301,6 @@ RSpec.describe Evilution::Runner do
     end
 
     let(:collector) { instance_double(Evilution::Coverage::Collector) }
-    let(:test_map) { Evilution::Coverage::TestMap.new(coverage_data) }
 
     before do
       parser = instance_double(Evilution::AST::Parser)
