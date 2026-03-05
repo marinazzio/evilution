@@ -33,7 +33,10 @@ module Evilution
       subjects = parse_subjects
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
+      test_map = collect_coverage if config.coverage
+      mutations, skipped = filter_by_coverage(mutations, test_map) if test_map
       results = run_mutations(mutations)
+      results.concat(skipped) if skipped
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
       summary = Result::Summary.new(results: results, duration: duration)
@@ -58,6 +61,26 @@ module Evilution
 
     def generate_mutations(subjects)
       subjects.flat_map { |subject| registry.mutations_for(subject) }
+    end
+
+    def collect_coverage
+      test_files = Dir.glob("spec/**/*_spec.rb")
+      return nil if test_files.empty?
+
+      data = Coverage::Collector.new.call(test_files: test_files)
+      Coverage::TestMap.new(data)
+    end
+
+    def filter_by_coverage(mutations, test_map)
+      covered, uncovered = mutations.partition do |m|
+        test_map.covered?(File.expand_path(m.file_path), m.line)
+      end
+
+      skipped = uncovered.map do |m|
+        Result::MutationResult.new(mutation: m, status: :survived, duration: 0.0)
+      end
+
+      [covered, skipped]
     end
 
     def run_mutations(mutations)
