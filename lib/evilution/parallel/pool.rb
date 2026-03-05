@@ -60,18 +60,12 @@ module Evilution
 
       attr_reader :jobs
 
-      # Divides mutations into N chunks, grouping by file path so no two
-      # workers mutate the same file simultaneously (which would corrupt it).
+      # Distributes mutations across N chunks using round-robin.
+      # File isolation is handled by Integration::RSpec via temp directories
+      # and $LOAD_PATH, so same-file mutations can safely run in parallel.
       def partition(mutations, n)
-        by_file = mutations.group_by(&:file_path)
         chunks = Array.new(n) { [] }
-
-        # Assign each file's mutations to the least-loaded chunk
-        by_file.values.sort_by { |group| -group.size }.each do |group|
-          smallest = chunks.min_by(&:size)
-          smallest.concat(group)
-        end
-
+        mutations.each_with_index { |m, i| chunks[i % n] << m }
         chunks
       end
 

@@ -50,43 +50,24 @@ RSpec.describe Evilution::Parallel::Pool do
       )
     end
 
-    it "groups mutations for the same file into the same chunk" do
-      file_a = (1..3).map { |i| build_mutation_for_file("lib/a.rb", i) }
-      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
-
-      all_mutations = file_a + file_b
+    it "distributes mutations round-robin across chunks" do
+      all_mutations = (1..5).map { |i| build_mutation_for_file("lib/a.rb", i) }
       chunks = pool.send(:partition, all_mutations, 2)
 
-      # For each file_path, collect the indices of chunks in which it appears
-      file_to_chunk_indices = Hash.new { |h, k| h[k] = [] }
-      chunks.each_with_index do |chunk, chunk_index|
-        chunk.each do |mutation|
-          file_to_chunk_indices[mutation.file_path] << chunk_index
-        end
-      end
+      # Round-robin: indices 0,2,4 -> chunk 0; indices 1,3 -> chunk 1
+      expect(chunks[0].map(&:line)).to eq([1, 3, 5])
+      expect(chunks[1].map(&:line)).to eq([2, 4])
 
-      file_to_chunk_indices.each do |file, indices|
-        unique_indices = indices.uniq
-        expect(unique_indices.size).to(
-          eq(1),
-          "Expected all mutations for #{file} to be in a single chunk, but found in chunks #{unique_indices}"
-        )
-      end
-
-      # Ensure no mutations were lost or duplicated across chunks
+      # No mutations lost or duplicated
       expect(chunks.flatten).to match_array(all_mutations)
     end
 
-    it "balances chunks by assigning largest groups first" do
-      file_a = (1..4).map { |i| build_mutation_for_file("lib/a.rb", i) }
-      file_b = (1..2).map { |i| build_mutation_for_file("lib/b.rb", i) }
-      file_c = [build_mutation_for_file("lib/c.rb", 1)]
+    it "evenly distributes mutations across chunks" do
+      all_mutations = (1..6).map { |i| build_mutation_for_file("lib/a.rb", i) }
+      chunks = pool.send(:partition, all_mutations, 3)
 
-      chunks = pool.send(:partition, file_a + file_b + file_c, 2)
-
-      sizes = chunks.map(&:size).sort
-      # file_a (4) in one chunk, file_b (2) + file_c (1) in other = [3, 4]
-      expect(sizes).to eq([3, 4])
+      sizes = chunks.map(&:size)
+      expect(sizes).to all(eq(2))
     end
   end
 
@@ -169,29 +150,13 @@ RSpec.describe Evilution::Parallel::Pool do
       # wall-clock time should be ~0.6s — significantly less than the 1.2s that sequential
       # execution (4 × 0.3s) would take.
       #
-      # Mutations must have distinct file_paths so partition spreads them across workers
-      # (same-file mutations are grouped into a single chunk to avoid concurrent writes).
+      # All mutations use the same file — round-robin partition spreads them across workers,
+      # and per-mutation file isolation (via Integration::RSpec temp dirs) prevents conflicts.
       let(:sleep_duration) { 0.3 }
       let(:sequential_lower_bound) { parallel_mutations.size * sleep_duration } # 1.2s
 
       let(:parallel_mutations) do
-        (1..4).map do |i|
-          subj = Evilution::Subject.new(
-            name: "Example#foo",
-            file_path: "lib/example_#{i}.rb",
-            line_number: 1,
-            source: "def foo; end",
-            node: nil
-          )
-          Evilution::Mutation.new(
-            subject: subj,
-            operator_name: "comparison_replacement",
-            original_source: "a > b",
-            mutated_source: "a < b",
-            file_path: "lib/example_#{i}.rb",
-            line: 1
-          )
-        end
+        (1..4).map { |i| build_mutation(i) }
       end
 
       let(:test_command_builder) do

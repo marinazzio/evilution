@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "stringio"
+require "tmpdir"
 require_relative "base"
 
 module Evilution
@@ -14,6 +16,7 @@ module Evilution
 
       def call(mutation)
         @original_content = nil
+        @temp_dir = nil
         ensure_rspec_loaded
         apply_mutation(mutation)
         run_rspec(mutation)
@@ -35,12 +38,43 @@ module Evilution
       end
 
       def apply_mutation(mutation)
-        @original_content = File.read(mutation.file_path)
-        File.write(mutation.file_path, mutation.mutated_source)
+        subpath = resolve_require_subpath(mutation.file_path)
+
+        if subpath
+          @temp_dir = Dir.mktmpdir("evilution")
+          dest = File.join(@temp_dir, subpath)
+          FileUtils.mkdir_p(File.dirname(dest))
+          File.write(dest, mutation.mutated_source)
+          $LOAD_PATH.unshift(@temp_dir)
+        else
+          # Fallback: direct write when file isn't under any $LOAD_PATH entry
+          @original_content = File.read(mutation.file_path)
+          File.write(mutation.file_path, mutation.mutated_source)
+        end
       end
 
       def restore_original(mutation)
-        File.write(mutation.file_path, @original_content) if @original_content
+        if @temp_dir
+          $LOAD_PATH.delete(@temp_dir)
+          FileUtils.rm_rf(@temp_dir)
+          @temp_dir = nil
+        elsif @original_content
+          File.write(mutation.file_path, @original_content)
+        end
+      end
+
+      def resolve_require_subpath(file_path)
+        absolute = File.expand_path(file_path)
+
+        $LOAD_PATH.each do |entry|
+          dir = File.expand_path(entry)
+          prefix = dir.end_with?("/") ? dir : "#{dir}/"
+          next unless absolute.start_with?(prefix)
+
+          return absolute.delete_prefix(prefix)
+        end
+
+        nil
       end
 
       def run_rspec(mutation)
