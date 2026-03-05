@@ -178,6 +178,68 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "temp file isolation" do
+    let(:load_path_dir) { Dir.mktmpdir("evilution_lp") }
+    let(:source_subpath) { "calculator.rb" }
+    let(:source_path) { File.join(load_path_dir, source_subpath) }
+
+    let(:lp_mutation) do
+      double(
+        "Mutation",
+        file_path: source_path,
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+    end
+
+    before do
+      File.write(source_path, original_source)
+      $LOAD_PATH.unshift(load_path_dir)
+    end
+
+    after do
+      $LOAD_PATH.delete(load_path_dir)
+      FileUtils.rm_rf(load_path_dir)
+    end
+
+    it "does not modify the original file on disk" do
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      integration.call(lp_mutation)
+
+      expect(File.read(source_path)).to eq(original_source)
+    end
+
+    it "cleans up the temp directory after restore_original" do
+      temp_dir_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # Capture the temp dir that was prepended to $LOAD_PATH
+        temp_dir_during_run = $LOAD_PATH.first
+        expect(Dir.exist?(temp_dir_during_run)).to be true
+        1
+      end
+
+      integration.call(lp_mutation)
+
+      expect(temp_dir_during_run).not_to be_nil
+      expect(Dir.exist?(temp_dir_during_run)).to be false
+    end
+
+    it "prepends temp dir to $LOAD_PATH during test execution" do
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # The first $LOAD_PATH entry should be our temp dir
+        expect($LOAD_PATH.first).to start_with(File.join(Dir.tmpdir, "evilution"))
+        0
+      end
+
+      integration.call(lp_mutation)
+
+      # After restore, temp dir should not be in $LOAD_PATH
+      evilution_entries = $LOAD_PATH.select { |p| p.include?("evilution") && p.start_with?(Dir.tmpdir) && p != load_path_dir }
+      expect(evilution_entries).to be_empty
+    end
+  end
+
   describe "convention-based test file detection" do
     let(:lib_mutation) do
       double(
