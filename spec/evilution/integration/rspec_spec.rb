@@ -108,6 +108,8 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(first_result[:passed]).to be true
       expect(second_result[:passed]).to be false
       expect(call_count).to eq(2)
+      # Ensure each call clears RSpec world state independently
+      expect(RSpec).to have_received(:reset).twice
     end
 
     it "calls RSpec.reset before each run to clear world state" do
