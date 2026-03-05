@@ -95,7 +95,8 @@ Use `--format json` for machine-readable output. Schema:
       "line": "integer   — line number of the mutation",
       "status": "string  — result status: 'survived', 'killed', 'timeout', or 'error'",
       "duration": "float — seconds this mutation took, rounded to 4 decimals",
-      "diff": "string    — unified diff snippet"
+      "diff": "string    — unified diff snippet",
+      "suggestion": "string — actionable hint for surviving mutants (survived only)"
     }
   ],
   "killed": ["... same shape as survived entries ..."],

@@ -2,10 +2,15 @@
 
 require "json"
 require "time"
+require_relative "suggestion"
 
 module Evilution
   module Reporter
     class JSON
+      def initialize
+        @suggestion = Suggestion.new
+      end
+
       def call(summary)
         ::JSON.generate(build_report(summary))
       end
@@ -38,7 +43,7 @@ module Evilution
 
       def build_mutation_detail(result)
         mutation = result.mutation
-        {
+        detail = {
           operator: mutation.operator_name,
           file: mutation.file_path,
           line: mutation.line,
@@ -46,6 +51,8 @@ module Evilution
           duration: result.duration.round(4),
           diff: mutation.diff
         }
+        detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
+        detail
       end
     end
   end
