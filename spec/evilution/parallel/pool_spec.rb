@@ -168,8 +168,31 @@ RSpec.describe Evilution::Parallel::Pool do
       # Each mutation sleeps 0.3s. With 2 workers handling 2 mutations each in parallel,
       # wall-clock time should be ~0.6s — significantly less than the 1.2s that sequential
       # execution (4 × 0.3s) would take.
+      #
+      # Mutations must have distinct file_paths so partition spreads them across workers
+      # (same-file mutations are grouped into a single chunk to avoid concurrent writes).
       let(:sleep_duration) { 0.3 }
-      let(:sequential_lower_bound) { mutations.size * sleep_duration } # 1.2s
+      let(:sequential_lower_bound) { parallel_mutations.size * sleep_duration } # 1.2s
+
+      let(:parallel_mutations) do
+        (1..4).map do |i|
+          subj = Evilution::Subject.new(
+            name: "Example#foo",
+            file_path: "lib/example_#{i}.rb",
+            line_number: 1,
+            source: "def foo; end",
+            node: nil
+          )
+          Evilution::Mutation.new(
+            subject: subj,
+            operator_name: "comparison_replacement",
+            original_source: "a > b",
+            mutated_source: "a < b",
+            file_path: "lib/example_#{i}.rb",
+            line: 1
+          )
+        end
+      end
 
       let(:test_command_builder) do
         duration = sleep_duration
@@ -183,7 +206,7 @@ RSpec.describe Evilution::Parallel::Pool do
 
       it "completes faster than sequential execution would" do
         start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        results = pool.call(mutations: mutations, test_command_builder: test_command_builder, timeout: 10)
+        results = pool.call(mutations: parallel_mutations, test_command_builder: test_command_builder, timeout: 10)
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
         expect(results.size).to eq(4)
