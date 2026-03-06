@@ -10,7 +10,7 @@
 - **RSpec integration** for test execution
 - **Parallel execution** with configurable worker count (`--jobs`)
 - **Diff-based targeting** to mutate only changed code (`--diff HEAD~1`)
-- **Coverage-based test selection** using Ruby's Coverage module
+- **Coverage-based filtering** — skip mutations on lines no test exercises
 - **JSON output** for AI agents and CI pipelines (`--format json`)
 - **CLI output** with human-readable mutation testing results
 - **Actionable suggestions** for surviving mutants

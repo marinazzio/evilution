@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
   spec.description = "Evilution is a mutation testing tool for Ruby. " \
                      "It validates test suite quality by making small code changes and " \
                      "checking if tests catch them. AI-agent-first design with JSON output, " \
-                     "diff-based targeting, and coverage-based test selection."
+                     "diff-based targeting, and coverage-based filtering."
 
   spec.metadata = {
     "allowed_push_host" => "https://rubygems.org",
