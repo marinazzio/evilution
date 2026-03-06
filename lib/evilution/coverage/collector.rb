@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "coverage"
+require "stringio"
 
 module Evilution
   module Coverage
@@ -31,7 +32,14 @@ module Evilution
 
       def collect_coverage(test_files)
         ::Coverage.start
-        test_files.each { |f| load(f) }
+        return ::Coverage.result if test_files.empty?
+
+        require "rspec/core"
+        ::RSpec.reset
+        ::RSpec::Core::Runner.run(
+          ["--format", "progress", "--no-color", "--order", "defined", *test_files],
+          StringIO.new, StringIO.new
+        )
         ::Coverage.result
       end
     end

@@ -72,7 +72,7 @@ module Evilution
         # Test integration: rspec (default: rspec)
         # integration: rspec
 
-        # Enable coverage-based test selection (default: true)
+        # Skip mutations on uncovered lines (default: true)
         # coverage: true
       YAML
     end

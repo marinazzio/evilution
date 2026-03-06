@@ -66,7 +66,7 @@ Creates `.evilution.yml`:
 # format: text       # text | json
 # min_score: 0.0     # 0.0–1.0
 # integration: rspec # test framework
-# coverage: true     # coverage-based test selection
+# coverage: true     # skip mutations on uncovered lines
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.
