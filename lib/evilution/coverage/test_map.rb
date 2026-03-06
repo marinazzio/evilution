@@ -20,12 +20,6 @@ module Evilution
         count = line_data[index]
         !count.nil? && count.positive?
       end
-
-      # Returns whether the given source line was exercised by any test.
-      # Delegates to covered? for the actual check.
-      def relevant_tests(file_path, line_number)
-        covered?(file_path, line_number)
-      end
     end
   end
 end

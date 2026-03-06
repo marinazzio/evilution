@@ -53,22 +53,4 @@ RSpec.describe Evilution::Coverage::TestMap do
       end
     end
   end
-
-  describe "#relevant_tests" do
-    it "returns true when the line was executed during tests" do
-      expect(test_map.relevant_tests("/path/to/lib/foo.rb", 2)).to be true
-    end
-
-    it "returns false when the line was not executed during tests" do
-      expect(test_map.relevant_tests("/path/to/lib/foo.rb", 3)).to be false
-    end
-
-    it "returns false for a non-executable line" do
-      expect(test_map.relevant_tests("/path/to/lib/foo.rb", 1)).to be false
-    end
-
-    it "returns false for an unknown file" do
-      expect(test_map.relevant_tests("/path/to/lib/missing.rb", 1)).to be false
-    end
-  end
 end
