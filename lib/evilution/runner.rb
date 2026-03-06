@@ -33,7 +33,7 @@ module Evilution
       subjects = parse_subjects
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      test_map = collect_coverage if config.coverage
+      test_map = collect_coverage if config.coverage && config.integration == :rspec
       mutations, skipped = filter_by_coverage(mutations, test_map) if test_map
       results = run_mutations(mutations)
       results.concat(skipped) if skipped
