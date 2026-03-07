@@ -111,24 +111,6 @@ RSpec.describe Evilution::CLI do
       end
     end
 
-    describe "--jobs flag" do
-      it "sets jobs to the given integer" do
-        cli = described_class.new(["--jobs", "4"])
-        cli.call
-        expect(Evilution::Runner).to have_received(:new).with(
-          config: have_attributes(jobs: 4)
-        )
-      end
-
-      it "also accepts the short form -j" do
-        cli = described_class.new(["-j", "8"])
-        cli.call
-        expect(Evilution::Runner).to have_received(:new).with(
-          config: have_attributes(jobs: 8)
-        )
-      end
-    end
-
     describe "--timeout flag" do
       it "sets timeout to the given integer" do
         cli = described_class.new(["--timeout", "30"])

@@ -55,7 +55,6 @@ module Evilution
         opts.separator ""
         opts.separator "Options:"
 
-        opts.on("-j", "--jobs N", Integer, "Number of parallel workers") { |n| @options[:jobs] = n }
         opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
         opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
         opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }

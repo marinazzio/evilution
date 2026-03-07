@@ -9,7 +9,6 @@ RSpec.describe Evilution::Runner do
       format: :json,
       timeout: 5,
       quiet: true,
-      jobs: 1,
       coverage: false,
       skip_config_file: true
     )
@@ -101,59 +100,6 @@ RSpec.describe Evilution::Runner do
     end
   end
 
-  describe "#call with parallel execution" do
-    let(:config) do
-      Evilution::Config.new(
-        target_files: ["lib/example.rb"],
-        format: :json,
-        timeout: 5,
-        quiet: true,
-        jobs: 4,
-        coverage: false,
-        skip_config_file: true
-      )
-    end
-
-    let(:mutation2) do
-      double(
-        "Mutation",
-        subject: subject_obj,
-        operator_name: "nil_replacement",
-        original_source: "x",
-        mutated_source: "nil",
-        file_path: "lib/example.rb",
-        line: 5,
-        column: 0,
-        diff: "- x\n+ nil"
-      )
-    end
-
-    before do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
-
-      registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation, mutation2])
-
-      pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(jobs: 4).and_return(pool)
-      allow(pool).to receive(:call).and_return([mutation_result, mutation_result])
-    end
-
-    it "uses Parallel::Pool when jobs > 1 and multiple mutations exist" do
-      pool = Evilution::Parallel::Pool.new(jobs: 4)
-      expect(pool).to receive(:call).with(
-        mutations: [mutation, mutation2],
-        test_command_builder: anything,
-        timeout: 5
-      ).and_return([mutation_result, mutation_result])
-
-      runner.call
-    end
-  end
-
   describe "#call with diff filtering" do
     let(:config) do
       Evilution::Config.new(
@@ -161,8 +107,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        jobs: 1,
-        diff_base: "HEAD~1",
+          diff_base: "HEAD~1",
         coverage: false,
         skip_config_file: true
       )
@@ -229,8 +174,7 @@ RSpec.describe Evilution::Runner do
         target_files: ["lib/example.rb"],
         integration: :minitest,
         quiet: true,
-        jobs: 1,
-        coverage: false,
+          coverage: false,
         skip_config_file: true
       )
     end
@@ -260,8 +204,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        jobs: 1,
-        coverage: true,
+          coverage: true,
         skip_config_file: true
       )
     end
