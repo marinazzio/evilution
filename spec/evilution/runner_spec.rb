@@ -98,6 +98,53 @@ RSpec.describe Evilution::Runner do
 
       runner.call
     end
+
+    context "with multiple mutations" do
+      let(:mutation2) do
+        double(
+          "Mutation",
+          subject: subject_obj,
+          operator_name: "nil_replacement",
+          original_source: "x",
+          mutated_source: "nil",
+          file_path: "lib/example.rb",
+          line: 5,
+          column: 0,
+          diff: "- x\n+ nil"
+        )
+      end
+
+      let(:mutation_result2) do
+        Evilution::Result::MutationResult.new(
+          mutation: mutation2,
+          status: :survived,
+          duration: 0.2
+        )
+      end
+
+      before do
+        registry = Evilution::Mutator::Registry.default
+        allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation, mutation2])
+
+        isolator = Evilution::Isolation::Fork.new
+        allow(isolator).to receive(:call).and_return(mutation_result, mutation_result2)
+      end
+
+      it "runs isolator for each mutation" do
+        isolator = Evilution::Isolation::Fork.new
+        expect(isolator).to receive(:call).twice
+
+        runner.call
+      end
+
+      it "returns results for all mutations" do
+        result = runner.call
+
+        expect(result.total).to eq(2)
+        expect(result.killed).to eq(1)
+        expect(result.survived).to eq(1)
+      end
+    end
   end
 
   describe "#call with diff filtering" do

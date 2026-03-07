@@ -56,6 +56,10 @@ RSpec.describe Evilution::Config do
       expect(config.target_files).to eq(["lib/foo.rb"])
     end
 
+    it "warns when jobs option is provided" do
+      expect { described_class.new(jobs: 4, skip_config_file: true) }.to output(/no longer supported/).to_stderr
+    end
+
     it "accepts custom timeout" do
       config = described_class.new(timeout: 30, skip_config_file: true)
 

@@ -24,6 +24,7 @@ module Evilution
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
       merged = DEFAULTS.merge(file_options).merge(options)
+      warn_removed_options(merged)
       @target_files = Array(merged[:target_files])
       @timeout = merged[:timeout]
       @format = merged[:format].to_sym
@@ -73,6 +74,10 @@ module Evilution
     end
 
     private
+
+    def warn_removed_options(merged)
+      warn("Warning: 'jobs' option is no longer supported and will be ignored. Remove it from your config.") if merged.key?(:jobs)
+    end
 
     def load_config_file
       CONFIG_FILES.each do |path|

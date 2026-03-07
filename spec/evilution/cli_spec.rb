@@ -111,6 +111,12 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--jobs flag (deprecated)" do
+      it "warns and does not crash" do
+        expect { described_class.new(["--jobs", "4"]) }.to output(/no longer supported/).to_stderr
+      end
+    end
+
     describe "--timeout flag" do
       it "sets timeout to the given integer" do
         cli = described_class.new(["--timeout", "30"])
