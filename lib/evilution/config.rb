@@ -76,10 +76,10 @@ module Evilution
     private
 
     def warn_removed_options(merged)
-      if merged.key?(:jobs)
-        warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
-          "Remove it from your configuration or invocation.")
-      end
+      return unless merged.key?(:jobs)
+
+      warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
+           "Remove it from your configuration or invocation.")
     end
 
     def load_config_file
