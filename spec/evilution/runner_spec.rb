@@ -107,7 +107,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-          diff_base: "HEAD~1",
+        diff_base: "HEAD~1",
         coverage: false,
         skip_config_file: true
       )
@@ -174,7 +174,7 @@ RSpec.describe Evilution::Runner do
         target_files: ["lib/example.rb"],
         integration: :minitest,
         quiet: true,
-          coverage: false,
+        coverage: false,
         skip_config_file: true
       )
     end
@@ -204,7 +204,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-          coverage: true,
+        coverage: true,
         skip_config_file: true
       )
     end
