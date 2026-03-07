@@ -115,6 +115,20 @@ RSpec.describe Evilution::CLI do
       it "warns and does not crash" do
         expect { described_class.new(["--jobs", "4"]) }.to output(/no longer supported/).to_stderr
       end
+
+      it "also handles the short form -j" do
+        expect { described_class.new(["-j", "4"]) }.to output(/no longer supported/).to_stderr
+      end
+
+      it "does not appear in help output" do
+        help_output = nil
+        expect do
+          described_class.new(["--help"])
+        rescue SystemExit
+          # --help causes SystemExit
+        end.to output(satisfy { |out| help_output = out }).to_stdout
+        expect(help_output).not_to include("--jobs")
+      end
     end
 
     describe "--timeout flag" do

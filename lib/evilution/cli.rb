@@ -12,6 +12,7 @@ module Evilution
       @command = :run
       argv = argv.dup
       argv = extract_command(argv)
+      argv = warn_removed_flags(argv)
       @files = build_option_parser.parse!(argv)
     end
 
@@ -43,6 +44,26 @@ module Evilution
       argv
     end
 
+    def warn_removed_flags(argv)
+      result = []
+      skip_next = false
+      argv.each do |arg|
+        if skip_next
+          skip_next = false
+          next
+        end
+        if %w[--jobs -j].include?(arg)
+          warn("Warning: --jobs is no longer supported and will be ignored.")
+          skip_next = true
+        elsif arg.start_with?("--jobs=")
+          warn("Warning: --jobs is no longer supported and will be ignored.")
+        else
+          result << arg
+        end
+      end
+      result
+    end
+
     def build_option_parser
       OptionParser.new do |opts|
         opts.banner = "Usage: evilution [command] [options] [files...]"
@@ -55,9 +76,6 @@ module Evilution
         opts.separator ""
         opts.separator "Options:"
 
-        opts.on("-j", "--jobs N", Integer, "[REMOVED] Parallel execution was removed in v0.2") do
-          warn("Warning: --jobs is no longer supported and will be ignored.")
-        end
         opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
         opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
         opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }

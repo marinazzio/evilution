@@ -132,7 +132,7 @@ RSpec.describe Evilution::Runner do
 
       it "runs isolator for each mutation" do
         isolator = Evilution::Isolation::Fork.new
-        expect(isolator).to receive(:call).twice
+        expect(isolator).to receive(:call).twice.and_return(mutation_result, mutation_result2)
 
         runner.call
       end
