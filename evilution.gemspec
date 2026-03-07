@@ -23,6 +23,7 @@ Gem::Specification.new do |spec|
     "bug_tracker_uri" => "https://github.com/marinazzio/evilution/issues",
     "documentation_uri" => "https://github.com/marinazzio/evilution/blob/master/README.md",
 
+    "changelog_uri" => "https://github.com/marinazzio/evilution/blob/master/CHANGELOG.md",
     "homepage_uri" => spec.homepage,
     "rubygems_mfa_required" => "true",
     "source_code_uri" => spec.homepage
