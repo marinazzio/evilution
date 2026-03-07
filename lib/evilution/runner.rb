@@ -4,7 +4,6 @@ require_relative "config"
 require_relative "ast/parser"
 require_relative "mutator/registry"
 require_relative "isolation/fork"
-require_relative "parallel/pool"
 require_relative "integration/rspec"
 require_relative "reporter/json"
 require_relative "reporter/cli"
@@ -86,14 +85,6 @@ module Evilution
     def run_mutations(mutations)
       integration = build_integration
 
-      if config.jobs > 1 && mutations.size > 1
-        run_parallel(mutations, integration)
-      else
-        run_sequential(mutations, integration)
-      end
-    end
-
-    def run_sequential(mutations, integration)
       mutations.map do |mutation|
         test_command = ->(m) { integration.call(m) }
         isolator.call(
@@ -102,12 +93,6 @@ module Evilution
           timeout: config.timeout
         )
       end
-    end
-
-    def run_parallel(mutations, integration)
-      pool = Parallel::Pool.new(jobs: config.jobs)
-      test_command_builder = ->(_mutation) { ->(m) { integration.call(m) } }
-      pool.call(mutations: mutations, test_command_builder: test_command_builder, timeout: config.timeout)
     end
 
     def build_integration

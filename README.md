@@ -37,7 +37,6 @@ evilution [command] [options] [files...]
 
 | Flag                    | Type    | Default      | Description                                       |
 |-------------------------|---------|--------------|---------------------------------------------------|
-| `-j`, `--jobs N`        | Integer | CPU cores    | Parallel worker count. Use `1` for sequential.    |
 | `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
 | `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate methods whose definition line changed since BASE. |
@@ -61,7 +60,6 @@ Generate default config: `bundle exec evilution init`
 Creates `.evilution.yml`:
 
 ```yaml
-# jobs: 4            # parallel workers
 # timeout: 10        # seconds per mutation
 # format: text       # text | json
 # min_score: 0.0     # 0.0–1.0
@@ -137,7 +135,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 ### 1. Full project scan
 
 ```bash
-bundle exec evilution run lib/ --format json --jobs 4 --min-score 0.8
+bundle exec evilution run lib/ --format json --min-score 0.8
 ```
 
 Parse JSON output. Exit code 0 = pass, 1 = surviving mutants to address.

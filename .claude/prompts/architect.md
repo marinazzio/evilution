@@ -73,7 +73,6 @@ Evilution
   ::Coverage::TestMap      # Source line → test file mapping
   ::Diff::Parser           # Git diff output parser
   ::Diff::FileFilter       # Filter subjects to changed code
-  ::Parallel::Pool         # Thread-based worker pool
   ::Result::MutationResult # Single mutation outcome
   ::Result::Summary        # Aggregated results
   ::Reporter::JSON         # Structured output for AI agents

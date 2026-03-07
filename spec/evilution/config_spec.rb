@@ -10,11 +10,6 @@ RSpec.describe Evilution::Config do
       expect(config.target_files).to eq([])
     end
 
-    it "sets jobs to processor count" do
-      expect(config.jobs).to be_a(Integer)
-      expect(config.jobs).to be >= 1
-    end
-
     it "sets timeout to 10 seconds" do
       expect(config.timeout).to eq(10)
     end
@@ -61,10 +56,8 @@ RSpec.describe Evilution::Config do
       expect(config.target_files).to eq(["lib/foo.rb"])
     end
 
-    it "accepts custom jobs count" do
-      config = described_class.new(jobs: 2, skip_config_file: true)
-
-      expect(config.jobs).to eq(2)
+    it "warns when jobs option is provided" do
+      expect { described_class.new(jobs: 4, skip_config_file: true) }.to output(/no longer supported/).to_stderr
     end
 
     it "accepts custom timeout" do
@@ -148,7 +141,6 @@ RSpec.describe Evilution::Config do
     it "returns a YAML string with commented-out options" do
       template = described_class.default_template
 
-      expect(template).to include("# jobs:")
       expect(template).to include("# timeout:")
       expect(template).to include("# format:")
     end

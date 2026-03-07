@@ -7,7 +7,6 @@ module Evilution
     CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
 
     DEFAULTS = {
-      jobs: nil,
       timeout: 10,
       format: :text,
       diff_base: nil,
@@ -19,14 +18,14 @@ module Evilution
       quiet: false
     }.freeze
 
-    attr_reader :target_files, :jobs, :timeout, :format, :diff_base,
+    attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
       merged = DEFAULTS.merge(file_options).merge(options)
+      warn_removed_options(merged)
       @target_files = Array(merged[:target_files])
-      @jobs = merged[:jobs] || default_jobs
       @timeout = merged[:timeout]
       @format = merged[:format].to_sym
       @diff_base = merged[:diff_base]
@@ -57,9 +56,6 @@ module Evilution
         # Evilution configuration
         # See: https://github.com/marinazzio/evilution
 
-        # Number of parallel workers (default: number of CPU cores)
-        # jobs: 4
-
         # Per-mutation timeout in seconds (default: 10)
         # timeout: 10
 
@@ -79,6 +75,13 @@ module Evilution
 
     private
 
+    def warn_removed_options(merged)
+      return unless merged.key?(:jobs)
+
+      warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
+           "Remove it from your configuration or invocation.")
+    end
+
     def load_config_file
       CONFIG_FILES.each do |path|
         next unless File.exist?(path)
@@ -88,11 +91,6 @@ module Evilution
       end
 
       {}
-    end
-
-    def default_jobs
-      require "etc"
-      Etc.nprocessors
     end
   end
 end
