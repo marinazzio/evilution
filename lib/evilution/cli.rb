@@ -52,7 +52,7 @@ module Evilution
         if %w[--jobs -j].include?(arg)
           warn("Warning: --jobs is no longer supported and will be ignored.")
           next_arg = argv[i + 1]
-          i += next_arg && !next_arg.start_with?("-") ? 2 : 1
+          i += next_arg&.match?(/\A\d+\z/) ? 2 : 1
         elsif arg.start_with?("--jobs=") || arg.match?(/\A-j\d+\z/)
           warn("Warning: --jobs is no longer supported and will be ignored.")
           i += 1
