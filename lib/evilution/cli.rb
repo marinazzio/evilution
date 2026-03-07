@@ -13,7 +13,8 @@ module Evilution
       argv = argv.dup
       argv = extract_command(argv)
       argv = warn_removed_flags(argv)
-      @files = build_option_parser.parse!(argv)
+      raw_args = build_option_parser.parse!(argv)
+      @files, @line_ranges = parse_file_args(raw_args)
     end
 
     def call
@@ -69,6 +70,12 @@ module Evilution
         opts.banner = "Usage: evilution [command] [options] [files...]"
 
         opts.separator ""
+        opts.separator "File arguments support line-range targeting:"
+        opts.separator "    lib/foo.rb:15-30   Lines 15 through 30"
+        opts.separator "    lib/foo.rb:15      Single line 15"
+        opts.separator "    lib/foo.rb:15-     From line 15 to end of file"
+        opts.separator "    lib/foo.rb         Whole file (existing behavior)"
+        opts.separator ""
         opts.separator "Commands:"
         opts.separator "    run        Execute mutation testing (default)"
         opts.separator "    init       Generate .evilution.yml config file"
@@ -98,8 +105,35 @@ module Evilution
       0
     end
 
+    def parse_file_args(raw_args)
+      files = []
+      ranges = {}
+
+      raw_args.each do |arg|
+        file, range_str = arg.split(":", 2)
+        files << file
+        next unless range_str
+
+        ranges[file] = parse_line_range(range_str)
+      end
+
+      [files, ranges]
+    end
+
+    def parse_line_range(str)
+      if str.include?("-")
+        start_str, end_str = str.split("-", 2)
+        start_line = Integer(start_str)
+        end_line = end_str.empty? ? Float::INFINITY : Integer(end_str)
+        start_line..end_line
+      else
+        line = Integer(str)
+        line..line
+      end
+    end
+
     def run_mutations
-      config = Config.new(**@options, target_files: @files)
+      config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
       runner = Runner.new(config: config)
       summary = runner.call
       summary.success?(min_score: config.min_score) ? 0 : 1

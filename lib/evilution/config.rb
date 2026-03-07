@@ -15,11 +15,13 @@ module Evilution
       integration: :rspec,
       coverage: true,
       verbose: false,
-      quiet: false
+      quiet: false,
+      line_ranges: {}
     }.freeze
 
     attr_reader :target_files, :timeout, :format, :diff_base,
-                :target, :min_score, :integration, :coverage, :verbose, :quiet
+                :target, :min_score, :integration, :coverage, :verbose, :quiet,
+                :line_ranges
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -35,6 +37,7 @@ module Evilution
       @coverage = merged[:coverage]
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
+      @line_ranges = merged[:line_ranges] || {}
       freeze
     end
 
@@ -48,6 +51,10 @@ module Evilution
 
     def diff?
       !diff_base.nil?
+    end
+
+    def line_ranges?
+      !line_ranges.empty?
     end
 
     # Generates a default config file template.
