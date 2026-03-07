@@ -46,19 +46,19 @@ module Evilution
 
     def warn_removed_flags(argv)
       result = []
-      skip_next = false
-      argv.each do |arg|
-        if skip_next
-          skip_next = false
-          next
-        end
+      i = 0
+      while i < argv.length
+        arg = argv[i]
         if %w[--jobs -j].include?(arg)
           warn("Warning: --jobs is no longer supported and will be ignored.")
-          skip_next = true
-        elsif arg.start_with?("--jobs=")
+          next_arg = argv[i + 1]
+          i += next_arg && !next_arg.start_with?("-") ? 2 : 1
+        elsif arg.start_with?("--jobs=") || arg.match?(/\A-j\d+\z/)
           warn("Warning: --jobs is no longer supported and will be ignored.")
+          i += 1
         else
           result << arg
+          i += 1
         end
       end
       result

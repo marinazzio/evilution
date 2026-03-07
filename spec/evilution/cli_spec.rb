@@ -120,6 +120,14 @@ RSpec.describe Evilution::CLI do
         expect { described_class.new(["-j", "4"]) }.to output(/no longer supported/).to_stderr
       end
 
+      it "also handles the attached short form -j4" do
+        expect { described_class.new(["-j4"]) }.to output(/no longer supported/).to_stderr
+      end
+
+      it "also handles the attached long form --jobs=4" do
+        expect { described_class.new(["--jobs=4"]) }.to output(/no longer supported/).to_stderr
+      end
+
       it "does not appear in help output" do
         help_output = nil
         expect do
