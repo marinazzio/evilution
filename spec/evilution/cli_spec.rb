@@ -157,6 +157,24 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--spec flag" do
+      it "sets spec_files from comma-separated list" do
+        cli = described_class.new(["--spec", "spec/foo_spec.rb,spec/bar_spec.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(spec_files: ["spec/foo_spec.rb", "spec/bar_spec.rb"])
+        )
+      end
+
+      it "sets a single spec file" do
+        cli = described_class.new(["--spec", "spec/foo_spec.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(spec_files: ["spec/foo_spec.rb"])
+        )
+      end
+    end
+
     describe "--quiet flag" do
       it "sets quiet to true" do
         cli = described_class.new(["--quiet"])

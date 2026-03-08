@@ -87,6 +87,7 @@ module Evilution
         opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
         opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }
         opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
+        opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
         opts.on("--no-coverage", "Disable coverage-based filtering of uncovered mutations") { @options[:coverage] = false }
         opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
         opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }

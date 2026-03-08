@@ -271,6 +271,56 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with spec_files" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        spec_files: ["spec/example_spec.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: false,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "passes spec_files to the RSpec integration" do
+      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: ["spec/example_spec.rb"]).and_call_original
+
+      runner.call
+    end
+
+    it "passes nil test_files when spec_files is empty" do
+      empty_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: false,
+        skip_config_file: true
+      )
+      empty_runner = described_class.new(config: empty_config)
+
+      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: nil).and_call_original
+
+      empty_runner.call
+    end
+  end
+
   describe "#call with no mutations" do
     before do
       parser = instance_double(Evilution::AST::Parser)
