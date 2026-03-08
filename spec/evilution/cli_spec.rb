@@ -222,5 +222,62 @@ RSpec.describe Evilution::CLI do
         )
       end
     end
+
+    describe "line-range targeting" do
+      it "parses file:start-end into file path and line range" do
+        cli = described_class.new(["lib/foo.rb:15-30"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            line_ranges: { "lib/foo.rb" => 15..30 }
+          )
+        )
+      end
+
+      it "parses file:line as a single-line range" do
+        cli = described_class.new(["lib/foo.rb:15"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            line_ranges: { "lib/foo.rb" => 15..15 }
+          )
+        )
+      end
+
+      it "parses file:line- as open-ended range" do
+        cli = described_class.new(["lib/foo.rb:15-"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            line_ranges: { "lib/foo.rb" => 15..Float::INFINITY }
+          )
+        )
+      end
+
+      it "passes plain files without line ranges" do
+        cli = described_class.new(["lib/foo.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            line_ranges: {}
+          )
+        )
+      end
+
+      it "handles mixed arguments with and without ranges" do
+        cli = described_class.new(["lib/foo.rb:10-20", "lib/bar.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb", "lib/bar.rb"],
+            line_ranges: { "lib/foo.rb" => 10..20 }
+          )
+        )
+      end
+    end
   end
 end

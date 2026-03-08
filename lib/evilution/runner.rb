@@ -30,6 +30,7 @@ module Evilution
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       subjects = parse_subjects
+      subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
       test_map = collect_coverage if config.coverage && config.integration == :rspec
@@ -50,6 +51,17 @@ module Evilution
 
     def parse_subjects
       config.target_files.flat_map { |file| parser.call(file) }
+    end
+
+    def filter_by_line_ranges(subjects)
+      subjects.select do |subject|
+        range = config.line_ranges[subject.file_path]
+        next true unless range
+
+        subject_start = subject.line_number
+        subject_end = subject_start + subject.source.count("\n")
+        subject_start <= range.last && subject_end >= range.first
+      end
     end
 
     def filter_by_diff(subjects)

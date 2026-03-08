@@ -148,7 +148,28 @@ bundle exec evilution run lib/ --format json --diff main --min-score 0.9
 
 Mutates methods whose definition (starting) line is changed compared to `main` (the diff filter is based on the method’s first line, not any line in its body). Use this for incremental checks — it's fast and focused on newly added or moved methods and changed signatures.
 
-### 3. Single-file targeted scan
+### 3. Line-range targeted scan (fastest)
+
+```bash
+bundle exec evilution run lib/foo.rb:15-30 --format json
+```
+
+Target exact lines you changed. Supports multiple syntaxes:
+
+```bash
+evilution run lib/foo.rb:15-30    # lines 15 through 30
+evilution run lib/foo.rb:15       # single line 15
+evilution run lib/foo.rb:15-      # from line 15 to end of file
+evilution run lib/foo.rb          # whole file (existing behavior)
+```
+
+Methods whose body overlaps the requested range are included. Mix targeted and whole-file arguments freely:
+
+```bash
+evilution run lib/foo.rb:15-30 lib/bar.rb --format json
+```
+
+### 4. Single-file targeted scan
 
 ```bash
 bundle exec evilution run lib/specific_file.rb --format json
@@ -156,7 +177,7 @@ bundle exec evilution run lib/specific_file.rb --format json
 
 Use when you know which file was modified and want to verify its test coverage.
 
-### 4. Fixing surviving mutants
+### 5. Fixing surviving mutants
 
 For each entry in `survived[]`:
 1. Read `file` at `line` to understand the code context
@@ -165,7 +186,7 @@ For each entry in `survived[]`:
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
-### 5. CI gate
+### 6. CI gate
 
 ```bash
 bundle exec evilution run lib/ --format json --min-score 0.8 --quiet

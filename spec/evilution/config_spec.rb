@@ -41,6 +41,10 @@ RSpec.describe Evilution::Config do
     it "sets diff_base to nil" do
       expect(config.diff_base).to be_nil
     end
+
+    it "sets line_ranges to empty hash" do
+      expect(config.line_ranges).to eq({})
+    end
   end
 
   describe "custom options" do
@@ -171,6 +175,20 @@ RSpec.describe Evilution::Config do
       config = described_class.new(format: :json, skip_config_file: true)
 
       expect(config.text?).to be false
+    end
+  end
+
+  describe "#line_ranges?" do
+    it "returns true when line_ranges is non-empty" do
+      config = described_class.new(line_ranges: { "lib/foo.rb" => 10..20 }, skip_config_file: true)
+
+      expect(config.line_ranges?).to be true
+    end
+
+    it "returns false when line_ranges is empty" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.line_ranges?).to be false
     end
   end
 

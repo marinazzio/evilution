@@ -147,6 +147,80 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with line-range filtering" do
+    let(:subject_in_range) do
+      double("Subject",
+             name: "Example#foo",
+             file_path: "lib/example.rb",
+             line_number: 20,
+             source: "def foo\n  x + 1\nend")
+    end
+
+    let(:subject_outside_range) do
+      double("Subject",
+             name: "Example#bar",
+             file_path: "lib/example.rb",
+             line_number: 50,
+             source: "def bar\n  y\nend")
+    end
+
+    let(:subject_other_file) do
+      double("Subject",
+             name: "Other#baz",
+             file_path: "lib/other.rb",
+             line_number: 1,
+             source: "def baz\n  z\nend")
+    end
+
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb", "lib/other.rb"],
+        line_ranges: { "lib/example.rb" => 15..30 },
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: false,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_in_range, subject_outside_range])
+      allow(parser).to receive(:call).with("lib/other.rb").and_return([subject_other_file])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "includes subjects overlapping with the line range" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).to receive(:mutations_for).with(subject_in_range).and_return([mutation])
+
+      runner.call
+    end
+
+    it "excludes subjects outside the line range" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).not_to receive(:mutations_for).with(subject_outside_range)
+
+      runner.call
+    end
+
+    it "includes all subjects from files without a line range constraint" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).to receive(:mutations_for).with(subject_other_file).and_return([mutation])
+
+      runner.call
+    end
+  end
+
   describe "#call with diff filtering" do
     let(:config) do
       Evilution::Config.new(
