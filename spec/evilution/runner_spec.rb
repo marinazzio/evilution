@@ -149,18 +149,27 @@ RSpec.describe Evilution::Runner do
 
   describe "#call with line-range filtering" do
     let(:subject_in_range) do
-      double("Subject", name: "Example#foo", file_path: "lib/example.rb",
-             line_number: 20, source: "def foo\n  x + 1\nend")
+      double("Subject",
+             name: "Example#foo",
+             file_path: "lib/example.rb",
+             line_number: 20,
+             source: "def foo\n  x + 1\nend")
     end
 
     let(:subject_outside_range) do
-      double("Subject", name: "Example#bar", file_path: "lib/example.rb",
-             line_number: 50, source: "def bar\n  y\nend")
+      double("Subject",
+             name: "Example#bar",
+             file_path: "lib/example.rb",
+             line_number: 50,
+             source: "def bar\n  y\nend")
     end
 
     let(:subject_other_file) do
-      double("Subject", name: "Other#baz", file_path: "lib/other.rb",
-             line_number: 1, source: "def baz\n  z\nend")
+      double("Subject",
+             name: "Other#baz",
+             file_path: "lib/other.rb",
+             line_number: 1,
+             source: "def baz\n  z\nend")
     end
 
     let(:config) do
