@@ -8,7 +8,7 @@
 
 ### Deprecated
 
-- **Coverage-based filtering** (`--no-coverage` flag and `coverage` config key) — with line-range and method-name targeting, coverage collection adds overhead for little benefit
+- **Coverage-based filtering flags/config** (`--no-coverage` flag and `coverage` config key) — deprecated and now ignored; coverage-based filtering behavior has been removed from `Runner`
 
 ### Removed
 
