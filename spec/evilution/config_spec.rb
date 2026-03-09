@@ -148,6 +148,12 @@ RSpec.describe Evilution::Config do
       expect(config.timeout).to eq(5)
     end
 
+    it "warns when diff_base is set in config file" do
+      File.write(".evilution.yml", "diff_base: main\n")
+
+      expect { described_class.new }.to output(/diff_base.*deprecated/).to_stderr
+    end
+
     it "handles empty config file gracefully" do
       File.write(".evilution.yml", "")
 

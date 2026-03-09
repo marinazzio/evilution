@@ -85,7 +85,11 @@ module Evilution
     def add_options(opts)
       opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
       opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
-      opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }
+      opts.on("--diff BASE", "DEPRECATED: Use line-range targeting instead") do |b|
+        warn("Warning: --diff is deprecated and will be removed in a future version. " \
+             "Use line-range targeting instead: evilution run lib/foo.rb:15-30")
+        @options[:diff_base] = b
+      end
       opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
       opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
       opts.on("--no-coverage", "Disable coverage-based filtering of uncovered mutations") { @options[:coverage] = false }

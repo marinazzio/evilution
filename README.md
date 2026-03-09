@@ -39,7 +39,7 @@ evilution [command] [options] [files...]
 |-------------------------|---------|--------------|---------------------------------------------------|
 | `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
-| `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate methods whose definition line changed since BASE. |
+| `--diff BASE`           | String  | _(none)_     | **DEPRECATED**: Use line-range targeting instead. Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
 | `--no-coverage`         | Boolean | false        | Reserved; currently has no effect.                |
@@ -141,13 +141,15 @@ bundle exec evilution run lib/ --format json --min-score 0.8
 
 Parse JSON output. Exit code 0 = pass, 1 = surviving mutants to address.
 
-### 2. PR / diff-only scan (fast feedback)
+### 2. PR / changed-lines scan (fast feedback)
 
 ```bash
-bundle exec evilution run lib/ --format json --diff main --min-score 0.9
+bundle exec evilution run lib/foo.rb:15-30 lib/bar.rb:5-20 --format json --min-score 0.9
 ```
 
-Mutates methods whose definition (starting) line is changed compared to `main` (the diff filter is based on the method’s first line, not any line in its body). Use this for incremental checks — it's fast and focused on newly added or moved methods and changed signatures.
+Target the exact lines you changed for fast, focused mutation testing. See line-range syntax below.
+
+> **Note**: `--diff BASE` is deprecated and will be removed in a future version. Prefer line-range targeting for new workflows.
 
 ### 3. Line-range targeted scan (fastest)
 
