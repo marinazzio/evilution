@@ -209,7 +209,7 @@ RSpec.describe Evilution::CLI do
 
     describe "--no-coverage flag (deprecated)" do
       it "emits a deprecation warning to stderr" do
-        expect { described_class.new(["--no-coverage"]) }.to output(/--no-coverage is deprecated/).to_stderr
+        expect { described_class.new(["--no-coverage"]) }.to output(/--no-coverage is deprecated.*no effect/).to_stderr
       end
 
       it "still sets coverage to false on the config" do

@@ -151,13 +151,13 @@ RSpec.describe Evilution::Config do
     it "warns when coverage is set in config file" do
       File.write(".evilution.yml", "coverage: true\n")
 
-      expect { described_class.new }.to output(/coverage.*deprecated/).to_stderr
+      expect { described_class.new }.to output(/coverage.*deprecated.*ignored/).to_stderr
     end
 
     it "warns when coverage is explicitly set to false in config file" do
       File.write(".evilution.yml", "coverage: false\n")
 
-      expect { described_class.new }.to output(/coverage.*deprecated/).to_stderr
+      expect { described_class.new }.to output(/coverage.*deprecated.*ignored/).to_stderr
     end
 
     it "warns when diff_base is set in config file" do

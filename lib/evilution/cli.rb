@@ -95,6 +95,7 @@ module Evilution
       opts.on("--target METHOD", "Only mutate the named method (e.g. Foo::Bar#calculate)") { |m| @options[:target] = m }
       opts.on("--no-coverage", "DEPRECATED: Has no effect and will be removed in a future version") do
         warn("Warning: --no-coverage is deprecated, currently has no effect, and will be removed in a future version.")
+        @options[:coverage] = false
       end
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }

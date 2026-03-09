@@ -43,7 +43,7 @@ evilution [command] [options] [files...]
 | `--diff BASE`           | String  | _(none)_     | **DEPRECATED**: Use line-range targeting instead. Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
-| `--no-coverage`         | Boolean | false        | **DEPRECATED, NO-OP**: Kept only for backward compatibility. Coverage filtering has been removed. |
+| `--no-coverage`         | Boolean | false        | **DEPRECATED, NO-OP**: Kept for backward compatibility. Will be removed. |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
 

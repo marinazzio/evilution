@@ -95,8 +95,8 @@ module Evilution
       end
 
       if file_options.key?(:coverage)
-        warn("Warning: 'coverage' in config file is deprecated. " \
-             "Coverage filtering will be removed in a future version.")
+        warn("Warning: 'coverage' in config file is deprecated and ignored. " \
+             "This option will be removed in a future version.")
       end
 
       return unless file_options[:diff_base]
