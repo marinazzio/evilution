@@ -2,10 +2,10 @@
 
 > **Purpose**: Validate test suite quality by injecting small code changes (mutations) and checking whether tests detect them. Surviving mutations indicate gaps in test coverage.
 
-**License**: MIT (free, no commercial restrictions)
-**Language**: Ruby >= 3.3
-**Parser**: Prism (Ruby's official AST parser, ships with Ruby 3.3+)
-**Test framework**: RSpec (currently the only supported integration)
+* **License**: MIT (free, no commercial restrictions)
+* **Language**: Ruby >= 3.3
+* **Parser**: Prism (Ruby's official AST parser, ships with Ruby 3.3+)
+* **Test framework**: RSpec (currently the only supported integration)
 
 ## Installation
 
