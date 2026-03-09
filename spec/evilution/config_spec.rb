@@ -1,19 +1,8 @@
 # frozen_string_literal: true
 
-require "stringio"
 require "tempfile"
 
 RSpec.describe Evilution::Config do
-  def capture_stderr
-    io = StringIO.new
-    original = $stderr
-    $stderr = io
-    yield
-    io.string
-  ensure
-    $stderr = original
-  end
-
   describe "defaults" do
     subject(:config) { described_class.new(skip_config_file: true) }
 
