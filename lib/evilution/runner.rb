@@ -75,7 +75,7 @@ module Evilution
     end
 
     def collect_coverage
-      test_files = Dir.glob("spec/**/*_spec.rb")
+      test_files = config.spec_files.empty? ? Dir.glob("spec/**/*_spec.rb") : config.spec_files
       return nil if test_files.empty?
 
       data = Coverage::Collector.new.call(test_files: test_files)

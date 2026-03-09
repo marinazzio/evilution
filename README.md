@@ -41,6 +41,7 @@ evilution [command] [options] [files...]
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
 | `--diff BASE`           | String  | _(none)_     | Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
+| `--spec FILES`          | String  | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
 | `--no-coverage`         | Boolean | false        | Reserved; currently has no effect.                |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |

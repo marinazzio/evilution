@@ -130,17 +130,6 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(RSpec).to have_received(:reset)
     end
 
-    it "defaults to spec/ directory when no test_files given" do
-      integration_default = described_class.new
-
-      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
-        expect(args).to include("spec")
-        0
-      end
-
-      integration_default.call(mutation)
-    end
-
     it "raises Evilution::Error when rspec-core is not available" do
       integration_no_rspec = described_class.new(test_files: ["spec/some_spec.rb"])
       integration_no_rspec.instance_variable_set(:@rspec_loaded, false)

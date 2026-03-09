@@ -31,7 +31,7 @@ Metrics/MethodLength:
     - heredoc
 
 Metrics/AbcSize:
-  Max: 36
+  Max: 35
 
 Metrics/CyclomaticComplexity:
   Max: 12

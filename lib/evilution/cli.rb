@@ -68,30 +68,29 @@ module Evilution
     def build_option_parser
       OptionParser.new do |opts|
         opts.banner = "Usage: evilution [command] [options] [files...]"
-
-        opts.separator ""
-        opts.separator "File arguments support line-range targeting:"
-        opts.separator "    lib/foo.rb:15-30   Lines 15 through 30"
-        opts.separator "    lib/foo.rb:15      Single line 15"
-        opts.separator "    lib/foo.rb:15-     From line 15 to end of file"
-        opts.separator "    lib/foo.rb         Whole file (existing behavior)"
-        opts.separator ""
-        opts.separator "Commands:"
-        opts.separator "    run        Execute mutation testing (default)"
-        opts.separator "    init       Generate .evilution.yml config file"
-        opts.separator "    version    Print version string"
-        opts.separator ""
-        opts.separator "Options:"
-
-        opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
-        opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
-        opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }
-        opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
-        opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
-        opts.on("--no-coverage", "Disable coverage-based filtering of uncovered mutations") { @options[:coverage] = false }
-        opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
-        opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
+        add_separators(opts)
+        add_options(opts)
       end
+    end
+
+    def add_separators(opts)
+      opts.separator ""
+      opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
+      opts.separator ""
+      opts.separator "Commands: run (default), init, version"
+      opts.separator ""
+      opts.separator "Options:"
+    end
+
+    def add_options(opts)
+      opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
+      opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
+      opts.on("--diff BASE", "Only mutate code changed since BASE") { |b| @options[:diff_base] = b }
+      opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
+      opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
+      opts.on("--no-coverage", "Disable coverage-based filtering of uncovered mutations") { @options[:coverage] = false }
+      opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
+      opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end
 
     def run_init
