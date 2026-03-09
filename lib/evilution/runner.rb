@@ -30,6 +30,7 @@ module Evilution
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       subjects = parse_subjects
+      subjects = filter_by_target(subjects) if config.target?
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
@@ -51,6 +52,13 @@ module Evilution
 
     def parse_subjects
       config.target_files.flat_map { |file| parser.call(file) }
+    end
+
+    def filter_by_target(subjects)
+      matched = subjects.select { |s| s.name == config.target }
+      raise Error, "no method found matching '#{config.target}'" if matched.empty?
+
+      matched
     end
 
     def filter_by_line_ranges(subjects)

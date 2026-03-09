@@ -39,6 +39,7 @@ evilution [command] [options] [files...]
 |-------------------------|---------|--------------|---------------------------------------------------|
 | `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
+| `--target METHOD`       | String  | _(none)_     | Only mutate the named method (e.g. `Foo::Bar#calculate`). |
 | `--diff BASE`           | String  | _(none)_     | **DEPRECATED**: Use line-range targeting instead. Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
@@ -172,7 +173,15 @@ Methods whose body overlaps the requested range are included. Mix targeted and w
 evilution run lib/foo.rb:15-30 lib/bar.rb --format json
 ```
 
-### 4. Single-file targeted scan
+### 4. Method-name targeted scan
+
+```bash
+bundle exec evilution run lib/foo.rb --target Foo::Bar#calculate --format json
+```
+
+Target a specific method by its fully-qualified name. Useful when you want to focus on a single method without knowing its exact line numbers.
+
+### 5. Single-file targeted scan
 
 ```bash
 bundle exec evilution run lib/specific_file.rb --format json
@@ -180,7 +189,7 @@ bundle exec evilution run lib/specific_file.rb --format json
 
 Use when you know which file was modified and want to verify its test coverage.
 
-### 5. Fixing surviving mutants
+### 6. Fixing surviving mutants
 
 For each entry in `survived[]`:
 1. Read `file` at `line` to understand the code context
@@ -189,7 +198,7 @@ For each entry in `survived[]`:
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
-### 6. CI gate
+### 7. CI gate
 
 ```bash
 bundle exec evilution run lib/ --format json --min-score 0.8 --quiet

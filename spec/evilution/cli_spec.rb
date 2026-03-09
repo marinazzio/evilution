@@ -207,6 +207,16 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--target flag" do
+      it "sets target on the config" do
+        cli = described_class.new(["--target", "Foo#bar"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(target: "Foo#bar")
+        )
+      end
+    end
+
     describe "exit code" do
       it "returns 0 when the mutation score meets min_score" do
         allow(summary).to receive(:success?).with(min_score: 0.0).and_return(true)
