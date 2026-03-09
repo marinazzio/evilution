@@ -8,8 +8,6 @@ require_relative "integration/rspec"
 require_relative "reporter/json"
 require_relative "reporter/cli"
 require_relative "reporter/suggestion"
-require_relative "coverage/collector"
-require_relative "coverage/test_map"
 require_relative "diff/parser"
 require_relative "diff/file_filter"
 require_relative "result/mutation_result"
@@ -34,10 +32,7 @@ module Evilution
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      test_map = collect_coverage if config.coverage && config.integration == :rspec
-      mutations, skipped = filter_by_coverage(mutations, test_map) if test_map
       results = run_mutations(mutations)
-      results.concat(skipped) if skipped
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
       summary = Result::Summary.new(results: results, duration: duration)
@@ -80,26 +75,6 @@ module Evilution
 
     def generate_mutations(subjects)
       subjects.flat_map { |subject| registry.mutations_for(subject) }
-    end
-
-    def collect_coverage
-      test_files = config.spec_files.empty? ? Dir.glob("spec/**/*_spec.rb") : config.spec_files
-      return nil if test_files.empty?
-
-      data = Coverage::Collector.new.call(test_files: test_files)
-      Coverage::TestMap.new(data)
-    end
-
-    def filter_by_coverage(mutations, test_map)
-      covered, uncovered = mutations.partition do |m|
-        test_map.covered?(File.expand_path(m.file_path), m.line)
-      end
-
-      skipped = uncovered.map do |m|
-        Result::MutationResult.new(mutation: m, status: :survived, duration: 0.0)
-      end
-
-      [covered, skipped]
     end
 
     def run_mutations(mutations)

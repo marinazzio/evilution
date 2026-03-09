@@ -9,7 +9,6 @@ RSpec.describe Evilution::Runner do
       format: :json,
       timeout: 5,
       quiet: true,
-      coverage: false,
       skip_config_file: true
     )
   end
@@ -179,7 +178,6 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
     end
@@ -243,7 +241,6 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
     end
@@ -283,7 +280,6 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
       no_match_runner = described_class.new(config: no_match_config)
@@ -300,7 +296,6 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         diff_base: "HEAD~1",
-        coverage: false,
         skip_config_file: true
       )
     end
@@ -350,7 +345,6 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
     end
@@ -381,7 +375,6 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
       empty_runner = described_class.new(config: empty_config)
@@ -416,7 +409,6 @@ RSpec.describe Evilution::Runner do
         target_files: ["lib/example.rb"],
         integration: :minitest,
         quiet: true,
-        coverage: false,
         skip_config_file: true
       )
     end
@@ -436,155 +428,6 @@ RSpec.describe Evilution::Runner do
 
     it "raises an error" do
       expect { runner.call }.to raise_error(Evilution::Error, /unknown integration/)
-    end
-  end
-
-  describe "#call with coverage enabled" do
-    let(:config) do
-      Evilution::Config.new(
-        target_files: ["lib/example.rb"],
-        format: :json,
-        timeout: 5,
-        quiet: true,
-        coverage: true,
-        skip_config_file: true
-      )
-    end
-
-    let(:covered_mutation) do
-      double(
-        "Mutation",
-        subject: subject_obj,
-        operator_name: "comparison_replacement",
-        original_source: "a >= b",
-        mutated_source: "a > b",
-        file_path: "lib/example.rb",
-        line: 3,
-        column: 4,
-        diff: "- a >= b\n+ a > b"
-      )
-    end
-
-    let(:uncovered_mutation) do
-      double(
-        "Mutation",
-        subject: subject_obj,
-        operator_name: "nil_replacement",
-        original_source: "x",
-        mutated_source: "nil",
-        file_path: "lib/example.rb",
-        line: 10,
-        column: 0,
-        diff: "- x\n+ nil"
-      )
-    end
-
-    let(:expanded_path) { File.expand_path("lib/example.rb") }
-
-    let(:coverage_data) do
-      { expanded_path => [nil, 1, 1, 1, nil, nil, nil, nil, nil, nil] }
-    end
-
-    let(:collector) { instance_double(Evilution::Coverage::Collector) }
-
-    before do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
-
-      registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([covered_mutation, uncovered_mutation])
-
-      allow(Evilution::Coverage::Collector).to receive(:new).and_return(collector)
-      allow(collector).to receive(:call).and_return(coverage_data)
-
-      allow(Dir).to receive(:glob).with("spec/**/*_spec.rb").and_return(["spec/example_spec.rb"])
-
-      isolator = instance_double(Evilution::Isolation::Fork)
-      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      allow(isolator).to receive(:call).and_return(
-        Evilution::Result::MutationResult.new(mutation: covered_mutation, status: :killed, duration: 0.1)
-      )
-    end
-
-    it "calls Coverage::Collector with discovered spec files" do
-      expect(collector).to receive(:call).with(test_files: ["spec/example_spec.rb"])
-
-      runner.call
-    end
-
-    it "skips uncovered mutations without running them through isolator" do
-      isolator = Evilution::Isolation::Fork.new
-      expect(isolator).to receive(:call).once
-
-      result = runner.call
-
-      expect(result.total).to eq(2)
-    end
-
-    it "marks uncovered mutations as survived" do
-      result = runner.call
-
-      survived = result.results.select(&:survived?)
-      expect(survived.size).to eq(1)
-      expect(survived.first.mutation).to eq(uncovered_mutation)
-      expect(survived.first.duration).to eq(0.0)
-    end
-
-    it "runs covered mutations through isolator normally" do
-      isolator = Evilution::Isolation::Fork.new
-      expect(isolator).to receive(:call).with(
-        mutation: covered_mutation,
-        test_command: anything,
-        timeout: 5
-      ).and_return(
-        Evilution::Result::MutationResult.new(mutation: covered_mutation, status: :killed, duration: 0.1)
-      )
-
-      result = runner.call
-
-      killed = result.results.select(&:killed?)
-      expect(killed.size).to eq(1)
-      expect(killed.first.mutation).to eq(covered_mutation)
-    end
-
-    it "uses config.spec_files for coverage when provided" do
-      spec_config = Evilution::Config.new(
-        target_files: ["lib/example.rb"],
-        spec_files: ["spec/custom_spec.rb"],
-        format: :json,
-        timeout: 5,
-        quiet: true,
-        coverage: true,
-        skip_config_file: true
-      )
-      spec_runner = described_class.new(config: spec_config)
-
-      expect(Dir).not_to receive(:glob)
-      expect(collector).to receive(:call).with(test_files: ["spec/custom_spec.rb"]).and_return(coverage_data)
-
-      spec_runner.call
-    end
-  end
-
-  describe "#call with coverage disabled" do
-    it "does not call Coverage::Collector" do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).and_return([subject_obj])
-
-      registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).and_return([mutation])
-
-      isolator = instance_double(Evilution::Isolation::Fork)
-      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      allow(isolator).to receive(:call).and_return(mutation_result)
-
-      expect(Evilution::Coverage::Collector).not_to receive(:new)
-
-      runner.call
     end
   end
 end

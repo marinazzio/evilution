@@ -93,7 +93,10 @@ module Evilution
       opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
       opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
       opts.on("--target METHOD", "Only mutate the named method (e.g. Foo::Bar#calculate)") { |m| @options[:target] = m }
-      opts.on("--no-coverage", "Disable coverage-based filtering of uncovered mutations") { @options[:coverage] = false }
+      opts.on("--no-coverage", "DEPRECATED: Coverage filtering is deprecated and will be removed") do
+        warn("Warning: --no-coverage is deprecated. Coverage filtering is deprecated and will be removed in a future version.")
+        @options[:coverage] = false
+      end
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end

@@ -81,7 +81,7 @@ module Evilution
         # Test integration: rspec (default: rspec)
         # integration: rspec
 
-        # Skip mutations on uncovered lines (default: true)
+        # DEPRECATED: Coverage filtering is deprecated and will be removed
         # coverage: true
       YAML
     end
@@ -92,6 +92,11 @@ module Evilution
       if merged.key?(:jobs)
         warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
              "Remove it from your configuration or invocation.")
+      end
+
+      if file_options.key?(:coverage)
+        warn("Warning: 'coverage' in config file is deprecated. " \
+             "Coverage filtering will be removed in a future version.")
       end
 
       return unless file_options[:diff_base]

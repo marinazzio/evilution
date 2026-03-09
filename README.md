@@ -43,7 +43,7 @@ evilution [command] [options] [files...]
 | `--diff BASE`           | String  | _(none)_     | **DEPRECATED**: Use line-range targeting instead. Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
-| `--no-coverage`         | Boolean | false        | Reserved; currently has no effect.                |
+| `--no-coverage`         | Boolean | false        | **DEPRECATED**: Coverage filtering is deprecated and will be removed. |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output.                                    |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
 
@@ -66,7 +66,6 @@ Creates `.evilution.yml`:
 # format: text       # text | json
 # min_score: 0.0     # 0.0–1.0
 # integration: rspec # test framework
-# coverage: true     # skip mutations on uncovered lines
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.

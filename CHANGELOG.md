@@ -6,6 +6,10 @@
 
 - **Line-range targeting** — scope mutations to exact lines: `lib/foo.rb:15-30`, `lib/foo.rb:15`, `lib/foo.rb:15-`
 
+### Deprecated
+
+- **Coverage-based filtering** (`--no-coverage` flag and `coverage` config key) — with line-range and method-name targeting, coverage collection adds overhead for little benefit
+
 ### Removed
 
 - **Parallel execution** (`--jobs` flag) — simplifies codebase for AI-agent-first design; will be reintroduced later
