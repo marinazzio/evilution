@@ -319,7 +319,6 @@ RSpec.describe Evilution::Runner do
 
       empty_runner.call
     end
-
   end
 
   describe "#call with no mutations" do
