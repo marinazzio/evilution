@@ -1,18 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-03-10
 
 ### Added
 
 - **Line-range targeting** — scope mutations to exact lines: `lib/foo.rb:15-30`, `lib/foo.rb:15`, `lib/foo.rb:15-`
+- **Method-name targeting** (`--target`) — mutate a single method by fully-qualified name (e.g. `Foo::Bar#calculate`)
+- **Commands section** in `--help` output
+
+### Changed
+
+- Added `changelog_uri` to gemspec metadata
+- Added GitHub publish workflow
 
 ### Deprecated
 
+- **`--diff` flag** — use line-range targeting instead
 - **Coverage-based filtering flags/config** (`--no-coverage` flag and `coverage` config key) — deprecated and now ignored; coverage-based filtering behavior has been removed from `Runner`
 
 ### Removed
 
 - **Parallel execution** (`--jobs` flag) — simplifies codebase for AI-agent-first design; will be reintroduced later
+- **File-discovery logic** from `Integration::RSpec` — spec files are now passed explicitly or default to `spec/`
 
 ## [0.1.0] - 2026-03-02
 
