@@ -1,8 +1,19 @@
 # frozen_string_literal: true
 
+require "stringio"
 require "tempfile"
 
 RSpec.describe Evilution::Config do
+  def capture_stderr
+    io = StringIO.new
+    original = $stderr
+    $stderr = io
+    yield
+    io.string
+  ensure
+    $stderr = original
+  end
+
   describe "defaults" do
     subject(:config) { described_class.new(skip_config_file: true) }
 
@@ -146,6 +157,12 @@ RSpec.describe Evilution::Config do
       config = described_class.new(timeout: 5)
 
       expect(config.timeout).to eq(5)
+    end
+
+    it "warns when diff_base is set in config file" do
+      File.write(".evilution.yml", "diff_base: main\n")
+
+      expect { described_class.new }.to output(/diff_base.*deprecated/).to_stderr
     end
 
     it "handles empty config file gracefully" do

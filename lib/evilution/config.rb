@@ -27,7 +27,7 @@ module Evilution
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
       merged = DEFAULTS.merge(file_options).merge(options)
-      warn_removed_options(merged)
+      warn_removed_options(merged, file_options)
       @target_files = Array(merged[:target_files])
       @timeout = merged[:timeout]
       @format = merged[:format].to_sym
@@ -84,11 +84,16 @@ module Evilution
 
     private
 
-    def warn_removed_options(merged)
-      return unless merged.key?(:jobs)
+    def warn_removed_options(merged, file_options)
+      if merged.key?(:jobs)
+        warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
+             "Remove it from your configuration or invocation.")
+      end
 
-      warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
-           "Remove it from your configuration or invocation.")
+      return unless file_options[:diff_base]
+
+      warn("Warning: 'diff_base' in config file is deprecated and will be removed in a future version. " \
+           "Use line-range targeting instead: evilution run lib/foo.rb:15-30")
     end
 
     def load_config_file

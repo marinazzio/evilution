@@ -139,6 +139,20 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--diff flag (deprecated)" do
+      it "emits a deprecation warning to stderr" do
+        expect { described_class.new(["--diff", "main"]) }.to output(/--diff is deprecated/).to_stderr
+      end
+
+      it "still sets diff_base on the config" do
+        stderr = capture_stderr { described_class.new(["--diff", "main"]).call }
+        expect(stderr).to include("--diff is deprecated")
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(diff_base: "main")
+        )
+      end
+    end
+
     describe "--timeout flag" do
       it "sets timeout to the given integer" do
         cli = described_class.new(["--timeout", "30"])
