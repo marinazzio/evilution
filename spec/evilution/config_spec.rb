@@ -45,6 +45,10 @@ RSpec.describe Evilution::Config do
     it "sets line_ranges to empty hash" do
       expect(config.line_ranges).to eq({})
     end
+
+    it "sets spec_files to empty array" do
+      expect(config.spec_files).to eq([])
+    end
   end
 
   describe "custom options" do
@@ -86,6 +90,18 @@ RSpec.describe Evilution::Config do
       config = described_class.new(min_score: 0.9, skip_config_file: true)
 
       expect(config.min_score).to eq(0.9)
+    end
+
+    it "accepts spec_files" do
+      config = described_class.new(spec_files: ["spec/foo_spec.rb"], skip_config_file: true)
+
+      expect(config.spec_files).to eq(["spec/foo_spec.rb"])
+    end
+
+    it "wraps single spec_file in array" do
+      config = described_class.new(spec_files: "spec/foo_spec.rb", skip_config_file: true)
+
+      expect(config.spec_files).to eq(["spec/foo_spec.rb"])
     end
   end
 

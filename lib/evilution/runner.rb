@@ -75,7 +75,7 @@ module Evilution
     end
 
     def collect_coverage
-      test_files = Dir.glob("spec/**/*_spec.rb")
+      test_files = config.spec_files.empty? ? Dir.glob("spec/**/*_spec.rb") : config.spec_files
       return nil if test_files.empty?
 
       data = Coverage::Collector.new.call(test_files: test_files)
@@ -110,7 +110,8 @@ module Evilution
     def build_integration
       case config.integration
       when :rspec
-        Integration::RSpec.new
+        test_files = config.spec_files.empty? ? nil : config.spec_files
+        Integration::RSpec.new(test_files: test_files)
       else
         raise Error, "unknown integration: #{config.integration}"
       end

@@ -108,76 +108,9 @@ module Evilution
         { passed: false, error: e.message }
       end
 
-      def build_args(mutation)
-        files = test_files || detect_test_files(mutation)
+      def build_args(_mutation)
+        files = test_files || ["spec"]
         ["--format", "progress", "--no-color", "--order", "defined", *files]
-      end
-
-      def detect_test_files(mutation)
-        # Convention: lib/foo/bar.rb -> spec/foo/bar_spec.rb
-        candidates = spec_file_candidates(mutation.file_path)
-        found = candidates.select { |f| File.exist?(f) }
-        return found unless found.empty?
-
-        # Fallback: find spec/ directory relative to the mutation's project root
-        fallback = fallback_spec_dir(mutation.file_path)
-        return [fallback] if fallback
-
-        []
-      end
-
-      def fallback_spec_dir(source_path)
-        expanded = File.expand_path(source_path)
-
-        # Derive spec/ from mutation's project, not CWD
-        if expanded.include?("/lib/")
-          project_root = expanded.split(%r{/lib/}, 2).first
-          spec_dir = File.join(project_root, "spec")
-          return spec_dir if Dir.exist?(spec_dir)
-        end
-
-        # Walk up from the file's directory looking for spec/
-        dir = File.dirname(expanded)
-        loop do
-          spec_dir = File.join(dir, "spec")
-          return spec_dir if Dir.exist?(spec_dir)
-
-          parent = File.dirname(dir)
-          break if parent == dir
-
-          dir = parent
-        end
-
-        nil
-      end
-
-      def spec_file_candidates(source_path)
-        candidates = []
-
-        if source_path.start_with?("lib/")
-          # lib/foo/bar.rb -> spec/foo/bar_spec.rb
-          relative = source_path.sub(%r{^lib/}, "")
-          spec_name = relative.sub(/\.rb$/, "_spec.rb")
-          candidates << File.join("spec", spec_name)
-          candidates << File.join("spec", "unit", spec_name)
-        elsif source_path.include?("/lib/")
-          # /absolute/path/lib/foo/bar.rb -> /absolute/path/spec/foo/bar_spec.rb
-          prefix, relative = source_path.split(%r{/lib/}, 2)
-          spec_name = relative.sub(/\.rb$/, "_spec.rb")
-          candidates << File.join(prefix, "spec", spec_name)
-          candidates << File.join(prefix, "spec", "unit", spec_name)
-        end
-
-        # Same directory: foo/bar.rb -> foo/bar_spec.rb
-        sibling_spec = source_path.sub(/\.rb$/, "_spec.rb")
-        candidates << sibling_spec
-
-        # Subdirectory spec/ variant: foo/bar.rb -> foo/spec/bar_spec.rb
-        dir = File.dirname(source_path)
-        base = File.basename(source_path, ".rb")
-        candidates << File.join(dir, "spec", "#{base}_spec.rb")
-
-        candidates.uniq
       end
     end
   end

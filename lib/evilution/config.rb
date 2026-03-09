@@ -16,12 +16,13 @@ module Evilution
       coverage: true,
       verbose: false,
       quiet: false,
-      line_ranges: {}
+      line_ranges: {},
+      spec_files: []
     }.freeze
 
     attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet,
-                :line_ranges
+                :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -38,6 +39,7 @@ module Evilution
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
       @line_ranges = merged[:line_ranges] || {}
+      @spec_files = Array(merged[:spec_files])
       freeze
     end
 
