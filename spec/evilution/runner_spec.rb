@@ -221,6 +221,77 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with target filtering" do
+    let(:matching_subject) do
+      double("Subject",
+             name: "Example#foo",
+             file_path: "lib/example.rb",
+             line_number: 3)
+    end
+
+    let(:non_matching_subject) do
+      double("Subject",
+             name: "Example#bar",
+             file_path: "lib/example.rb",
+             line_number: 10)
+    end
+
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Example#foo",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: false,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([matching_subject, non_matching_subject])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "includes subjects matching the target" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).to receive(:mutations_for).with(matching_subject).and_return([mutation])
+
+      runner.call
+    end
+
+    it "excludes subjects not matching the target" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).not_to receive(:mutations_for).with(non_matching_subject)
+
+      runner.call
+    end
+
+    it "raises an error when no subjects match the target" do
+      no_match_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Example#nonexistent",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: false,
+        skip_config_file: true
+      )
+      no_match_runner = described_class.new(config: no_match_config)
+
+      expect { no_match_runner.call }.to raise_error(Evilution::Error, /no method found matching 'Example#nonexistent'/)
+    end
+  end
+
   describe "#call with diff filtering" do
     let(:config) do
       Evilution::Config.new(

@@ -59,6 +59,10 @@ module Evilution
       !line_ranges.empty?
     end
 
+    def target?
+      !target.nil?
+    end
+
     # Generates a default config file template.
     def self.default_template
       <<~YAML

@@ -214,6 +214,20 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "#target?" do
+    it "returns true when target is set" do
+      config = described_class.new(target: "Foo#bar", skip_config_file: true)
+
+      expect(config.target?).to be true
+    end
+
+    it "returns false when target is nil" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.target?).to be false
+    end
+  end
+
   describe "#diff?" do
     it "returns true when diff_base is set" do
       config = described_class.new(diff_base: "HEAD~1", skip_config_file: true)
