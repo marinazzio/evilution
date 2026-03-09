@@ -477,6 +477,24 @@ RSpec.describe Evilution::Runner do
       expect(killed.size).to eq(1)
       expect(killed.first.mutation).to eq(covered_mutation)
     end
+
+    it "uses config.spec_files for coverage when provided" do
+      spec_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        spec_files: ["spec/custom_spec.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: true,
+        skip_config_file: true
+      )
+      spec_runner = described_class.new(config: spec_config)
+
+      expect(Dir).not_to receive(:glob)
+      expect(collector).to receive(:call).with(test_files: ["spec/custom_spec.rb"]).and_return(coverage_data)
+
+      spec_runner.call
+    end
   end
 
   describe "#call with coverage disabled" do
