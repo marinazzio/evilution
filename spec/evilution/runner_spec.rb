@@ -319,6 +319,27 @@ RSpec.describe Evilution::Runner do
 
       empty_runner.call
     end
+
+    it "passes configured spec_files to Coverage::Collector when coverage is enabled" do
+      coverage_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        spec_files: ["spec/example_spec.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        coverage: true,
+        skip_config_file: true
+      )
+      coverage_runner = described_class.new(config: coverage_config)
+
+      collector = instance_double(Coverage::Collector)
+      allow(collector).to receive(:call)
+
+      expect(Dir).not_to receive(:glob)
+      expect(Coverage::Collector).to receive(:new).with(["spec/example_spec.rb"]).and_return(collector)
+
+      coverage_runner.call
+    end
   end
 
   describe "#call with no mutations" do
