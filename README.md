@@ -1,3 +1,5 @@
+[![Gem Version](https://badge.fury.io/rb/evilution.svg)](https://badge.fury.io/rb/evilution)
+
 # Evilution — Mutation Testing for Ruby
 
 > **Purpose**: Validate test suite quality by injecting small code changes (mutations) and checking whether tests detect them. Surviving mutations indicate gaps in test coverage.
