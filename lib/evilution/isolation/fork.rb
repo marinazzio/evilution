@@ -12,7 +12,7 @@ module Evilution
       def call(mutation:, test_command:, timeout:)
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         read_io, write_io = IO.pipe
-        existing_temp_dirs = Dir.glob(File.join(Dir.tmpdir, TEMP_DIR_PATTERN))
+        existing_temp_dirs = evilution_temp_dirs
 
         pid = ::Process.fork do
           read_io.close
@@ -44,9 +44,12 @@ module Evilution
         warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
       end
 
+      def evilution_temp_dirs
+        Dir.glob(File.join(Dir.tmpdir, TEMP_DIR_PATTERN)).select { |p| File.directory?(p) }
+      end
+
       def cleanup_leaked_temp_dirs(existing_temp_dirs)
-        current_temp_dirs = Dir.glob(File.join(Dir.tmpdir, TEMP_DIR_PATTERN))
-        leaked = current_temp_dirs - existing_temp_dirs
+        leaked = evilution_temp_dirs - existing_temp_dirs
         leaked.each { |dir| FileUtils.rm_rf(dir) }
       rescue StandardError => e
         warn("Warning: failed to clean up temp directories: #{e.message}")
