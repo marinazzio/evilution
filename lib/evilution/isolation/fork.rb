@@ -23,9 +23,16 @@ module Evilution
       ensure
         read_io&.close
         write_io&.close
+        restore_original_source(mutation)
       end
 
       private
+
+      def restore_original_source(mutation)
+        File.write(mutation.file_path, mutation.original_source)
+      rescue StandardError => e
+        warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
+      end
 
       def execute_in_child(mutation, test_command)
         test_command.call(mutation)

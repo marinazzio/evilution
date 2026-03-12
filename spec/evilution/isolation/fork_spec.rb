@@ -1,9 +1,24 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 RSpec.describe Evilution::Isolation::Fork do
   subject(:isolator) { described_class.new }
 
-  let(:mutation) { double("Mutation") }
+  let(:tmpfile) { Tempfile.new("fork_spec") }
+  let(:original_content) { "original content" }
+  let(:mutation) do
+    double("Mutation", file_path: tmpfile.path, original_source: original_content)
+  end
+
+  before do
+    File.write(tmpfile.path, original_content)
+  end
+
+  after do
+    tmpfile.close
+    tmpfile.unlink
+  end
 
   describe "#call" do
     it "returns killed when test command fails" do
@@ -32,6 +47,18 @@ RSpec.describe Evilution::Isolation::Fork do
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
 
       expect(result).to be_timeout
+    end
+
+    it "restores the original file after a timeout" do
+      test_command = lambda { |m|
+        File.write(m.file_path, "mutated content")
+        sleep 10
+        { passed: true }
+      }
+
+      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+
+      expect(File.read(tmpfile.path)).to eq(original_content)
     end
 
     it "returns error when test command raises" do
