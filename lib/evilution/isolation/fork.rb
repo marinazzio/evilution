@@ -52,9 +52,11 @@ module Evilution
         leaked = evilution_temp_dirs - existing_temp_dirs
         leaked.each do |dir|
           expanded_dir = File.expand_path(dir)
-          if !expanded_dir.start_with?(File.expand_path(Dir.tmpdir) + File::SEPARATOR)
+
+          unless expanded_dir.start_with?(File.expand_path(Dir.tmpdir) + File::SEPARATOR)
             raise "Invalid path: path traversal detected in #{dir}"
           end
+
           FileUtils.rm_rf(expanded_dir)
         end
       rescue StandardError => e
