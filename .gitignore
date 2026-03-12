@@ -9,3 +9,6 @@
 
 # rspec failure tracking
 .rspec_status
+
+# ignore all files and folders with local suffixes
+*.local

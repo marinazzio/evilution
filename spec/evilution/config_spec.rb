@@ -10,8 +10,8 @@ RSpec.describe Evilution::Config do
       expect(config.target_files).to eq([])
     end
 
-    it "sets timeout to 10 seconds" do
-      expect(config.timeout).to eq(10)
+    it "sets timeout to 30 seconds" do
+      expect(config.timeout).to eq(30)
     end
 
     it "sets format to :text" do
@@ -171,7 +171,7 @@ RSpec.describe Evilution::Config do
 
       config = described_class.new
 
-      expect(config.timeout).to eq(10) # default
+      expect(config.timeout).to eq(30) # default
     end
   end
 

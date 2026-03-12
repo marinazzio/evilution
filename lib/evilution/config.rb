@@ -7,7 +7,7 @@ module Evilution
     CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
 
     DEFAULTS = {
-      timeout: 10,
+      timeout: 30,
       format: :text,
       diff_base: nil,
       target: nil,
@@ -69,8 +69,8 @@ module Evilution
         # Evilution configuration
         # See: https://github.com/marinazzio/evilution
 
-        # Per-mutation timeout in seconds (default: 10)
-        # timeout: 10
+        # Per-mutation timeout in seconds (default: 30)
+        # timeout: 30
 
         # Output format: text or json (default: text)
         # format: text
