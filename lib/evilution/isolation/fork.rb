@@ -1,11 +1,17 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
+
 module Evilution
   module Isolation
     class Fork
+      TEMP_DIR_PATTERN = "evilution*"
+
       def call(mutation:, test_command:, timeout:)
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         read_io, write_io = IO.pipe
+        existing_temp_dirs = Dir.glob(File.join(Dir.tmpdir, TEMP_DIR_PATTERN))
 
         pid = ::Process.fork do
           read_io.close
@@ -24,6 +30,7 @@ module Evilution
         read_io&.close
         write_io&.close
         restore_original_source(mutation)
+        cleanup_leaked_temp_dirs(existing_temp_dirs)
       end
 
       private
@@ -34,6 +41,14 @@ module Evilution
         File.write(mutation.file_path, mutation.original_source)
       rescue StandardError => e
         warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
+      end
+
+      def cleanup_leaked_temp_dirs(existing_temp_dirs)
+        current_temp_dirs = Dir.glob(File.join(Dir.tmpdir, TEMP_DIR_PATTERN))
+        leaked = current_temp_dirs - existing_temp_dirs
+        leaked.each { |dir| FileUtils.rm_rf(dir) }
+      rescue StandardError => e
+        warn("Warning: failed to clean up temp directories: #{e.message}")
       end
 
       def execute_in_child(mutation, test_command)

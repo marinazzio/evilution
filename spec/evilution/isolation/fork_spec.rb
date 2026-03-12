@@ -61,6 +61,20 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(File.read(tmpfile.path)).to eq(original_content)
     end
 
+    it "cleans up leaked temp directories after child timeout" do
+      test_command = lambda { |_m|
+        Dir.mktmpdir("evilution")
+        sleep 10
+        { passed: true }
+      }
+
+      dirs_before = Dir.glob(File.join(Dir.tmpdir, "evilution*"))
+      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      dirs_after = Dir.glob(File.join(Dir.tmpdir, "evilution*"))
+
+      expect(dirs_after - dirs_before).to be_empty
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 
