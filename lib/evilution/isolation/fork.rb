@@ -29,6 +29,8 @@ module Evilution
       private
 
       def restore_original_source(mutation)
+        return if File.read(mutation.file_path) == mutation.original_source
+
         File.write(mutation.file_path, mutation.original_source)
       rescue StandardError => e
         warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
