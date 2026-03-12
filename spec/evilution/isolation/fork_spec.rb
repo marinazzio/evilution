@@ -61,6 +61,30 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(File.read(tmpfile.path)).to eq(original_content)
     end
 
+    it "sends SIGTERM before SIGKILL on timeout" do
+      test_command = lambda { |_m|
+        Signal.trap("TERM") { exit!(42) }
+        sleep 10
+        { passed: true }
+      }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+
+      expect(result).to be_timeout
+    end
+
+    it "escalates to SIGKILL when child ignores SIGTERM" do
+      test_command = lambda { |_m|
+        Signal.trap("TERM", "IGNORE")
+        sleep 10
+        { passed: true }
+      }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+
+      expect(result).to be_timeout
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 

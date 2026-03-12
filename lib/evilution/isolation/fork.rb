@@ -3,6 +3,8 @@
 module Evilution
   module Isolation
     class Fork
+      GRACE_PERIOD = 2
+
       def call(mutation:, test_command:, timeout:)
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         read_io, write_io = IO.pipe
@@ -51,10 +53,22 @@ module Evilution
           ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
           { timeout: false, passed: false, error: "empty result from child" }
         else
-          ::Process.kill("KILL", pid) rescue nil # rubocop:disable Style/RescueModifier
-          ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
+          terminate_child(pid)
           { timeout: true }
         end
+      end
+
+      def terminate_child(pid)
+        ::Process.kill("TERM", pid) rescue nil # rubocop:disable Style/RescueModifier
+        _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
+        return if status
+
+        sleep(GRACE_PERIOD)
+        _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
+        return if status
+
+        ::Process.kill("KILL", pid) rescue nil # rubocop:disable Style/RescueModifier
+        ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
       end
 
       def build_mutation_result(mutation, result, duration)
