@@ -1,15 +1,20 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
+
 module Evilution
   module Isolation
     class Fork
       GRACE_PERIOD = 2
 
       def call(mutation:, test_command:, timeout:)
+        sandbox_dir = Dir.mktmpdir("evilution-run")
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         read_io, write_io = IO.pipe
 
         pid = ::Process.fork do
+          ENV["TMPDIR"] = sandbox_dir
           read_io.close
           result = execute_in_child(mutation, test_command)
           Marshal.dump(result, write_io)
@@ -26,6 +31,7 @@ module Evilution
         read_io&.close
         write_io&.close
         restore_original_source(mutation)
+        FileUtils.rm_rf(sandbox_dir) if sandbox_dir
       end
 
       private
