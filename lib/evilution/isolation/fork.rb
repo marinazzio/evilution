@@ -10,9 +10,9 @@ module Evilution
       GRACE_PERIOD = 2
 
       def call(mutation:, test_command:, timeout:)
+        existing_temp_dirs = evilution_temp_dirs
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         read_io, write_io = IO.pipe
-        existing_temp_dirs = evilution_temp_dirs
 
         pid = ::Process.fork do
           read_io.close
@@ -31,7 +31,7 @@ module Evilution
         read_io&.close
         write_io&.close
         restore_original_source(mutation)
-        cleanup_leaked_temp_dirs(existing_temp_dirs)
+        cleanup_leaked_temp_dirs(existing_temp_dirs) if result.is_a?(Hash) && result[:timeout]
       end
 
       private
@@ -50,7 +50,13 @@ module Evilution
 
       def cleanup_leaked_temp_dirs(existing_temp_dirs)
         leaked = evilution_temp_dirs - existing_temp_dirs
-        leaked.each { |dir| FileUtils.rm_rf(dir) }
+        leaked.each do |dir|
+          expanded_dir = File.expand_path(dir)
+          if !expanded_dir.start_with?(File.expand_path(Dir.tmpdir) + File::SEPARATOR)
+            raise "Invalid path: path traversal detected in #{dir}"
+          end
+          FileUtils.rm_rf(expanded_dir)
+        end
       rescue StandardError => e
         warn("Warning: failed to clean up temp directories: #{e.message}")
       end
