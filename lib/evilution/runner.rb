@@ -25,7 +25,6 @@ module Evilution
     end
 
     def call
-      @truncated = false
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       subjects = parse_subjects
@@ -33,10 +32,10 @@ module Evilution
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      results = run_mutations(mutations)
+      results, truncated = run_mutations(mutations)
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-      summary = Result::Summary.new(results: results, duration: duration, truncated: @truncated)
+      summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
       output_report(summary)
 
       summary
@@ -82,6 +81,7 @@ module Evilution
       integration = build_integration
       results = []
       survived_count = 0
+      truncated = false
 
       mutations.each do |mutation|
         test_command = ->(m) { integration.call(m) }
@@ -94,12 +94,12 @@ module Evilution
         survived_count += 1 if result.survived?
 
         if config.fail_fast? && survived_count >= config.fail_fast
-          @truncated = true
+          truncated = true
           break
         end
       end
 
-      results
+      [results, truncated]
     end
 
     def build_integration

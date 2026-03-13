@@ -59,11 +59,11 @@ module Evilution
           i += 1
         elsif arg == "--fail-fast"
           next_arg = argv[i + 1]
-          if next_arg&.match?(/\A\d+\z/)
+          if next_arg&.match?(/\A-?\d+\z/)
             @options[:fail_fast] = Integer(next_arg)
             i += 2
           else
-            @options[:fail_fast] = 1
+            result << arg
             i += 1
           end
         elsif arg.start_with?("--fail-fast=")
@@ -109,6 +109,7 @@ module Evilution
         warn("Warning: --no-coverage is deprecated, currently has no effect, and will be removed in a future version.")
         @options[:coverage] = false
       end
+      opts.on("--fail-fast", "Stop after N surviving mutants (default: 1, use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end
