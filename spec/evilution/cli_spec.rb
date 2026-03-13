@@ -223,6 +223,22 @@ RSpec.describe Evilution::CLI do
           config: have_attributes(fail_fast: 5)
         )
       end
+
+      it "accepts --fail-fast=N form" do
+        cli = described_class.new(["--fail-fast=3"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 3)
+        )
+      end
+
+      it "does not consume positional file arguments" do
+        cli = described_class.new(["--fail-fast", "lib/foo.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 1, target_files: ["lib/foo.rb"])
+        )
+      end
     end
 
     describe "--no-coverage flag (deprecated)" do

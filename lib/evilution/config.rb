@@ -39,7 +39,7 @@ module Evilution
       @coverage = merged[:coverage]
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
-      @fail_fast = merged[:fail_fast]
+      @fail_fast = validate_fail_fast(merged[:fail_fast])
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
       freeze
@@ -96,6 +96,15 @@ module Evilution
     end
 
     private
+
+    def validate_fail_fast(value)
+      return nil if value.nil?
+
+      value = Integer(value)
+      raise ArgumentError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
+
+      value
+    end
 
     def warn_removed_options(merged, file_options)
       if merged.key?(:jobs)

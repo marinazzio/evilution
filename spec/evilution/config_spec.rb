@@ -278,6 +278,18 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "fail_fast validation" do
+    it "rejects zero" do
+      expect { described_class.new(fail_fast: 0, skip_config_file: true) }
+        .to raise_error(ArgumentError, /positive integer/)
+    end
+
+    it "rejects negative values" do
+      expect { described_class.new(fail_fast: -1, skip_config_file: true) }
+        .to raise_error(ArgumentError, /positive integer/)
+    end
+  end
+
   describe "immutability" do
     it "is frozen after initialization" do
       config = described_class.new(skip_config_file: true)
