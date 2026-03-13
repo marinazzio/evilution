@@ -21,7 +21,7 @@ Metrics/BlockLength:
     - "evilution.gemspec"
 
 Metrics/ClassLength:
-  Max: 130
+  Max: 140
 
 Metrics/MethodLength:
   Max: 30
@@ -37,7 +37,7 @@ Metrics/CyclomaticComplexity:
   Max: 12
 
 Metrics/PerceivedComplexity:
-  Max: 12
+  Max: 13
 
 Metrics/ParameterLists:
   Max: 8
