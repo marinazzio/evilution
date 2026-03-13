@@ -23,6 +23,7 @@ module Evilution
         end
 
         lines << ""
+        lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
         lines << result_line(summary)
 
         lines.join("\n")

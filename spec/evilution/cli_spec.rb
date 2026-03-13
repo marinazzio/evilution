@@ -207,6 +207,24 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--fail-fast flag" do
+      it "sets fail_fast to 1 when given without a value" do
+        cli = described_class.new(["--fail-fast"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 1)
+        )
+      end
+
+      it "sets fail_fast to the given integer" do
+        cli = described_class.new(["--fail-fast", "5"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 5)
+        )
+      end
+    end
+
     describe "--no-coverage flag (deprecated)" do
       it "emits a deprecation warning to stderr" do
         expect { described_class.new(["--no-coverage"]) }.to output(/--no-coverage is deprecated.*no effect/).to_stderr

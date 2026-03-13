@@ -16,13 +16,14 @@ module Evilution
       coverage: true,
       verbose: false,
       quiet: false,
+      fail_fast: nil,
       line_ranges: {},
       spec_files: []
     }.freeze
 
     attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet,
-                :line_ranges, :spec_files
+                :fail_fast, :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -38,6 +39,7 @@ module Evilution
       @coverage = merged[:coverage]
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
+      @fail_fast = merged[:fail_fast]
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
       freeze
@@ -63,6 +65,10 @@ module Evilution
       !target.nil?
     end
 
+    def fail_fast?
+      !fail_fast.nil?
+    end
+
     # Generates a default config file template.
     def self.default_template
       <<~YAML
@@ -80,6 +86,9 @@ module Evilution
 
         # Test integration: rspec (default: rspec)
         # integration: rspec
+
+        # Stop after N surviving mutants (default: disabled)
+        # fail_fast: 1
 
         # DEPRECATED: Coverage filtering is deprecated and will be removed
         # coverage: true

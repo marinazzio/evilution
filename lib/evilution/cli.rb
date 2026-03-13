@@ -97,6 +97,7 @@ module Evilution
         warn("Warning: --no-coverage is deprecated, currently has no effect, and will be removed in a future version.")
         @options[:coverage] = false
       end
+      opts.on("--fail-fast [N]", Integer, "Stop after N surviving mutants (default: 1)") { |n| @options[:fail_fast] = n || 1 }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end

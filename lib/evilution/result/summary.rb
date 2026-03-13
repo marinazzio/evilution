@@ -5,10 +5,15 @@ module Evilution
     class Summary
       attr_reader :results, :duration
 
-      def initialize(results:, duration: 0.0)
+      def initialize(results:, duration: 0.0, truncated: false)
         @results = results
         @duration = duration
+        @truncated = truncated
         freeze
+      end
+
+      def truncated?
+        @truncated
       end
 
       def total

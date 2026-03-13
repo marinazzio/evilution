@@ -30,7 +30,7 @@ module Evilution
       end
 
       def build_summary(summary)
-        {
+        data = {
           total: summary.total,
           killed: summary.killed,
           survived: summary.survived,
@@ -39,6 +39,8 @@ module Evilution
           score: summary.score.round(4),
           duration: summary.duration.round(4)
         }
+        data[:truncated] = true if summary.truncated?
+        data
       end
 
       def build_mutation_detail(result)
