@@ -101,9 +101,11 @@ module Evilution
       return nil if value.nil?
 
       value = Integer(value)
-      raise ArgumentError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
+      raise ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
 
       value
+    rescue ::ArgumentError
+      raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
     end
 
     def warn_removed_options(merged, file_options)

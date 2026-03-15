@@ -59,7 +59,8 @@ module Evilution
           i += 1
         elsif arg == "--fail-fast"
           next_arg = argv[i + 1]
-          if next_arg&.match?(/\A-?\d+\z/)
+
+          if next_arg&.match?(/\A\d+\z/)
             @options[:fail_fast] = Integer(next_arg)
             i += 2
           else
@@ -67,7 +68,7 @@ module Evilution
             i += 1
           end
         elsif arg.start_with?("--fail-fast=")
-          @options[:fail_fast] = Integer(arg.delete_prefix("--fail-fast="))
+          @options[:fail_fast] = arg.delete_prefix("--fail-fast=")
           i += 1
         else
           result << arg

@@ -281,12 +281,17 @@ RSpec.describe Evilution::Config do
   describe "fail_fast validation" do
     it "rejects zero" do
       expect { described_class.new(fail_fast: 0, skip_config_file: true) }
-        .to raise_error(ArgumentError, /positive integer/)
+        .to raise_error(Evilution::ConfigError, /positive integer/)
     end
 
     it "rejects negative values" do
       expect { described_class.new(fail_fast: -1, skip_config_file: true) }
-        .to raise_error(ArgumentError, /positive integer/)
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects non-integer values" do
+      expect { described_class.new(fail_fast: "abc", skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
     end
   end
 

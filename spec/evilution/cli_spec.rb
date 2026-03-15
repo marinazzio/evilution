@@ -239,6 +239,24 @@ RSpec.describe Evilution::CLI do
           config: have_attributes(fail_fast: 1, target_files: ["lib/foo.rb"])
         )
       end
+
+      it "returns exit code 2 for invalid --fail-fast=abc" do
+        cli = described_class.new(["--fail-fast=abc"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+
+      it "returns exit code 2 for --fail-fast=0" do
+        cli = described_class.new(["--fail-fast=0"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+
+      it "returns exit code 2 for --fail-fast=-1" do
+        cli = described_class.new(["--fail-fast=-1"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
     end
 
     describe "--no-coverage flag (deprecated)" do
