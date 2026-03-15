@@ -96,6 +96,20 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    context "path normalization" do
+      it "strips leading ./ from paths" do
+        create_file("spec/foo/bar_spec.rb")
+
+        expect(resolver.call("./lib/foo/bar.rb")).to eq("spec/foo/bar_spec.rb")
+      end
+
+      it "handles absolute paths by making them relative to pwd" do
+        create_file("spec/foo/bar_spec.rb")
+
+        expect(resolver.call("#{Dir.pwd}/lib/foo/bar.rb")).to eq("spec/foo/bar_spec.rb")
+      end
+    end
+
     context "invalid input" do
       it "returns nil for nil input" do
         expect(resolver.call(nil)).to be_nil
@@ -128,6 +142,10 @@ RSpec.describe Evilution::SpecResolver do
         results = resolver.resolve_all(["lib/foo.rb", "lib/foo.rb"])
 
         expect(results).to eq(["spec/foo_spec.rb"])
+      end
+
+      it "returns empty array for nil input" do
+        expect(resolver.resolve_all(nil)).to eq([])
       end
     end
   end
