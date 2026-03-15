@@ -396,12 +396,13 @@ RSpec.describe Evilution::CLI do
         it "prints plain text error to stderr without JSON" do
           allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
           cli = described_class.new([])
+          stderr = nil
           stdout = capture_stdout do
-            @stderr = capture_stderr { cli.call }
+            stderr = capture_stderr { cli.call }
           end
 
-          expect(@stderr).to include("Error: something failed")
-          expect(@stderr).not_to include("{")
+          expect(stderr).to include("Error: something failed")
+          expect(stderr).not_to include("{")
           expect(stdout).to be_empty
         end
       end
