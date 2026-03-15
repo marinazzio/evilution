@@ -10,7 +10,7 @@ module Evilution
 
         begin
           source = File.read(file_path)
-        rescue Errno::ENOENT, Errno::EACCES => e
+        rescue SystemCallError => e
           raise ParseError.new("cannot read #{file_path}: #{e.message}", file: file_path)
         end
         result = Prism.parse(source)

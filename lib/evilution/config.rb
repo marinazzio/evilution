@@ -75,6 +75,10 @@ module Evilution
 
         data = YAML.safe_load_file(path, symbolize_names: true)
         return data.is_a?(Hash) ? data : {}
+      rescue Psych::SyntaxError, Psych::DisallowedClass => e
+        raise ConfigError.new("failed to parse config file #{path}: #{e.message}", file: path)
+      rescue SystemCallError => e
+        raise ConfigError.new("cannot read config file #{path}: #{e.message}", file: path)
       end
 
       {}

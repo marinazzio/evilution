@@ -158,11 +158,7 @@ module Evilution
     end
 
     def run_mutations
-      file_options = begin
-        Config.file_options
-      rescue StandardError
-        {}
-      end
+      file_options = Config.file_options
       config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
       runner = Runner.new(config: config)
       summary = runner.call
