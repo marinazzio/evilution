@@ -158,7 +158,6 @@ module Evilution
     end
 
     def run_mutations
-      config = nil
       config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
       runner = Runner.new(config: config)
       summary = runner.call

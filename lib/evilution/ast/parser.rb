@@ -8,7 +8,11 @@ module Evilution
       def call(file_path)
         raise ParseError.new("file not found: #{file_path}", file: file_path) unless File.exist?(file_path)
 
-        source = File.read(file_path)
+        begin
+          source = File.read(file_path)
+        rescue Errno::ENOENT, Errno::EACCES => e
+          raise ParseError.new("cannot read #{file_path}: #{e.message}", file: file_path)
+        end
         result = Prism.parse(source)
 
         raise ParseError.new("failed to parse #{file_path}: #{result.errors.map(&:message).join(", ")}", file: file_path) if result.failure?
