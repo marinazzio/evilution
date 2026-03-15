@@ -462,6 +462,29 @@ RSpec.describe Evilution::Runner do
       expect(result).to be_truncated
     end
 
+    it "does not mark as truncated when threshold reached on last mutation" do
+      one_mutation_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        fail_fast: 1,
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      one_mutation_runner = described_class.new(config: one_mutation_config)
+
+      registry = Evilution::Mutator::Registry.default
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result)
+
+      result = one_mutation_runner.call
+
+      expect(result.total).to eq(1)
+      expect(result).not_to be_truncated
+    end
+
     it "does not truncate when survivors are below threshold" do
       fail_fast_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],

@@ -83,7 +83,7 @@ module Evilution
       survived_count = 0
       truncated = false
 
-      mutations.each do |mutation|
+      mutations.each_with_index do |mutation, index|
         test_command = ->(m) { integration.call(m) }
         result = isolator.call(
           mutation: mutation,
@@ -93,7 +93,7 @@ module Evilution
         results << result
         survived_count += 1 if result.survived?
 
-        if config.fail_fast? && survived_count >= config.fail_fast
+        if config.fail_fast? && survived_count >= config.fail_fast && index < mutations.length - 1
           truncated = true
           break
         end
