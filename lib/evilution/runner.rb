@@ -10,6 +10,7 @@ require_relative "reporter/cli"
 require_relative "reporter/suggestion"
 require_relative "diff/parser"
 require_relative "diff/file_filter"
+require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
 
@@ -46,7 +47,14 @@ module Evilution
     attr_reader :parser, :registry, :isolator
 
     def parse_subjects
-      config.target_files.flat_map { |file| parser.call(file) }
+      files = resolve_target_files
+      files.flat_map { |file| parser.call(file) }
+    end
+
+    def resolve_target_files
+      return config.target_files unless config.target_files.empty?
+
+      Git::ChangedFiles.new.call
     end
 
     def filter_by_target(subjects)
