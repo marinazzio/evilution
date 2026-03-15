@@ -69,6 +69,17 @@ module Evilution
       !fail_fast.nil?
     end
 
+    def self.file_options
+      CONFIG_FILES.each do |path|
+        next unless File.exist?(path)
+
+        data = YAML.safe_load_file(path, symbolize_names: true)
+        return data.is_a?(Hash) ? data : {}
+      end
+
+      {}
+    end
+
     # Generates a default config file template.
     def self.default_template
       <<~YAML
@@ -126,14 +137,7 @@ module Evilution
     end
 
     def load_config_file
-      CONFIG_FILES.each do |path|
-        next unless File.exist?(path)
-
-        data = YAML.safe_load_file(path, symbolize_names: true)
-        return data.is_a?(Hash) ? data : {}
-      end
-
-      {}
+      self.class.file_options
     end
   end
 end
