@@ -175,8 +175,18 @@ module Evilution
     def json_format?(config)
       return config.json? if config
 
-      format = @options[:format]
+      format = @options[:format] || config_file_format
       format && format.to_sym == :json
+    end
+
+    def config_file_format
+      Config::CONFIG_FILES.each do |path|
+        next unless File.exist?(path)
+
+        data = YAML.safe_load_file(path, symbolize_names: true)
+        return data[:format] if data.is_a?(Hash) && data[:format]
+      end
+      nil
     end
 
     def error_payload(error)

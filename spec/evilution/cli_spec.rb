@@ -370,6 +370,19 @@ RSpec.describe Evilution::CLI do
           end
         end
 
+        it "uses JSON format from config file even when Config.new fails" do
+          Dir.mktmpdir do |dir|
+            Dir.chdir(dir) do
+              File.write(".evilution.yml", "format: json\nfail_fast: -1\n")
+              cli = described_class.new([])
+              output = capture_stdout { expect(cli.call).to eq(2) }
+              parsed = JSON.parse(output)
+
+              expect(parsed["error"]["type"]).to eq("config_error")
+            end
+          end
+        end
+
         it "does not output to stderr" do
           allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
           cli = described_class.new(["--format", "json"])
@@ -380,7 +393,7 @@ RSpec.describe Evilution::CLI do
       end
 
       context "in text mode" do
-        it "does not include file field for errors without file context" do
+        it "prints error message to stderr" do
           allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
           cli = described_class.new([])
           output = capture_stderr { cli.call }
