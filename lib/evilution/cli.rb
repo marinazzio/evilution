@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require "optparse"
 require_relative "version"
 require_relative "config"
@@ -162,8 +163,29 @@ module Evilution
       summary = runner.call
       summary.success?(min_score: config.min_score) ? 0 : 1
     rescue Error => e
-      warn("Error: #{e.message}")
+      if json_format?
+        $stdout.puts(JSON.generate(error_payload(e)))
+      else
+        warn("Error: #{e.message}")
+      end
       2
+    end
+
+    def json_format?
+      format = @options[:format]
+      format && format.to_sym == :json
+    end
+
+    def error_payload(error)
+      error_type = case error
+                   when ConfigError then "config_error"
+                   when ParseError then "parse_error"
+                   else "runtime_error"
+                   end
+
+      payload = { type: error_type, message: error.message }
+      payload[:file] = error.file if error.file
+      { error: payload }
     end
   end
 end

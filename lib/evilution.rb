@@ -42,7 +42,15 @@ require_relative "evilution/cli"
 require_relative "evilution/runner"
 
 module Evilution
-  class Error < StandardError; end
+  class Error < StandardError
+    attr_reader :file
+
+    def initialize(message = nil, file: nil)
+      super(message)
+      @file = file
+    end
+  end
+
   class ConfigError < Error; end
   class ParseError < Error; end
   class IsolationError < Error; end
