@@ -355,6 +355,21 @@ RSpec.describe Evilution::CLI do
           )
         end
 
+        it "uses JSON format when set via config file" do
+          Dir.mktmpdir do |dir|
+            Dir.chdir(dir) do
+              File.write(".evilution.yml", "format: json\n")
+              allow(Evilution::Runner).to receive(:new).and_return(runner)
+              allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+              cli = described_class.new([])
+              output = capture_stdout { expect(cli.call).to eq(2) }
+              parsed = JSON.parse(output)
+
+              expect(parsed["error"]["type"]).to eq("runtime_error")
+            end
+          end
+        end
+
         it "does not output to stderr" do
           allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
           cli = described_class.new(["--format", "json"])
