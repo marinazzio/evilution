@@ -54,6 +54,7 @@ module Evilution
           diff: mutation.diff
         }
         detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
+        detail[:test_command] = result.test_command if result.test_command
         detail
       end
     end

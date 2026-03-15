@@ -225,6 +225,23 @@ RSpec.describe Evilution::Integration::RSpec do
       custom_integration.call(mutation)
     end
 
+    it "includes test_command in the result" do
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = integration.call(mutation)
+
+      expect(result[:test_command]).to eq("rspec --format progress --no-color --order defined spec/some_spec.rb")
+    end
+
+    it "includes default spec path in test_command when no test_files" do
+      default_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = default_integration.call(mutation)
+
+      expect(result[:test_command]).to eq("rspec --format progress --no-color --order defined spec")
+    end
+
     it "defaults to spec/ when no test_files provided" do
       default_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|

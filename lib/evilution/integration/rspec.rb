@@ -102,10 +102,11 @@ module Evilution
         args = build_args(mutation)
 
         status = ::RSpec::Core::Runner.run(args, out, err)
+        command = "rspec #{args.join(" ")}"
 
-        { passed: status.zero? }
+        { passed: status.zero?, test_command: command }
       rescue StandardError => e
-        { passed: false, error: e.message }
+        { passed: false, error: e.message, test_command: "rspec #{args.join(" ")}" }
       end
 
       def build_args(_mutation)

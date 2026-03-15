@@ -135,5 +135,27 @@ RSpec.describe Evilution::Reporter::JSON do
 
       expect(parsed["summary"]).not_to have_key("truncated")
     end
+
+    it "includes test_command when present in mutation result" do
+      result_with_command = Evilution::Result::MutationResult.new(
+        mutation: survived_mutation,
+        status: :survived,
+        duration: 0.123,
+        test_command: "rspec --format progress --no-color --order defined spec"
+      )
+      command_summary = Evilution::Result::Summary.new(results: [result_with_command], duration: 0.2)
+      parsed = JSON.parse(reporter.call(command_summary))
+
+      expect(parsed["survived"].first["test_command"]).to eq(
+        "rspec --format progress --no-color --order defined spec"
+      )
+    end
+
+    it "omits test_command when not present in mutation result" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["survived"].first).not_to have_key("test_command")
+      expect(parsed["killed"].first).not_to have_key("test_command")
+    end
   end
 end

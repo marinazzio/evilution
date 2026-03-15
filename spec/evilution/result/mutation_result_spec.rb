@@ -54,6 +54,18 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.duration).to eq(0.0)
   end
 
+  it "stores test_command" do
+    result = described_class.new(mutation: mutation, status: :killed, test_command: "rspec --format progress spec")
+
+    expect(result.test_command).to eq("rspec --format progress spec")
+  end
+
+  it "defaults test_command to nil" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.test_command).to be_nil
+  end
+
   it "is frozen" do
     result = described_class.new(mutation: mutation, status: :killed)
 

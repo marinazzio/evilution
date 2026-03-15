@@ -91,7 +91,8 @@ module Evilution
         Result::MutationResult.new(
           mutation: mutation,
           status: status,
-          duration: duration
+          duration: duration,
+          test_command: result[:test_command]
         )
       end
     end
