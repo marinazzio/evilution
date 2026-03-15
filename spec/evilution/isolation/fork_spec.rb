@@ -116,6 +116,22 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.duration).to be > 0
     end
 
+    it "passes test_command from result to MutationResult" do
+      test_command = ->(_m) { { passed: false, test_command: "rspec --format progress spec" } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.test_command).to eq("rspec --format progress spec")
+    end
+
+    it "sets test_command to nil when not in result" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.test_command).to be_nil
+    end
+
     it "isolates mutations from parent process" do
       parent_value = "original"
       test_command = lambda do |_m|
