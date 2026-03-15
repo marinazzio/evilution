@@ -6,12 +6,16 @@ module Evilution
   module AST
     class Parser
       def call(file_path)
-        raise ParseError, "file not found: #{file_path}" unless File.exist?(file_path)
+        raise ParseError.new("file not found: #{file_path}", file: file_path) unless File.exist?(file_path)
 
-        source = File.read(file_path)
+        begin
+          source = File.read(file_path)
+        rescue SystemCallError => e
+          raise ParseError.new("cannot read #{file_path}: #{e.message}", file: file_path)
+        end
         result = Prism.parse(source)
 
-        raise ParseError, "failed to parse #{file_path}: #{result.errors.map(&:message).join(", ")}" if result.failure?
+        raise ParseError.new("failed to parse #{file_path}: #{result.errors.map(&:message).join(", ")}", file: file_path) if result.failure?
 
         extract_subjects(result.value, source, file_path)
       end

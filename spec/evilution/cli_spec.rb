@@ -317,6 +317,95 @@ RSpec.describe Evilution::CLI do
 
         expect(output).to include("Error: something failed")
       end
+
+      context "in JSON mode" do
+        it "outputs structured JSON error to stdout for runtime errors" do
+          allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+          cli = described_class.new(["--format", "json"])
+          output = capture_stdout { expect(cli.call).to eq(2) }
+          parsed = JSON.parse(output)
+
+          expect(parsed).to eq(
+            "error" => { "type" => "runtime_error", "message" => "something failed" }
+          )
+        end
+
+        it "outputs structured JSON error for config errors" do
+          cli = described_class.new(["--format", "json", "--fail-fast=0"])
+          output = capture_stdout { expect(cli.call).to eq(2) }
+          parsed = JSON.parse(output)
+
+          expect(parsed["error"]["type"]).to eq("config_error")
+          expect(parsed["error"]["message"]).to include("positive integer")
+        end
+
+        it "outputs structured JSON error with file for parse errors" do
+          error = Evilution::ParseError.new("file not found: lib/missing.rb", file: "lib/missing.rb")
+          allow(runner).to receive(:call).and_raise(error)
+          cli = described_class.new(["--format", "json"])
+          output = capture_stdout { expect(cli.call).to eq(2) }
+          parsed = JSON.parse(output)
+
+          expect(parsed).to eq(
+            "error" => {
+              "type" => "parse_error",
+              "message" => "file not found: lib/missing.rb",
+              "file" => "lib/missing.rb"
+            }
+          )
+        end
+
+        it "uses JSON format when set via config file" do
+          Dir.mktmpdir do |dir|
+            Dir.chdir(dir) do
+              File.write(".evilution.yml", "format: json\n")
+              allow(Evilution::Runner).to receive(:new).and_return(runner)
+              allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+              cli = described_class.new([])
+              output = capture_stdout { expect(cli.call).to eq(2) }
+              parsed = JSON.parse(output)
+
+              expect(parsed["error"]["type"]).to eq("runtime_error")
+            end
+          end
+        end
+
+        it "uses JSON format from config file even when Config.new fails" do
+          Dir.mktmpdir do |dir|
+            Dir.chdir(dir) do
+              File.write(".evilution.yml", "format: json\nfail_fast: -1\n")
+              cli = described_class.new([])
+              output = capture_stdout { expect(cli.call).to eq(2) }
+              parsed = JSON.parse(output)
+
+              expect(parsed["error"]["type"]).to eq("config_error")
+            end
+          end
+        end
+
+        it "does not output to stderr" do
+          allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+          cli = described_class.new(["--format", "json"])
+          stderr = capture_stderr { capture_stdout { cli.call } }
+
+          expect(stderr).to be_empty
+        end
+      end
+
+      context "in text mode" do
+        it "prints plain text error to stderr without JSON" do
+          allow(runner).to receive(:call).and_raise(Evilution::Error, "something failed")
+          cli = described_class.new([])
+          stderr = nil
+          stdout = capture_stdout do
+            stderr = capture_stderr { cli.call }
+          end
+
+          expect(stderr).to include("Error: something failed")
+          expect(stderr).not_to include("{")
+          expect(stdout).to be_empty
+        end
+      end
     end
 
     describe "positional file arguments" do
