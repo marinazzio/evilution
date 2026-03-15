@@ -158,12 +158,17 @@ module Evilution
     end
 
     def run_mutations
+      file_options = begin
+        Config.file_options
+      rescue StandardError
+        {}
+      end
       config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
       runner = Runner.new(config: config)
       summary = runner.call
       summary.success?(min_score: config.min_score) ? 0 : 1
     rescue Error => e
-      if json_format?(config)
+      if json_format?(config, file_options)
         $stdout.puts(JSON.generate(error_payload(e)))
       else
         warn("Error: #{e.message}")
@@ -171,10 +176,10 @@ module Evilution
       2
     end
 
-    def json_format?(config)
+    def json_format?(config, file_options)
       return config.json? if config
 
-      format = @options[:format] || Config.file_options[:format]
+      format = @options[:format] || (file_options && file_options[:format])
       format && format.to_sym == :json
     end
 
