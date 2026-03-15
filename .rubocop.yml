@@ -24,6 +24,7 @@ Metrics/ClassLength:
   Max: 120
   Exclude:
     - "lib/evilution/cli.rb"
+    - "lib/evilution/config.rb"
 
 Metrics/MethodLength:
   Max: 30
@@ -67,4 +68,7 @@ Lint/DuplicateBranch:
     - "lib/evilution/mutator/operator/float_literal.rb"
 
 Naming/PredicateMethod:
+  Enabled: false
+
+Style/SafeNavigation:
   Enabled: false

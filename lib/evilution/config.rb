@@ -104,7 +104,7 @@ module Evilution
       raise ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
 
       value
-    rescue ::ArgumentError
+    rescue ::ArgumentError, ::TypeError
       raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
     end
 

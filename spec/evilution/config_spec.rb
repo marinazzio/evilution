@@ -289,8 +289,13 @@ RSpec.describe Evilution::Config do
         .to raise_error(Evilution::ConfigError, /positive integer/)
     end
 
-    it "rejects non-integer values" do
+    it "rejects non-integer string values" do
       expect { described_class.new(fail_fast: "abc", skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects boolean values" do
+      expect { described_class.new(fail_fast: true, skip_config_file: true) }
         .to raise_error(Evilution::ConfigError, /positive integer/)
     end
   end

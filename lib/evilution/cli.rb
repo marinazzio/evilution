@@ -53,15 +53,16 @@ module Evilution
         if %w[--jobs -j].include?(arg)
           warn("Warning: --jobs is no longer supported and will be ignored.")
           next_arg = argv[i + 1]
-          i += next_arg&.match?(/\A-?\d+\z/) ? 2 : 1
+          numeric_next = next_arg && next_arg.match?(/\A-?\d+\z/)
+          i += numeric_next ? 2 : 1
         elsif arg.start_with?("--jobs=") || arg.match?(/\A-j-?\d+\z/)
           warn("Warning: --jobs is no longer supported and will be ignored.")
           i += 1
         elsif arg == "--fail-fast"
           next_arg = argv[i + 1]
 
-          if next_arg&.match?(/\A\d+\z/)
-            @options[:fail_fast] = Integer(next_arg)
+          if next_arg && next_arg.match?(/\A-?\d+\z/)
+            @options[:fail_fast] = next_arg
             i += 2
           else
             result << arg

@@ -257,6 +257,12 @@ RSpec.describe Evilution::CLI do
         output = capture_stderr { expect(cli.call).to eq(2) }
         expect(output).to include("Error:")
       end
+
+      it "returns exit code 2 for spaced --fail-fast -1" do
+        cli = described_class.new(["--fail-fast", "-1"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
     end
 
     describe "--no-coverage flag (deprecated)" do
