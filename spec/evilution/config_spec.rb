@@ -42,6 +42,10 @@ RSpec.describe Evilution::Config do
       expect(config.diff_base).to be_nil
     end
 
+    it "sets fail_fast to nil" do
+      expect(config.fail_fast).to be_nil
+    end
+
     it "sets line_ranges to empty hash" do
       expect(config.line_ranges).to eq({})
     end
@@ -102,6 +106,12 @@ RSpec.describe Evilution::Config do
       config = described_class.new(spec_files: "spec/foo_spec.rb", skip_config_file: true)
 
       expect(config.spec_files).to eq(["spec/foo_spec.rb"])
+    end
+
+    it "accepts fail_fast" do
+      config = described_class.new(fail_fast: 3, skip_config_file: true)
+
+      expect(config.fail_fast).to eq(3)
     end
   end
 
@@ -251,6 +261,42 @@ RSpec.describe Evilution::Config do
       config = described_class.new(skip_config_file: true)
 
       expect(config.diff?).to be false
+    end
+  end
+
+  describe "#fail_fast?" do
+    it "returns true when fail_fast is set" do
+      config = described_class.new(fail_fast: 1, skip_config_file: true)
+
+      expect(config.fail_fast?).to be true
+    end
+
+    it "returns false when fail_fast is nil" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.fail_fast?).to be false
+    end
+  end
+
+  describe "fail_fast validation" do
+    it "rejects zero" do
+      expect { described_class.new(fail_fast: 0, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects negative values" do
+      expect { described_class.new(fail_fast: -1, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects non-integer string values" do
+      expect { described_class.new(fail_fast: "abc", skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects boolean values" do
+      expect { described_class.new(fail_fast: true, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
     end
   end
 

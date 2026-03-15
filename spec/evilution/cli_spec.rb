@@ -207,6 +207,64 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--fail-fast flag" do
+      it "sets fail_fast to 1 when given without a value" do
+        cli = described_class.new(["--fail-fast"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 1)
+        )
+      end
+
+      it "sets fail_fast to the given integer" do
+        cli = described_class.new(["--fail-fast", "5"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 5)
+        )
+      end
+
+      it "accepts --fail-fast=N form" do
+        cli = described_class.new(["--fail-fast=3"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 3)
+        )
+      end
+
+      it "does not consume positional file arguments" do
+        cli = described_class.new(["--fail-fast", "lib/foo.rb"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(fail_fast: 1, target_files: ["lib/foo.rb"])
+        )
+      end
+
+      it "returns exit code 2 for invalid --fail-fast=abc" do
+        cli = described_class.new(["--fail-fast=abc"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+
+      it "returns exit code 2 for --fail-fast=0" do
+        cli = described_class.new(["--fail-fast=0"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+
+      it "returns exit code 2 for --fail-fast=-1" do
+        cli = described_class.new(["--fail-fast=-1"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+
+      it "returns exit code 2 for spaced --fail-fast -1" do
+        cli = described_class.new(["--fail-fast", "-1"])
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("Error:")
+      end
+    end
+
     describe "--no-coverage flag (deprecated)" do
       it "emits a deprecation warning to stderr" do
         expect { described_class.new(["--no-coverage"]) }.to output(/--no-coverage is deprecated.*no effect/).to_stderr

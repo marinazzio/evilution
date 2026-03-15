@@ -115,4 +115,16 @@ RSpec.describe Evilution::Result::Summary do
   it "is frozen" do
     expect(summary).to be_frozen
   end
+
+  describe "#truncated?" do
+    it "defaults to false" do
+      expect(summary).not_to be_truncated
+    end
+
+    it "returns true when truncated" do
+      truncated_summary = described_class.new(results: results, duration: 1.0, truncated: true)
+
+      expect(truncated_summary).to be_truncated
+    end
+  end
 end

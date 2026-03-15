@@ -16,13 +16,14 @@ module Evilution
       coverage: true,
       verbose: false,
       quiet: false,
+      fail_fast: nil,
       line_ranges: {},
       spec_files: []
     }.freeze
 
     attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet,
-                :line_ranges, :spec_files
+                :fail_fast, :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -38,6 +39,7 @@ module Evilution
       @coverage = merged[:coverage]
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
+      @fail_fast = validate_fail_fast(merged[:fail_fast])
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
       freeze
@@ -63,6 +65,10 @@ module Evilution
       !target.nil?
     end
 
+    def fail_fast?
+      !fail_fast.nil?
+    end
+
     # Generates a default config file template.
     def self.default_template
       <<~YAML
@@ -81,12 +87,26 @@ module Evilution
         # Test integration: rspec (default: rspec)
         # integration: rspec
 
+        # Stop after N surviving mutants (default: disabled)
+        # fail_fast: 1
+
         # DEPRECATED: Coverage filtering is deprecated and will be removed
         # coverage: true
       YAML
     end
 
     private
+
+    def validate_fail_fast(value)
+      return nil if value.nil?
+
+      value = Integer(value)
+      raise ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
+
+      value
+    rescue ::ArgumentError, ::TypeError
+      raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
+    end
 
     def warn_removed_options(merged, file_options)
       if merged.key?(:jobs)

@@ -122,5 +122,18 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["summary"]["duration"]).to eq(0.6)
       expect(parsed["killed"].first["duration"]).to eq(0.456)
     end
+
+    it "includes truncated when summary is truncated" do
+      truncated_summary = Evilution::Result::Summary.new(results: [survived_result, killed_result], duration: 0.6, truncated: true)
+      parsed = JSON.parse(reporter.call(truncated_summary))
+
+      expect(parsed["summary"]["truncated"]).to be true
+    end
+
+    it "omits truncated when summary is not truncated" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["summary"]).not_to have_key("truncated")
+    end
   end
 end

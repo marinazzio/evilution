@@ -385,6 +385,127 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with fail_fast" do
+    let(:survived_result) do
+      Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :survived,
+        duration: 0.1
+      )
+    end
+
+    let(:mutation2) do
+      double(
+        "Mutation",
+        subject: subject_obj,
+        operator_name: "nil_replacement",
+        original_source: "x",
+        mutated_source: "nil",
+        file_path: "lib/example.rb",
+        line: 5,
+        column: 0,
+        diff: "- x\n+ nil"
+      )
+    end
+
+    let(:mutation3) do
+      double(
+        "Mutation",
+        subject: subject_obj,
+        operator_name: "boolean_literal_replacement",
+        original_source: "true",
+        mutated_source: "false",
+        file_path: "lib/example.rb",
+        line: 7,
+        column: 0,
+        diff: "- true\n+ false"
+      )
+    end
+
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        fail_fast: 1,
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation, mutation2, mutation3])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(survived_result)
+    end
+
+    it "stops after reaching the survivor threshold" do
+      isolator = Evilution::Isolation::Fork.new
+      expect(isolator).to receive(:call).once.and_return(survived_result)
+
+      result = runner.call
+
+      expect(result.total).to eq(1)
+    end
+
+    it "marks the summary as truncated" do
+      result = runner.call
+
+      expect(result).to be_truncated
+    end
+
+    it "does not mark as truncated when threshold reached on last mutation" do
+      one_mutation_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        fail_fast: 1,
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      one_mutation_runner = described_class.new(config: one_mutation_config)
+
+      registry = Evilution::Mutator::Registry.default
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result)
+
+      result = one_mutation_runner.call
+
+      expect(result.total).to eq(1)
+      expect(result).not_to be_truncated
+    end
+
+    it "does not truncate when survivors are below threshold" do
+      fail_fast_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        fail_fast: 5,
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      fail_fast_runner = described_class.new(config: fail_fast_config)
+
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result)
+
+      result = fail_fast_runner.call
+
+      expect(result.total).to eq(3)
+      expect(result).not_to be_truncated
+    end
+  end
+
   describe "#call with no mutations" do
     before do
       parser = instance_double(Evilution::AST::Parser)

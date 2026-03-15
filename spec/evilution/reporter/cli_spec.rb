@@ -142,5 +142,22 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("0 survived")
       expect(output).not_to include("Survived mutations:")
     end
+
+    it "shows truncation notice when summary is truncated" do
+      truncated_summary = Evilution::Result::Summary.new(
+        results: [survived_result],
+        duration: 0.5,
+        truncated: true
+      )
+      output = reporter.call(truncated_summary)
+
+      expect(output).to include("[TRUNCATED] Stopped early due to --fail-fast")
+    end
+
+    it "does not show truncation notice when summary is not truncated" do
+      output = reporter.call(summary)
+
+      expect(output).not_to include("TRUNCATED")
+    end
   end
 end

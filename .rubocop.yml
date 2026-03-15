@@ -21,7 +21,10 @@ Metrics/BlockLength:
     - "evilution.gemspec"
 
 Metrics/ClassLength:
-  Max: 130
+  Max: 120
+  Exclude:
+    - "lib/evilution/cli.rb"
+    - "lib/evilution/config.rb"
 
 Metrics/MethodLength:
   Max: 30
@@ -37,7 +40,9 @@ Metrics/CyclomaticComplexity:
   Max: 12
 
 Metrics/PerceivedComplexity:
-  Max: 12
+  Max: 8
+  Exclude:
+    - "lib/evilution/cli.rb"
 
 Metrics/ParameterLists:
   Max: 8
@@ -63,4 +68,7 @@ Lint/DuplicateBranch:
     - "lib/evilution/mutator/operator/float_literal.rb"
 
 Naming/PredicateMethod:
+  Enabled: false
+
+Style/SafeNavigation:
   Enabled: false

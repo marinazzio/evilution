@@ -12,7 +12,7 @@ module Evilution
       @command = :run
       argv = argv.dup
       argv = extract_command(argv)
-      argv = warn_removed_flags(argv)
+      argv = preprocess_flags(argv)
       raw_args = build_option_parser.parse!(argv)
       @files, @line_ranges = parse_file_args(raw_args)
     end
@@ -45,7 +45,7 @@ module Evilution
       argv
     end
 
-    def warn_removed_flags(argv)
+    def preprocess_flags(argv)
       result = []
       i = 0
       while i < argv.length
@@ -53,9 +53,23 @@ module Evilution
         if %w[--jobs -j].include?(arg)
           warn("Warning: --jobs is no longer supported and will be ignored.")
           next_arg = argv[i + 1]
-          i += next_arg&.match?(/\A-?\d+\z/) ? 2 : 1
+          numeric_next = next_arg && next_arg.match?(/\A-?\d+\z/)
+          i += numeric_next ? 2 : 1
         elsif arg.start_with?("--jobs=") || arg.match?(/\A-j-?\d+\z/)
           warn("Warning: --jobs is no longer supported and will be ignored.")
+          i += 1
+        elsif arg == "--fail-fast"
+          next_arg = argv[i + 1]
+
+          if next_arg && next_arg.match?(/\A-?\d+\z/)
+            @options[:fail_fast] = next_arg
+            i += 2
+          else
+            result << arg
+            i += 1
+          end
+        elsif arg.start_with?("--fail-fast=")
+          @options[:fail_fast] = arg.delete_prefix("--fail-fast=")
           i += 1
         else
           result << arg
@@ -97,6 +111,8 @@ module Evilution
         warn("Warning: --no-coverage is deprecated, currently has no effect, and will be removed in a future version.")
         @options[:coverage] = false
       end
+      opts.on("--fail-fast", "Stop after N surviving mutants " \
+                             "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end

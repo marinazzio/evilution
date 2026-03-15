@@ -32,10 +32,10 @@ module Evilution
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      results = run_mutations(mutations)
+      results, truncated = run_mutations(mutations)
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-      summary = Result::Summary.new(results: results, duration: duration)
+      summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
       output_report(summary)
 
       summary
@@ -79,15 +79,27 @@ module Evilution
 
     def run_mutations(mutations)
       integration = build_integration
+      results = []
+      survived_count = 0
+      truncated = false
 
-      mutations.map do |mutation|
+      mutations.each_with_index do |mutation, index|
         test_command = ->(m) { integration.call(m) }
-        isolator.call(
+        result = isolator.call(
           mutation: mutation,
           test_command: test_command,
           timeout: config.timeout
         )
+        results << result
+        survived_count += 1 if result.survived?
+
+        if config.fail_fast? && survived_count >= config.fail_fast && index < mutations.length - 1
+          truncated = true
+          break
+        end
       end
+
+      [results, truncated]
     end
 
     def build_integration
