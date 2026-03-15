@@ -38,6 +38,7 @@ require_relative "evilution/reporter/cli"
 require_relative "evilution/reporter/suggestion"
 require_relative "evilution/coverage/collector"
 require_relative "evilution/coverage/test_map"
+require_relative "evilution/spec_resolver"
 require_relative "evilution/cli"
 require_relative "evilution/runner"
 
