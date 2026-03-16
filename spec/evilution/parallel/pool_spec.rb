@@ -3,6 +3,16 @@
 require "evilution/parallel/pool"
 
 RSpec.describe Evilution::Parallel::Pool do
+  describe "#initialize" do
+    it "rejects zero size" do
+      expect { described_class.new(size: 0) }.to raise_error(ArgumentError, /positive integer/)
+    end
+
+    it "rejects negative size" do
+      expect { described_class.new(size: -1) }.to raise_error(ArgumentError, /positive integer/)
+    end
+  end
+
   describe "#map" do
     it "executes block for each item and returns results in order" do
       pool = described_class.new(size: 2)

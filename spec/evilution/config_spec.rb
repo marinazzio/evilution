@@ -327,6 +327,11 @@ RSpec.describe Evilution::Config do
       expect { described_class.new(jobs: "abc", skip_config_file: true) }
         .to raise_error(Evilution::ConfigError, /positive integer/)
     end
+
+    it "rejects float values" do
+      expect { described_class.new(jobs: 2.5, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
   end
 
   describe "immutability" do

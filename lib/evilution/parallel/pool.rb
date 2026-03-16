@@ -4,6 +4,8 @@ module Evilution
   module Parallel
     class Pool
       def initialize(size:)
+        raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
+
         @size = size
       end
 

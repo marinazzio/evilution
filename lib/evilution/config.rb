@@ -129,6 +129,8 @@ module Evilution
     end
 
     def validate_jobs(value)
+      raise ConfigError, "jobs must be a positive integer, got #{value.inspect}" if value.is_a?(Float)
+
       value = Integer(value)
       raise ConfigError, "jobs must be a positive integer, got #{value}" unless value >= 1
 
