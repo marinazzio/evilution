@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **`--version` flag** — now correctly outputs the gem version instead of "version unknown"
+- **RSpec noise suppression** — child process stdout/stderr is redirected to `/dev/null` so RSpec warnings no longer corrupt JSON output or flood the terminal
+
 ## [0.4.0] - 2026-03-16
 
 ### Added

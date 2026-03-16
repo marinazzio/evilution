@@ -46,9 +46,8 @@ module Evilution
       end
 
       def suppress_child_output
-        devnull = File.open(File::NULL, "w") # rubocop:disable Style/FileOpen
-        $stdout.reopen(devnull)
-        $stderr.reopen(devnull)
+        $stdout.reopen(File::NULL, "w")
+        $stderr.reopen(File::NULL, "w")
       end
 
       def execute_in_child(mutation, test_command)
