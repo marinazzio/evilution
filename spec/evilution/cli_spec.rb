@@ -435,6 +435,72 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--stdin flag" do
+      it "reads file paths from stdin" do
+        stdin = StringIO.new("lib/foo.rb\nlib/bar.rb\n")
+        cli = described_class.new(["--stdin"], stdin: stdin)
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(target_files: ["lib/foo.rb", "lib/bar.rb"])
+        )
+      end
+
+      it "supports line-range syntax in stdin lines" do
+        stdin = StringIO.new("lib/foo.rb:15-30\n")
+        cli = described_class.new(["--stdin"], stdin: stdin)
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            line_ranges: { "lib/foo.rb" => 15..30 }
+          )
+        )
+      end
+
+      it "skips blank lines" do
+        stdin = StringIO.new("lib/foo.rb\n\n\nlib/bar.rb\n")
+        cli = described_class.new(["--stdin"], stdin: stdin)
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(target_files: ["lib/foo.rb", "lib/bar.rb"])
+        )
+      end
+
+      it "errors when combined with positional file args" do
+        stdin = StringIO.new("lib/foo.rb\n")
+        cli = described_class.new(["--stdin", "lib/bar.rb"], stdin: stdin)
+        output = capture_stderr { expect(cli.call).to eq(2) }
+        expect(output).to include("--stdin cannot be combined with positional file arguments")
+      end
+
+      it "outputs structured JSON error when combined with positional args in JSON mode" do
+        stdin = StringIO.new("lib/foo.rb\n")
+        cli = described_class.new(["--stdin", "--format", "json", "lib/bar.rb"], stdin: stdin)
+        stderr = nil
+        stdout = capture_stdout do
+          stderr = capture_stderr { expect(cli.call).to eq(2) }
+        end
+        parsed = JSON.parse(stdout)
+
+        expect(parsed["error"]["type"]).to eq("config_error")
+        expect(parsed["error"]["message"]).to include("--stdin cannot be combined")
+        expect(stderr).to be_empty
+      end
+
+      it "can be combined with other flags" do
+        stdin = StringIO.new("lib/foo.rb\n")
+        cli = described_class.new(["--stdin", "--format", "json", "-j", "4"], stdin: stdin)
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/foo.rb"],
+            format: :json,
+            jobs: 4
+          )
+        )
+      end
+    end
+
     describe "line-range targeting" do
       it "parses file:start-end into file path and line range" do
         cli = described_class.new(["lib/foo.rb:15-30"])

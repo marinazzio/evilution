@@ -8,14 +8,16 @@ require_relative "runner"
 
 module Evilution
   class CLI
-    def initialize(argv)
+    def initialize(argv, stdin: $stdin)
       @options = {}
       @command = :run
+      @stdin = stdin
       argv = argv.dup
       argv = extract_command(argv)
       argv = preprocess_flags(argv)
       raw_args = build_option_parser.parse!(argv)
       @files, @line_ranges = parse_file_args(raw_args)
+      read_stdin_files if @options.delete(:stdin) && @command == :run
     end
 
     def call
@@ -108,6 +110,7 @@ module Evilution
       end
       opts.on("--fail-fast", "Stop after N surviving mutants " \
                              "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
+      opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
     end
@@ -122,6 +125,20 @@ module Evilution
       File.write(path, Config.default_template)
       $stdout.puts("Created #{path}")
       0
+    end
+
+    def read_stdin_files
+      @stdin_error = "--stdin cannot be combined with positional file arguments" unless @files.empty?
+      return if @stdin_error
+
+      lines = []
+      @stdin.each_line do |line|
+        line = line.strip
+        lines << line unless line.empty?
+      end
+      stdin_files, stdin_ranges = parse_file_args(lines)
+      @files = stdin_files
+      @line_ranges = @line_ranges.merge(stdin_ranges)
     end
 
     def parse_file_args(raw_args)
@@ -152,6 +169,8 @@ module Evilution
     end
 
     def run_mutations
+      raise ConfigError, @stdin_error if @stdin_error
+
       file_options = Config.file_options
       config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
       runner = Runner.new(config: config)
