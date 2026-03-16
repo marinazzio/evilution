@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "English"
+
 module Evilution
   module Git
     class ChangedFiles
@@ -30,7 +32,9 @@ module Evilution
       def branch_exists?(name)
         run_git("rev-parse", "--verify", name)
         true
-      rescue Error
+      rescue Error => e
+        raise if e.message.include?("not a git repository")
+
         false
       end
 
@@ -41,7 +45,7 @@ module Evilution
       def run_git(*args)
         output = `git #{args.join(" ")} 2>&1`.strip
         raise Error, "not a git repository" if output.include?("not a git repository")
-        raise Error, "git command failed: git #{args.join(" ")}" unless $CHILD_STATUS.success?
+        raise Error, "git command failed: git #{args.join(" ")}: #{output}" unless $CHILD_STATUS.success?
 
         output
       end

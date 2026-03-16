@@ -109,5 +109,15 @@ RSpec.describe Evilution::Git::ChangedFiles do
         Evilution::Error, /could not detect main branch/
       )
     end
+
+    it "re-raises not a git repository error from branch_exists?" do
+      allow(detector).to receive(:run_git).with("rev-parse", "--verify", "main").and_raise(
+        Evilution::Error, "not a git repository"
+      )
+
+      expect { detector.send(:detect_main_branch) }.to raise_error(
+        Evilution::Error, /not a git repository/
+      )
+    end
   end
 end
