@@ -16,6 +16,7 @@ module Evilution
         pid = ::Process.fork do
           ENV["TMPDIR"] = sandbox_dir
           read_io.close
+          suppress_child_output
           result = execute_in_child(mutation, test_command)
           Marshal.dump(result, write_io)
           write_io.close
@@ -42,6 +43,12 @@ module Evilution
         File.write(mutation.file_path, mutation.original_source)
       rescue StandardError => e
         warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
+      end
+
+      def suppress_child_output
+        devnull = File.open(File::NULL, "w") # rubocop:disable Style/FileOpen
+        $stdout.reopen(devnull)
+        $stderr.reopen(devnull)
       end
 
       def execute_in_child(mutation, test_command)

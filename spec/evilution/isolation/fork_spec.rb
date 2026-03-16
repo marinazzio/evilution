@@ -132,6 +132,56 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.test_command).to be_nil
     end
 
+    it "suppresses child stdout so it does not leak to parent" do
+      test_command = lambda do |_m|
+        $stdout.write("noisy stdout from child\n")
+        { passed: false }
+      end
+
+      reader, writer = IO.pipe
+      original_stdout = $stdout.dup
+      $stdout.reopen(writer)
+
+      begin
+        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+        $stdout.reopen(original_stdout)
+        writer.close
+        captured = reader.read
+      ensure
+        $stdout.reopen(original_stdout)
+        reader.close unless reader.closed?
+        writer.close unless writer.closed?
+        original_stdout.close
+      end
+
+      expect(captured).not_to include("noisy")
+    end
+
+    it "suppresses child stderr so it does not leak to parent" do
+      test_command = lambda do |_m|
+        $stderr.write("noisy stderr from child\n")
+        { passed: false }
+      end
+
+      reader, writer = IO.pipe
+      original_stderr = $stderr.dup
+      $stderr.reopen(writer)
+
+      begin
+        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+        $stderr.reopen(original_stderr)
+        writer.close
+        captured = reader.read
+      ensure
+        $stderr.reopen(original_stderr)
+        reader.close unless reader.closed?
+        writer.close unless writer.closed?
+        original_stderr.close
+      end
+
+      expect(captured).not_to include("noisy")
+    end
+
     it "isolates mutations from parent process" do
       parent_value = "original"
       test_command = lambda do |_m|
