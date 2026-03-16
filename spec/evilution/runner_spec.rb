@@ -621,4 +621,97 @@ RSpec.describe Evilution::Runner do
       expect { no_files_runner.call }.to raise_error(Evilution::Error, /no changed Ruby files/)
     end
   end
+
+  describe "progress indicator" do
+    let(:text_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: false,
+        skip_config_file: true
+      )
+    end
+
+    let(:quiet_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+    end
+
+    let(:json_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: false,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    def capture_stderr_with_tty(tty: true)
+      io = StringIO.new
+      allow(io).to receive(:tty?).and_return(tty)
+      original = $stderr
+      $stderr = io
+      yield
+      io.string
+    ensure
+      $stderr = original
+    end
+
+    it "prints progress to stderr in text mode when TTY" do
+      text_runner = described_class.new(config: text_config)
+      output = capture_stderr_with_tty { text_runner.call }
+      expect(output).to match(%r{mutation 1/1 killed})
+    end
+
+    it "does not print progress in quiet mode" do
+      quiet_runner = described_class.new(config: quiet_config)
+      output = capture_stderr_with_tty { quiet_runner.call }
+      expect(output).not_to include("mutation")
+    end
+
+    it "does not print progress in json mode" do
+      json_runner = described_class.new(config: json_config)
+      output = capture_stderr_with_tty { json_runner.call }
+      expect(output).not_to include("mutation")
+    end
+
+    it "does not print progress when stderr is not a TTY" do
+      text_runner = described_class.new(config: text_config)
+      output = capture_stderr_with_tty(tty: false) { text_runner.call }
+      expect(output).not_to include("mutation")
+    end
+
+    it "includes the mutation status in progress output" do
+      survived_result = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :survived, duration: 0.1
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result)
+
+      text_runner = described_class.new(config: text_config)
+      output = capture_stderr_with_tty { text_runner.call }
+      expect(output).to match(%r{mutation 1/1 survived})
+    end
+  end
 end

@@ -100,6 +100,7 @@ module Evilution
         )
         results << result
         survived_count += 1 if result.survived?
+        log_progress(index + 1, mutations.length, result.status)
 
         if config.fail_fast? && survived_count >= config.fail_fast && index < mutations.length - 1
           truncated = true
@@ -126,6 +127,12 @@ module Evilution
 
       output = reporter.call(summary)
       $stdout.puts(output) unless config.quiet
+    end
+
+    def log_progress(current, total, status)
+      return if config.quiet || !config.text? || !$stderr.tty?
+
+      $stderr.write("mutation #{current}/#{total} #{status}\n")
     end
 
     def build_reporter
