@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **`--version` flag** — now correctly outputs the gem version instead of "version unknown"
+- **RSpec noise suppression** — child process stdout/stderr is redirected to `/dev/null` so RSpec warnings no longer corrupt JSON output or flood the terminal
+
+## [0.4.0] - 2026-03-16
+
+### Added
+
+- **`--fail-fast` flag** — stop after N surviving mutants (`--fail-fast`, `--fail-fast=3`, `--fail-fast 5`); defaults to 1 when given without a value
+- **Structured JSON error responses** — errors in `--format json` mode now output structured JSON with `type`, `message`, and optional `file` fields
+- **Convention-based spec file resolution** — automatically maps source files to their spec counterparts (`lib/` → `spec/`, `app/` → `spec/`)
+- **`test_command` in mutation result JSON** — each mutation result now includes the RSpec command used, for easier debugging
+- **Auto-detect changed files from git merge base** — when no explicit files are given, Evilution automatically finds changed `.rb` files under `lib/` and `app/` since the merge base with `main`/`master` (including `origin/` remotes for CI)
+
+### Changed
+
+- Error classes (`ConfigError`, `ParseError`) now support a `file:` keyword for richer error context
+
+## [0.3.0] - 2026-03-13
+
+### Added
+
+- **Sandbox-based temp directory cleanup** — leaked temp directories from timed-out children are now reliably cleaned up
+- **Graceful timeout handling** — sends SIGTERM with a grace period before SIGKILL on child timeout
+
+### Changed
+
+- Default per-mutation timeout increased from 10s to 30s
+- Parent process now restores the original source file after each mutation (defense-in-depth)
+
 ## [0.2.0] - 2026-03-10
 
 ### Added
