@@ -2,6 +2,7 @@
 
 require "stringio"
 require "tmpdir"
+require "mcp"
 require "evilution/cli"
 
 RSpec.describe Evilution::CLI do
@@ -57,6 +58,17 @@ RSpec.describe Evilution::CLI do
         }
       end
       expect(output).to include(Evilution::VERSION)
+    end
+  end
+
+  describe "mcp command" do
+    it "starts the MCP server" do
+      transport = instance_double(MCP::Server::Transports::StdioTransport, open: nil)
+      allow(MCP::Server::Transports::StdioTransport).to receive(:new).and_return(transport)
+
+      cli = described_class.new(["mcp"])
+      expect(cli.call).to eq(0)
+      expect(transport).to have_received(:open)
     end
   end
 
