@@ -83,6 +83,7 @@ module Evilution
     def build_option_parser
       OptionParser.new do |opts|
         opts.banner = "Usage: evilution [command] [options] [files...]"
+        opts.version = VERSION
         add_separators(opts)
         add_options(opts)
       end

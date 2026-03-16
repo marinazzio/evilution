@@ -49,6 +49,17 @@ RSpec.describe Evilution::CLI do
     end
   end
 
+  describe "--version flag" do
+    it "outputs the gem version and exits" do
+      output = capture_stdout do
+        expect { described_class.new(["--version"]) }.to raise_error(SystemExit) { |e|
+          expect(e.status).to eq(0)
+        }
+      end
+      expect(output).to include(Evilution::VERSION)
+    end
+  end
+
   describe "init command" do
     around do |example|
       Dir.mktmpdir do |dir|
