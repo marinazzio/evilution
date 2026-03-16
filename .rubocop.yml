@@ -25,6 +25,7 @@ Metrics/ClassLength:
   Exclude:
     - "lib/evilution/cli.rb"
     - "lib/evilution/config.rb"
+    - "lib/evilution/runner.rb"
 
 Metrics/MethodLength:
   Max: 30

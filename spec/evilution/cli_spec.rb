@@ -122,31 +122,29 @@ RSpec.describe Evilution::CLI do
       end
     end
 
-    describe "--jobs flag (deprecated)" do
-      it "warns and does not crash" do
-        expect { described_class.new(["--jobs", "4"]) }.to output(/no longer supported/).to_stderr
+    describe "--jobs flag" do
+      it "sets jobs to the given integer" do
+        cli = described_class.new(["--jobs", "4"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(jobs: 4)
+        )
       end
 
-      it "also handles the short form -j" do
-        expect { described_class.new(["-j", "4"]) }.to output(/no longer supported/).to_stderr
+      it "also accepts the short form -j" do
+        cli = described_class.new(["-j", "2"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(jobs: 2)
+        )
       end
 
-      it "also handles the attached short form -j4" do
-        expect { described_class.new(["-j4"]) }.to output(/no longer supported/).to_stderr
-      end
-
-      it "also handles the attached long form --jobs=4" do
-        expect { described_class.new(["--jobs=4"]) }.to output(/no longer supported/).to_stderr
-      end
-
-      it "does not appear in help output" do
-        help_output = nil
-        expect do
-          described_class.new(["--help"])
-        rescue SystemExit
-          # --help causes SystemExit
-        end.to output(satisfy { |out| help_output = out }).to_stdout
-        expect(help_output).not_to include("--jobs")
+      it "defaults to 1 when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(jobs: 1)
+        )
       end
     end
 

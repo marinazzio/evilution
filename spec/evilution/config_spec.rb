@@ -68,8 +68,10 @@ RSpec.describe Evilution::Config do
       expect(config.target_files).to eq(["lib/foo.rb"])
     end
 
-    it "warns when jobs option is provided" do
-      expect { described_class.new(jobs: 4, skip_config_file: true) }.to output(/no longer supported/).to_stderr
+    it "accepts custom jobs" do
+      config = described_class.new(jobs: 4, skip_config_file: true)
+
+      expect(config.jobs).to eq(4)
     end
 
     it "accepts custom timeout" do
@@ -296,6 +298,38 @@ RSpec.describe Evilution::Config do
 
     it "rejects boolean values" do
       expect { described_class.new(fail_fast: true, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+  end
+
+  describe "jobs validation" do
+    it "defaults to 1" do
+      config = described_class.new(skip_config_file: true)
+      expect(config.jobs).to eq(1)
+    end
+
+    it "accepts positive integers" do
+      config = described_class.new(jobs: 4, skip_config_file: true)
+      expect(config.jobs).to eq(4)
+    end
+
+    it "rejects zero" do
+      expect { described_class.new(jobs: 0, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects negative values" do
+      expect { described_class.new(jobs: -1, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects non-integer string values" do
+      expect { described_class.new(jobs: "abc", skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /positive integer/)
+    end
+
+    it "rejects float values" do
+      expect { described_class.new(jobs: 2.5, skip_config_file: true) }
         .to raise_error(Evilution::ConfigError, /positive integer/)
     end
   end
