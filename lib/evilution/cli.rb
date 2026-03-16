@@ -17,7 +17,7 @@ module Evilution
       argv = preprocess_flags(argv)
       raw_args = build_option_parser.parse!(argv)
       @files, @line_ranges = parse_file_args(raw_args)
-      read_stdin_files if @options[:stdin]
+      read_stdin_files if @options.delete(:stdin) && @command == :run
     end
 
     def call
@@ -131,7 +131,11 @@ module Evilution
       @stdin_error = "--stdin cannot be combined with positional file arguments" unless @files.empty?
       return if @stdin_error
 
-      lines = @stdin.read.lines.map(&:strip).reject(&:empty?)
+      lines = []
+      @stdin.each_line do |line|
+        line = line.strip
+        lines << line unless line.empty?
+      end
       stdin_files, stdin_ranges = parse_file_args(lines)
       @files = stdin_files
       @line_ranges = @line_ranges.merge(stdin_ranges)

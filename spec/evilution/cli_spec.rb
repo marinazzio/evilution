@@ -473,6 +473,20 @@ RSpec.describe Evilution::CLI do
         expect(output).to include("--stdin cannot be combined with positional file arguments")
       end
 
+      it "outputs structured JSON error when combined with positional args in JSON mode" do
+        stdin = StringIO.new("lib/foo.rb\n")
+        cli = described_class.new(["--stdin", "--format", "json", "lib/bar.rb"], stdin: stdin)
+        stderr = nil
+        stdout = capture_stdout do
+          stderr = capture_stderr { expect(cli.call).to eq(2) }
+        end
+        parsed = JSON.parse(stdout)
+
+        expect(parsed["error"]["type"]).to eq("config_error")
+        expect(parsed["error"]["message"]).to include("--stdin cannot be combined")
+        expect(stderr).to be_empty
+      end
+
       it "can be combined with other flags" do
         stdin = StringIO.new("lib/foo.rb\n")
         cli = described_class.new(["--stdin", "--format", "json", "-j", "4"], stdin: stdin)
