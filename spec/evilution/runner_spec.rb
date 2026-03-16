@@ -551,4 +551,74 @@ RSpec.describe Evilution::Runner do
       expect { runner.call }.to raise_error(Evilution::Error, /unknown integration/)
     end
   end
+
+  describe "#call with auto-detected files" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: [],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      changed_files = instance_double(Evilution::Git::ChangedFiles)
+      allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed_files)
+      allow(changed_files).to receive(:call).and_return(["lib/example.rb"])
+
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "uses git changed files when no target_files provided" do
+      result = runner.call
+
+      expect(result.total).to eq(1)
+    end
+
+    it "does not use git detection when target_files are provided" do
+      explicit_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      explicit_runner = described_class.new(config: explicit_config)
+
+      expect(Evilution::Git::ChangedFiles).not_to receive(:new)
+
+      explicit_runner.call
+    end
+
+    it "propagates errors from git changed files detection" do
+      changed_files = instance_double(Evilution::Git::ChangedFiles)
+      allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed_files)
+      allow(changed_files).to receive(:call).and_raise(
+        Evilution::Error, "no changed Ruby files found since merge base with main"
+      )
+
+      no_files_config = Evilution::Config.new(
+        target_files: [],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      no_files_runner = described_class.new(config: no_files_config)
+
+      expect { no_files_runner.call }.to raise_error(Evilution::Error, /no changed Ruby files/)
+    end
+  end
 end
