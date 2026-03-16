@@ -13,6 +13,7 @@ require_relative "diff/file_filter"
 require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
+require_relative "parallel/pool"
 
 module Evilution
   class Runner
@@ -86,6 +87,14 @@ module Evilution
     end
 
     def run_mutations(mutations)
+      if config.jobs > 1
+        run_mutations_parallel(mutations)
+      else
+        run_mutations_sequential(mutations)
+      end
+    end
+
+    def run_mutations_sequential(mutations)
       integration = build_integration
       results = []
       survived_count = 0
@@ -109,6 +118,39 @@ module Evilution
       end
 
       [results, truncated]
+    end
+
+    def run_mutations_parallel(mutations)
+      integration = build_integration
+      pool = Parallel::Pool.new(size: config.jobs)
+      results = []
+      survived_count = 0
+      truncated = false
+      completed = 0
+
+      mutations.each_slice(config.jobs) do |batch|
+        break if truncated
+
+        batch_results = pool.map(batch) do |mutation|
+          test_command = ->(m) { integration.call(m) }
+          isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+        end
+
+        batch_results.each do |result|
+          results << result
+          survived_count += 1 if result.survived?
+          completed += 1
+          log_progress(completed, mutations.length, result.status)
+        end
+
+        truncated = true if should_truncate?(survived_count, completed, mutations.length)
+      end
+
+      [results, truncated]
+    end
+
+    def should_truncate?(survived_count, completed, total)
+      config.fail_fast? && survived_count >= config.fail_fast && completed < total
     end
 
     def build_integration

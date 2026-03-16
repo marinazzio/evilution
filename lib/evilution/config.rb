@@ -16,6 +16,7 @@ module Evilution
       coverage: true,
       verbose: false,
       quiet: false,
+      jobs: 1,
       fail_fast: nil,
       line_ranges: {},
       spec_files: []
@@ -23,7 +24,7 @@ module Evilution
 
     attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet,
-                :fail_fast, :line_ranges, :spec_files
+                :jobs, :fail_fast, :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -39,6 +40,7 @@ module Evilution
       @coverage = merged[:coverage]
       @verbose = merged[:verbose]
       @quiet = merged[:quiet]
+      @jobs = validate_jobs(merged[:jobs])
       @fail_fast = validate_fail_fast(merged[:fail_fast])
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
@@ -102,6 +104,9 @@ module Evilution
         # Test integration: rspec (default: rspec)
         # integration: rspec
 
+        # Number of parallel workers (default: 1)
+        # jobs: 1
+
         # Stop after N surviving mutants (default: disabled)
         # fail_fast: 1
 
@@ -123,12 +128,16 @@ module Evilution
       raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
     end
 
-    def warn_removed_options(merged, file_options)
-      if merged.key?(:jobs)
-        warn("Warning: 'jobs' option is no longer supported and will be ignored. " \
-             "Remove it from your configuration or invocation.")
-      end
+    def validate_jobs(value)
+      value = Integer(value)
+      raise ConfigError, "jobs must be a positive integer, got #{value}" unless value >= 1
 
+      value
+    rescue ::ArgumentError, ::TypeError
+      raise ConfigError, "jobs must be a positive integer, got #{value.inspect}"
+    end
+
+    def warn_removed_options(_merged, file_options)
       if file_options.key?(:coverage)
         warn("Warning: 'coverage' in config file is deprecated and ignored. " \
              "This option will be removed in a future version.")

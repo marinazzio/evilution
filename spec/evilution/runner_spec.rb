@@ -714,4 +714,123 @@ RSpec.describe Evilution::Runner do
       expect(output).to match(%r{mutation 1/1 survived})
     end
   end
+
+  describe "parallel execution" do
+    let(:mutation2) do
+      double(
+        "Mutation2",
+        subject: subject_obj,
+        operator_name: "boolean_literal_replacement",
+        original_source: "true",
+        mutated_source: "false",
+        file_path: "lib/example.rb",
+        line: 5,
+        column: 4,
+        diff: "- true\n+ false"
+      )
+    end
+
+    let(:mutation_result2) do
+      Evilution::Result::MutationResult.new(
+        mutation: mutation2,
+        status: :survived,
+        duration: 0.2
+      )
+    end
+
+    let(:parallel_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        jobs: 2,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation, mutation2])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result, mutation_result2)
+    end
+
+    it "returns all results when using parallel execution" do
+      parallel_runner = described_class.new(config: parallel_config)
+      result = parallel_runner.call
+
+      expect(result.total).to eq(2)
+    end
+
+    it "uses sequential execution when jobs is 1" do
+      sequential_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        jobs: 1,
+        skip_config_file: true
+      )
+      sequential_runner = described_class.new(config: sequential_config)
+
+      expect(Evilution::Parallel::Pool).not_to receive(:new)
+
+      sequential_runner.call
+    end
+
+    it "uses Parallel::Pool when jobs > 1" do
+      parallel_runner = described_class.new(config: parallel_config)
+
+      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_call_original
+
+      parallel_runner.call
+    end
+
+    it "respects fail_fast in parallel mode" do
+      mutation3 = double(
+        "Mutation3",
+        subject: subject_obj,
+        operator_name: "nil_replacement",
+        original_source: "nil",
+        mutated_source: "0",
+        file_path: "lib/example.rb",
+        line: 7,
+        column: 4,
+        diff: "- nil\n+ 0"
+      )
+
+      registry = Evilution::Mutator::Registry.default
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation, mutation2, mutation3])
+
+      ff_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        jobs: 1,
+        fail_fast: 1,
+        skip_config_file: true
+      )
+
+      survived = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :survived, duration: 0.1
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived)
+
+      ff_runner = described_class.new(config: ff_config)
+      result = ff_runner.call
+
+      expect(result.truncated?).to be true
+      expect(result.total).to be < 3
+    end
+  end
 end

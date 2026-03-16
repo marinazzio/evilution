@@ -51,15 +51,7 @@ module Evilution
       i = 0
       while i < argv.length
         arg = argv[i]
-        if %w[--jobs -j].include?(arg)
-          warn("Warning: --jobs is no longer supported and will be ignored.")
-          next_arg = argv[i + 1]
-          numeric_next = next_arg && next_arg.match?(/\A-?\d+\z/)
-          i += numeric_next ? 2 : 1
-        elsif arg.start_with?("--jobs=") || arg.match?(/\A-j-?\d+\z/)
-          warn("Warning: --jobs is no longer supported and will be ignored.")
-          i += 1
-        elsif arg == "--fail-fast"
+        if arg == "--fail-fast"
           next_arg = argv[i + 1]
 
           if next_arg && next_arg.match?(/\A-?\d+\z/)
@@ -99,6 +91,7 @@ module Evilution
     end
 
     def add_options(opts)
+      opts.on("-j", "--jobs N", Integer, "Number of parallel workers (default: 1)") { |n| @options[:jobs] = n }
       opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
       opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
       opts.on("--diff BASE", "DEPRECATED: Use line-range targeting instead") do |b|
