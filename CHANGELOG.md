@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Progress indicator** — prints `mutation 3/19 killed` progress to stderr during text-mode runs so long-running sessions no longer appear stuck; suppressed in quiet and JSON modes
+
 ### Fixed
 
 - **`--version` flag** — now correctly outputs the gem version instead of "version unknown"
