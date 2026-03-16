@@ -2,6 +2,7 @@
 
 require "stringio"
 require "tmpdir"
+require "mcp"
 require "evilution/cli"
 
 RSpec.describe Evilution::CLI do

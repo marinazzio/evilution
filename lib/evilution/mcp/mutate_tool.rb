@@ -84,10 +84,12 @@ module Evilution
             line = Integer(str)
             line..line
           end
+        rescue ArgumentError, TypeError
+          raise ParseError, "invalid line range: #{str.inspect}"
         end
 
         def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec)
-          opts = { target_files: files, line_ranges: line_ranges, format: :json, skip_config_file: true }
+          opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, skip_config_file: true }
           opts[:target] = target if target
           opts[:timeout] = timeout if timeout
           opts[:jobs] = jobs if jobs

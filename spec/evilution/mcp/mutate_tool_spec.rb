@@ -126,5 +126,22 @@ RSpec.describe Evilution::MCP::MutateTool do
         config: have_attributes(target_files: [])
       )
     end
+
+    it "sets quiet mode to avoid stdout pollution" do
+      described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: have_attributes(quiet: true)
+      )
+    end
+
+    it "returns parse error for invalid line range" do
+      response = described_class.call(files: ["lib/foo.rb:abc"], server_context: nil)
+
+      expect(response.error?).to be true
+      parsed = JSON.parse(response.content.first[:text])
+      expect(parsed["error"]["type"]).to eq("parse_error")
+      expect(parsed["error"]["message"]).to include("invalid line range")
+    end
   end
 end
