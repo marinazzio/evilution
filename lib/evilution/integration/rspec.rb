@@ -100,6 +100,7 @@ module Evilution
 
         out = StringIO.new
         err = StringIO.new
+        command = "rspec"
         args = build_args(mutation)
         command = "rspec #{args.join(" ")}"
 
