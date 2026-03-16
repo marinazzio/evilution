@@ -601,5 +601,24 @@ RSpec.describe Evilution::Runner do
 
       explicit_runner.call
     end
+
+    it "propagates errors from git changed files detection" do
+      changed_files = instance_double(Evilution::Git::ChangedFiles)
+      allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed_files)
+      allow(changed_files).to receive(:call).and_raise(
+        Evilution::Error, "no changed Ruby files found since merge base with main"
+      )
+
+      no_files_config = Evilution::Config.new(
+        target_files: [],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      no_files_runner = described_class.new(config: no_files_config)
+
+      expect { no_files_runner.call }.to raise_error(Evilution::Error, /no changed Ruby files/)
+    end
   end
 end

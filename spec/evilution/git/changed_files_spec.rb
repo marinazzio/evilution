@@ -10,7 +10,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "returns .rb files under lib/" do
         allow(detector).to receive(:detect_main_branch).and_return("main")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "main").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return(
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return(
           "lib/foo.rb\nlib/bar.rb\nREADME.md\n"
         )
 
@@ -20,7 +20,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "returns .rb files under app/" do
         allow(detector).to receive(:detect_main_branch).and_return("main")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "main").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return(
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return(
           "app/models/user.rb\napp/views/index.html.erb\n"
         )
 
@@ -30,7 +30,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "raises when only non-.rb files changed" do
         allow(detector).to receive(:detect_main_branch).and_return("main")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "main").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return(
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return(
           "lib/foo.yml\nspec/foo_spec.rb\nGemfile\n"
         )
 
@@ -40,7 +40,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "raises when changed files are outside lib/ and app/" do
         allow(detector).to receive(:detect_main_branch).and_return("main")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "main").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return(
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return(
           "spec/foo_spec.rb\nbin/console\nsrc/thing.rb\n"
         )
 
@@ -52,7 +52,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "detects master when main does not exist" do
         allow(detector).to receive(:detect_main_branch).and_return("master")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "master").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return(
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return(
           "lib/foo.rb\n"
         )
 
@@ -80,7 +80,7 @@ RSpec.describe Evilution::Git::ChangedFiles do
       it "raises when no changes are detected" do
         allow(detector).to receive(:detect_main_branch).and_return("main")
         allow(detector).to receive(:run_git).with("merge-base", "HEAD", "main").and_return("abc123")
-        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123").and_return("")
+        allow(detector).to receive(:run_git).with("diff", "--name-only", "--diff-filter=ACMR", "abc123..HEAD").and_return("")
 
         expect { detector.call }.to raise_error(Evilution::Error, /no changed Ruby files/)
       end
@@ -101,9 +101,28 @@ RSpec.describe Evilution::Git::ChangedFiles do
       expect(detector.send(:detect_main_branch)).to eq("master")
     end
 
-    it "raises when neither main nor master exists" do
+    it "falls back to origin/main when local branches do not exist" do
       allow(detector).to receive(:branch_exists?).with("main").and_return(false)
       allow(detector).to receive(:branch_exists?).with("master").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("origin/main").and_return(true)
+
+      expect(detector.send(:detect_main_branch)).to eq("origin/main")
+    end
+
+    it "falls back to origin/master when no other branches exist" do
+      allow(detector).to receive(:branch_exists?).with("main").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("master").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("origin/main").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("origin/master").and_return(true)
+
+      expect(detector.send(:detect_main_branch)).to eq("origin/master")
+    end
+
+    it "raises when no branch candidates exist" do
+      allow(detector).to receive(:branch_exists?).with("main").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("master").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("origin/main").and_return(false)
+      allow(detector).to receive(:branch_exists?).with("origin/master").and_return(false)
 
       expect { detector.send(:detect_main_branch) }.to raise_error(
         Evilution::Error, /could not detect main branch/

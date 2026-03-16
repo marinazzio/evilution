@@ -5,13 +5,13 @@ require "English"
 module Evilution
   module Git
     class ChangedFiles
-      MAIN_BRANCHES = %w[main master].freeze
+      MAIN_BRANCHES = %w[main master origin/main origin/master].freeze
       SOURCE_PREFIXES = %w[lib/ app/].freeze
 
       def call
         main_branch = detect_main_branch
         merge_base = run_git("merge-base", "HEAD", main_branch)
-        diff_output = run_git("diff", "--name-only", "--diff-filter=ACMR", merge_base)
+        diff_output = run_git("diff", "--name-only", "--diff-filter=ACMR", "#{merge_base}..HEAD")
 
         files = diff_output.split("\n").select { |f| ruby_source_file?(f) }
         raise Error, "no changed Ruby files found since merge base with #{main_branch}" if files.empty?
