@@ -667,19 +667,39 @@ RSpec.describe Evilution::Runner do
       allow(isolator).to receive(:call).and_return(mutation_result)
     end
 
-    it "prints progress to stderr in text mode" do
+    def capture_stderr_with_tty(tty: true)
+      io = StringIO.new
+      allow(io).to receive(:tty?).and_return(tty)
+      original = $stderr
+      $stderr = io
+      yield
+      io.string
+    ensure
+      $stderr = original
+    end
+
+    it "prints progress to stderr in text mode when TTY" do
       text_runner = described_class.new(config: text_config)
-      expect { text_runner.call }.to output(%r{mutation 1/1 killed}).to_stderr
+      output = capture_stderr_with_tty { text_runner.call }
+      expect(output).to match(%r{mutation 1/1 killed})
     end
 
     it "does not print progress in quiet mode" do
       quiet_runner = described_class.new(config: quiet_config)
-      expect { quiet_runner.call }.not_to output(/mutation/).to_stderr
+      output = capture_stderr_with_tty { quiet_runner.call }
+      expect(output).not_to include("mutation")
     end
 
     it "does not print progress in json mode" do
       json_runner = described_class.new(config: json_config)
-      expect { json_runner.call }.not_to output(/mutation/).to_stderr
+      output = capture_stderr_with_tty { json_runner.call }
+      expect(output).not_to include("mutation")
+    end
+
+    it "does not print progress when stderr is not a TTY" do
+      text_runner = described_class.new(config: text_config)
+      output = capture_stderr_with_tty(tty: false) { text_runner.call }
+      expect(output).not_to include("mutation")
     end
 
     it "includes the mutation status in progress output" do
@@ -690,7 +710,8 @@ RSpec.describe Evilution::Runner do
       allow(isolator).to receive(:call).and_return(survived_result)
 
       text_runner = described_class.new(config: text_config)
-      expect { text_runner.call }.to output(%r{mutation 1/1 survived}).to_stderr
+      output = capture_stderr_with_tty { text_runner.call }
+      expect(output).to match(%r{mutation 1/1 survived})
     end
   end
 end

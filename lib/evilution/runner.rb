@@ -130,7 +130,7 @@ module Evilution
     end
 
     def log_progress(current, total, status)
-      return if config.quiet || !config.text?
+      return if config.quiet || !config.text? || !$stderr.tty?
 
       $stderr.write("mutation #{current}/#{total} #{status}\n")
     end
