@@ -62,18 +62,19 @@ RSpec.describe Evilution::Isolation::Fork do
     end
 
     it "cleans up sandbox temp directory after child timeout" do
-      leaked_dir = nil
+      dirs_before = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
+
       test_command = lambda { |_m|
-        leaked_dir = Dir.mktmpdir("evilution")
+        Dir.mktmpdir("evilution")
         sleep 10
         { passed: true }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
 
-      # The sandbox dir (parent of leaked_dir) should be removed by ensure block
-      sandbox_dirs = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
-      expect(sandbox_dirs).to be_empty
+      dirs_after = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
+      new_dirs = dirs_after - dirs_before
+      expect(new_dirs).to be_empty
     end
 
     it "sends SIGTERM before SIGKILL on timeout" do

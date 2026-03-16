@@ -60,6 +60,17 @@ RSpec.describe Evilution::CLI do
     end
   end
 
+  describe "mcp command" do
+    it "starts the MCP server" do
+      transport = instance_double(MCP::Server::Transports::StdioTransport, open: nil)
+      allow(MCP::Server::Transports::StdioTransport).to receive(:new).and_return(transport)
+
+      cli = described_class.new(["mcp"])
+      expect(cli.call).to eq(0)
+      expect(transport).to have_received(:open)
+    end
+  end
+
   describe "init command" do
     around do |example|
       Dir.mktmpdir do |dir|

@@ -41,4 +41,5 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "diff-lcs", ">= 1.5", "< 3"
+  spec.add_dependency "mcp", ">= 0.8", "< 2"
 end

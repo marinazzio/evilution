@@ -27,6 +27,8 @@ module Evilution
         0
       when :init
         run_init
+      when :mcp
+        run_mcp
       when :run
         run_mutations
       end
@@ -41,6 +43,9 @@ module Evilution
         argv.shift
       when "init"
         @command = :init
+        argv.shift
+      when "mcp"
+        @command = :mcp
         argv.shift
       when "run"
         argv.shift
@@ -87,7 +92,7 @@ module Evilution
       opts.separator ""
       opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
       opts.separator ""
-      opts.separator "Commands: run (default), init, version"
+      opts.separator "Commands: run (default), init, mcp, version"
       opts.separator ""
       opts.separator "Options:"
     end
@@ -124,6 +129,14 @@ module Evilution
 
       File.write(path, Config.default_template)
       $stdout.puts("Created #{path}")
+      0
+    end
+
+    def run_mcp
+      require_relative "mcp/server"
+      server = MCP::Server.build
+      transport = ::MCP::Server::Transports::StdioTransport.new(server)
+      transport.open
       0
     end
 
