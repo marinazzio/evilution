@@ -7,7 +7,7 @@ RSpec.describe Evilution::MCP::Server do
     it "returns an MCP::Server instance" do
       server = described_class.build
 
-      expect(server).to be_a(::MCP::Server)
+      expect(server).to be_a(MCP::Server)
     end
 
     it "registers the mutate tool" do
