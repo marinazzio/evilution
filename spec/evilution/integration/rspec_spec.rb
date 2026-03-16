@@ -253,4 +253,54 @@ RSpec.describe Evilution::Integration::RSpec do
       default_integration.call(mutation)
     end
   end
+
+  describe "per-mutation spec targeting" do
+    let(:resolver) { instance_double(Evilution::SpecResolver) }
+
+    before do
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+    end
+
+    it "uses resolved spec file for the mutation's source file" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/some_spec.rb")
+        expect(args).not_to include("spec")
+        0
+      end
+
+      auto_integration.call(mutation)
+    end
+
+    it "falls back to full spec suite when no matching spec found" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec")
+        0
+      end
+
+      auto_integration.call(mutation)
+    end
+
+    it "does not use resolver when explicit test_files are provided" do
+      explicit_integration = described_class.new(test_files: ["spec/explicit_spec.rb"])
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      explicit_integration.call(mutation)
+
+      expect(Evilution::SpecResolver).not_to have_received(:new)
+    end
+
+    it "includes resolved spec in test_command" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = auto_integration.call(mutation)
+
+      expect(result[:test_command]).to include("spec/some_spec.rb")
+    end
+  end
 end

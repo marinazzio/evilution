@@ -4,6 +4,7 @@ require "fileutils"
 require "stringio"
 require "tmpdir"
 require_relative "base"
+require_relative "../spec_resolver"
 
 module Evilution
   module Integration
@@ -109,9 +110,16 @@ module Evilution
         { passed: false, error: e.message, test_command: command }
       end
 
-      def build_args(_mutation)
-        files = test_files || ["spec"]
+      def build_args(mutation)
+        files = resolve_test_files(mutation)
         ["--format", "progress", "--no-color", "--order", "defined", *files]
+      end
+
+      def resolve_test_files(mutation)
+        return test_files if test_files
+
+        resolved = SpecResolver.new.call(mutation.file_path)
+        resolved ? [resolved] : ["spec"]
       end
     end
   end
