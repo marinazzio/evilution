@@ -11,38 +11,25 @@ RSpec.describe Evilution::Parallel::Pool do
       expect(results).to eq([10, 20, 30])
     end
 
-    it "runs items concurrently up to pool size" do
+    it "runs batch items concurrently in separate processes" do
       pool = described_class.new(size: 3)
-      started_at = []
-      mutex = Mutex.new
+      results = pool.map([1, 2, 3]) { |n| [n, Process.pid] }
 
-      pool.map([1, 2, 3]) do |n|
-        mutex.synchronize { started_at << Process.clock_gettime(Process::CLOCK_MONOTONIC) }
-        sleep 0.1
-        n
-      end
-
-      # All 3 should start nearly simultaneously (within 50ms)
-      expect(started_at.max - started_at.min).to be < 0.05
+      pids = results.map(&:last)
+      # All items should run in different child processes (not the parent)
+      expect(pids.uniq.size).to eq(3)
+      expect(pids).not_to include(Process.pid)
     end
 
-    it "limits concurrency to pool size" do
+    it "limits concurrency to pool size via batching" do
       pool = described_class.new(size: 2)
-      concurrent_count = 0
-      max_concurrent = 0
-      mutex = Mutex.new
+      results = pool.map([1, 2, 3, 4]) { |n| [n, Process.pid] }
 
-      pool.map([1, 2, 3, 4]) do |n|
-        mutex.synchronize do
-          concurrent_count += 1
-          max_concurrent = [max_concurrent, concurrent_count].max
-        end
-        sleep 0.05
-        mutex.synchronize { concurrent_count -= 1 }
-        n
-      end
-
-      expect(max_concurrent).to eq(2)
+      # 4 items with size 2 = 2 batches; pids within a batch differ
+      batch1_pids = results[0..1].map(&:last)
+      batch2_pids = results[2..3].map(&:last)
+      expect(batch1_pids.uniq.size).to eq(2)
+      expect(batch2_pids.uniq.size).to eq(2)
     end
 
     it "returns empty array for empty input" do

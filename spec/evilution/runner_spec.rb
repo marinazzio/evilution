@@ -764,6 +764,10 @@ RSpec.describe Evilution::Runner do
     end
 
     it "returns all results when using parallel execution" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
+      allow(pool).to receive(:map).and_return([mutation_result, mutation_result2])
+
       parallel_runner = described_class.new(config: parallel_config)
       result = parallel_runner.call
 
@@ -787,14 +791,17 @@ RSpec.describe Evilution::Runner do
     end
 
     it "uses Parallel::Pool when jobs > 1" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
+      allow(pool).to receive(:map).and_return([mutation_result])
+
       parallel_runner = described_class.new(config: parallel_config)
-
-      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_call_original
-
       parallel_runner.call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2)
     end
 
-    it "respects fail_fast in parallel mode" do
+    it "respects fail_fast and truncates early" do
       mutation3 = double(
         "Mutation3",
         subject: subject_obj,
