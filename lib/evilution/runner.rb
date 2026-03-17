@@ -13,6 +13,7 @@ require_relative "diff/file_filter"
 require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
+require_relative "baseline"
 require_relative "parallel/pool"
 
 module Evilution
@@ -34,7 +35,8 @@ module Evilution
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      results, truncated = run_mutations(mutations)
+      baseline_result = run_baseline(mutations)
+      results, truncated = run_mutations(mutations, baseline_result)
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
       summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
@@ -86,16 +88,27 @@ module Evilution
       subjects.flat_map { |subject| registry.mutations_for(subject) }
     end
 
-    def run_mutations(mutations)
+    def run_baseline(mutations)
+      return nil unless config.baseline? && mutations.any?
+
+      log_baseline_start
+      baseline = Baseline.new(timeout: config.timeout)
+      result = baseline.call(mutations)
+      log_baseline_complete(result)
+      result
+    end
+
+    def run_mutations(mutations, baseline_result = nil)
       if config.jobs > 1
-        run_mutations_parallel(mutations)
+        run_mutations_parallel(mutations, baseline_result)
       else
-        run_mutations_sequential(mutations)
+        run_mutations_sequential(mutations, baseline_result)
       end
     end
 
-    def run_mutations_sequential(mutations)
+    def run_mutations_sequential(mutations, baseline_result = nil)
       integration = build_integration
+      spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
       results = []
       survived_count = 0
       truncated = false
@@ -107,6 +120,7 @@ module Evilution
           test_command: test_command,
           timeout: config.timeout
         )
+        result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
         log_progress(index + 1, mutations.length, result.status)
@@ -120,33 +134,55 @@ module Evilution
       [results, truncated]
     end
 
-    def run_mutations_parallel(mutations)
+    def run_mutations_parallel(mutations, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
-      results = []
-      survived_count = 0
-      truncated = false
-      completed = 0
+      spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
+      state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
       mutations.each_slice(config.jobs) do |batch|
-        break if truncated
+        break if state[:truncated]
 
         batch_results = pool.map(batch) do |mutation|
           test_command = ->(m) { integration.call(m) }
           isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
-        batch_results.each do |result|
-          results << result
-          survived_count += 1 if result.survived?
-          completed += 1
-          log_progress(completed, mutations.length, result.status)
-        end
-
-        truncated = true if should_truncate?(survived_count, completed, mutations.length)
+        process_batch(batch_results, baseline_result, spec_resolver, mutations.length, state)
       end
 
-      [results, truncated]
+      [state[:results], state[:truncated]]
+    end
+
+    def process_batch(batch_results, baseline_result, spec_resolver, total, state)
+      batch_results.each do |result|
+        result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
+        state[:results] << result
+        state[:survived_count] += 1 if result.survived?
+        state[:completed] += 1
+        log_progress(state[:completed], total, result.status)
+      end
+
+      state[:truncated] = true if should_truncate?(state[:survived_count], state[:completed], total)
+    end
+
+    def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
+      return result unless result.survived? && baseline_result && baseline_result.failed?
+
+      if config.spec_files.any?
+        neutralize = true
+      else
+        spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
+        neutralize = baseline_result.failed_spec_files.include?(spec_file)
+      end
+      return result unless neutralize
+
+      Result::MutationResult.new(
+        mutation: result.mutation,
+        status: :neutral,
+        duration: result.duration,
+        test_command: result.test_command
+      )
     end
 
     def should_truncate?(survived_count, completed, total)
@@ -169,6 +205,19 @@ module Evilution
 
       output = reporter.call(summary)
       $stdout.puts(output) unless config.quiet
+    end
+
+    def log_baseline_start
+      return if config.quiet || !config.text? || !$stderr.tty?
+
+      $stderr.write("Running baseline test suite...\n")
+    end
+
+    def log_baseline_complete(result)
+      return if config.quiet || !config.text? || !$stderr.tty?
+
+      count = result.failed_spec_files.size
+      $stderr.write("Baseline complete: #{count} failing spec file#{"s" unless count == 1}\n")
     end
 
     def log_progress(current, total, status)

@@ -24,6 +24,7 @@ module Evilution
           summary: build_summary(summary),
           survived: summary.survived_results.map { |r| build_mutation_detail(r) },
           killed: summary.killed_results.map { |r| build_mutation_detail(r) },
+          neutral: summary.neutral_results.map { |r| build_mutation_detail(r) },
           timed_out: summary.results.select(&:timeout?).map { |r| build_mutation_detail(r) },
           errors: summary.results.select(&:error?).map { |r| build_mutation_detail(r) }
         }
@@ -36,6 +37,7 @@ module Evilution
           survived: summary.survived,
           timed_out: summary.timed_out,
           errors: summary.errors,
+          neutral: summary.neutral,
           score: summary.score.round(4),
           duration: summary.duration.round(4)
         }
