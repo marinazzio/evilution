@@ -12,3 +12,6 @@
 
 # ignore all files and folders with local suffixes
 *.local
+
+# MCP server configuration (local/editor-specific)
+.mcp.json

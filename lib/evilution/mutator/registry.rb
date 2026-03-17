@@ -24,7 +24,8 @@ module Evilution
           Operator::NegationInsertion,
           Operator::ReturnValueRemoval,
           Operator::CollectionReplacement,
-          Operator::MethodCallRemoval
+          Operator::MethodCallRemoval,
+          Operator::ArgumentRemoval
         ].each { |op| registry.register(op) }
         registry
       end
