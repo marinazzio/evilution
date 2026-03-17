@@ -98,6 +98,12 @@ module Evilution
     end
 
     def add_options(opts)
+      add_core_options(opts)
+      add_filter_options(opts)
+      add_flag_options(opts)
+    end
+
+    def add_core_options(opts)
       opts.on("-j", "--jobs N", Integer, "Number of parallel workers (default: 1)") { |n| @options[:jobs] = n }
       opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
       opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
@@ -106,6 +112,9 @@ module Evilution
              "Use line-range targeting instead: evilution run lib/foo.rb:15-30")
         @options[:diff_base] = b
       end
+    end
+
+    def add_filter_options(opts)
       opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
       opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
       opts.on("--target METHOD", "Only mutate the named method (e.g. Foo::Bar#calculate)") { |m| @options[:target] = m }
@@ -113,6 +122,9 @@ module Evilution
         warn("Warning: --no-coverage is deprecated, currently has no effect, and will be removed in a future version.")
         @options[:coverage] = false
       end
+    end
+
+    def add_flag_options(opts)
       opts.on("--fail-fast", "Stop after N surviving mutants " \
                              "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
       opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }

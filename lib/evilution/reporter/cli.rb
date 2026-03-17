@@ -46,7 +46,7 @@ module Evilution
       def mutations_line(summary)
         parts = "Mutations: #{summary.total} total, #{summary.killed} killed, " \
                 "#{summary.survived} survived, #{summary.timed_out} timed out"
-        parts += ", #{summary.neutral} neutral" if summary.neutral > 0
+        parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
         parts
       end
 

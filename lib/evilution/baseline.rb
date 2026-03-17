@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
-require "set"
 require "tmpdir"
 require "fileutils"
 require_relative "spec_resolver"
 
 module Evilution
   class Baseline
-    Result = Struct.new(:failed_spec_files, :duration, keyword_init: true) do
+    Result = Struct.new(:failed_spec_files, :duration) do
       def initialize(**)
         super
         freeze
@@ -38,8 +37,18 @@ module Evilution
 
     def run_spec_file(spec_file)
       read_io, write_io = IO.pipe
+      pid = fork_spec_runner(spec_file, read_io, write_io)
+      write_io.close
+      read_result(read_io, pid)
+    rescue StandardError
+      false
+    ensure
+      read_io&.close
+      write_io&.close
+    end
 
-      pid = Process.fork do
+    def fork_spec_runner(spec_file, read_io, write_io)
+      Process.fork do
         read_io.close
         $stdout.reopen(File::NULL, "w")
         $stderr.reopen(File::NULL, "w")
@@ -53,9 +62,9 @@ module Evilution
         write_io.close
         exit!(status.zero? ? 0 : 1)
       end
+    end
 
-      write_io.close
-
+    def read_result(read_io, pid)
       if read_io.wait_readable(@timeout)
         data = read_io.read
         Process.wait(pid)
@@ -68,11 +77,6 @@ module Evilution
         Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
         false
       end
-    rescue StandardError
-      false
-    ensure
-      read_io&.close
-      write_io&.close
     end
 
     private
