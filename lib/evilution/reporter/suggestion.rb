@@ -22,7 +22,8 @@ module Evilution
         "negation_insertion" => "Add a test where the predicate result matters (not just truthiness)",
         "return_value_removal" => "Add a test that uses the return value of this method",
         "collection_replacement" => "Add a test that checks the return value of the collection operation, not just side effects",
-        "method_call_removal" => "Add a test that depends on the return value or side effect of this method call"
+        "method_call_removal" => "Add a test that depends on the return value or side effect of this method call",
+        "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call"
       }.freeze
 
       DEFAULT_SUGGESTION = "Add a more specific test that detects this mutation"
