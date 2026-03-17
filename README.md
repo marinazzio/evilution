@@ -133,6 +133,33 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `return_value_removal`    | Strip return values                       | `return x` -> `return`            |
 | `collection_replacement`  | Swap collection methods                   | `map` -> `each`, `select` <-> `reject` |
 
+## MCP Server (AI Agent Integration)
+
+Evilution includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) server for direct tool invocation by AI agents (Claude Code, VS Code Copilot, etc.).
+
+### Setup
+
+Create a `.mcp.json` file in your project root:
+
+```json
+{
+  "mcpServers": {
+    "evilution": {
+      "type": "stdio",
+      "command": "evilution",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+If using Bundler, set the command to `bundle` and args to `["exec", "evilution", "mcp"]`.
+
+The server exposes an `evilution-mutate` tool that accepts target files, method targets, spec overrides, parallelism, and timeout options — returning structured JSON results directly to the agent.
+
+> **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
+
 ## Recommended Workflows for AI Agents
 
 ### 1. Full project scan
