@@ -9,6 +9,7 @@ RSpec.describe Evilution::Runner do
       format: :json,
       timeout: 5,
       quiet: true,
+      baseline: false,
       skip_config_file: true
     )
   end
@@ -178,6 +179,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -241,6 +243,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -280,6 +283,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
       no_match_runner = described_class.new(config: no_match_config)
@@ -295,6 +299,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         diff_base: "HEAD~1",
         skip_config_file: true
       )
@@ -345,6 +350,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -375,6 +381,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
       empty_runner = described_class.new(config: empty_config)
@@ -429,6 +436,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -469,6 +477,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
       one_mutation_runner = described_class.new(config: one_mutation_config)
@@ -489,6 +498,7 @@ RSpec.describe Evilution::Runner do
       fail_fast_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],
         fail_fast: 5,
+        baseline: false,
         format: :json,
         timeout: 5,
         quiet: true,
@@ -530,6 +540,7 @@ RSpec.describe Evilution::Runner do
         target_files: ["lib/example.rb"],
         integration: :minitest,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -559,6 +570,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -593,6 +605,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
       explicit_runner = described_class.new(config: explicit_config)
@@ -614,6 +627,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
       no_files_runner = described_class.new(config: no_files_config)
@@ -623,6 +637,16 @@ RSpec.describe Evilution::Runner do
   end
 
   describe "#call with baseline detection" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+    end
+
     let(:survived_result) do
       Evilution::Result::MutationResult.new(
         mutation: mutation,
@@ -786,6 +810,7 @@ RSpec.describe Evilution::Runner do
         format: :text,
         timeout: 5,
         quiet: false,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -796,6 +821,7 @@ RSpec.describe Evilution::Runner do
         format: :text,
         timeout: 5,
         quiet: true,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -806,6 +832,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: false,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -902,6 +929,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         jobs: 2,
+        baseline: false,
         skip_config_file: true
       )
     end
@@ -938,6 +966,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         jobs: 1,
+        baseline: false,
         skip_config_file: true
       )
       sequential_runner = described_class.new(config: sequential_config)
@@ -981,6 +1010,7 @@ RSpec.describe Evilution::Runner do
         quiet: true,
         jobs: 1,
         fail_fast: 1,
+        baseline: false,
         skip_config_file: true
       )
 

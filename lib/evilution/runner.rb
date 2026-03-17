@@ -108,7 +108,7 @@ module Evilution
 
     def run_mutations_sequential(mutations, baseline_result = nil)
       integration = build_integration
-      spec_resolver = baseline_result ? SpecResolver.new : nil
+      spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
       results = []
       survived_count = 0
       truncated = false
@@ -137,39 +137,45 @@ module Evilution
     def run_mutations_parallel(mutations, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
-      spec_resolver = baseline_result ? SpecResolver.new : nil
-      results = []
-      survived_count = 0
-      truncated = false
-      completed = 0
+      spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
+      state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
       mutations.each_slice(config.jobs) do |batch|
-        break if truncated
+        break if state[:truncated]
 
         batch_results = pool.map(batch) do |mutation|
           test_command = ->(m) { integration.call(m) }
           isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
-        batch_results.each do |result|
-          result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
-          results << result
-          survived_count += 1 if result.survived?
-          completed += 1
-          log_progress(completed, mutations.length, result.status)
-        end
-
-        truncated = true if should_truncate?(survived_count, completed, mutations.length)
+        process_batch(batch_results, baseline_result, spec_resolver, mutations.length, state)
       end
 
-      [results, truncated]
+      [state[:results], state[:truncated]]
+    end
+
+    def process_batch(batch_results, baseline_result, spec_resolver, total, state)
+      batch_results.each do |result|
+        result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
+        state[:results] << result
+        state[:survived_count] += 1 if result.survived?
+        state[:completed] += 1
+        log_progress(state[:completed], total, result.status)
+      end
+
+      state[:truncated] = true if should_truncate?(state[:survived_count], state[:completed], total)
     end
 
     def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
-      return result unless result.survived? && baseline_result
+      return result unless result.survived? && baseline_result && baseline_result.failed?
 
-      spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
-      return result unless baseline_result.failed_spec_files.include?(spec_file)
+      if config.spec_files.any?
+        neutralize = true
+      else
+        spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
+        neutralize = baseline_result.failed_spec_files.include?(spec_file)
+      end
+      return result unless neutralize
 
       Result::MutationResult.new(
         mutation: result.mutation,

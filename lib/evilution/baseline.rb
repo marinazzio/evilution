@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "tmpdir"
-require "fileutils"
 require_relative "spec_resolver"
 
 module Evilution
@@ -64,6 +62,8 @@ module Evilution
       end
     end
 
+    GRACE_PERIOD = 0.5
+
     def read_result(read_io, pid)
       if read_io.wait_readable(@timeout)
         data = read_io.read
@@ -73,10 +73,22 @@ module Evilution
         result = Marshal.load(data) # rubocop:disable Security/MarshalLoad
         result[:passed]
       else
-        Process.kill("TERM", pid) rescue nil # rubocop:disable Style/RescueModifier
-        Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
+        terminate_child(pid)
         false
       end
+    end
+
+    def terminate_child(pid)
+      Process.kill("TERM", pid) rescue nil # rubocop:disable Style/RescueModifier
+      _, status = Process.waitpid2(pid, Process::WNOHANG)
+      return if status
+
+      sleep(GRACE_PERIOD)
+      _, status = Process.waitpid2(pid, Process::WNOHANG)
+      return if status
+
+      Process.kill("KILL", pid) rescue nil # rubocop:disable Style/RescueModifier
+      Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
     end
 
     private

@@ -37,11 +37,13 @@ RSpec.describe Evilution::MCP::MutateTool do
       survived: 0,
       timed_out: 0,
       errors: 0,
+      neutral: 0,
       score: 1.0,
       duration: 0.5,
       truncated?: false,
       survived_results: [],
-      killed_results: [killed_result]
+      killed_results: [killed_result],
+      neutral_results: []
     )
   end
 
