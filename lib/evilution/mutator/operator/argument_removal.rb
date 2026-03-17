@@ -18,7 +18,7 @@ module Evilution
             args.each_index do |i|
               remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
               replacement = remaining.join(", ")
-              
+
               add_mutation(
                 offset: node.arguments.location.start_offset,
                 length: node.arguments.location.length,
