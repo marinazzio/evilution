@@ -13,6 +13,7 @@ require_relative "diff/file_filter"
 require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
+require_relative "baseline"
 require_relative "parallel/pool"
 
 module Evilution
@@ -34,7 +35,8 @@ module Evilution
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
       mutations = generate_mutations(subjects)
-      results, truncated = run_mutations(mutations)
+      baseline_result = run_baseline(mutations)
+      results, truncated = run_mutations(mutations, baseline_result)
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
       summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
@@ -86,16 +88,27 @@ module Evilution
       subjects.flat_map { |subject| registry.mutations_for(subject) }
     end
 
-    def run_mutations(mutations)
+    def run_baseline(mutations)
+      return nil unless config.baseline? && mutations.any?
+
+      log_baseline_start
+      baseline = Baseline.new(timeout: config.timeout)
+      result = baseline.call(mutations)
+      log_baseline_complete(result)
+      result
+    end
+
+    def run_mutations(mutations, baseline_result = nil)
       if config.jobs > 1
-        run_mutations_parallel(mutations)
+        run_mutations_parallel(mutations, baseline_result)
       else
-        run_mutations_sequential(mutations)
+        run_mutations_sequential(mutations, baseline_result)
       end
     end
 
-    def run_mutations_sequential(mutations)
+    def run_mutations_sequential(mutations, baseline_result = nil)
       integration = build_integration
+      spec_resolver = baseline_result ? SpecResolver.new : nil
       results = []
       survived_count = 0
       truncated = false
@@ -107,6 +120,7 @@ module Evilution
           test_command: test_command,
           timeout: config.timeout
         )
+        result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
         log_progress(index + 1, mutations.length, result.status)
@@ -120,9 +134,10 @@ module Evilution
       [results, truncated]
     end
 
-    def run_mutations_parallel(mutations)
+    def run_mutations_parallel(mutations, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
+      spec_resolver = baseline_result ? SpecResolver.new : nil
       results = []
       survived_count = 0
       truncated = false
@@ -137,6 +152,7 @@ module Evilution
         end
 
         batch_results.each do |result|
+          result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
           results << result
           survived_count += 1 if result.survived?
           completed += 1
@@ -147,6 +163,20 @@ module Evilution
       end
 
       [results, truncated]
+    end
+
+    def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
+      return result unless result.survived? && baseline_result
+
+      spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
+      return result unless baseline_result.failed_spec_files.include?(spec_file)
+
+      Result::MutationResult.new(
+        mutation: result.mutation,
+        status: :neutral,
+        duration: result.duration,
+        test_command: result.test_command
+      )
     end
 
     def should_truncate?(survived_count, completed, total)
@@ -169,6 +199,19 @@ module Evilution
 
       output = reporter.call(summary)
       $stdout.puts(output) unless config.quiet
+    end
+
+    def log_baseline_start
+      return if config.quiet || !config.text? || !$stderr.tty?
+
+      $stderr.write("Running baseline test suite...\n")
+    end
+
+    def log_baseline_complete(result)
+      return if config.quiet || !config.text? || !$stderr.tty?
+
+      count = result.failed_spec_files.size
+      $stderr.write("Baseline complete: #{count} failing spec file#{"s" unless count == 1}\n")
     end
 
     def log_progress(current, total, status)

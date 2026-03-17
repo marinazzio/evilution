@@ -133,6 +133,59 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).not_to include("Survived mutations:")
     end
 
+    context "with neutral mutations" do
+      let(:neutral_mutation) do
+        double(
+          "Mutation",
+          operator_name: "comparison_replacement",
+          file_path: "lib/user.rb",
+          line: 12,
+          diff: "- x <= 5\n+ x < 5"
+        )
+      end
+
+      let(:neutral_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: neutral_mutation,
+          status: :neutral,
+          duration: 0.1
+        )
+      end
+
+      let(:neutral_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, neutral_result],
+          duration: 1.0
+        )
+      end
+
+      it "includes neutral count in mutations line" do
+        output = reporter.call(neutral_summary)
+
+        expect(output).to include("1 neutral")
+      end
+
+      it "shows neutral mutations section" do
+        output = reporter.call(neutral_summary)
+
+        expect(output).to include("Neutral mutations (test already failing):")
+        expect(output).to include("comparison_replacement: lib/user.rb:12")
+      end
+
+      it "excludes neutrals from score denominator" do
+        output = reporter.call(neutral_summary)
+
+        expect(output).to include("Score:")
+        expect(output).to include("(1/1)")
+      end
+
+      it "does not show neutral section when there are none" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("Neutral mutations")
+      end
+    end
+
     it "handles empty results gracefully" do
       empty_summary = Evilution::Result::Summary.new(results: [], duration: 0.0)
       output = reporter.call(empty_summary)

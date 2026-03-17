@@ -115,6 +115,7 @@ module Evilution
       end
       opts.on("--fail-fast", "Stop after N surviving mutants " \
                              "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
+      opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }
       opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }

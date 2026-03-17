@@ -29,6 +29,14 @@ RSpec.describe Evilution::Result::MutationResult do
 
       expect(result).to be_error
     end
+
+    it "identifies neutral mutations" do
+      result = described_class.new(mutation: mutation, status: :neutral)
+
+      expect(result).to be_neutral
+      expect(result).not_to be_survived
+      expect(result).not_to be_killed
+    end
   end
 
   it "rejects invalid statuses" do

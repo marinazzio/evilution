@@ -22,6 +22,14 @@ module Evilution
           end
         end
 
+        if summary.neutral_results.any?
+          lines << ""
+          lines << "Neutral mutations (test already failing):"
+          summary.neutral_results.each do |result|
+            lines << format_neutral(result)
+          end
+        end
+
         lines << ""
         lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
         lines << result_line(summary)
@@ -36,12 +44,14 @@ module Evilution
       end
 
       def mutations_line(summary)
-        "Mutations: #{summary.total} total, #{summary.killed} killed, " \
-          "#{summary.survived} survived, #{summary.timed_out} timed out"
+        parts = "Mutations: #{summary.total} total, #{summary.killed} killed, " \
+                "#{summary.survived} survived, #{summary.timed_out} timed out"
+        parts += ", #{summary.neutral} neutral" if summary.neutral > 0
+        parts
       end
 
       def score_line(summary)
-        denominator = summary.total - summary.errors
+        denominator = summary.total - summary.errors - summary.neutral
         score_pct = format_pct(summary.score)
         "Score: #{score_pct} (#{summary.killed}/#{denominator})"
       end
@@ -55,6 +65,11 @@ module Evilution
         location = "#{mutation.file_path}:#{mutation.line}"
         diff_lines = mutation.diff.split("\n").map { |l| "    #{l}" }.join("\n")
         "  #{mutation.operator_name}: #{location}\n#{diff_lines}"
+      end
+
+      def format_neutral(result)
+        mutation = result.mutation
+        "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
       end
 
       def result_line(summary)

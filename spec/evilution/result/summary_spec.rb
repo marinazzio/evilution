@@ -49,6 +49,33 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#neutral" do
+    it "counts neutral mutations" do
+      results_with_neutral = [
+        make_result(:killed),
+        make_result(:neutral),
+        make_result(:neutral)
+      ]
+      s = described_class.new(results: results_with_neutral)
+
+      expect(s.neutral).to eq(2)
+    end
+
+    it "returns zero when no neutral mutations" do
+      expect(summary.neutral).to eq(0)
+    end
+  end
+
+  describe "#neutral_results" do
+    it "returns only neutral results" do
+      neutral_result = make_result(:neutral)
+      results_with_neutral = [make_result(:killed), neutral_result]
+      s = described_class.new(results: results_with_neutral)
+
+      expect(s.neutral_results).to eq([neutral_result])
+    end
+  end
+
   describe "#score" do
     it "calculates killed / (total - errors)" do
       expect(summary.score).to eq(3.0 / 5)
@@ -71,9 +98,39 @@ RSpec.describe Evilution::Result::Summary do
       expect(s.score).to eq(1.0 / 2)
     end
 
+    it "excludes neutrals from denominator" do
+      results_with_neutral = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:neutral)
+      ]
+      s = described_class.new(results: results_with_neutral)
+
+      expect(s.score).to eq(1.0 / 2)
+    end
+
+    it "excludes both errors and neutrals from denominator" do
+      mixed = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:error),
+        make_result(:neutral)
+      ]
+      s = described_class.new(results: mixed)
+
+      expect(s.score).to eq(1.0 / 2)
+    end
+
     it "returns 0.0 when all mutations are errors (avoids NaN)" do
       all_errors = [make_result(:error), make_result(:error)]
       s = described_class.new(results: all_errors)
+
+      expect(s.score).to eq(0.0)
+    end
+
+    it "returns 0.0 when all mutations are neutral" do
+      all_neutral = [make_result(:neutral), make_result(:neutral)]
+      s = described_class.new(results: all_neutral)
 
       expect(s.score).to eq(0.0)
     end

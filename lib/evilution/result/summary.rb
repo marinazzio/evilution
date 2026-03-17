@@ -36,8 +36,12 @@ module Evilution
         results.count(&:error?)
       end
 
+      def neutral
+        results.count(&:neutral?)
+      end
+
       def score
-        denominator = total - errors
+        denominator = total - errors - neutral
         return 0.0 if denominator.zero?
 
         killed.to_f / denominator
@@ -53,6 +57,10 @@ module Evilution
 
       def killed_results
         results.select(&:killed?)
+      end
+
+      def neutral_results
+        results.select(&:neutral?)
       end
     end
   end

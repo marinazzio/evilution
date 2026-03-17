@@ -101,6 +101,59 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first).not_to have_key("suggestion")
     end
 
+    context "with neutral mutations" do
+      let(:neutral_mutation) do
+        double(
+          "Mutation",
+          operator_name: "comparison_replacement",
+          file_path: "lib/user.rb",
+          line: 12,
+          diff: "- x <= 5\n+ x < 5"
+        )
+      end
+
+      let(:neutral_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: neutral_mutation,
+          status: :neutral,
+          duration: 0.1
+        )
+      end
+
+      let(:neutral_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, neutral_result],
+          duration: 0.6
+        )
+      end
+
+      it "includes neutral count in summary" do
+        parsed = JSON.parse(reporter.call(neutral_summary))
+
+        expect(parsed["summary"]["neutral"]).to eq(1)
+      end
+
+      it "includes neutral array with mutation details" do
+        parsed = JSON.parse(reporter.call(neutral_summary))
+
+        expect(parsed["neutral"].length).to eq(1)
+        expect(parsed["neutral"].first["operator"]).to eq("comparison_replacement")
+        expect(parsed["neutral"].first["status"]).to eq("neutral")
+      end
+
+      it "does not include suggestion for neutral mutations" do
+        parsed = JSON.parse(reporter.call(neutral_summary))
+
+        expect(parsed["neutral"].first).not_to have_key("suggestion")
+      end
+
+      it "excludes neutrals from score calculation" do
+        parsed = JSON.parse(reporter.call(neutral_summary))
+
+        expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
+
     it "handles empty results" do
       empty_summary = Evilution::Result::Summary.new(results: [], duration: 0.0)
       parsed = JSON.parse(reporter.call(empty_summary))

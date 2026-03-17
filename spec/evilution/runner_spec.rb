@@ -622,6 +622,163 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with baseline detection" do
+    let(:survived_result) do
+      Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :survived,
+        duration: 0.1
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(survived_result)
+    end
+
+    it "reclassifies survived mutations as neutral when baseline spec fails" do
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set["spec/example_spec.rb"],
+        duration: 0.5
+      )
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(baseline_result)
+
+      spec_resolver = instance_double(Evilution::SpecResolver)
+      allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+
+      result = runner.call
+
+      expect(result.results.first.status).to eq(:neutral)
+      expect(result.survived).to eq(0)
+      expect(result.neutral).to eq(1)
+    end
+
+    it "keeps survived mutations when baseline spec passes" do
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set.new,
+        duration: 0.5
+      )
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(baseline_result)
+
+      result = runner.call
+
+      expect(result.results.first.status).to eq(:survived)
+      expect(result.survived).to eq(1)
+      expect(result.neutral).to eq(0)
+    end
+
+    it "does not reclassify killed mutations" do
+      killed = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :killed, duration: 0.1
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(killed)
+
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set["spec/example_spec.rb"],
+        duration: 0.5
+      )
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(baseline_result)
+
+      spec_resolver = instance_double(Evilution::SpecResolver)
+      allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+
+      result = runner.call
+
+      expect(result.results.first.status).to eq(:killed)
+    end
+
+    it "does not count neutral mutations toward fail_fast" do
+      mutation2 = double(
+        "Mutation2",
+        subject: subject_obj,
+        operator_name: "nil_replacement",
+        original_source: "x",
+        mutated_source: "nil",
+        file_path: "lib/example.rb",
+        line: 5,
+        column: 0,
+        diff: "- x\n+ nil"
+      )
+      survived2 = Evilution::Result::MutationResult.new(
+        mutation: mutation2, status: :survived, duration: 0.1
+      )
+
+      registry = Evilution::Mutator::Registry.default
+      allow(registry).to receive(:mutations_for).and_return([mutation, mutation2])
+
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result, survived2)
+
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set["spec/example_spec.rb"],
+        duration: 0.5
+      )
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(baseline_result)
+
+      spec_resolver = instance_double(Evilution::SpecResolver)
+      allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+
+      ff_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        fail_fast: 1,
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        skip_config_file: true
+      )
+      ff_runner = described_class.new(config: ff_config)
+
+      result = ff_runner.call
+
+      expect(result.total).to eq(2)
+      expect(result).not_to be_truncated
+    end
+
+    context "with --no-baseline" do
+      let(:no_baseline_config) do
+        Evilution::Config.new(
+          target_files: ["lib/example.rb"],
+          format: :json,
+          timeout: 5,
+          quiet: true,
+          baseline: false,
+          skip_config_file: true
+        )
+      end
+
+      it "skips baseline when disabled" do
+        no_baseline_runner = described_class.new(config: no_baseline_config)
+
+        expect(Evilution::Baseline).not_to receive(:new)
+
+        result = no_baseline_runner.call
+
+        expect(result.results.first.status).to eq(:survived)
+      end
+    end
+  end
+
   describe "progress indicator" do
     let(:text_config) do
       Evilution::Config.new(
