@@ -134,6 +134,23 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       expect(output).to match(/\[verbose\].*heap_live_slots: \d+/)
     end
 
+    it "logs total_allocated_objects in per-mutation output" do
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*allocated: \d+/)
+    end
+
+    it "logs total_freed_objects in per-mutation output" do
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*freed: \d+/)
+    end
+
+    it "includes GC stats in phase memory logs" do
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[memory\] after parse_subjects: .* \(.*heap_live_slots: \d+/)
+      expect(output).to match(/\[memory\] after parse_subjects: .* \(.*allocated: \d+/)
+      expect(output).to match(/\[memory\] after parse_subjects: .* \(.*freed: \d+/)
+    end
+
     it "omits child_rss and delta fields when no memory data available" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).not_to match(/\[verbose\].*child_rss:/)
