@@ -10,6 +10,7 @@ RSpec.describe Evilution::Runner do
       timeout: 5,
       quiet: true,
       baseline: false,
+      isolation: :fork,
       skip_config_file: true
     )
   end
