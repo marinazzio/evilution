@@ -271,7 +271,7 @@ module Evilution
 
       parts = []
       parts << format("child_rss: %<mb>.1f MB", mb: result.child_rss_kb / 1024.0) if result.child_rss_kb
-      parts << format("delta: +%<mb>.1f MB", mb: result.memory_delta_kb / 1024.0) if result.memory_delta_kb
+      parts << format("delta: %+<mb>.1f MB", mb: result.memory_delta_kb / 1024.0) if result.memory_delta_kb
       parts << format("heap_live_slots: %<slots>d", slots: GC.stat(:heap_live_slots))
       return if parts.empty?
 
