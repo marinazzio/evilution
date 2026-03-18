@@ -2,6 +2,7 @@
 
 require_relative "config"
 require_relative "ast/parser"
+require_relative "memory"
 require_relative "mutator/registry"
 require_relative "isolation/fork"
 require_relative "isolation/in_process"
@@ -35,9 +36,15 @@ module Evilution
       subjects = filter_by_target(subjects) if config.target?
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
       subjects = filter_by_diff(subjects) if config.diff?
+      log_memory("after parse_subjects", "#{subjects.length} subjects")
+
       mutations = generate_mutations(subjects)
+      log_memory("after generate_mutations", "#{mutations.length} mutations")
+
       baseline_result = run_baseline(mutations)
       results, truncated = run_mutations(mutations, baseline_result)
+      log_memory("after run_mutations", "#{results.length} results")
+
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
       summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
@@ -164,6 +171,7 @@ module Evilution
         log_progress(state[:completed], total, result.status)
       end
 
+      log_memory("after batch", "#{state[:completed]}/#{total} complete")
       state[:truncated] = true if should_truncate?(state[:survived_count], state[:completed], total)
     end
 
@@ -241,6 +249,17 @@ module Evilution
       return if config.quiet || !config.text? || !$stderr.tty?
 
       $stderr.write("mutation #{current}/#{total} #{status}\n")
+    end
+
+    def log_memory(phase, context = nil)
+      return unless config.verbose && !config.quiet
+
+      rss = Memory.rss_mb
+      return unless rss
+
+      msg = format("[memory] %<phase>s: %<rss>.1f MB", phase: phase, rss: rss)
+      msg += " (#{context})" if context
+      $stderr.write("#{msg}\n")
     end
 
     def build_reporter
