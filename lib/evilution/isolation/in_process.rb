@@ -2,6 +2,7 @@
 
 require "timeout"
 require "stringio"
+require_relative "../memory"
 require_relative "../result/mutation_result"
 
 module Evilution
@@ -9,10 +10,13 @@ module Evilution
     class InProcess
       def call(mutation:, test_command:, timeout:)
         start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        rss_before = Memory.rss_kb
         result = execute_with_timeout(mutation, test_command, timeout)
+        rss_after = Memory.rss_kb
         duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+        delta = compute_memory_delta(rss_before, rss_after, result)
 
-        build_mutation_result(mutation, result, duration)
+        build_mutation_result(mutation, result, duration, delta)
       end
 
       private
@@ -39,7 +43,14 @@ module Evilution
         $stderr = saved_stderr
       end
 
-      def build_mutation_result(mutation, result, duration)
+      def compute_memory_delta(rss_before, rss_after, result)
+        return nil if result[:timeout]
+        return nil unless rss_before && rss_after
+
+        rss_after - rss_before
+      end
+
+      def build_mutation_result(mutation, result, duration, memory_delta_kb)
         status = if result[:timeout]
                    :timeout
                  elsif result[:error]
@@ -54,7 +65,8 @@ module Evilution
           mutation: mutation,
           status: status,
           duration: duration,
-          test_command: result[:test_command]
+          test_command: result[:test_command],
+          memory_delta_kb: memory_delta_kb
         )
       end
     end
