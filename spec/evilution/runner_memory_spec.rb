@@ -28,6 +28,8 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
   end
 
   before do
+    allow(Evilution::Memory).to receive(:rss_mb).and_return(42.5)
+
     parser = instance_double(Evilution::AST::Parser)
     allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
     allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
@@ -42,14 +44,18 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
   end
 
   def capture_stderr_with_tty(tty: true)
-    io = StringIO.new
-    allow(io).to receive(:tty?).and_return(tty)
-    original = $stderr
-    $stderr = io
+    stderr_io = StringIO.new
+    stdout_io = StringIO.new
+    allow(stderr_io).to receive(:tty?).and_return(tty)
+    original_stderr = $stderr
+    original_stdout = $stdout
+    $stderr = stderr_io
+    $stdout = stdout_io
     yield
-    io.string
+    stderr_io.string
   ensure
-    $stderr = original
+    $stderr = original_stderr
+    $stdout = original_stdout
   end
 
   context "with verbose enabled" do
@@ -70,17 +76,17 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "logs memory after parsing subjects" do
       output = capture_stderr_with_tty { runner.call }
-      expect(output).to match(/\[memory\] after parse_subjects:.*MB/)
+      expect(output).to match(/\[memory\] after parse_subjects: 42\.5 MB/)
     end
 
     it "logs memory after generating mutations" do
       output = capture_stderr_with_tty { runner.call }
-      expect(output).to match(/\[memory\] after generate_mutations:.*MB/)
+      expect(output).to match(/\[memory\] after generate_mutations: 42\.5 MB/)
     end
 
     it "logs memory after mutation run completes" do
       output = capture_stderr_with_tty { runner.call }
-      expect(output).to match(/\[memory\] after run_mutations:.*MB/)
+      expect(output).to match(/\[memory\] after run_mutations: 42\.5 MB/)
     end
 
     it "includes mutation count context" do
@@ -157,7 +163,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       allow(pool).to receive(:map).and_return([mutation_result])
 
       output = capture_stderr_with_tty { runner.call }
-      expect(output).to match(/\[memory\] after batch.*MB/)
+      expect(output).to match(/\[memory\] after batch: 42\.5 MB/)
     end
   end
 end
