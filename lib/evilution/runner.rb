@@ -132,6 +132,7 @@ module Evilution
         results << result
         survived_count += 1 if result.survived?
         log_progress(index + 1, mutations.length, result.status)
+        log_mutation_diagnostics(result)
 
         if config.fail_fast? && survived_count >= config.fail_fast && index < mutations.length - 1
           truncated = true
@@ -169,6 +170,7 @@ module Evilution
         state[:survived_count] += 1 if result.survived?
         state[:completed] += 1
         log_progress(state[:completed], total, result.status)
+        log_mutation_diagnostics(result)
       end
 
       log_memory("after batch", "#{state[:completed]}/#{total} complete")
@@ -262,6 +264,18 @@ module Evilution
       msg = format("[memory] %<phase>s: %<rss>.1f MB", phase: phase, rss: rss)
       msg += " (#{context})" if context
       $stderr.write("#{msg}\n")
+    end
+
+    def log_mutation_diagnostics(result)
+      return unless config.verbose && !config.quiet
+
+      parts = []
+      parts << format("child_rss: %<mb>.1f MB", mb: result.child_rss_kb / 1024.0) if result.child_rss_kb
+      parts << format("delta: +%<mb>.1f MB", mb: result.memory_delta_kb / 1024.0) if result.memory_delta_kb
+      parts << format("heap_live_slots: %<slots>d", slots: GC.stat(:heap_live_slots))
+      return if parts.empty?
+
+      $stderr.write("[verbose] #{result.mutation}: #{parts.join(", ")}\n")
     end
 
     def build_reporter

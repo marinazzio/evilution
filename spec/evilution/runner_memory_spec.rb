@@ -94,6 +94,39 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       expect(output).to match(/1 subjects/)
       expect(output).to match(/1 mutations/)
     end
+
+    it "logs per-mutation child_rss_kb when available" do
+      result_with_rss = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :killed, duration: 0.1, child_rss_kb: 51_200
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(result_with_rss)
+
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*child_rss: 50\.0 MB/)
+    end
+
+    it "logs per-mutation memory_delta_kb when available" do
+      result_with_delta = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :killed, duration: 0.1, memory_delta_kb: 2400
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(result_with_delta)
+
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*delta: \+2\.3 MB/)
+    end
+
+    it "logs GC heap_live_slots in per-mutation output" do
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*heap_live_slots: \d+/)
+    end
+
+    it "does not log per-mutation diagnostics when no memory data" do
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).not_to match(/\[verbose\].*child_rss:/)
+      expect(output).not_to match(/\[verbose\].*delta:/)
+    end
   end
 
   context "with verbose disabled" do
