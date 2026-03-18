@@ -1077,25 +1077,51 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Isolation::InProcess).to have_received(:new)
     end
 
-    it "uses Fork when isolation is :auto and jobs>1" do
+    it "uses InProcess inside pool workers when isolation is :auto and jobs>1" do
       auto_config = Evilution::Config.new(
         target_files: ["lib/example.rb"], jobs: 2, quiet: true,
         baseline: false, skip_config_file: true
       )
 
-      isolator = instance_double(Evilution::Isolation::Fork)
-      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      in_process_isolator = instance_double(Evilution::Isolation::InProcess)
+      allow(Evilution::Isolation::InProcess).to receive(:new).and_return(in_process_isolator)
+      allow(in_process_isolator).to receive(:call).and_return(mutation_result)
+      allow(Evilution::Isolation::Fork).to receive(:new)
 
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
-      allow(pool).to receive(:map).and_return([mutation_result])
+      allow(pool).to receive(:map) do |batch, &block|
+        batch.map { |item| block.call(item) }
+      end
 
       described_class.new(config: auto_config).call
 
-      expect(Evilution::Isolation::Fork).to have_received(:new)
+      expect(in_process_isolator).to have_received(:call)
+      expect(Evilution::Isolation::Fork).not_to have_received(:new)
     end
 
-    it "uses Fork when isolation is :fork" do
+    it "uses InProcess inside pool workers even when isolation is :fork" do
+      fork_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"], isolation: :fork, jobs: 2, quiet: true,
+        baseline: false, skip_config_file: true
+      )
+
+      in_process_isolator = instance_double(Evilution::Isolation::InProcess)
+      allow(Evilution::Isolation::InProcess).to receive(:new).and_return(in_process_isolator)
+      allow(in_process_isolator).to receive(:call).and_return(mutation_result)
+
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+      allow(pool).to receive(:map) do |batch, &block|
+        batch.map { |item| block.call(item) }
+      end
+
+      described_class.new(config: fork_config).call
+
+      expect(in_process_isolator).to have_received(:call)
+    end
+
+    it "uses Fork when isolation is :fork and jobs=1" do
       fork_config = Evilution::Config.new(
         target_files: ["lib/example.rb"], isolation: :fork, quiet: true,
         baseline: false, skip_config_file: true
