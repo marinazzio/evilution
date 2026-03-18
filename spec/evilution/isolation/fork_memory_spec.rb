@@ -24,7 +24,7 @@ RSpec.describe Evilution::Isolation::Fork, "memory reporting", if: File.exist?("
     it "includes child_rss_kb in the result" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.child_rss_kb).to be_a(Integer)
       expect(result.child_rss_kb).to be > 0
@@ -33,7 +33,7 @@ RSpec.describe Evilution::Isolation::Fork, "memory reporting", if: File.exist?("
     it "reports child RSS for passed tests too" do
       test_command = ->(_m) { { passed: true } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.child_rss_kb).to be_a(Integer)
       expect(result.child_rss_kb).to be > 0
@@ -45,7 +45,7 @@ RSpec.describe Evilution::Isolation::Fork, "memory reporting", if: File.exist?("
         { passed: true }
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result.child_rss_kb).to be_nil
     end
@@ -53,7 +53,7 @@ RSpec.describe Evilution::Isolation::Fork, "memory reporting", if: File.exist?("
     it "returns nil child_rss_kb on error" do
       test_command = ->(_m) { raise "boom" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       # Error results may or may not have RSS depending on where the error occurred
       expect(result.child_rss_kb).to be_nil.or be_a(Integer)
