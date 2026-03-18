@@ -24,7 +24,10 @@ RSpec.describe Evilution::MCP::MutateTool do
       survived?: false,
       timeout?: false,
       error?: false,
-      test_command: "rspec spec/foo_spec.rb"
+      neutral?: false,
+      test_command: "rspec spec/foo_spec.rb",
+      child_rss_kb: nil,
+      memory_delta_kb: nil
     )
   end
 
@@ -43,7 +46,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       truncated?: false,
       survived_results: [],
       killed_results: [killed_result],
-      neutral_results: []
+      neutral_results: [],
+      peak_memory_mb: nil
     )
   end
 

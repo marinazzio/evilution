@@ -42,6 +42,7 @@ module Evilution
           duration: summary.duration.round(4)
         }
         data[:truncated] = true if summary.truncated?
+        data[:peak_memory_mb] = summary.peak_memory_mb.round(1) if summary.peak_memory_mb
         data
       end
 
@@ -57,6 +58,8 @@ module Evilution
         }
         detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
         detail[:test_command] = result.test_command if result.test_command
+        detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
+        detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
         detail
       end
     end
