@@ -62,6 +62,13 @@ module Evilution
       def neutral_results
         results.select(&:neutral?)
       end
+
+      def peak_memory_mb
+        rss_values = results.filter_map(&:child_rss_kb)
+        return nil if rss_values.empty?
+
+        rss_values.max / 1024.0
+      end
     end
   end
 end

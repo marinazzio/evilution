@@ -117,12 +117,24 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       expect(output).to match(/\[verbose\].*delta: \+2\.3 MB/)
     end
 
+    it "formats negative memory_delta_kb without double sign" do
+      result_with_negative_delta = Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :killed, duration: 0.1, memory_delta_kb: -1200
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(result_with_negative_delta)
+
+      output = capture_stderr_with_tty { runner.call }
+      expect(output).to match(/\[verbose\].*delta: -1\.2 MB/)
+      expect(output).not_to match(/\+-/)
+    end
+
     it "logs GC heap_live_slots in per-mutation output" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).to match(/\[verbose\].*heap_live_slots: \d+/)
     end
 
-    it "omits child_rss_kb and memory_delta_kb when unavailable" do
+    it "omits child_rss and delta fields when no memory data available" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).not_to match(/\[verbose\].*child_rss:/)
       expect(output).not_to match(/\[verbose\].*delta:/)

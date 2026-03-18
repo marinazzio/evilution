@@ -13,23 +13,9 @@ module Evilution
         lines << mutations_line(summary)
         lines << score_line(summary)
         lines << duration_line(summary)
-
-        if summary.survived_results.any?
-          lines << ""
-          lines << "Survived mutations:"
-          summary.survived_results.each do |result|
-            lines << format_survived(result)
-          end
-        end
-
-        if summary.neutral_results.any?
-          lines << ""
-          lines << "Neutral mutations (test already failing):"
-          summary.neutral_results.each do |result|
-            lines << format_neutral(result)
-          end
-        end
-
+        lines << peak_memory_line(summary) if summary.peak_memory_mb
+        append_survived(lines, summary)
+        append_neutral(lines, summary)
         lines << ""
         lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
         lines << result_line(summary)
@@ -38,6 +24,22 @@ module Evilution
       end
 
       private
+
+      def append_survived(lines, summary)
+        return unless summary.survived_results.any?
+
+        lines << ""
+        lines << "Survived mutations:"
+        summary.survived_results.each { |result| lines << format_survived(result) }
+      end
+
+      def append_neutral(lines, summary)
+        return unless summary.neutral_results.any?
+
+        lines << ""
+        lines << "Neutral mutations (test already failing):"
+        summary.neutral_results.each { |result| lines << format_neutral(result) }
+      end
 
       def header
         "Evilution v#{Evilution::VERSION} — Mutation Testing Results"
@@ -78,6 +80,10 @@ module Evilution
         score_pct = format_pct(summary.score)
         threshold_pct = format_pct(min_score)
         "Result: #{pass_fail} (score #{score_pct} #{pass_fail == "PASS" ? ">=" : "<"} #{threshold_pct})"
+      end
+
+      def peak_memory_line(summary)
+        format("Peak memory: %<mb>.1f MB", mb: summary.peak_memory_mb)
       end
 
       def format_pct(value)
