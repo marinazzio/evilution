@@ -261,8 +261,10 @@ module Evilution
       rss = Memory.rss_mb
       return unless rss
 
+      gc = gc_stats_string
       msg = format("[memory] %<phase>s: %<rss>.1f MB", phase: phase, rss: rss)
-      msg += " (#{context})" if context
+      context = [context, gc].compact.join(", ")
+      msg += " (#{context})" unless context.empty?
       $stderr.write("#{msg}\n")
     end
 
@@ -277,11 +279,21 @@ module Evilution
         parts << format("delta: %<sign>s%<mb>.1f MB", sign: sign, mb: result.memory_delta_kb / 1024.0)
       end
 
-      parts << format("heap_live_slots: %<slots>d", slots: GC.stat(:heap_live_slots))
+      parts << gc_stats_string
 
       return if parts.empty?
 
       $stderr.write("[verbose] #{result.mutation}: #{parts.join(", ")}\n")
+    end
+
+    def gc_stats_string
+      stats = GC.stat
+      format(
+        "heap_live_slots: %<live>d, allocated: %<alloc>d, freed: %<freed>d",
+        live: stats[:heap_live_slots],
+        alloc: stats[:total_allocated_objects],
+        freed: stats[:total_freed_objects]
+      )
     end
 
     def build_reporter
