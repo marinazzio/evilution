@@ -53,8 +53,7 @@ module Evilution
 
       def execute_in_child(mutation, test_command)
         result = test_command.call(mutation)
-        result[:child_rss_kb] = Memory.rss_kb
-        result
+        { child_rss_kb: Memory.rss_kb }.merge(result)
       rescue StandardError => e
         { passed: false, error: e.message }
       end
