@@ -57,5 +57,23 @@ RSpec.describe Evilution::Isolation::InProcess, "memory reporting" do
       expect(result).to be_error
       expect(result.memory_delta_kb).to eq(2400)
     end
+
+    it "includes child_rss_kb from post-execution RSS" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.child_rss_kb).to eq(102_400)
+    end
+
+    it "returns nil child_rss_kb when RSS unavailable" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(nil)
+
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.child_rss_kb).to be_nil
+    end
   end
 end

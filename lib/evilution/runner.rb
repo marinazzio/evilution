@@ -146,6 +146,7 @@ module Evilution
     def run_mutations_parallel(mutations, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
+      worker_isolator = Isolation::InProcess.new
       spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
       state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
@@ -154,7 +155,7 @@ module Evilution
 
         batch_results = pool.map(batch) do |mutation|
           test_command = ->(m) { integration.call(m) }
-          isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+          worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
         process_batch(batch_results, baseline_result, spec_resolver, mutations.length, state)
@@ -210,12 +211,9 @@ module Evilution
     end
 
     def resolve_isolation
-      case config.isolation
-      when :auto
-        config.jobs > 1 ? :fork : :in_process
-      else
-        config.isolation
-      end
+      return :fork if config.isolation == :fork
+
+      :in_process
     end
 
     def build_integration
