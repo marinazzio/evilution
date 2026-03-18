@@ -4,6 +4,7 @@ require_relative "config"
 require_relative "ast/parser"
 require_relative "mutator/registry"
 require_relative "isolation/fork"
+require_relative "isolation/in_process"
 require_relative "integration/rspec"
 require_relative "reporter/json"
 require_relative "reporter/cli"
@@ -24,7 +25,7 @@ module Evilution
       @config = config
       @parser = AST::Parser.new
       @registry = Mutator::Registry.default
-      @isolator = Isolation::Fork.new
+      @isolator = build_isolator
     end
 
     def call
@@ -187,6 +188,22 @@ module Evilution
 
     def should_truncate?(survived_count, completed, total)
       config.fail_fast? && survived_count >= config.fail_fast && completed < total
+    end
+
+    def build_isolator
+      case resolve_isolation
+      when :fork then Isolation::Fork.new
+      when :in_process then Isolation::InProcess.new
+      end
+    end
+
+    def resolve_isolation
+      case config.isolation
+      when :auto
+        config.jobs > 1 ? :fork : :in_process
+      else
+        config.isolation
+      end
     end
 
     def build_integration
