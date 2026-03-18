@@ -1106,6 +1106,10 @@ RSpec.describe Evilution::Runner do
         baseline: false, skip_config_file: true
       )
 
+      fork_isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(fork_isolator)
+      allow(fork_isolator).to receive(:call)
+
       in_process_isolator = instance_double(Evilution::Isolation::InProcess)
       allow(Evilution::Isolation::InProcess).to receive(:new).and_return(in_process_isolator)
       allow(in_process_isolator).to receive(:call).and_return(mutation_result)
@@ -1119,6 +1123,7 @@ RSpec.describe Evilution::Runner do
       described_class.new(config: fork_config).call
 
       expect(in_process_isolator).to have_received(:call)
+      expect(fork_isolator).not_to have_received(:call)
     end
 
     it "uses Fork when isolation is :fork and jobs=1" do
