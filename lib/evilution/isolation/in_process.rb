@@ -18,7 +18,6 @@ module Evilution
       private
 
       def execute_with_timeout(mutation, test_command, timeout)
-        saved_features = $LOADED_FEATURES.dup
         result = Timeout.timeout(timeout) do
           suppress_output { test_command.call(mutation) }
         end
@@ -27,8 +26,6 @@ module Evilution
         { timeout: true }
       rescue StandardError => e
         { timeout: false, passed: false, error: e.message }
-      ensure
-        cleanup_loaded_features(saved_features)
       end
 
       def suppress_output
@@ -40,11 +37,6 @@ module Evilution
       ensure
         $stdout = saved_stdout
         $stderr = saved_stderr
-      end
-
-      def cleanup_loaded_features(saved_features)
-        added = $LOADED_FEATURES - saved_features
-        added.each { |f| $LOADED_FEATURES.delete(f) }
       end
 
       def build_mutation_result(mutation, result, duration)

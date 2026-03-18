@@ -359,6 +359,11 @@ RSpec.describe Evilution::Config do
       expect { described_class.new(isolation: :invalid, skip_config_file: true) }
         .to raise_error(Evilution::ConfigError, /isolation must be/)
     end
+
+    it "rejects nil values" do
+      expect { described_class.new(isolation: nil, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /isolation must be/)
+    end
   end
 
   describe "immutability" do

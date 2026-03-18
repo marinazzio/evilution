@@ -141,6 +141,8 @@ module Evilution
     end
 
     def validate_isolation(value)
+      raise ConfigError, "isolation must be auto, fork, or in_process, got nil" if value.nil?
+
       value = value.to_sym
       raise ConfigError, "isolation must be auto, fork, or in_process, got #{value.inspect}" unless %i[auto fork in_process].include?(value)
 

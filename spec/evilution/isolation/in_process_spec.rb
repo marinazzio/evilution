@@ -122,29 +122,13 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect($stderr).to eq(original_stderr)
     end
 
-    it "cleans up $LOADED_FEATURES added during execution" do
-      marker = "/tmp/evilution_in_process_test_marker_#{Process.pid}.rb"
-      File.write(marker, "# test marker")
-
-      test_command = lambda { |_m|
-        require marker
-        { passed: false }
-      }
-
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
-
-      expect($LOADED_FEATURES).not_to include(marker)
-    ensure
-      FileUtils.rm_f(marker)
-    end
-
-    it "does not remove pre-existing $LOADED_FEATURES" do
+    it "does not interfere with $LOADED_FEATURES" do
       features_before = $LOADED_FEATURES.dup
 
       test_command = ->(_m) { { passed: false } }
       isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
 
-      expect($LOADED_FEATURES).to include(*features_before)
+      expect($LOADED_FEATURES).to eq(features_before)
     end
   end
 end
