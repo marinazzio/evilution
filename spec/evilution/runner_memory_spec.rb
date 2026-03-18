@@ -122,7 +122,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       expect(output).to match(/\[verbose\].*heap_live_slots: \d+/)
     end
 
-    it "does not log per-mutation diagnostics when no memory data" do
+    it "omits child_rss_kb and memory_delta_kb when unavailable" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).not_to match(/\[verbose\].*child_rss:/)
       expect(output).not_to match(/\[verbose\].*delta:/)
