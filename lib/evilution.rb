@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "evilution/version"
+require_relative "evilution/memory"
 require_relative "evilution/config"
 require_relative "evilution/subject"
 require_relative "evilution/mutation"
