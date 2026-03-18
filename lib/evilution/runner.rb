@@ -190,7 +190,9 @@ module Evilution
         mutation: result.mutation,
         status: :neutral,
         duration: result.duration,
-        test_command: result.test_command
+        test_command: result.test_command,
+        child_rss_kb: result.child_rss_kb,
+        memory_delta_kb: result.memory_delta_kb
       )
     end
 

@@ -5,9 +5,11 @@ module Evilution
     class MutationResult
       STATUSES = %i[killed survived timeout error neutral].freeze
 
-      attr_reader :mutation, :status, :duration, :killing_test, :test_command, :child_rss_kb
+      attr_reader :mutation, :status, :duration, :killing_test, :test_command,
+                  :child_rss_kb, :memory_delta_kb
 
-      def initialize(mutation:, status:, duration: 0.0, killing_test: nil, test_command: nil, child_rss_kb: nil)
+      def initialize(mutation:, status:, duration: 0.0, killing_test: nil, test_command: nil,
+                     child_rss_kb: nil, memory_delta_kb: nil)
         raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
         @mutation = mutation
@@ -16,6 +18,7 @@ module Evilution
         @killing_test = killing_test
         @test_command = test_command
         @child_rss_kb = child_rss_kb
+        @memory_delta_kb = memory_delta_kb
         freeze
       end
 
