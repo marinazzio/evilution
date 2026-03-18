@@ -48,5 +48,14 @@ RSpec.describe Evilution::Isolation::InProcess, "memory reporting" do
 
       expect(result.memory_delta_kb).to be_nil
     end
+
+    it "reports memory delta on error" do
+      test_command = ->(_m) { raise "boom" }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.memory_delta_kb).to eq(2400)
+    end
   end
 end
