@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "tmpdir"
+require_relative "../memory"
 
 module Evilution
   module Isolation
@@ -51,7 +52,9 @@ module Evilution
       end
 
       def execute_in_child(mutation, test_command)
-        test_command.call(mutation)
+        result = test_command.call(mutation)
+        result[:child_rss_kb] = Memory.rss_kb
+        result
       rescue StandardError => e
         { passed: false, error: e.message }
       end
@@ -98,7 +101,8 @@ module Evilution
           mutation: mutation,
           status: status,
           duration: duration,
-          test_command: result[:test_command]
+          test_command: result[:test_command],
+          child_rss_kb: result[:child_rss_kb]
         )
       end
     end
