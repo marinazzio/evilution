@@ -180,6 +180,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -244,6 +245,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -284,6 +286,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       no_match_runner = described_class.new(config: no_match_config)
@@ -301,6 +304,7 @@ RSpec.describe Evilution::Runner do
         quiet: true,
         baseline: false,
         diff_base: "HEAD~1",
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -351,6 +355,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -382,6 +387,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       empty_runner = described_class.new(config: empty_config)
@@ -437,6 +443,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -478,6 +485,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       one_mutation_runner = described_class.new(config: one_mutation_config)
@@ -502,6 +510,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        isolation: :fork,
         skip_config_file: true
       )
       fail_fast_runner = described_class.new(config: fail_fast_config)
@@ -541,6 +550,7 @@ RSpec.describe Evilution::Runner do
         integration: :minitest,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -571,6 +581,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -606,6 +617,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       explicit_runner = described_class.new(config: explicit_config)
@@ -628,6 +640,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       no_files_runner = described_class.new(config: no_files_config)
@@ -643,6 +656,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -769,6 +783,7 @@ RSpec.describe Evilution::Runner do
         format: :json,
         timeout: 5,
         quiet: true,
+        isolation: :fork,
         skip_config_file: true
       )
       ff_runner = described_class.new(config: ff_config)
@@ -787,6 +802,7 @@ RSpec.describe Evilution::Runner do
           timeout: 5,
           quiet: true,
           baseline: false,
+          isolation: :fork,
           skip_config_file: true
         )
       end
@@ -811,6 +827,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: false,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -822,6 +839,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: true,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -833,6 +851,7 @@ RSpec.describe Evilution::Runner do
         timeout: 5,
         quiet: false,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -930,6 +949,7 @@ RSpec.describe Evilution::Runner do
         quiet: true,
         jobs: 2,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
     end
@@ -967,6 +987,7 @@ RSpec.describe Evilution::Runner do
         quiet: true,
         jobs: 1,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
       sequential_runner = described_class.new(config: sequential_config)
@@ -1011,6 +1032,7 @@ RSpec.describe Evilution::Runner do
         jobs: 1,
         fail_fast: 1,
         baseline: false,
+        isolation: :fork,
         skip_config_file: true
       )
 
@@ -1025,6 +1047,81 @@ RSpec.describe Evilution::Runner do
 
       expect(result.truncated?).to be true
       expect(result.total).to be < 3
+    end
+  end
+
+  describe "isolation selection" do
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+    end
+
+    it "uses InProcess when isolation is :auto and jobs=1" do
+      auto_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"], jobs: 1, quiet: true,
+        baseline: false, skip_config_file: true
+      )
+
+      isolator = instance_double(Evilution::Isolation::InProcess)
+      allow(Evilution::Isolation::InProcess).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      described_class.new(config: auto_config).call
+
+      expect(Evilution::Isolation::InProcess).to have_received(:new)
+    end
+
+    it "uses Fork when isolation is :auto and jobs>1" do
+      auto_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"], jobs: 2, quiet: true,
+        baseline: false, skip_config_file: true
+      )
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+      allow(pool).to receive(:map).and_return([mutation_result])
+
+      described_class.new(config: auto_config).call
+
+      expect(Evilution::Isolation::Fork).to have_received(:new)
+    end
+
+    it "uses Fork when isolation is :fork" do
+      fork_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"], isolation: :fork, quiet: true,
+        baseline: false, skip_config_file: true
+      )
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      described_class.new(config: fork_config).call
+
+      expect(Evilution::Isolation::Fork).to have_received(:new)
+    end
+
+    it "uses InProcess when isolation is :in_process" do
+      ip_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"], isolation: :in_process, quiet: true,
+        baseline: false, skip_config_file: true
+      )
+
+      isolator = instance_double(Evilution::Isolation::InProcess)
+      allow(Evilution::Isolation::InProcess).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      described_class.new(config: ip_config).call
+
+      expect(Evilution::Isolation::InProcess).to have_received(:new)
     end
   end
 end

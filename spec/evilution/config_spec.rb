@@ -334,6 +334,33 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "isolation validation" do
+    it "defaults to :auto" do
+      config = described_class.new(skip_config_file: true)
+      expect(config.isolation).to eq(:auto)
+    end
+
+    it "accepts :fork" do
+      config = described_class.new(isolation: :fork, skip_config_file: true)
+      expect(config.isolation).to eq(:fork)
+    end
+
+    it "accepts :in_process" do
+      config = described_class.new(isolation: :in_process, skip_config_file: true)
+      expect(config.isolation).to eq(:in_process)
+    end
+
+    it "accepts string values and converts to symbol" do
+      config = described_class.new(isolation: "fork", skip_config_file: true)
+      expect(config.isolation).to eq(:fork)
+    end
+
+    it "rejects invalid values" do
+      expect { described_class.new(isolation: :invalid, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /isolation must be/)
+    end
+  end
+
   describe "immutability" do
     it "is frozen after initialization" do
       config = described_class.new(skip_config_file: true)
