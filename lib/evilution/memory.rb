@@ -12,7 +12,10 @@ module Evilution
     end
 
     def rss_mb
-      rss_kb / 1024.0
+      kb = rss_kb
+      return nil unless kb
+
+      kb / 1024.0
     end
 
     def rss_kb_for(pid)
@@ -30,7 +33,8 @@ module Evilution
       before = rss_kb
       result = yield
       after = rss_kb
-      [result, after - before]
+      delta_kb = before && after ? after - before : nil
+      [result, delta_kb]
     end
   end
 end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Evilution::Memory do
+RSpec.describe Evilution::Memory, if: File.exist?("/proc/self/status") do
   describe ".rss_mb" do
     it "returns a positive float" do
       result = described_class.rss_mb
@@ -49,9 +49,32 @@ RSpec.describe Evilution::Memory do
     end
 
     it "measures memory change from an allocation" do
-      _result, delta_kb = described_class.delta { Array.new(100_000) { "x" * 1000 } }
-      # Allocating ~100MB of strings should show positive delta
+      GC.disable
+      held = nil
+      _result, delta_kb = described_class.delta { held = Array.new(100_000) { "x" * 1000 } }
       expect(delta_kb).to be > 0
+    ensure
+      held = nil
+      GC.enable
+      GC.start
+    end
+  end
+end
+
+RSpec.describe Evilution::Memory, "on unsupported platforms" do
+  describe ".rss_mb" do
+    it "returns nil when rss_kb is unavailable" do
+      allow(described_class).to receive(:rss_kb).and_return(nil)
+      expect(described_class.rss_mb).to be_nil
+    end
+  end
+
+  describe ".delta" do
+    it "returns nil delta when rss_kb is unavailable" do
+      allow(described_class).to receive(:rss_kb).and_return(nil)
+      result, delta_kb = described_class.delta { 42 }
+      expect(result).to eq(42)
+      expect(delta_kb).to be_nil
     end
   end
 end
