@@ -86,6 +86,45 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    context "nested module fallback" do
+      it "falls back to parent spec when nested spec does not exist" do
+        create_file("spec/models/game_spec.rb")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game_spec.rb")
+      end
+
+      it "prefers exact match over parent fallback" do
+        create_file("spec/models/game/round_spec.rb")
+        create_file("spec/models/game_spec.rb")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game/round_spec.rb")
+      end
+
+      it "falls back to parent spec for deeply nested paths" do
+        create_file("spec/services/payment_spec.rb")
+
+        expect(resolver.call("app/services/payment/stripe/charge.rb")).to eq("spec/services/payment_spec.rb")
+      end
+
+      it "falls back through multiple parent levels" do
+        create_file("spec/foo_spec.rb")
+
+        expect(resolver.call("lib/foo/bar/baz.rb")).to eq("spec/foo_spec.rb")
+      end
+
+      it "does not fall back to spec directory root" do
+        expect(resolver.call("lib/foo/bar/baz.rb")).to be_nil
+      end
+    end
+
+    context "Rails concerns" do
+      it "resolves app/models/concerns/trackable.rb to spec/models/concerns/trackable_spec.rb" do
+        create_file("spec/models/concerns/trackable_spec.rb")
+
+        expect(resolver.call("app/models/concerns/trackable.rb")).to eq("spec/models/concerns/trackable_spec.rb")
+      end
+    end
+
     context "no matching spec" do
       it "returns nil when no spec file exists" do
         expect(resolver.call("lib/foo/bar.rb")).to be_nil
