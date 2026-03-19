@@ -157,13 +157,14 @@ module Evilution
       mutations.each_slice(config.jobs) do |batch|
         break if state[:truncated]
 
-        batch_results = pool.map(batch) do |mutation|
+        compact_results = pool.map(batch) do |mutation|
           test_command = ->(m) { integration.call(m) }
-          worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+          result = worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+          compact_result(result)
         end
 
         batch.each(&:strip_sources!)
-        batch_results.each { |r| r.mutation.strip_sources! }
+        batch_results = rebuild_results(batch, compact_results)
         process_batch(batch_results, baseline_result, spec_resolver, state)
       end
 
@@ -203,6 +204,31 @@ module Evilution
         child_rss_kb: result.child_rss_kb,
         memory_delta_kb: result.memory_delta_kb
       )
+    end
+
+    def compact_result(result)
+      {
+        status: result.status,
+        duration: result.duration,
+        killing_test: result.killing_test,
+        test_command: result.test_command,
+        child_rss_kb: result.child_rss_kb,
+        memory_delta_kb: result.memory_delta_kb
+      }
+    end
+
+    def rebuild_results(batch, compact_results)
+      batch.zip(compact_results).map do |mutation, data|
+        Result::MutationResult.new(
+          mutation: mutation,
+          status: data[:status],
+          duration: data[:duration],
+          killing_test: data[:killing_test],
+          test_command: data[:test_command],
+          child_rss_kb: data[:child_rss_kb],
+          memory_delta_kb: data[:memory_delta_kb]
+        )
+      end
     end
 
     def should_truncate?(survived_count)

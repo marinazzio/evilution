@@ -995,7 +995,11 @@ RSpec.describe Evilution::Runner do
     it "returns all results when using parallel execution" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
-      allow(pool).to receive(:map).and_return([mutation_result, mutation_result2])
+      compact = [
+        { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
+        { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
+      ]
+      allow(pool).to receive(:map).and_return(compact)
 
       parallel_runner = described_class.new(config: parallel_config)
       result = parallel_runner.call
@@ -1024,7 +1028,11 @@ RSpec.describe Evilution::Runner do
     it "uses Parallel::Pool when jobs > 1" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
-      allow(pool).to receive(:map).and_return([mutation_result])
+      compact = [
+        { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
+        { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
+      ]
+      allow(pool).to receive(:map).and_return(compact)
 
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
@@ -1035,13 +1043,42 @@ RSpec.describe Evilution::Runner do
     it "strips source strings from mutations in parallel path" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
-      allow(pool).to receive(:map).and_return([mutation_result, mutation_result2])
+      compact = [
+        { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
+        { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
+      ]
+      allow(pool).to receive(:map).and_return(compact)
 
-      expect(mutation).to receive(:strip_sources!).at_least(:once)
-      expect(mutation2).to receive(:strip_sources!).at_least(:once)
+      expect(mutation).to receive(:strip_sources!)
+      expect(mutation2).to receive(:strip_sources!)
 
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
+    end
+
+    it "sends compact hashes through the pool instead of full MutationResults" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
+
+      captured_block = nil
+      allow(pool).to receive(:map) do |batch, &block|
+        captured_block = block
+        batch.map { |item| block.call(item) }
+      end
+
+      worker_isolator = instance_double(Evilution::Isolation::InProcess)
+      allow(Evilution::Isolation::InProcess).to receive(:new).and_return(worker_isolator)
+      allow(worker_isolator).to receive(:call).and_return(mutation_result, mutation_result2)
+
+      parallel_runner = described_class.new(config: parallel_config)
+      parallel_runner.call
+
+      # Verify block returns a hash, not a MutationResult
+      allow(worker_isolator).to receive(:call).and_return(mutation_result)
+      result = captured_block.call(mutation)
+      expect(result).to be_a(Hash)
+      expect(result).to have_key(:status)
+      expect(result).not_to have_key(:mutation)
     end
 
     it "respects fail_fast and truncates early" do

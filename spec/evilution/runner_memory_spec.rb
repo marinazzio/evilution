@@ -217,7 +217,8 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
     it "logs memory after each batch" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
-      allow(pool).to receive(:map).and_return([mutation_result])
+      compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
+      allow(pool).to receive(:map).and_return(compact)
 
       output = capture_stderr_with_tty { runner.call }
       expect(output).to match(/\[memory\] after batch: 42\.5 MB/)
