@@ -101,6 +101,12 @@ RSpec.describe Evilution::Runner do
       runner.call
     end
 
+    it "strips source strings from mutations after execution" do
+      expect(mutation).to receive(:strip_sources!)
+
+      runner.call
+    end
+
     context "with multiple mutations" do
       let(:mutation2) do
         double(
@@ -1013,6 +1019,18 @@ RSpec.describe Evilution::Runner do
       parallel_runner.call
 
       expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2)
+    end
+
+    it "strips source strings from mutations in parallel path" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2).and_return(pool)
+      allow(pool).to receive(:map).and_return([mutation_result, mutation_result2])
+
+      expect(mutation).to receive(:strip_sources!).at_least(:once)
+      expect(mutation2).to receive(:strip_sources!).at_least(:once)
+
+      parallel_runner = described_class.new(config: parallel_config)
+      parallel_runner.call
     end
 
     it "respects fail_fast and truncates early" do

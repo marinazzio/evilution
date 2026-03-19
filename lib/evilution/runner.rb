@@ -159,6 +159,7 @@ module Evilution
         end
 
         batch.each(&:strip_sources!)
+        batch_results.each { |r| r.mutation.strip_sources! }
         process_batch(batch_results, baseline_result, spec_resolver, state)
       end
 
