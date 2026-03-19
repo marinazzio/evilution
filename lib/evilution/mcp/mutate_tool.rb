@@ -50,8 +50,9 @@ module Evilution
           runner = Runner.new(config: config)
           summary = runner.call
           report = Reporter::JSON.new.call(summary)
+          compact = trim_report(report)
 
-          ::MCP::Tool::Response.new([{ type: "text", text: report }])
+          ::MCP::Tool::Response.new([{ type: "text", text: compact }])
         rescue Evilution::Error => e
           error_payload = build_error_payload(e)
           ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(error_payload) }], error: true)
@@ -96,6 +97,19 @@ module Evilution
           opts[:fail_fast] = fail_fast if fail_fast
           opts[:spec_files] = spec if spec
           opts
+        end
+
+        def trim_report(json_string)
+          data = ::JSON.parse(json_string)
+          strip_diffs(data, "killed")
+          strip_diffs(data, "neutral")
+          ::JSON.generate(data)
+        end
+
+        def strip_diffs(data, key)
+          return unless data[key]
+
+          data[key].each { |entry| entry.delete("diff") }
         end
 
         def build_error_payload(error)
