@@ -39,9 +39,20 @@ RSpec.describe Evilution::Subject do
     end
   end
 
-  describe "immutability" do
-    it "is frozen after initialization" do
-      expect(subj).to be_frozen
+  describe "#release_node!" do
+    it "sets node to nil" do
+      subj.release_node!
+
+      expect(subj.node).to be_nil
+    end
+
+    it "preserves other attributes" do
+      subj.release_node!
+
+      expect(subj.name).to eq("User#adult?")
+      expect(subj.file_path).to eq("lib/user.rb")
+      expect(subj.line_number).to eq(9)
+      expect(subj.source).to include("@age >= 18")
     end
   end
 end

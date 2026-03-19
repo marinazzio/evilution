@@ -10,7 +10,10 @@ module Evilution
       @line_number = line_number
       @source = source
       @node = node
-      freeze
+    end
+
+    def release_node!
+      @node = nil
     end
 
     def to_s

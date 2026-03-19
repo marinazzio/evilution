@@ -15,7 +15,7 @@ RSpec.describe Evilution::Runner do
     )
   end
 
-  let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3) }
+  let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3, release_node!: nil) }
 
   let(:mutation) do
     double(
@@ -107,6 +107,12 @@ RSpec.describe Evilution::Runner do
       runner.call
     end
 
+    it "releases AST nodes from subjects after mutation generation" do
+      expect(subject_obj).to receive(:release_node!)
+
+      runner.call
+    end
+
     context "with multiple mutations" do
       let(:mutation2) do
         double(
@@ -162,7 +168,8 @@ RSpec.describe Evilution::Runner do
              name: "Example#foo",
              file_path: "lib/example.rb",
              line_number: 20,
-             source: "def foo\n  x + 1\nend")
+             source: "def foo\n  x + 1\nend",
+             release_node!: nil)
     end
 
     let(:subject_outside_range) do
@@ -170,7 +177,8 @@ RSpec.describe Evilution::Runner do
              name: "Example#bar",
              file_path: "lib/example.rb",
              line_number: 50,
-             source: "def bar\n  y\nend")
+             source: "def bar\n  y\nend",
+             release_node!: nil)
     end
 
     let(:subject_other_file) do
@@ -178,7 +186,8 @@ RSpec.describe Evilution::Runner do
              name: "Other#baz",
              file_path: "lib/other.rb",
              line_number: 1,
-             source: "def baz\n  z\nend")
+             source: "def baz\n  z\nend",
+             release_node!: nil)
     end
 
     let(:config) do
@@ -236,14 +245,16 @@ RSpec.describe Evilution::Runner do
       double("Subject",
              name: "Example#foo",
              file_path: "lib/example.rb",
-             line_number: 3)
+             line_number: 3,
+             release_node!: nil)
     end
 
     let(:non_matching_subject) do
       double("Subject",
              name: "Example#bar",
              file_path: "lib/example.rb",
-             line_number: 10)
+             line_number: 10,
+             release_node!: nil)
     end
 
     let(:config) do
@@ -1192,8 +1203,8 @@ RSpec.describe Evilution::Runner do
       )
     end
 
-    let(:subject_a) { double("SubjectA", name: "A#foo", file_path: "lib/example.rb", line_number: 1) }
-    let(:subject_b) { double("SubjectB", name: "B#bar", file_path: "lib/example.rb", line_number: 10) }
+    let(:subject_a) { double("SubjectA", name: "A#foo", file_path: "lib/example.rb", line_number: 1, release_node!: nil) }
+    let(:subject_b) { double("SubjectB", name: "B#bar", file_path: "lib/example.rb", line_number: 10, release_node!: nil) }
 
     let(:mutation_a) do
       double("MutationA",
