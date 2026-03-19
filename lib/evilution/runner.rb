@@ -92,7 +92,7 @@ module Evilution
     end
 
     def generate_mutations(subjects)
-      subjects.lazy.flat_map do |subject|
+      subjects.flat_map do |subject|
         mutations = registry.mutations_for(subject)
         subject.release_node!
         mutations
