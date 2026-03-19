@@ -149,5 +149,197 @@ RSpec.describe Evilution::MCP::MutateTool do
       expect(parsed["error"]["type"]).to eq("parse_error")
       expect(parsed["error"]["message"]).to include("invalid line range")
     end
+
+    context "response trimming" do
+      it "strips diffs from killed mutations" do
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        killed_entry = parsed["killed"].first
+        expect(killed_entry).not_to have_key("diff")
+        expect(killed_entry["operator"]).to eq("arithmetic_replacement")
+        expect(killed_entry["file"]).to eq("lib/foo.rb")
+        expect(killed_entry["line"]).to eq(10)
+      end
+
+      it "preserves timed_out entries with full details" do
+        timed_out_result = instance_double(
+          Evilution::Result::MutationResult,
+          mutation: mutation,
+          status: :timeout,
+          duration: 30.0,
+          killed?: false,
+          survived?: false,
+          timeout?: true,
+          error?: false,
+          neutral?: false,
+          test_command: "rspec spec/foo_spec.rb",
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+        timed_out_summary = instance_double(
+          Evilution::Result::Summary,
+          results: [timed_out_result],
+          total: 1,
+          killed: 0,
+          survived: 0,
+          timed_out: 1,
+          errors: 0,
+          neutral: 0,
+          score: 0.0,
+          duration: 30.0,
+          truncated?: false,
+          survived_results: [],
+          killed_results: [],
+          neutral_results: [],
+          peak_memory_mb: nil
+        )
+        allow(runner).to receive(:call).and_return(timed_out_summary)
+
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["timed_out"].first["diff"]).to eq("- a + b\n+ a - b")
+      end
+
+      it "preserves errors entries with full details" do
+        error_result = instance_double(
+          Evilution::Result::MutationResult,
+          mutation: mutation,
+          status: :error,
+          duration: 0.05,
+          killed?: false,
+          survived?: false,
+          timeout?: false,
+          error?: true,
+          neutral?: false,
+          test_command: "rspec spec/foo_spec.rb",
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+        error_summary = instance_double(
+          Evilution::Result::Summary,
+          results: [error_result],
+          total: 1,
+          killed: 0,
+          survived: 0,
+          timed_out: 0,
+          errors: 1,
+          neutral: 0,
+          score: 0.0,
+          duration: 0.05,
+          truncated?: false,
+          survived_results: [],
+          killed_results: [],
+          neutral_results: [],
+          peak_memory_mb: nil
+        )
+        allow(runner).to receive(:call).and_return(error_summary)
+
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["errors"].first["diff"]).to eq("- a + b\n+ a - b")
+      end
+
+      it "strips diffs from neutral mutations" do
+        neutral_result = instance_double(
+          Evilution::Result::MutationResult,
+          mutation: mutation,
+          status: :neutral,
+          duration: 0.1,
+          killed?: false,
+          survived?: false,
+          timeout?: false,
+          error?: false,
+          neutral?: true,
+          test_command: "rspec spec/foo_spec.rb",
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+        neutral_summary = instance_double(
+          Evilution::Result::Summary,
+          results: [neutral_result],
+          total: 1,
+          killed: 0,
+          survived: 0,
+          timed_out: 0,
+          errors: 0,
+          neutral: 1,
+          score: 0.0,
+          duration: 0.1,
+          truncated?: false,
+          survived_results: [],
+          killed_results: [],
+          neutral_results: [neutral_result],
+          peak_memory_mb: nil
+        )
+        allow(runner).to receive(:call).and_return(neutral_summary)
+
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        neutral_entry = parsed["neutral"].first
+        expect(neutral_entry).not_to have_key("diff")
+        expect(neutral_entry["operator"]).to eq("arithmetic_replacement")
+      end
+
+      it "preserves survived mutation details with diffs" do
+        survived_mutation = instance_double(
+          Evilution::Mutation,
+          operator_name: "statement_deletion",
+          file_path: "lib/foo.rb",
+          line: 5,
+          diff: "- x = 1\n+ "
+        )
+        survived_result = instance_double(
+          Evilution::Result::MutationResult,
+          mutation: survived_mutation,
+          status: :survived,
+          duration: 0.1,
+          killed?: false,
+          survived?: true,
+          timeout?: false,
+          error?: false,
+          neutral?: false,
+          test_command: "rspec spec/foo_spec.rb",
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+        survived_summary = instance_double(
+          Evilution::Result::Summary,
+          results: [survived_result],
+          total: 1,
+          killed: 0,
+          survived: 1,
+          timed_out: 0,
+          errors: 0,
+          neutral: 0,
+          score: 0.0,
+          duration: 0.5,
+          truncated?: false,
+          survived_results: [survived_result],
+          killed_results: [],
+          neutral_results: [],
+          peak_memory_mb: nil
+        )
+        allow(runner).to receive(:call).and_return(survived_summary)
+
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["survived"].length).to eq(1)
+        expect(parsed["survived"].first["diff"]).to eq("- x = 1\n+ ")
+      end
+
+      it "preserves summary counts" do
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["summary"]["total"]).to eq(1)
+        expect(parsed["summary"]["killed"]).to eq(1)
+        expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
   end
 end
