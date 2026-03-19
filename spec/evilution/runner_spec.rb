@@ -27,7 +27,8 @@ RSpec.describe Evilution::Runner do
       file_path: "lib/example.rb",
       line: 3,
       column: 4,
-      diff: "- a >= b\n+ a > b"
+      diff: "- a >= b\n+ a > b",
+      strip_sources!: nil
     )
   end
 
@@ -111,7 +112,8 @@ RSpec.describe Evilution::Runner do
           file_path: "lib/example.rb",
           line: 5,
           column: 0,
-          diff: "- x\n+ nil"
+          diff: "- x\n+ nil",
+          strip_sources!: nil
         )
       end
 
@@ -418,7 +420,8 @@ RSpec.describe Evilution::Runner do
         file_path: "lib/example.rb",
         line: 5,
         column: 0,
-        diff: "- x\n+ nil"
+        diff: "- x\n+ nil",
+        strip_sources!: nil
       )
     end
 
@@ -432,7 +435,8 @@ RSpec.describe Evilution::Runner do
         file_path: "lib/example.rb",
         line: 7,
         column: 0,
-        diff: "- true\n+ false"
+        diff: "- true\n+ false",
+        strip_sources!: nil
       )
     end
 
@@ -754,7 +758,8 @@ RSpec.describe Evilution::Runner do
         file_path: "lib/example.rb",
         line: 5,
         column: 0,
-        diff: "- x\n+ nil"
+        diff: "- x\n+ nil",
+        strip_sources!: nil
       )
       survived2 = Evilution::Result::MutationResult.new(
         mutation: mutation2, status: :survived, duration: 0.1
@@ -930,7 +935,8 @@ RSpec.describe Evilution::Runner do
         file_path: "lib/example.rb",
         line: 5,
         column: 4,
-        diff: "- true\n+ false"
+        diff: "- true\n+ false",
+        strip_sources!: nil
       )
     end
 
@@ -1019,7 +1025,8 @@ RSpec.describe Evilution::Runner do
         file_path: "lib/example.rb",
         line: 7,
         column: 4,
-        diff: "- nil\n+ 0"
+        diff: "- nil\n+ 0",
+        strip_sources!: nil
       )
 
       registry = Evilution::Mutator::Registry.default
@@ -1175,7 +1182,7 @@ RSpec.describe Evilution::Runner do
              subject: subject_a, operator_name: "op_a",
              original_source: "a", mutated_source: "b",
              file_path: "lib/example.rb", line: 1, column: 0,
-             diff: "- a\n+ b")
+             diff: "- a\n+ b", strip_sources!: nil)
     end
 
     let(:mutation_b) do
@@ -1183,7 +1190,7 @@ RSpec.describe Evilution::Runner do
              subject: subject_b, operator_name: "op_b",
              original_source: "c", mutated_source: "d",
              file_path: "lib/example.rb", line: 10, column: 0,
-             diff: "- c\n+ d")
+             diff: "- c\n+ d", strip_sources!: nil)
     end
 
     before do

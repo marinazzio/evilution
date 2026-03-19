@@ -16,10 +16,22 @@ module Evilution
       @file_path = file_path
       @line = line
       @column = column
-      freeze
+      @diff = nil
     end
 
     def diff
+      @diff ||= compute_diff
+    end
+
+    def strip_sources!
+      diff # ensure diff is cached before clearing sources
+      @original_source = nil
+      @mutated_source = nil
+    end
+
+    private
+
+    def compute_diff
       original_lines = original_source.lines
       mutated_lines = mutated_source.lines
       diffs = ::Diff::LCS.diff(original_lines, mutated_lines)
@@ -37,6 +49,8 @@ module Evilution
       end
       result.join("\n")
     end
+
+    public
 
     def to_s
       "#{operator_name}: #{file_path}:#{line}"

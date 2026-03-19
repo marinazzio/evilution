@@ -127,6 +127,7 @@ module Evilution
           test_command: test_command,
           timeout: config.timeout
         )
+        mutation.strip_sources!
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
@@ -157,6 +158,7 @@ module Evilution
           worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
+        batch.each(&:strip_sources!)
         process_batch(batch_results, baseline_result, spec_resolver, state)
       end
 
