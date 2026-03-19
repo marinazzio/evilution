@@ -13,7 +13,8 @@ module Evilution
         lines << mutations_line(summary)
         lines << score_line(summary)
         lines << duration_line(summary)
-        lines << peak_memory_line(summary) if summary.peak_memory_mb
+        peak = summary.peak_memory_mb
+        lines << peak_memory_line(peak) if peak
         append_survived(lines, summary)
         append_neutral(lines, summary)
         lines << ""
@@ -82,8 +83,8 @@ module Evilution
         "Result: #{pass_fail} (score #{score_pct} #{pass_fail == "PASS" ? ">=" : "<"} #{threshold_pct})"
       end
 
-      def peak_memory_line(summary)
-        format("Peak memory: %<mb>.1f MB", mb: summary.peak_memory_mb)
+      def peak_memory_line(peak_mb)
+        format("Peak memory: %<mb>.1f MB", mb: peak_mb)
       end
 
       def format_pct(value)

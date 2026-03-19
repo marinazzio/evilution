@@ -8,9 +8,9 @@ RSpec.describe Evilution::Baseline do
   subject(:baseline) { described_class.new(spec_resolver: spec_resolver, timeout: 5) }
 
   describe "#call" do
-    let(:mutation1) { double("Mutation1", file_path: "lib/user.rb") }
-    let(:mutation2) { double("Mutation2", file_path: "lib/user.rb") }
-    let(:mutation3) { double("Mutation3", file_path: "lib/order.rb") }
+    let(:subject1) { double("Subject1", file_path: "lib/user.rb") }
+    let(:subject2) { double("Subject2", file_path: "lib/user.rb") }
+    let(:subject3) { double("Subject3", file_path: "lib/order.rb") }
 
     before do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
@@ -21,16 +21,16 @@ RSpec.describe Evilution::Baseline do
       allow(baseline).to receive(:run_spec_file).with("spec/user_spec.rb").and_return(false)
       allow(baseline).to receive(:run_spec_file).with("spec/order_spec.rb").and_return(true)
 
-      result = baseline.call([mutation1, mutation2, mutation3])
+      result = baseline.call([subject1, subject2, subject3])
 
       expect(result.failed_spec_files).to contain_exactly("spec/user_spec.rb")
     end
 
-    it "deduplicates spec files from multiple mutations" do
+    it "deduplicates spec files from multiple subjects" do
       allow(baseline).to receive(:run_spec_file).with("spec/user_spec.rb").and_return(true)
       allow(baseline).to receive(:run_spec_file).with("spec/order_spec.rb").and_return(true)
 
-      baseline.call([mutation1, mutation2, mutation3])
+      baseline.call([subject1, subject2, subject3])
 
       expect(baseline).to have_received(:run_spec_file).with("spec/user_spec.rb").once
     end
@@ -38,12 +38,12 @@ RSpec.describe Evilution::Baseline do
     it "returns empty set when all specs pass" do
       allow(baseline).to receive(:run_spec_file).and_return(true)
 
-      result = baseline.call([mutation1, mutation3])
+      result = baseline.call([subject1, subject3])
 
       expect(result.failed_spec_files).to be_empty
     end
 
-    it "returns empty result for empty mutations list" do
+    it "returns empty result for empty subjects list" do
       result = baseline.call([])
 
       expect(result.failed_spec_files).to be_empty
@@ -53,7 +53,7 @@ RSpec.describe Evilution::Baseline do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(baseline).to receive(:run_spec_file).with("spec").and_return(false)
 
-      result = baseline.call([mutation1])
+      result = baseline.call([subject1])
 
       expect(result.failed_spec_files).to contain_exactly("spec")
     end
@@ -61,7 +61,7 @@ RSpec.describe Evilution::Baseline do
     it "records duration" do
       allow(baseline).to receive(:run_spec_file).and_return(true)
 
-      result = baseline.call([mutation1])
+      result = baseline.call([subject1])
 
       expect(result.duration).to be >= 0
     end

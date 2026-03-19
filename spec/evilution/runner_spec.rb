@@ -478,7 +478,7 @@ RSpec.describe Evilution::Runner do
       expect(result).to be_truncated
     end
 
-    it "does not mark as truncated when threshold reached on last mutation" do
+    it "marks as truncated even when threshold reached on last mutation" do
       one_mutation_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],
         fail_fast: 1,
@@ -500,7 +500,7 @@ RSpec.describe Evilution::Runner do
       result = one_mutation_runner.call
 
       expect(result.total).to eq(1)
-      expect(result).not_to be_truncated
+      expect(result).to be_truncated
     end
 
     it "does not truncate when survivors are below threshold" do
@@ -885,7 +885,7 @@ RSpec.describe Evilution::Runner do
     it "prints progress to stderr in text mode when TTY" do
       text_runner = described_class.new(config: text_config)
       output = capture_stderr_with_tty { text_runner.call }
-      expect(output).to match(%r{mutation 1/1 killed})
+      expect(output).to match(/mutation 1 killed/)
     end
 
     it "does not print progress in quiet mode" do
@@ -915,7 +915,7 @@ RSpec.describe Evilution::Runner do
 
       text_runner = described_class.new(config: text_config)
       output = capture_stderr_with_tty { text_runner.call }
-      expect(output).to match(%r{mutation 1/1 survived})
+      expect(output).to match(/mutation 1 survived/)
     end
   end
 
@@ -1193,38 +1193,42 @@ RSpec.describe Evilution::Runner do
     end
 
     it "generates mutations lazily per-subject during execution" do
-      call_order = []
+      generation_order = []
 
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for) do |subject|
-        call_order << subject.name
+        generation_order << subject.name
         subject == subject_a ? [mutation_a] : [mutation_b]
       end
 
-      result_a = Evilution::Result::MutationResult.new(
-        mutation: mutation_a, status: :killed, duration: 0.1
-      )
-      result_b = Evilution::Result::MutationResult.new(
-        mutation: mutation_b, status: :killed, duration: 0.1
-      )
-
+      execution_order = []
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      allow(isolator).to receive(:call).and_return(result_a, result_b)
+      allow(isolator).to receive(:call) do |mutation:, **|
+        execution_order << mutation.subject.name
+        Evilution::Result::MutationResult.new(
+          mutation: mutation, status: :killed, duration: 0.1
+        )
+      end
 
       result = described_class.new(config: lazy_config).call
 
       expect(result.total).to eq(2)
-      # mutations_for is called twice for counting + twice lazily during execution
-      expect(registry).to have_received(:mutations_for).with(subject_a).at_least(:twice)
-      expect(registry).to have_received(:mutations_for).with(subject_b).at_least(:twice)
+      # Subject A's mutations are generated and executed before subject B's are generated
+      expect(generation_order).to eq(%w[A#foo B#bar])
+      expect(execution_order).to eq(%w[A#foo B#bar])
     end
 
-    it "does not generate all mutations before baseline" do
+    it "runs baseline before generating any mutations" do
+      call_sequence = []
+
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).and_return([mutation_a])
+      allow(registry).to receive(:mutations_for) do |_subject|
+        call_sequence << :mutations_for
+        [mutation_a]
+      end
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1240,16 +1244,17 @@ RSpec.describe Evilution::Runner do
 
       baseline = instance_double(Evilution::Baseline)
       allow(Evilution::Baseline).to receive(:new).and_return(baseline)
-      allow(baseline).to receive(:call).and_return(
+      allow(baseline).to receive(:call) do |_subjects|
+        call_sequence << :baseline
         Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 0.1)
-      )
+      end
 
       described_class.new(config: baseline_config).call
 
-      # Baseline receives subjects, not a pre-materialized mutations array
-      expect(baseline).to have_received(:call).with(
-        satisfy { |arg| arg.is_a?(Array) && arg.all? { |s| s.respond_to?(:file_path) && s.respond_to?(:line_number) } }
-      )
+      # Baseline runs before any mutations_for calls
+      baseline_index = call_sequence.index(:baseline)
+      first_mutation_index = call_sequence.index(:mutations_for)
+      expect(baseline_index).to be < first_mutation_index
     end
   end
 end

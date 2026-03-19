@@ -42,7 +42,8 @@ module Evilution
           duration: summary.duration.round(4)
         }
         data[:truncated] = true if summary.truncated?
-        data[:peak_memory_mb] = summary.peak_memory_mb.round(1) if summary.peak_memory_mb
+        peak = summary.peak_memory_mb
+        data[:peak_memory_mb] = peak.round(1) if peak
         data
       end
 

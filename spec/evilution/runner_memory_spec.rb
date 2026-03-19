@@ -79,20 +79,14 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       expect(output).to match(/\[memory\] after parse_subjects: 42\.5 MB/)
     end
 
-    it "logs memory after generating mutations" do
-      output = capture_stderr_with_tty { runner.call }
-      expect(output).to match(/\[memory\] after generate_mutations: 42\.5 MB/)
-    end
-
     it "logs memory after mutation run completes" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).to match(/\[memory\] after run_mutations: 42\.5 MB/)
     end
 
-    it "includes mutation count context" do
+    it "includes subject count context" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).to match(/1 subjects/)
-      expect(output).to match(/1 mutations/)
     end
 
     it "logs per-mutation child_rss_kb when available" do
