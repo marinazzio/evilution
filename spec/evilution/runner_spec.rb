@@ -1156,4 +1156,100 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Isolation::InProcess).to have_received(:new)
     end
   end
+
+  describe "lazy mutation generation" do
+    let(:lazy_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json, timeout: 5, quiet: true,
+        baseline: false, isolation: :fork,
+        skip_config_file: true
+      )
+    end
+
+    let(:subject_a) { double("SubjectA", name: "A#foo", file_path: "lib/example.rb", line_number: 1) }
+    let(:subject_b) { double("SubjectB", name: "B#bar", file_path: "lib/example.rb", line_number: 10) }
+
+    let(:mutation_a) do
+      double("MutationA",
+             subject: subject_a, operator_name: "op_a",
+             original_source: "a", mutated_source: "b",
+             file_path: "lib/example.rb", line: 1, column: 0,
+             diff: "- a\n+ b")
+    end
+
+    let(:mutation_b) do
+      double("MutationB",
+             subject: subject_b, operator_name: "op_b",
+             original_source: "c", mutated_source: "d",
+             file_path: "lib/example.rb", line: 10, column: 0,
+             diff: "- c\n+ d")
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_a, subject_b])
+    end
+
+    it "generates mutations lazily per-subject during execution" do
+      call_order = []
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for) do |subject|
+        call_order << subject.name
+        subject == subject_a ? [mutation_a] : [mutation_b]
+      end
+
+      result_a = Evilution::Result::MutationResult.new(
+        mutation: mutation_a, status: :killed, duration: 0.1
+      )
+      result_b = Evilution::Result::MutationResult.new(
+        mutation: mutation_b, status: :killed, duration: 0.1
+      )
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(result_a, result_b)
+
+      result = described_class.new(config: lazy_config).call
+
+      expect(result.total).to eq(2)
+      # mutations_for is called twice for counting + twice lazily during execution
+      expect(registry).to have_received(:mutations_for).with(subject_a).at_least(:twice)
+      expect(registry).to have_received(:mutations_for).with(subject_b).at_least(:twice)
+    end
+
+    it "does not generate all mutations before baseline" do
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation_a])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(
+        Evilution::Result::MutationResult.new(mutation: mutation_a, status: :killed, duration: 0.1)
+      )
+
+      baseline_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json, timeout: 5, quiet: true,
+        isolation: :fork, skip_config_file: true
+      )
+
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(
+        Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 0.1)
+      )
+
+      described_class.new(config: baseline_config).call
+
+      # Baseline receives subjects, not a pre-materialized mutations array
+      expect(baseline).to have_received(:call).with(
+        satisfy { |arg| arg.is_a?(Array) && arg.all? { |s| s.respond_to?(:file_path) && s.respond_to?(:line_number) } }
+      )
+    end
+  end
 end

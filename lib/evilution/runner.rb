@@ -38,11 +38,12 @@ module Evilution
       subjects = filter_by_diff(subjects) if config.diff?
       log_memory("after parse_subjects", "#{subjects.length} subjects")
 
+      mutation_count = count_mutations(subjects)
       mutations = generate_mutations(subjects)
-      log_memory("after generate_mutations", "#{mutations.length} mutations")
+      log_memory("after generate_mutations", "#{mutation_count} mutations")
 
-      baseline_result = run_baseline(mutations)
-      results, truncated = run_mutations(mutations, baseline_result)
+      baseline_result = run_baseline(subjects)
+      results, truncated = run_mutations(mutations, mutation_count, baseline_result)
       log_memory("after run_mutations", "#{results.length} results")
 
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
@@ -92,29 +93,33 @@ module Evilution
       Diff::FileFilter.new.filter(subjects, changed_ranges)
     end
 
-    def generate_mutations(subjects)
-      subjects.flat_map { |subject| registry.mutations_for(subject) }
+    def count_mutations(subjects)
+      subjects.sum { |subject| registry.mutations_for(subject).size }
     end
 
-    def run_baseline(mutations)
-      return nil unless config.baseline? && mutations.any?
+    def generate_mutations(subjects)
+      subjects.lazy.flat_map { |subject| registry.mutations_for(subject) }
+    end
+
+    def run_baseline(subjects)
+      return nil unless config.baseline? && subjects.any?
 
       log_baseline_start
       baseline = Baseline.new(timeout: config.timeout)
-      result = baseline.call(mutations)
+      result = baseline.call(subjects)
       log_baseline_complete(result)
       result
     end
 
-    def run_mutations(mutations, baseline_result = nil)
+    def run_mutations(mutations, total, baseline_result = nil)
       if config.jobs > 1
-        run_mutations_parallel(mutations, baseline_result)
+        run_mutations_parallel(mutations, total, baseline_result)
       else
-        run_mutations_sequential(mutations, baseline_result)
+        run_mutations_sequential(mutations, total, baseline_result)
       end
     end
 
-    def run_mutations_sequential(mutations, baseline_result = nil)
+    def run_mutations_sequential(mutations, total, baseline_result = nil)
       integration = build_integration
       spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
       results = []
@@ -131,10 +136,10 @@ module Evilution
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
-        log_progress(index + 1, mutations.length, result.status)
+        log_progress(index + 1, total, result.status)
         log_mutation_diagnostics(result)
 
-        if config.fail_fast? && survived_count >= config.fail_fast && index < mutations.length - 1
+        if config.fail_fast? && survived_count >= config.fail_fast && index < total - 1
           truncated = true
           break
         end
@@ -143,7 +148,7 @@ module Evilution
       [results, truncated]
     end
 
-    def run_mutations_parallel(mutations, baseline_result = nil)
+    def run_mutations_parallel(mutations, total, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
       worker_isolator = Isolation::InProcess.new
@@ -158,7 +163,7 @@ module Evilution
           worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
-        process_batch(batch_results, baseline_result, spec_resolver, mutations.length, state)
+        process_batch(batch_results, baseline_result, spec_resolver, total, state)
       end
 
       [state[:results], state[:truncated]]
