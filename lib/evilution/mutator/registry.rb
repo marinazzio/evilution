@@ -28,7 +28,8 @@ module Evilution
           Operator::ArgumentRemoval,
           Operator::BlockRemoval,
           Operator::ConditionalFlip,
-          Operator::RangeReplacement
+          Operator::RangeReplacement,
+          Operator::RegexpMutation
         ].each { |op| registry.register(op) }
         registry
       end
