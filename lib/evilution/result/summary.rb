@@ -64,10 +64,14 @@ module Evilution
       end
 
       def peak_memory_mb
-        rss_values = results.filter_map(&:child_rss_kb)
-        return nil if rss_values.empty?
+        max_rss = nil
+        results.each do |result|
+          kb = result.child_rss_kb
+          next unless kb
 
-        rss_values.max / 1024.0
+          max_rss = kb if max_rss.nil? || kb > max_rss
+        end
+        max_rss && (max_rss / 1024.0)
       end
     end
   end

@@ -38,12 +38,10 @@ module Evilution
       subjects = filter_by_diff(subjects) if config.diff?
       log_memory("after parse_subjects", "#{subjects.length} subjects")
 
-      mutation_count = count_mutations(subjects)
-      mutations = generate_mutations(subjects)
-      log_memory("after generate_mutations", "#{mutation_count} mutations")
-
       baseline_result = run_baseline(subjects)
-      results, truncated = run_mutations(mutations, mutation_count, baseline_result)
+
+      mutations = generate_mutations(subjects)
+      results, truncated = run_mutations(mutations, baseline_result)
       log_memory("after run_mutations", "#{results.length} results")
 
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
@@ -93,10 +91,6 @@ module Evilution
       Diff::FileFilter.new.filter(subjects, changed_ranges)
     end
 
-    def count_mutations(subjects)
-      subjects.sum { |subject| registry.mutations_for(subject).size }
-    end
-
     def generate_mutations(subjects)
       subjects.lazy.flat_map { |subject| registry.mutations_for(subject) }
     end
@@ -111,15 +105,15 @@ module Evilution
       result
     end
 
-    def run_mutations(mutations, total, baseline_result = nil)
+    def run_mutations(mutations, baseline_result = nil)
       if config.jobs > 1
-        run_mutations_parallel(mutations, total, baseline_result)
+        run_mutations_parallel(mutations, baseline_result)
       else
-        run_mutations_sequential(mutations, total, baseline_result)
+        run_mutations_sequential(mutations, baseline_result)
       end
     end
 
-    def run_mutations_sequential(mutations, total, baseline_result = nil)
+    def run_mutations_sequential(mutations, baseline_result = nil)
       integration = build_integration
       spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
       results = []
@@ -136,10 +130,10 @@ module Evilution
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
-        log_progress(index + 1, total, result.status)
+        log_progress(index + 1, result.status)
         log_mutation_diagnostics(result)
 
-        if config.fail_fast? && survived_count >= config.fail_fast && index < total - 1
+        if config.fail_fast? && survived_count >= config.fail_fast
           truncated = true
           break
         end
@@ -148,7 +142,7 @@ module Evilution
       [results, truncated]
     end
 
-    def run_mutations_parallel(mutations, total, baseline_result = nil)
+    def run_mutations_parallel(mutations, baseline_result = nil)
       integration = build_integration
       pool = Parallel::Pool.new(size: config.jobs)
       worker_isolator = Isolation::InProcess.new
@@ -163,24 +157,24 @@ module Evilution
           worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
         end
 
-        process_batch(batch_results, baseline_result, spec_resolver, total, state)
+        process_batch(batch_results, baseline_result, spec_resolver, state)
       end
 
       [state[:results], state[:truncated]]
     end
 
-    def process_batch(batch_results, baseline_result, spec_resolver, total, state)
+    def process_batch(batch_results, baseline_result, spec_resolver, state)
       batch_results.each do |result|
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         state[:results] << result
         state[:survived_count] += 1 if result.survived?
         state[:completed] += 1
-        log_progress(state[:completed], total, result.status)
+        log_progress(state[:completed], result.status)
         log_mutation_diagnostics(result)
       end
 
-      log_memory("after batch", "#{state[:completed]}/#{total} complete")
-      state[:truncated] = true if should_truncate?(state[:survived_count], state[:completed], total)
+      log_memory("after batch", "#{state[:completed]} complete")
+      state[:truncated] = true if should_truncate?(state[:survived_count])
     end
 
     def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
@@ -204,8 +198,8 @@ module Evilution
       )
     end
 
-    def should_truncate?(survived_count, completed, total)
-      config.fail_fast? && survived_count >= config.fail_fast && completed < total
+    def should_truncate?(survived_count)
+      config.fail_fast? && survived_count >= config.fail_fast
     end
 
     def build_isolator
@@ -252,10 +246,10 @@ module Evilution
       $stderr.write("Baseline complete: #{count} failing spec file#{"s" unless count == 1}\n")
     end
 
-    def log_progress(current, total, status)
+    def log_progress(current, status)
       return if config.quiet || !config.text? || !$stderr.tty?
 
-      $stderr.write("mutation #{current}/#{total} #{status}\n")
+      $stderr.write("mutation #{current} #{status}\n")
     end
 
     def log_memory(phase, context = nil)
