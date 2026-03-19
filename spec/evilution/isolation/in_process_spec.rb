@@ -122,6 +122,18 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect($stderr).to eq(original_stderr)
     end
 
+    it "does not buffer output in memory during execution" do
+      test_command = lambda { |_m|
+        $stdout.write("x" * 10_000)
+        $stderr.write("y" * 10_000)
+        expect($stdout).not_to be_a(StringIO)
+        expect($stderr).not_to be_a(StringIO)
+        { passed: false }
+      }
+
+      isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+    end
+
     it "does not interfere with $LOADED_FEATURES" do
       features_before = $LOADED_FEATURES.dup
 
