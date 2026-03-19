@@ -28,13 +28,35 @@ module Evilution
       base = source_path.sub(/\.rb\z/, "_spec.rb")
       prefix = STRIPPABLE_PREFIXES.find { |p| source_path.start_with?(p) }
 
-      if prefix
-        stripped = "spec/#{base.delete_prefix(prefix)}"
-        kept = "spec/#{base}"
-        [stripped, kept]
-      else
-        ["spec/#{base}"]
+      candidates = if prefix
+                     stripped = base.delete_prefix(prefix)
+                     ["spec/#{stripped}", "spec/#{base}"]
+                   else
+                     ["spec/#{base}"]
+                   end
+
+      fallbacks = candidates.flat_map { |c| parent_fallback_candidates(c) }.uniq
+      candidates + fallbacks
+    end
+
+    def parent_fallback_candidates(spec_path)
+      parts = spec_path.split("/")
+      # parts: ["spec", "foo", "bar_spec.rb"] — need at least 3 parts for fallback
+      return [] if parts.length < 3
+
+      candidates = []
+      # Remove filename, then progressively remove directories
+      dir_parts = parts[1..-2] # ["models", "game"]
+      (dir_parts.length - 1).downto(0) do |i|
+        file = "#{dir_parts[i]}_spec.rb"
+        if i.zero?
+          candidates << "spec/#{file}"
+        else
+          parent = dir_parts[0...i].join("/")
+          candidates << "spec/#{parent}/#{file}"
+        end
       end
+      candidates
     end
   end
 end
