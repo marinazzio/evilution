@@ -29,7 +29,8 @@ module Evilution
           Operator::BlockRemoval,
           Operator::ConditionalFlip,
           Operator::RangeReplacement,
-          Operator::RegexpMutation
+          Operator::RegexpMutation,
+          Operator::ReceiverReplacement
         ].each { |op| registry.register(op) }
         registry
       end
