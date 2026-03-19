@@ -1,0 +1,94 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/evilution"
+require_relative "../lib/evilution/memory/leak_check"
+
+FIXTURE = File.expand_path("../spec/support/fixtures/simple_class.rb", __dir__)
+ITERATIONS = Integer(ENV.fetch("MEMORY_CHECK_ITERATIONS", 50))
+MAX_GROWTH_KB = Integer(ENV.fetch("MEMORY_CHECK_MAX_GROWTH_KB", 10_240))
+
+def setup_workload
+  parser = Evilution::AST::Parser.new
+  registry = Evilution::Mutator::Registry.default
+  subjects = parser.call(FIXTURE)
+  mutations = subjects.flat_map { |s| registry.mutations_for(s) }
+  abort("No mutations found in fixture") if mutations.empty?
+  mutations
+end
+
+def run_check(name, iterations: ITERATIONS, max_growth_kb: MAX_GROWTH_KB, &)
+  check = Evilution::Memory::LeakCheck.new(iterations: iterations, max_growth_kb: max_growth_kb)
+  result = check.run(&)
+  report(name, result)
+  result[:passed]
+end
+
+def report(name, result)
+  status = result[:passed] ? "PASS" : "FAIL"
+  growth = result[:growth_mb] ? format("%.1f MB", result[:growth_mb]) : "N/A"
+  max = format("%.1f MB", result[:max_growth_kb] / 1024.0)
+  samples = result[:samples].map { |s| s ? format("%.1f", s / 1024.0) : "N/A" }.join(" -> ")
+
+  puts "[#{status}] #{name}"
+  puts "  Growth: #{growth} (max: #{max})"
+  puts "  Samples (MB): #{samples}"
+  puts
+end
+
+abort("RSS measurement unavailable (requires /proc filesystem)") unless Evilution::Memory.rss_kb
+
+mutations = setup_workload
+stub_test_command = ->(_m) { { passed: false } }
+all_passed = true
+
+# 1. InProcess isolation
+all_passed &= run_check("InProcess isolation") do
+  mutation = mutations.sample
+  isolator = Evilution::Isolation::InProcess.new
+  isolator.call(mutation: mutation, test_command: stub_test_command, timeout: 5)
+end
+
+# 2. Fork isolation
+all_passed &= run_check("Fork isolation") do
+  mutation = mutations.sample
+  isolator = Evilution::Isolation::Fork.new
+  isolator.call(mutation: mutation, test_command: stub_test_command, timeout: 5)
+end
+
+# 3. Mutation generation + stripping
+parser = Evilution::AST::Parser.new
+registry = Evilution::Mutator::Registry.default
+
+all_passed &= run_check("Mutation generation + stripping") do
+  subjects = parser.call(FIXTURE)
+  new_mutations = subjects.flat_map { |s| registry.mutations_for(s) }
+  subjects.each(&:release_node!)
+  new_mutations.each(&:strip_sources!)
+end
+
+# 4. Parallel pool with compact serialization
+if mutations.size >= 2
+  all_passed &= run_check("Parallel pool (compact)", iterations: 20) do
+    pool = Evilution::Parallel::Pool.new(size: 2)
+    batch = mutations.first(2)
+    worker_isolator = Evilution::Isolation::InProcess.new
+
+    compact_results = pool.map(batch) do |mutation|
+      result = worker_isolator.call(mutation: mutation, test_command: stub_test_command, timeout: 5)
+      { status: result.status, duration: result.duration,
+        child_rss_kb: result.child_rss_kb, memory_delta_kb: result.memory_delta_kb }
+    end
+
+    batch.each(&:strip_sources!)
+    batch.zip(compact_results).map do |mutation, data|
+      Evilution::Result::MutationResult.new(
+        mutation: mutation, status: data[:status], duration: data[:duration],
+        child_rss_kb: data[:child_rss_kb], memory_delta_kb: data[:memory_delta_kb]
+      )
+    end
+  end
+end
+
+puts all_passed ? "All memory checks passed." : "Some memory checks failed!"
+exit(all_passed ? 0 : 1)
