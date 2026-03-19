@@ -4,11 +4,11 @@ RSpec.describe Evilution::Mutator::Registry do
   let(:registry) { described_class.new }
 
   describe ".default" do
-    it "returns a registry pre-loaded with all 20 operators" do
+    it "returns a registry pre-loaded with all 21 operators" do
       default_registry = described_class.default
 
       expect(default_registry).to be_a(described_class)
-      expect(default_registry.operator_count).to eq(20)
+      expect(default_registry.operator_count).to eq(21)
     end
 
     it "includes all expected operator classes" do
@@ -35,7 +35,8 @@ RSpec.describe Evilution::Mutator::Registry do
         Evilution::Mutator::Operator::ReturnValueRemoval,
         Evilution::Mutator::Operator::CollectionReplacement,
         Evilution::Mutator::Operator::MethodCallRemoval,
-        Evilution::Mutator::Operator::ArgumentRemoval
+        Evilution::Mutator::Operator::ArgumentRemoval,
+        Evilution::Mutator::Operator::BlockRemoval
       ]
 
       expect(operators).to match_array(expected_operators)
