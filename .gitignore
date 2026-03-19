@@ -15,3 +15,5 @@
 
 # MCP server configuration (local/editor-specific)
 .mcp.json
+
+.claude/projects/
