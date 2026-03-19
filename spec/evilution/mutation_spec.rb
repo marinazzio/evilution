@@ -84,9 +84,28 @@ RSpec.describe Evilution::Mutation do
     end
   end
 
-  describe "immutability" do
-    it "is frozen after initialization" do
-      expect(mutation).to be_frozen
+  describe "#strip_sources!" do
+    it "nils out original_source and mutated_source" do
+      mutation.strip_sources!
+
+      expect(mutation.original_source).to be_nil
+      expect(mutation.mutated_source).to be_nil
+    end
+
+    it "preserves the diff after stripping" do
+      expected_diff = mutation.diff
+
+      mutation.strip_sources!
+
+      expect(mutation.diff).to eq(expected_diff)
+    end
+
+    it "preserves other attributes after stripping" do
+      mutation.strip_sources!
+
+      expect(mutation.operator_name).to eq("comparison_replacement")
+      expect(mutation.file_path).to eq("lib/user.rb")
+      expect(mutation.line).to eq(9)
     end
   end
 end
