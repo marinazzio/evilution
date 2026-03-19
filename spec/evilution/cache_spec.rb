@@ -116,4 +116,31 @@ RSpec.describe Evilution::Cache do
       expect(cache.fetch(other_op)).to be_nil
     end
   end
+
+  describe "malformed entries" do
+    it "returns nil for entry missing status key" do
+      cache.store(mutation, result_data)
+
+      # Corrupt the cache file by removing the status key
+      Dir.glob(File.join(cache_dir, "*.json")).each do |path|
+        data = JSON.parse(File.read(path))
+        data.each_value { |entry| entry.delete("status") if entry.is_a?(Hash) }
+        File.write(path, JSON.generate(data))
+      end
+
+      expect(cache.fetch(mutation)).to be_nil
+    end
+
+    it "returns nil for non-hash entry" do
+      cache.store(mutation, result_data)
+
+      Dir.glob(File.join(cache_dir, "*.json")).each do |path|
+        data = JSON.parse(File.read(path))
+        data.each_key { |k| data[k] = "corrupted" }
+        File.write(path, JSON.generate(data))
+      end
+
+      expect(cache.fetch(mutation)).to be_nil
+    end
+  end
 end

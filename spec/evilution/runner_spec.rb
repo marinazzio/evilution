@@ -1438,6 +1438,8 @@ RSpec.describe Evilution::Runner do
   end
 
   describe "#call with incremental mode" do
+    let(:cache_dir) { Dir.mktmpdir("evilution_cache_test") }
+
     let(:incremental_config) do
       Evilution::Config.new(
         target_files: ["lib/example.rb"],
@@ -1454,6 +1456,9 @@ RSpec.describe Evilution::Runner do
     let(:incremental_runner) { described_class.new(config: incremental_config) }
 
     before do
+      allow(Evilution::Cache).to receive(:new).and_call_original
+      allow(Evilution::Cache).to receive(:new).with(no_args).and_return(Evilution::Cache.new(cache_dir: cache_dir))
+
       parser = instance_double(Evilution::AST::Parser)
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
@@ -1468,7 +1473,7 @@ RSpec.describe Evilution::Runner do
     end
 
     after do
-      FileUtils.rm_rf(Evilution::Cache::DEFAULT_DIR)
+      FileUtils.rm_rf(cache_dir)
     end
 
     it "uses the isolator on first run" do

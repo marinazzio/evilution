@@ -21,7 +21,7 @@ module Evilution
       return nil unless data
 
       entry = data[entry_key]
-      return nil unless entry
+      return nil unless entry.is_a?(Hash) && entry["status"].is_a?(String)
 
       { status: entry["status"].to_sym, duration: entry["duration"],
         killing_test: entry["killing_test"], test_command: entry["test_command"] }
@@ -73,7 +73,9 @@ module Evilution
     def write_file(file_key, data)
       FileUtils.mkdir_p(@cache_dir)
       path = cache_path(file_key)
-      File.write(path, JSON.generate(data))
+      tmp = "#{path}.#{Process.pid}.tmp"
+      File.write(tmp, JSON.generate(data))
+      File.rename(tmp, path)
     end
 
     def cache_path(file_key)
