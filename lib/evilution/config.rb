@@ -20,13 +20,14 @@ module Evilution
       fail_fast: nil,
       baseline: true,
       isolation: :auto,
+      incremental: false,
       line_ranges: {},
       spec_files: []
     }.freeze
 
     attr_reader :target_files, :timeout, :format, :diff_base,
                 :target, :min_score, :integration, :coverage, :verbose, :quiet,
-                :jobs, :fail_fast, :baseline, :isolation, :line_ranges, :spec_files
+                :jobs, :fail_fast, :baseline, :isolation, :incremental, :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -62,6 +63,10 @@ module Evilution
 
     def baseline?
       baseline
+    end
+
+    def incremental?
+      incremental
     end
 
     def self.file_options
@@ -136,6 +141,7 @@ module Evilution
       @fail_fast = validate_fail_fast(merged[:fail_fast])
       @baseline = merged[:baseline]
       @isolation = validate_isolation(merged[:isolation])
+      @incremental = merged[:incremental]
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
     end
