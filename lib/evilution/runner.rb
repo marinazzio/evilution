@@ -27,6 +27,7 @@ module Evilution
       @parser = AST::Parser.new
       @registry = Mutator::Registry.default
       @isolator = build_isolator
+      @cache = config.incremental? ? Cache.new : nil
     end
 
     def call
@@ -54,7 +55,7 @@ module Evilution
 
     private
 
-    attr_reader :parser, :registry, :isolator
+    attr_reader :parser, :registry, :isolator, :cache
 
     def parse_subjects
       files = resolve_target_files
@@ -129,12 +130,10 @@ module Evilution
       truncated = false
 
       mutations.each_with_index do |mutation, index|
-        test_command = ->(m) { integration.call(m) }
-        result = isolator.call(
-          mutation: mutation,
-          test_command: test_command,
-          timeout: config.timeout
-        )
+        result = execute_or_fetch(mutation) do
+          test_command = ->(m) { integration.call(m) }
+          isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+        end
         mutation.strip_sources!
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
@@ -162,8 +161,10 @@ module Evilution
         break if state[:truncated]
 
         compact_results = pool.map(batch) do |mutation|
-          test_command = ->(m) { integration.call(m) }
-          result = worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+          result = execute_or_fetch(mutation) do
+            test_command = ->(m) { integration.call(m) }
+            worker_isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+          end
           compact_result(result)
         end
 
@@ -337,6 +338,42 @@ module Evilution
       when :text
         Reporter::CLI.new
       end
+    end
+
+    def execute_or_fetch(mutation)
+      cached = fetch_cached_result(mutation)
+      return cached if cached
+
+      result = yield
+      store_cached_result(mutation, result)
+      result
+    end
+
+    def fetch_cached_result(mutation)
+      return nil unless cache
+
+      data = cache.fetch(mutation)
+      return nil unless data
+      return nil unless %i[killed timeout].include?(data[:status])
+
+      Result::MutationResult.new(
+        mutation: mutation,
+        status: data[:status],
+        duration: data[:duration],
+        killing_test: data[:killing_test],
+        test_command: data[:test_command]
+      )
+    end
+
+    def store_cached_result(mutation, result)
+      return unless cache
+      return unless result.killed? || result.timeout?
+
+      cache.store(mutation,
+                  status: result.status,
+                  duration: result.duration,
+                  killing_test: result.killing_test,
+                  test_command: result.test_command)
     end
   end
 end

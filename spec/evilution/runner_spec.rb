@@ -1436,4 +1436,88 @@ RSpec.describe Evilution::Runner do
       expect(baseline_index).to be < first_mutation_index
     end
   end
+
+  describe "#call with incremental mode" do
+    let(:incremental_config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        incremental: true,
+        skip_config_file: true
+      )
+    end
+
+    let(:incremental_runner) { described_class.new(config: incremental_config) }
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    after do
+      FileUtils.rm_rf(Evilution::Cache::DEFAULT_DIR)
+    end
+
+    it "uses the isolator on first run" do
+      isolator = Evilution::Isolation::Fork.new
+      expect(isolator).to receive(:call).and_return(mutation_result)
+
+      incremental_runner.call
+    end
+
+    it "uses cached result on second run and skips isolator" do
+      isolator = Evilution::Isolation::Fork.new
+
+      # First run: isolator is called
+      expect(isolator).to receive(:call).once.and_return(mutation_result)
+      incremental_runner.call
+
+      # Second run: isolator should not be called
+      second_runner = described_class.new(config: incremental_config)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      expect(isolator).not_to receive(:call)
+      second_runner.call
+    end
+
+    it "does not cache survived results" do
+      survived_result = Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :survived,
+        duration: 0.1
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(survived_result)
+
+      incremental_runner.call
+
+      # Second run: isolator should still be called (survived not cached)
+      second_runner = described_class.new(config: incremental_config)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      expect(isolator).to receive(:call).and_return(survived_result)
+      second_runner.call
+    end
+
+    it "returns correct results from cache" do
+      incremental_runner.call
+
+      second_runner = described_class.new(config: incremental_config)
+      summary = second_runner.call
+
+      expect(summary.results.length).to eq(1)
+      expect(summary.results.first.status).to eq(:killed)
+    end
+  end
 end
