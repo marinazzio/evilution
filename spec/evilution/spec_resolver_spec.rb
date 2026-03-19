@@ -112,6 +112,18 @@ RSpec.describe Evilution::SpecResolver do
         expect(resolver.call("lib/foo/bar/baz.rb")).to eq("spec/foo_spec.rb")
       end
 
+      it "falls back for two-segment paths" do
+        create_file("spec/foo_spec.rb")
+
+        expect(resolver.call("lib/foo/bar.rb")).to eq("spec/foo_spec.rb")
+      end
+
+      it "falls back using kept prefix layout" do
+        create_file("spec/lib/foo_spec.rb")
+
+        expect(resolver.call("lib/foo/bar/baz.rb")).to eq("spec/lib/foo_spec.rb")
+      end
+
       it "does not fall back to spec directory root" do
         expect(resolver.call("lib/foo/bar/baz.rb")).to be_nil
       end

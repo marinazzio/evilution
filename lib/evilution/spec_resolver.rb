@@ -35,14 +35,14 @@ module Evilution
                      ["spec/#{base}"]
                    end
 
-      candidates + parent_fallback_candidates(candidates.first)
+      fallbacks = candidates.flat_map { |c| parent_fallback_candidates(c) }.uniq
+      candidates + fallbacks
     end
 
     def parent_fallback_candidates(spec_path)
       parts = spec_path.split("/")
-      # parts: ["spec", "models", "game", "round_spec.rb"]
-      # We need at least 3 parts: "spec", a directory, and a file
-      return [] if parts.length < 4
+      # parts: ["spec", "foo", "bar_spec.rb"] — need at least 3 parts for fallback
+      return [] if parts.length < 3
 
       candidates = []
       # Remove filename, then progressively remove directories
