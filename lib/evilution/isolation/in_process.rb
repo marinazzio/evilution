@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "timeout"
-require "stringio"
 require_relative "../memory"
 require_relative "../result/mutation_result"
 
@@ -35,9 +34,13 @@ module Evilution
       def suppress_output
         saved_stdout = $stdout
         saved_stderr = $stderr
-        $stdout = StringIO.new
-        $stderr = StringIO.new
-        yield
+        File.open(File::NULL, "w") do |null_out|
+          File.open(File::NULL, "w") do |null_err|
+            $stdout = null_out
+            $stderr = null_err
+            yield
+          end
+        end
       ensure
         $stdout = saved_stdout
         $stderr = saved_stderr

@@ -6,15 +6,13 @@ require "evilution/isolation/in_process"
 RSpec.describe Evilution::Isolation::InProcess do
   subject(:isolator) { described_class.new }
 
-  let(:mutation) do
-    double("Mutation", file_path: "lib/example.rb", original_source: "original")
-  end
+  let(:mutation) { double("Mutation", file_path: "lib/example.rb", original_source: "original") }
 
   describe "#call" do
     it "returns killed when test command fails" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_killed
       expect(result.mutation).to eq(mutation)
@@ -23,7 +21,7 @@ RSpec.describe Evilution::Isolation::InProcess do
     it "returns survived when test command passes" do
       test_command = ->(_m) { { passed: true } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_survived
     end
@@ -34,7 +32,7 @@ RSpec.describe Evilution::Isolation::InProcess do
         { passed: true }
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
     end
@@ -42,7 +40,7 @@ RSpec.describe Evilution::Isolation::InProcess do
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
     end
@@ -50,7 +48,7 @@ RSpec.describe Evilution::Isolation::InProcess do
     it "records duration" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.duration).to be > 0
     end
@@ -58,7 +56,7 @@ RSpec.describe Evilution::Isolation::InProcess do
     it "passes test_command from result to MutationResult" do
       test_command = ->(_m) { { passed: false, test_command: "rspec spec/foo_spec.rb" } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.test_command).to eq("rspec spec/foo_spec.rb")
     end
@@ -66,7 +64,7 @@ RSpec.describe Evilution::Isolation::InProcess do
     it "sets test_command to nil when not in result" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.test_command).to be_nil
     end
@@ -81,7 +79,7 @@ RSpec.describe Evilution::Isolation::InProcess do
       original = $stdout
       $stdout = output
       begin
-        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+        isolator.call(mutation:, test_command:, timeout: 5)
       ensure
         $stdout = original
       end
@@ -99,7 +97,7 @@ RSpec.describe Evilution::Isolation::InProcess do
       original = $stderr
       $stderr = output
       begin
-        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+        isolator.call(mutation:, test_command:, timeout: 5)
       ensure
         $stderr = original
       end
@@ -116,17 +114,29 @@ RSpec.describe Evilution::Isolation::InProcess do
         { passed: true }
       }
 
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect($stdout).to eq(original_stdout)
       expect($stderr).to eq(original_stderr)
+    end
+
+    it "does not buffer output in memory during execution" do
+      test_command = lambda { |_m|
+        $stdout.write("x" * 10_000)
+        $stderr.write("y" * 10_000)
+        expect($stdout).not_to be_a(StringIO)
+        expect($stderr).not_to be_a(StringIO)
+        { passed: false }
+      }
+
+      isolator.call(mutation:, test_command:, timeout: 5)
     end
 
     it "does not interfere with $LOADED_FEATURES" do
       features_before = $LOADED_FEATURES.dup
 
       test_command = ->(_m) { { passed: false } }
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      isolator.call(mutation:, test_command:, timeout: 5)
 
       expect($LOADED_FEATURES).to eq(features_before)
     end
