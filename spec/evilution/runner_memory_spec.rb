@@ -3,7 +3,7 @@
 require "evilution/runner"
 
 RSpec.describe Evilution::Runner, "memory instrumentation" do
-  let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3) }
+  let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3, release_node!: nil) }
 
   let(:mutation) do
     double(
