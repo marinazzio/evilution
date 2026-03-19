@@ -20,9 +20,9 @@ module Evilution
       @timeout = timeout
     end
 
-    def call(mutations)
+    def call(subjects)
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      spec_files = resolve_unique_spec_files(mutations)
+      spec_files = resolve_unique_spec_files(subjects)
       failed = Set.new
 
       spec_files.each do |spec_file|
@@ -93,8 +93,8 @@ module Evilution
 
     private
 
-    def resolve_unique_spec_files(mutations)
-      mutations.map { |m| @spec_resolver.call(m.file_path) || "spec" }.uniq
+    def resolve_unique_spec_files(subjects)
+      subjects.map { |s| @spec_resolver.call(s.file_path) || "spec" }.uniq
     end
   end
 end
