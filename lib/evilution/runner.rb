@@ -68,7 +68,11 @@ module Evilution
     end
 
     def filter_by_target(subjects)
-      matched = subjects.select { |s| s.name == config.target }
+      matched = if config.target.include?("#")
+                  subjects.select { |s| s.name == config.target }
+                else
+                  subjects.select { |s| s.name.start_with?("#{config.target}#") }
+                end
       raise Error, "no method found matching '#{config.target}'" if matched.empty?
 
       matched
