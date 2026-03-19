@@ -23,14 +23,22 @@ module Evilution
         result
       end
 
+      def rss_available?
+        !Evilution::Memory.rss_kb.nil?
+      end
+
       def growth_kb
+        return nil if samples.any?(&:nil?)
         return 0 if samples.size < 2
 
         samples.last - samples.first
       end
 
       def passed?
-        growth_kb <= @max_growth_kb
+        kb = growth_kb
+        return false if kb.nil?
+
+        kb <= @max_growth_kb
       end
 
       private
@@ -42,7 +50,7 @@ module Evilution
       end
 
       def measure(&)
-        @samples << current_rss
+        @samples << Evilution::Memory.rss_kb
 
         @iterations.times do |i|
           yield
@@ -50,26 +58,32 @@ module Evilution
           next unless ((i + 1) % sample_interval).zero?
 
           GC.start
-          @samples << current_rss
+          @samples << Evilution::Memory.rss_kb
         end
+
+        take_final_sample
+      end
+
+      def take_final_sample
+        return if (@iterations % sample_interval).zero?
+
+        GC.start
+        @samples << Evilution::Memory.rss_kb
       end
 
       def sample_interval
         @sample_interval ||= [@iterations / 10, 1].max
       end
 
-      def current_rss
-        Evilution::Memory.rss_kb || 0
-      end
-
       def result
         {
           passed: passed?,
           growth_kb: growth_kb,
-          growth_mb: growth_kb / 1024.0,
+          growth_mb: growth_kb ? growth_kb / 1024.0 : nil,
           samples: samples,
           iterations: @iterations,
-          max_growth_kb: @max_growth_kb
+          max_growth_kb: @max_growth_kb,
+          rss_available: rss_available?
         }
       end
     end

@@ -26,15 +26,17 @@ end
 
 def report(name, result)
   status = result[:passed] ? "PASS" : "FAIL"
-  growth = format("%.1f MB", result[:growth_mb])
+  growth = result[:growth_mb] ? format("%.1f MB", result[:growth_mb]) : "N/A"
   max = format("%.1f MB", result[:max_growth_kb] / 1024.0)
-  samples = result[:samples].map { |s| format("%.1f", s / 1024.0) }.join(" -> ")
+  samples = result[:samples].map { |s| s ? format("%.1f", s / 1024.0) : "N/A" }.join(" -> ")
 
   puts "[#{status}] #{name}"
   puts "  Growth: #{growth} (max: #{max})"
   puts "  Samples (MB): #{samples}"
   puts
 end
+
+abort("RSS measurement unavailable (requires /proc filesystem)") unless Evilution::Memory.rss_kb
 
 mutations = setup_workload
 stub_test_command = ->(_m) { { passed: false } }
@@ -78,6 +80,7 @@ if mutations.size >= 2
         child_rss_kb: result.child_rss_kb, memory_delta_kb: result.memory_delta_kb }
     end
 
+    batch.each(&:strip_sources!)
     batch.zip(compact_results).map do |mutation, data|
       Evilution::Result::MutationResult.new(
         mutation: mutation, status: data[:status], duration: data[:duration],

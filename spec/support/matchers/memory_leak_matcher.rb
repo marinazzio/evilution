@@ -13,6 +13,8 @@ RSpec::Matchers.define :leak_memory do
     @iterations ||= 20
     @max_growth_kb ||= 10_240 # 10 MB
 
+    skip "RSS measurement unavailable" unless Evilution::Memory.rss_kb
+
     GC.start
     GC.compact if GC.respond_to?(:compact)
     rss_before = Evilution::Memory.rss_kb
@@ -23,20 +25,18 @@ RSpec::Matchers.define :leak_memory do
     GC.compact if GC.respond_to?(:compact)
     rss_after = Evilution::Memory.rss_kb
 
-    return false unless rss_before && rss_after
-
     @actual_growth_kb = rss_after - rss_before
     @actual_growth_kb > @max_growth_kb
   end
 
   failure_message do
     "expected memory growth to exceed #{format_mb(@max_growth_kb)}, " \
-      "but grew by #{format_mb(@actual_growth_kb)}"
+      "but grew by #{format_mb(@actual_growth_kb || 0)}"
   end
 
   failure_message_when_negated do
     "expected memory growth not to exceed #{format_mb(@max_growth_kb)}, " \
-      "but grew by #{format_mb(@actual_growth_kb)}"
+      "but grew by #{format_mb(@actual_growth_kb || 0)}"
   end
 
   def format_mb(kb)

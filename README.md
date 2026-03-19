@@ -46,8 +46,8 @@ evilution [command] [options] [files...]
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
 | `--no-coverage`         | Boolean | false        | **DEPRECATED, NO-OP**: Kept for backward compatibility. Will be removed. |
-| `-j`, `--jobs N`        | Integer | 1            | Number of parallel workers. Each mutation runs in a forked process. |
-| `--baseline`            | Boolean | false        | Run baseline test suite first; marks mutations in already-failing code as `neutral`. |
+| `-j`, `--jobs N`        | Integer | 1            | Number of parallel workers. Pool forks per batch; mutations run in-process inside workers. |
+| `--no-baseline`         | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`       | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
@@ -259,7 +259,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Mutate** — Operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
-4. **Isolate** — Each mutation runs in a `fork()`-ed child process; parallel mode (`--jobs N`) uses in-process isolation inside pool workers to avoid double forking
+4. **Isolate** — Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
 5. **Test** — RSpec executes against the mutated source
 6. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 7. **Report** — Results aggregated into text or JSON, including peak memory usage
