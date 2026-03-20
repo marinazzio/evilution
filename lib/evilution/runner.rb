@@ -11,6 +11,7 @@ require_relative "reporter/json"
 require_relative "reporter/cli"
 require_relative "reporter/html"
 require_relative "reporter/suggestion"
+require_relative "equivalent/detector"
 require_relative "diff/parser"
 require_relative "diff/file_filter"
 require_relative "git/changed_files"
@@ -47,7 +48,10 @@ module Evilution
       equivalent_mutations, mutations = filter_equivalent(mutations)
       release_subject_nodes(subjects)
       results, truncated = run_mutations(mutations, baseline_result)
-      results += equivalent_mutations.map { |m| equivalent_result(m) }
+      results += equivalent_mutations.map do |m|
+        m.strip_sources!
+        equivalent_result(m)
+      end
       log_memory("after run_mutations", "#{results.length} results")
 
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time

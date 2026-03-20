@@ -17,7 +17,8 @@ module Evilution
 
       private
 
-      def build_report(summary) # rubocop:disable Metrics/PerceivedComplexity
+      # rubocop:disable Metrics/PerceivedComplexity
+      def build_report(summary)
         {
           version: Evilution::VERSION,
           timestamp: Time.now.iso8601,
@@ -30,6 +31,7 @@ module Evilution
           equivalent: summary.equivalent_results.map { |r| build_mutation_detail(r) }
         }
       end
+      # rubocop:enable Metrics/PerceivedComplexity
 
       def build_summary(summary)
         data = {
