@@ -22,4 +22,12 @@ class Calculator
   def power(a, b)
     a ** b
   end
+
+  def left_shift(a, b)
+    a << b
+  end
+
+  def right_shift(a, b)
+    a >> b
+  end
 end
