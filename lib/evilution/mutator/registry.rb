@@ -30,7 +30,8 @@ module Evilution
           Operator::ConditionalFlip,
           Operator::RangeReplacement,
           Operator::RegexpMutation,
-          Operator::ReceiverReplacement
+          Operator::ReceiverReplacement,
+          Operator::SendMutation
         ].each { |op| registry.register(op) }
         registry
       end
