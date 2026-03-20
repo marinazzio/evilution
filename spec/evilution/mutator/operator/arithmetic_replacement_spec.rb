@@ -59,6 +59,20 @@ RSpec.describe Evilution::Mutator::Operator::ArithmeticReplacement do
       expect(muts.first.mutated_source).to include("a * b")
     end
 
+    it "replaces << with >>" do
+      muts = mutations_for("left_shift")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("a >> b")
+    end
+
+    it "replaces >> with <<" do
+      muts = mutations_for("right_shift")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("a << b")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

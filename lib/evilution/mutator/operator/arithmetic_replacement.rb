@@ -10,7 +10,9 @@ module Evilution
           :* => [:/],
           :/ => [:*],
           :% => [:*],
-          :** => [:*]
+          :** => [:*],
+          :<< => [:>>],
+          :>> => [:<<]
         }.freeze
 
         def visit_call_node(node)
