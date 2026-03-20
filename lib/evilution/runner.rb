@@ -11,6 +11,7 @@ require_relative "reporter/json"
 require_relative "reporter/cli"
 require_relative "reporter/html"
 require_relative "reporter/suggestion"
+require_relative "equivalent/detector"
 require_relative "diff/parser"
 require_relative "diff/file_filter"
 require_relative "git/changed_files"
@@ -44,7 +45,13 @@ module Evilution
       baseline_result = run_baseline(subjects)
 
       mutations = generate_mutations(subjects)
+      equivalent_mutations, mutations = filter_equivalent(mutations)
+      release_subject_nodes(subjects)
       results, truncated = run_mutations(mutations, baseline_result)
+      results += equivalent_mutations.map do |m|
+        m.strip_sources!
+        equivalent_result(m)
+      end
       log_memory("after run_mutations", "#{results.length} results")
 
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
@@ -100,10 +107,20 @@ module Evilution
 
     def generate_mutations(subjects)
       subjects.flat_map do |subject|
-        mutations = registry.mutations_for(subject)
-        subject.release_node!
-        mutations
+        registry.mutations_for(subject)
       end
+    end
+
+    def filter_equivalent(mutations)
+      Equivalent::Detector.new.call(mutations)
+    end
+
+    def release_subject_nodes(subjects)
+      subjects.each(&:release_node!)
+    end
+
+    def equivalent_result(mutation)
+      Result::MutationResult.new(mutation: mutation, status: :equivalent, duration: 0.0)
     end
 
     def run_baseline(subjects)

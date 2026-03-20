@@ -37,6 +37,14 @@ RSpec.describe Evilution::Result::MutationResult do
       expect(result).not_to be_survived
       expect(result).not_to be_killed
     end
+
+    it "identifies equivalent mutations" do
+      result = described_class.new(mutation: mutation, status: :equivalent)
+
+      expect(result).to be_equivalent
+      expect(result).not_to be_survived
+      expect(result).not_to be_killed
+    end
   end
 
   it "rejects invalid statuses" do

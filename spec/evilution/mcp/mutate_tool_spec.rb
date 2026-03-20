@@ -41,12 +41,14 @@ RSpec.describe Evilution::MCP::MutateTool do
       timed_out: 0,
       errors: 0,
       neutral: 0,
+      equivalent: 0,
       score: 1.0,
       duration: 0.5,
       truncated?: false,
       survived_results: [],
       killed_results: [killed_result],
       neutral_results: [],
+      equivalent_results: [],
       peak_memory_mb: nil
     )
   end
@@ -192,6 +194,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           survived_results: [],
           killed_results: [],
           neutral_results: [],
+          equivalent: 0,
+          equivalent_results: [],
           peak_memory_mb: nil
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
@@ -232,6 +236,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           survived_results: [],
           killed_results: [],
           neutral_results: [],
+          equivalent: 0,
+          equivalent_results: [],
           peak_memory_mb: nil
         )
         allow(runner).to receive(:call).and_return(error_summary)
@@ -272,6 +278,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           survived_results: [],
           killed_results: [],
           neutral_results: [neutral_result],
+          equivalent: 0,
+          equivalent_results: [],
           peak_memory_mb: nil
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
@@ -321,6 +329,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           survived_results: [survived_result],
           killed_results: [],
           neutral_results: [],
+          equivalent: 0,
+          equivalent_results: [],
           peak_memory_mb: nil
         )
         allow(runner).to receive(:call).and_return(survived_summary)

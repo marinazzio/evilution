@@ -103,6 +103,7 @@ module Evilution
           data = ::JSON.parse(json_string)
           strip_diffs(data, "killed")
           strip_diffs(data, "neutral")
+          strip_diffs(data, "equivalent")
           ::JSON.generate(data)
         end
 

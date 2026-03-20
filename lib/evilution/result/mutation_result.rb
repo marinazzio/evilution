@@ -3,7 +3,7 @@
 module Evilution
   module Result
     class MutationResult
-      STATUSES = %i[killed survived timeout error neutral].freeze
+      STATUSES = %i[killed survived timeout error neutral equivalent].freeze
 
       attr_reader :mutation, :status, :duration, :killing_test, :test_command,
                   :child_rss_kb, :memory_delta_kb
@@ -40,6 +40,10 @@ module Evilution
 
       def neutral?
         status == :neutral
+      end
+
+      def equivalent?
+        status == :equivalent
       end
     end
   end

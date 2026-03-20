@@ -76,6 +76,28 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#equivalent" do
+    it "counts equivalent mutations" do
+      results_with_equivalent = [
+        make_result(:killed),
+        make_result(:equivalent),
+        make_result(:equivalent)
+      ]
+      s = described_class.new(results: results_with_equivalent)
+
+      expect(s.equivalent).to eq(2)
+    end
+  end
+
+  describe "#equivalent_results" do
+    it "returns only equivalent results" do
+      equiv = make_result(:equivalent)
+      s = described_class.new(results: [make_result(:killed), equiv])
+
+      expect(s.equivalent_results).to eq([equiv])
+    end
+  end
+
   describe "#score" do
     it "calculates killed / (total - errors)" do
       expect(summary.score).to eq(3.0 / 5)
@@ -117,6 +139,17 @@ RSpec.describe Evilution::Result::Summary do
         make_result(:neutral)
       ]
       s = described_class.new(results: mixed)
+
+      expect(s.score).to eq(1.0 / 2)
+    end
+
+    it "excludes equivalents from denominator" do
+      results_with_equivalent = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:equivalent)
+      ]
+      s = described_class.new(results: results_with_equivalent)
 
       expect(s.score).to eq(1.0 / 2)
     end

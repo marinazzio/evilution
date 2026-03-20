@@ -17,6 +17,7 @@ module Evilution
 
       private
 
+      # rubocop:disable Metrics/PerceivedComplexity
       def build_report(summary)
         {
           version: Evilution::VERSION,
@@ -26,9 +27,11 @@ module Evilution
           killed: summary.killed_results.map { |r| build_mutation_detail(r) },
           neutral: summary.neutral_results.map { |r| build_mutation_detail(r) },
           timed_out: summary.results.select(&:timeout?).map { |r| build_mutation_detail(r) },
-          errors: summary.results.select(&:error?).map { |r| build_mutation_detail(r) }
+          errors: summary.results.select(&:error?).map { |r| build_mutation_detail(r) },
+          equivalent: summary.equivalent_results.map { |r| build_mutation_detail(r) }
         }
       end
+      # rubocop:enable Metrics/PerceivedComplexity
 
       def build_summary(summary)
         data = {
@@ -38,6 +41,7 @@ module Evilution
           timed_out: summary.timed_out,
           errors: summary.errors,
           neutral: summary.neutral,
+          equivalent: summary.equivalent,
           score: summary.score.round(4),
           duration: summary.duration.round(4)
         }
