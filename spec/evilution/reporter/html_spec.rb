@@ -89,9 +89,10 @@ RSpec.describe Evilution::Reporter::HTML do
     it "includes summary statistics" do
       output = reporter.call(summary)
 
-      expect(output).to include("2")    # total
-      expect(output).to include("1")    # killed
-      expect(output).to include("50.00%") # score
+      expect(output).to match(%r{Total</span></div>.*}m)
+      expect(output).to match(%r{<span class="card-value">2</span><span class="card-label">Total</span>})
+      expect(output).to match(%r{<span class="card-value">1</span><span class="card-label">Killed</span>})
+      expect(output).to include("50.00%")
     end
 
     it "includes survived mutations with diffs" do
@@ -135,7 +136,8 @@ RSpec.describe Evilution::Reporter::HTML do
       output = reporter.call(empty_summary)
 
       expect(output).to include("<!DOCTYPE html>")
-      expect(output).to include("0")
+      expect(output).to match(%r{<span class="card-value">0</span><span class="card-label">Total</span>})
+      expect(output).to include("No mutations generated.")
     end
 
     it "includes meta tags and title" do
