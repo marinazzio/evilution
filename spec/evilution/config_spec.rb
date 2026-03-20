@@ -224,6 +224,20 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "#html?" do
+    it "returns true when format is html" do
+      config = described_class.new(format: :html, skip_config_file: true)
+
+      expect(config.html?).to be true
+    end
+
+    it "returns false when format is text" do
+      config = described_class.new(format: :text, skip_config_file: true)
+
+      expect(config.html?).to be false
+    end
+  end
+
   describe "#line_ranges?" do
     it "returns true when line_ranges is non-empty" do
       config = described_class.new(line_ranges: { "lib/foo.rb" => 10..20 }, skip_config_file: true)
