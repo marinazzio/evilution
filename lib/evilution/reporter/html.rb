@@ -76,6 +76,7 @@ module Evilution
             <div class="card"><span class="card-value">#{summary.timed_out}</span><span class="card-label">Timed Out</span></div>
             <div class="card"><span class="card-value">#{summary.errors}</span><span class="card-label">Errors</span></div>
             <div class="card"><span class="card-value">#{summary.neutral}</span><span class="card-label">Neutral</span></div>
+            <div class="card"><span class="card-value">#{summary.equivalent}</span><span class="card-label">Equivalent</span></div>
             <div class="card"><span class="card-value">#{format("%.2f", summary.duration)}s</span><span class="card-label">Duration</span></div>
             #{peak_html}
           </section>
@@ -222,6 +223,7 @@ module Evilution
             .map-line.timeout { color: #d29922; }
             .map-line.error { color: #f85149; }
             .map-line.neutral { color: #8b949e; }
+            .map-line.equivalent { color: #8b949e; }
             .line-number { min-width: 60px; color: #8b949e; }
             .operator { flex: 1; }
             .status-badge { font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 10px; text-transform: uppercase; font-weight: bold; }
@@ -229,6 +231,7 @@ module Evilution
             .status-badge.survived { background: #4a1a1a; }
             .status-badge.timeout { background: #4a3a10; }
             .status-badge.neutral { background: #21262d; }
+            .status-badge.equivalent { background: #21262d; }
             .survived-details { border-top: 1px solid #30363d; padding: 1rem; }
             .survived-details h3 { color: #f85149; font-size: 0.9rem; margin-bottom: 0.75rem; }
             .survived-entry { background: #1c1a1a; border: 1px solid #4a1a1a; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.75rem; }

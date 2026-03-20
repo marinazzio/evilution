@@ -44,7 +44,10 @@ module Evilution
       baseline_result = run_baseline(subjects)
 
       mutations = generate_mutations(subjects)
+      equivalent_mutations, mutations = filter_equivalent(mutations)
+      release_subject_nodes(subjects)
       results, truncated = run_mutations(mutations, baseline_result)
+      results += equivalent_mutations.map { |m| equivalent_result(m) }
       log_memory("after run_mutations", "#{results.length} results")
 
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
@@ -100,10 +103,20 @@ module Evilution
 
     def generate_mutations(subjects)
       subjects.flat_map do |subject|
-        mutations = registry.mutations_for(subject)
-        subject.release_node!
-        mutations
+        registry.mutations_for(subject)
       end
+    end
+
+    def filter_equivalent(mutations)
+      Equivalent::Detector.new.call(mutations)
+    end
+
+    def release_subject_nodes(subjects)
+      subjects.each(&:release_node!)
+    end
+
+    def equivalent_result(mutation)
+      Result::MutationResult.new(mutation: mutation, status: :equivalent, duration: 0.0)
     end
 
     def run_baseline(subjects)

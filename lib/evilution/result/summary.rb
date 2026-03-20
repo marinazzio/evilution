@@ -40,8 +40,12 @@ module Evilution
         results.count(&:neutral?)
       end
 
+      def equivalent
+        results.count(&:equivalent?)
+      end
+
       def score
-        denominator = total - errors - neutral
+        denominator = total - errors - neutral - equivalent
         return 0.0 if denominator.zero?
 
         killed.to_f / denominator
@@ -61,6 +65,10 @@ module Evilution
 
       def neutral_results
         results.select(&:neutral?)
+      end
+
+      def equivalent_results
+        results.select(&:equivalent?)
       end
 
       def peak_memory_mb

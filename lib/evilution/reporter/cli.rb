@@ -17,6 +17,7 @@ module Evilution
         lines << peak_memory_line(peak) if peak
         append_survived(lines, summary)
         append_neutral(lines, summary)
+        append_equivalent(lines, summary)
         lines << ""
         lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
         lines << result_line(summary)
@@ -42,6 +43,14 @@ module Evilution
         summary.neutral_results.each { |result| lines << format_neutral(result) }
       end
 
+      def append_equivalent(lines, summary)
+        return unless summary.equivalent_results.any?
+
+        lines << ""
+        lines << "Equivalent mutations (provably identical behavior):"
+        summary.equivalent_results.each { |result| lines << format_neutral(result) }
+      end
+
       def header
         "Evilution v#{Evilution::VERSION} — Mutation Testing Results"
       end
@@ -50,11 +59,12 @@ module Evilution
         parts = "Mutations: #{summary.total} total, #{summary.killed} killed, " \
                 "#{summary.survived} survived, #{summary.timed_out} timed out"
         parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
+        parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
         parts
       end
 
       def score_line(summary)
-        denominator = summary.total - summary.errors - summary.neutral
+        denominator = summary.total - summary.errors - summary.neutral - summary.equivalent
         score_pct = format_pct(summary.score)
         "Score: #{score_pct} (#{summary.killed}/#{denominator})"
       end
