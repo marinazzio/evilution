@@ -154,7 +154,7 @@ RSpec.describe Evilution::MCP::MutateTool do
 
     context "response trimming" do
       it "strips diffs from killed mutations" do
-        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
         killed_entry = parsed["killed"].first
@@ -284,7 +284,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
-        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
         neutral_entry = parsed["neutral"].first
@@ -349,6 +349,53 @@ RSpec.describe Evilution::MCP::MutateTool do
         expect(parsed["summary"]["total"]).to eq(1)
         expect(parsed["summary"]["killed"]).to eq(1)
         expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
+
+    context "verbosity control" do
+      it "defaults to summary verbosity (omits killed/neutral/equivalent arrays)" do
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).not_to have_key("neutral")
+        expect(parsed).not_to have_key("equivalent")
+        expect(parsed).to have_key("summary")
+        expect(parsed).to have_key("survived")
+        expect(parsed).to have_key("timed_out")
+        expect(parsed).to have_key("errors")
+      end
+
+      it "keeps all entries with diffs stripped in full verbosity" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).to have_key("killed")
+        expect(parsed).to have_key("neutral")
+        expect(parsed).to have_key("equivalent")
+        expect(parsed["killed"].first).not_to have_key("diff")
+      end
+
+      it "keeps only summary and survived in minimal verbosity" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "minimal", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).to have_key("summary")
+        expect(parsed).to have_key("survived")
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).not_to have_key("neutral")
+        expect(parsed).not_to have_key("equivalent")
+        expect(parsed).not_to have_key("timed_out")
+        expect(parsed).not_to have_key("errors")
+      end
+
+      it "accepts summary verbosity explicitly" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "summary", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).to have_key("survived")
+        expect(parsed).to have_key("summary")
       end
     end
   end

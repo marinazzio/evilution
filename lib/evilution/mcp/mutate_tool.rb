@@ -8,7 +8,7 @@ require_relative "../reporter/json"
 
 module Evilution
   module MCP
-    class MutateTool < ::MCP::Tool
+    class MutateTool < ::MCP::Tool # rubocop:disable Metrics/ClassLength
       tool_name "evilution-mutate"
       description "Run mutation testing on Ruby source files"
       input_schema(
@@ -38,19 +38,26 @@ module Evilution
             type: "array",
             items: { type: "string" },
             description: "Spec files to run (overrides auto-detection)"
+          },
+          verbosity: {
+            type: "string",
+            enum: %w[full summary minimal],
+            description: "Response verbosity: full (all entries, diffs stripped from killed/neutral/equivalent), " \
+                         "summary (omits killed/neutral/equivalent arrays; default), " \
+                         "minimal (only summary + survived)"
           }
         }
       )
 
       class << self
-        def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil, fail_fast: nil, spec: nil) # rubocop:disable Lint/UnusedMethodArgument
+        def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil, fail_fast: nil, spec: nil, verbosity: nil) # rubocop:disable Lint/UnusedMethodArgument
           parsed_files, line_ranges = parse_files(Array(files))
           config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec)
           config = Config.new(**config_opts)
           runner = Runner.new(config: config)
           summary = runner.call
           report = Reporter::JSON.new.call(summary)
-          compact = trim_report(report)
+          compact = trim_report(report, verbosity || "summary")
 
           ::MCP::Tool::Response.new([{ type: "text", text: compact }])
         rescue Evilution::Error => e
@@ -99,11 +106,24 @@ module Evilution
           opts
         end
 
-        def trim_report(json_string)
+        def trim_report(json_string, verbosity)
           data = ::JSON.parse(json_string)
-          strip_diffs(data, "killed")
-          strip_diffs(data, "neutral")
-          strip_diffs(data, "equivalent")
+          case verbosity
+          when "full"
+            strip_diffs(data, "killed")
+            strip_diffs(data, "neutral")
+            strip_diffs(data, "equivalent")
+          when "summary"
+            data.delete("killed")
+            data.delete("neutral")
+            data.delete("equivalent")
+          when "minimal"
+            data.delete("killed")
+            data.delete("neutral")
+            data.delete("equivalent")
+            data.delete("timed_out")
+            data.delete("errors")
+          end
           ::JSON.generate(data)
         end
 
