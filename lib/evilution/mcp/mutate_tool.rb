@@ -57,13 +57,15 @@ module Evilution
           runner = Runner.new(config: config)
           summary = runner.call
           report = Reporter::JSON.new.call(summary)
-          compact = trim_report(report, verbosity || "summary")
+          compact = trim_report(report, normalize_verbosity(verbosity))
 
           ::MCP::Tool::Response.new([{ type: "text", text: compact }])
         rescue Evilution::Error => e
           error_payload = build_error_payload(e)
           ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(error_payload) }], error: true)
         end
+
+        VALID_VERBOSITIES = %w[full summary minimal].freeze
 
         private
 
@@ -104,6 +106,14 @@ module Evilution
           opts[:fail_fast] = fail_fast if fail_fast
           opts[:spec_files] = spec if spec
           opts
+        end
+
+        def normalize_verbosity(value)
+          normalized = value.to_s.strip.downcase
+          normalized = "summary" if normalized.empty?
+          return normalized if VALID_VERBOSITIES.include?(normalized)
+
+          raise ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
         end
 
         def trim_report(json_string, verbosity)
