@@ -281,7 +281,15 @@ module Evilution
       return unless reporter
 
       output = reporter.call(summary)
-      $stdout.puts(output) unless config.quiet
+      return if config.quiet
+
+      if config.html?
+        path = "evilution-report.html"
+        File.write(path, output)
+        warn "HTML report written to #{path}"
+      else
+        $stdout.puts(output)
+      end
     end
 
     def log_baseline_start
@@ -350,6 +358,8 @@ module Evilution
         Reporter::JSON.new
       when :text
         Reporter::CLI.new
+      when :html
+        Reporter::HTML.new
       end
     end
 

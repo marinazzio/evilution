@@ -45,6 +45,10 @@ module Evilution
       format == :text
     end
 
+    def html?
+      format == :html
+    end
+
     def diff?
       !diff_base.nil?
     end

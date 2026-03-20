@@ -106,7 +106,7 @@ module Evilution
     def add_core_options(opts)
       opts.on("-j", "--jobs N", Integer, "Number of parallel workers (default: 1)") { |n| @options[:jobs] = n }
       opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
-      opts.on("-f", "--format FORMAT", "Output format: text, json") { |f| @options[:format] = f.to_sym }
+      opts.on("-f", "--format FORMAT", "Output format: text, json, html") { |f| @options[:format] = f.to_sym }
       opts.on("--diff BASE", "DEPRECATED: Use line-range targeting instead") do |b|
         warn("Warning: --diff is deprecated and will be removed in a future version. " \
              "Use line-range targeting instead: evilution run lib/foo.rb:15-30")
