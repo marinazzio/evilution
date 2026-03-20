@@ -12,8 +12,6 @@ require_relative "reporter/cli"
 require_relative "reporter/html"
 require_relative "reporter/suggestion"
 require_relative "equivalent/detector"
-require_relative "diff/parser"
-require_relative "diff/file_filter"
 require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
@@ -39,7 +37,6 @@ module Evilution
       subjects = parse_subjects
       subjects = filter_by_target(subjects) if config.target?
       subjects = filter_by_line_ranges(subjects) if config.line_ranges?
-      subjects = filter_by_diff(subjects) if config.diff?
       log_memory("after parse_subjects", "#{subjects.length} subjects")
 
       baseline_result = run_baseline(subjects)
@@ -97,12 +94,6 @@ module Evilution
         subject_end = subject_start + subject.source.count("\n")
         subject_start <= range.last && subject_end >= range.first
       end
-    end
-
-    def filter_by_diff(subjects)
-      diff_parser = Diff::Parser.new
-      changed_ranges = diff_parser.parse(config.diff_base)
-      Diff::FileFilter.new.filter(subjects, changed_ranges)
     end
 
     def generate_mutations(subjects)
