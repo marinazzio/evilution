@@ -42,10 +42,8 @@ evilution [command] [options] [files...]
 | `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
 | `--target METHOD`       | String  | _(none)_     | Only mutate the named method (e.g. `Foo::Bar#calculate`). |
-| `--diff BASE`           | String  | _(none)_     | **DEPRECATED**: Use line-range targeting instead. Git ref. Only mutate methods whose definition line changed since BASE. |
 | `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
-| `--no-coverage`         | Boolean | false        | **DEPRECATED, NO-OP**: Kept for backward compatibility. Will be removed. |
 | `-j`, `--jobs N`        | Integer | 1            | Number of parallel workers. Pool forks per batch; mutations run in-process inside workers. |
 | `--no-baseline`         | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`       | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
@@ -162,6 +160,18 @@ If using Bundler, set the command to `bundle` and args to `["exec", "evilution",
 
 The server exposes an `evilution-mutate` tool that accepts target files, method targets, spec overrides, parallelism, and timeout options — returning structured JSON results directly to the agent.
 
+### Verbosity Control
+
+The MCP tool accepts a `verbosity` parameter to control response size:
+
+| Level       | Default | What's included                                              |
+|-------------|---------|--------------------------------------------------------------|
+| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors`             |
+| `full`      |         | All entries (killed/neutral/equivalent diffs stripped)        |
+| `minimal`   |         | `summary` + `survived` only                                  |
+
+Use `minimal` when context window budget is tight and you only need to see what survived. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
+
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
 ## Recommended Workflows for AI Agents
@@ -181,8 +191,6 @@ bundle exec evilution run lib/foo.rb:15-30 lib/bar.rb:5-20 --format json --min-s
 ```
 
 Target the exact lines you changed for fast, focused mutation testing. See line-range syntax below.
-
-> **Note**: `--diff BASE` is deprecated and will be removed in a future version. Prefer line-range targeting for new workflows.
 
 ### 3. Line-range targeted scan (fastest)
 

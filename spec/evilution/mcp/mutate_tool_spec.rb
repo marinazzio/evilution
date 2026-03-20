@@ -154,7 +154,7 @@ RSpec.describe Evilution::MCP::MutateTool do
 
     context "response trimming" do
       it "strips diffs from killed mutations" do
-        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
         killed_entry = parsed["killed"].first
@@ -284,7 +284,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
-        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
         neutral_entry = parsed["neutral"].first
@@ -349,6 +349,122 @@ RSpec.describe Evilution::MCP::MutateTool do
         expect(parsed["summary"]["total"]).to eq(1)
         expect(parsed["summary"]["killed"]).to eq(1)
         expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
+
+    context "verbosity control" do
+      it "defaults to summary verbosity (omits killed/neutral/equivalent arrays)" do
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).not_to have_key("neutral")
+        expect(parsed).not_to have_key("equivalent")
+        expect(parsed).to have_key("summary")
+        expect(parsed).to have_key("survived")
+        expect(parsed).to have_key("timed_out")
+        expect(parsed).to have_key("errors")
+      end
+
+      it "keeps all entries with diffs stripped in full verbosity" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).to have_key("killed")
+        expect(parsed).to have_key("neutral")
+        expect(parsed).to have_key("equivalent")
+        expect(parsed["killed"].first).not_to have_key("diff")
+      end
+
+      it "keeps only summary and survived in minimal verbosity" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "minimal", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).to have_key("summary")
+        expect(parsed).to have_key("survived")
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).not_to have_key("neutral")
+        expect(parsed).not_to have_key("equivalent")
+        expect(parsed).not_to have_key("timed_out")
+        expect(parsed).not_to have_key("errors")
+      end
+
+      it "accepts summary verbosity explicitly" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "summary", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).to have_key("survived")
+        expect(parsed).to have_key("summary")
+      end
+
+      it "treats empty string verbosity as summary default" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).to have_key("summary")
+      end
+
+      it "treats nil verbosity as summary default" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: nil, server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed).not_to have_key("killed")
+        expect(parsed).to have_key("summary")
+      end
+
+      it "returns error for invalid verbosity" do
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "verbose", server_context: nil)
+
+        expect(response.error?).to be true
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["error"]["type"]).to eq("parse_error")
+        expect(parsed["error"]["message"]).to include("invalid verbosity")
+      end
+
+      it "strips diffs from equivalent entries in full verbosity" do
+        equivalent_result = instance_double(
+          Evilution::Result::MutationResult,
+          mutation: mutation,
+          status: :equivalent,
+          duration: 0.0,
+          killed?: false,
+          survived?: false,
+          timeout?: false,
+          error?: false,
+          neutral?: false,
+          test_command: nil,
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+        equivalent_summary = instance_double(
+          Evilution::Result::Summary,
+          results: [equivalent_result],
+          total: 1,
+          killed: 0,
+          survived: 0,
+          timed_out: 0,
+          errors: 0,
+          neutral: 0,
+          equivalent: 1,
+          score: 0.0,
+          duration: 0.0,
+          truncated?: false,
+          survived_results: [],
+          killed_results: [],
+          neutral_results: [],
+          equivalent_results: [equivalent_result],
+          peak_memory_mb: nil
+        )
+        allow(runner).to receive(:call).and_return(equivalent_summary)
+
+        response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
+
+        parsed = JSON.parse(response.content.first[:text])
+        equivalent_entry = parsed["equivalent"].first
+        expect(equivalent_entry).not_to have_key("diff")
+        expect(equivalent_entry["operator"]).to eq("arithmetic_replacement")
       end
     end
   end
