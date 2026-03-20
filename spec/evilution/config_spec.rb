@@ -26,20 +26,12 @@ RSpec.describe Evilution::Config do
       expect(config.integration).to eq(:rspec)
     end
 
-    it "enables coverage by default" do
-      expect(config.coverage).to be true
-    end
-
     it "disables verbose by default" do
       expect(config.verbose).to be false
     end
 
     it "disables quiet by default" do
       expect(config.quiet).to be false
-    end
-
-    it "sets diff_base to nil" do
-      expect(config.diff_base).to be_nil
     end
 
     it "sets fail_fast to nil" do
@@ -84,12 +76,6 @@ RSpec.describe Evilution::Config do
       config = described_class.new(format: "json", skip_config_file: true)
 
       expect(config.format).to eq(:json)
-    end
-
-    it "accepts diff_base" do
-      config = described_class.new(diff_base: "HEAD~1", skip_config_file: true)
-
-      expect(config.diff_base).to eq("HEAD~1")
     end
 
     it "accepts min_score" do
@@ -158,24 +144,6 @@ RSpec.describe Evilution::Config do
       config = described_class.new(timeout: 5)
 
       expect(config.timeout).to eq(5)
-    end
-
-    it "warns when coverage is set in config file" do
-      File.write(".evilution.yml", "coverage: true\n")
-
-      expect { described_class.new }.to output(/coverage.*deprecated.*ignored/).to_stderr
-    end
-
-    it "warns when coverage is explicitly set to false in config file" do
-      File.write(".evilution.yml", "coverage: false\n")
-
-      expect { described_class.new }.to output(/coverage.*deprecated.*ignored/).to_stderr
-    end
-
-    it "warns when diff_base is set in config file" do
-      File.write(".evilution.yml", "diff_base: main\n")
-
-      expect { described_class.new }.to output(/diff_base.*deprecated/).to_stderr
     end
 
     it "handles empty config file gracefully" do
@@ -263,20 +231,6 @@ RSpec.describe Evilution::Config do
       config = described_class.new(skip_config_file: true)
 
       expect(config.target?).to be false
-    end
-  end
-
-  describe "#diff?" do
-    it "returns true when diff_base is set" do
-      config = described_class.new(diff_base: "HEAD~1", skip_config_file: true)
-
-      expect(config.diff?).to be true
-    end
-
-    it "returns false when diff_base is nil" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.diff?).to be false
     end
   end
 

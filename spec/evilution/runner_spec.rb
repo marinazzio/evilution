@@ -421,57 +421,6 @@ RSpec.describe Evilution::Runner do
     end
   end
 
-  describe "#call with diff filtering" do
-    let(:config) do
-      Evilution::Config.new(
-        target_files: ["lib/example.rb"],
-        format: :json,
-        timeout: 5,
-        quiet: true,
-        baseline: false,
-        diff_base: "HEAD~1",
-        isolation: :fork,
-        skip_config_file: true
-      )
-    end
-
-    before do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
-
-      diff_parser = instance_double(Evilution::Diff::Parser)
-      allow(Evilution::Diff::Parser).to receive(:new).and_return(diff_parser)
-      allow(diff_parser).to receive(:parse).with("HEAD~1").and_return([{ file: "lib/example.rb", lines: [1..10] }])
-
-      file_filter = instance_double(Evilution::Diff::FileFilter)
-      allow(Evilution::Diff::FileFilter).to receive(:new).and_return(file_filter)
-      allow(file_filter).to receive(:filter).and_return([subject_obj])
-
-      registry = instance_double(Evilution::Mutator::Registry)
-      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
-
-      isolator = instance_double(Evilution::Isolation::Fork)
-      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      allow(isolator).to receive(:call).and_return(mutation_result)
-    end
-
-    it "filters subjects through diff when diff_base is set" do
-      diff_parser = Evilution::Diff::Parser.new
-      expect(diff_parser).to receive(:parse).with("HEAD~1").and_return([{ file: "lib/example.rb", lines: [1..10] }])
-
-      runner.call
-    end
-
-    it "applies file filter to subjects" do
-      file_filter = Evilution::Diff::FileFilter.new
-      expect(file_filter).to receive(:filter).and_return([subject_obj])
-
-      runner.call
-    end
-  end
-
   describe "#call with spec_files" do
     let(:config) do
       Evilution::Config.new(
