@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.10.0] - 2026-03-21
+
+### Added
+
+- **SendMutation operator** — new mutation operator that replaces method calls with semantically related alternatives (e.g. `detect` ↔ `find`, `map` ↔ `flat_map`, `length` ↔ `size`, `gsub` ↔ `sub`, `send` ↔ `public_send`, and more); 17 replacement pairs covering common Ruby method families
+- **ArgumentNilSubstitution operator** — new mutation operator that replaces each positional argument with `nil` one at a time (e.g. `foo(a, b)` → `foo(nil, b)`, `foo(a, nil)`); skips splat, keyword, block, and forwarding arguments
+- **HTML report** (`--format html`) — self-contained HTML mutation report with dark theme, color-coded mutation map, survived mutation diffs with suggestions, and score badge; written to `evilution-report.html`
+- **Equivalent mutation detection** — automatically identifies mutations that produce semantically identical behavior using four heuristics: noop source (identical before/after), method body nil (empty/nil methods), alias swap (detect↔find, length↔size, collect↔map), and dead code (unreachable statements after return/raise); equivalent mutations are excluded from the mutation score denominator
+- **MCP tool equivalent trimming** — diffs are stripped from equivalent mutation entries in MCP responses alongside killed and neutral entries
+
+### Removed
+
+- **`--diff` CLI flag** — deprecated since v0.2.0; use line-range targeting instead (e.g. `evilution run lib/foo.rb:15-30`)
+- **`--no-coverage` CLI flag** — deprecated since v0.2.0; had no effect
+- **`diff_base` and `coverage` config keys** — no longer recognized in `.evilution.yml`; config file warnings removed
+- **`Diff::Parser` and `Diff::FileFilter` modules** — dead code removed along with specs
+- **`Coverage::Collector` and `Coverage::TestMap` modules** — dead code removed along with specs
+
 ## [0.9.0] - 2026-03-19
 
 ### Added
