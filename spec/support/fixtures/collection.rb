@@ -22,4 +22,36 @@ class CollectionProcessor
   def collect_items(items)
     items.collect { |i| i.to_s }
   end
+
+  def sort_items(items)
+    items.sort { |a, b| a <=> b }
+  end
+
+  def sort_by_items(items)
+    items.sort_by { |i| i.length }
+  end
+
+  def find_item(items)
+    items.find { |i| i > 0 }
+  end
+
+  def detect_item(items)
+    items.detect { |i| i > 0 }
+  end
+
+  def check_any(items)
+    items.any? { |i| i > 0 }
+  end
+
+  def check_all(items)
+    items.all? { |i| i > 0 }
+  end
+
+  def count_items(items)
+    items.count
+  end
+
+  def length_items(items)
+    items.length
+  end
 end
