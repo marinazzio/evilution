@@ -10,7 +10,15 @@ module Evilution
           select: [:reject],
           reject: [:select],
           flat_map: [:map],
-          collect: [:each]
+          collect: [:each],
+          sort: [:sort_by],
+          sort_by: [:sort],
+          find: [:detect],
+          detect: [:find],
+          any?: [:all?],
+          all?: [:any?],
+          count: [:length],
+          length: [:count]
         }.freeze
 
         def visit_call_node(node)

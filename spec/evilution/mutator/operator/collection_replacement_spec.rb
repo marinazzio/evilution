@@ -59,6 +59,69 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("items.each")
     end
 
+    it "replaces sort with sort_by" do
+      muts = mutations_for("sort_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.sort_by")
+    end
+
+    it "replaces sort_by with sort" do
+      muts = mutations_for("sort_by_items")
+
+      sort_mut = muts.find { |m| m.mutated_source.include?("items.sort {") }
+      expect(sort_mut).not_to be_nil
+    end
+
+    it "also replaces length inside sort_by block" do
+      muts = mutations_for("sort_by_items")
+
+      count_mut = muts.find { |m| m.mutated_source.include?("i.count") }
+      expect(count_mut).not_to be_nil
+    end
+
+    it "replaces find with detect" do
+      muts = mutations_for("find_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.detect")
+    end
+
+    it "replaces detect with find" do
+      muts = mutations_for("detect_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.find")
+    end
+
+    it "replaces any? with all?" do
+      muts = mutations_for("check_any")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.all?")
+    end
+
+    it "replaces all? with any?" do
+      muts = mutations_for("check_all")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.any?")
+    end
+
+    it "replaces count with length" do
+      muts = mutations_for("count_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.length")
+    end
+
+    it "replaces length with count" do
+      muts = mutations_for("length_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.count")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
