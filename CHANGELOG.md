@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.11.0] - 2026-03-21
+
+### Added
+
+- **Nil variants for literal operators** — BooleanLiteralReplacement, IntegerLiteralReplacement, FloatLiteralReplacement, StringLiteralReplacement, and SymbolLiteralReplacement now produce a `nil` mutation alongside their existing replacements (#193)
+- **NilReplacement expansion** — `nil` now mutates to `true`, `false`, `0`, and `""` (was only `true`); covers boolean, numeric, and string contexts (#197)
+- **CollectionReplacement expansion** — added 8 new method swaps: `sort`↔`sort_by`, `find`↔`detect`, `any?`↔`all?`, `count`↔`length` (14 total swaps, up from 6) (#198)
+- **ComparisonReplacement expansion** — added opposite direction flips: `>`↔`<`, `>=`↔`<=` alongside existing boundary and equality mutations (#199)
+- **RegexpMutation expansion** — added always-matching `/.*/` variant alongside the existing never-matching `/a\A/`; each regexp now produces 2 mutations (#200)
+- **ArithmeticReplacement expansion** — added bitwise shift operators `<<`↔`>>` (#189)
+- **MCP verbosity control** — MCP tool responses support configurable verbosity levels (#192)
+
+### Changed
+
+- **Dependency updates** (#191)
+
 ## [0.10.0] - 2026-03-21
 
 ### Added
