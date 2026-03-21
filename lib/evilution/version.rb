@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 module Evilution
-  VERSION = "0.11.0"
+  VERSION = "0.11.2"
 end
