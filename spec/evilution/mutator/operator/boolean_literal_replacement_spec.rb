@@ -17,29 +17,38 @@ RSpec.describe Evilution::Mutator::Operator::BooleanLiteralReplacement do
   end
 
   describe "#call" do
-    it "replaces true with false" do
+    it "replaces true with false and nil" do
       muts = mutations_for("always_true")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def always_true\s+false\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def always_true\s+false\s+end/),
+        a_string_matching(/def always_true\s+nil\s+end/)
+      )
     end
 
-    it "replaces false with true" do
+    it "replaces false with true and nil" do
       muts = mutations_for("always_false")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def always_false\s+true\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def always_false\s+true\s+end/),
+        a_string_matching(/def always_false\s+nil\s+end/)
+      )
     end
 
     it "replaces all boolean literals in a method with multiple booleans" do
       muts = mutations_for("mixed_booleans")
 
-      expect(muts.length).to eq(2)
+      expect(muts.length).to eq(4)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/return false if flag/),
         a_string_matching(/return true if flag/)
       )
+      expect(mutated_sources.count { |s| s.include?("nil") }).to eq(2)
     end
 
     it "produces valid Ruby for all mutations" do

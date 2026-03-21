@@ -37,6 +37,13 @@ module Evilution
             )
           end
 
+          add_mutation(
+            offset: node.location.start_offset,
+            length: node.location.length,
+            replacement: "nil",
+            node: node
+          )
+
           super
         end
       end
