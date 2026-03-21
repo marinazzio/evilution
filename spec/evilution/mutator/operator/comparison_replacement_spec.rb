@@ -17,22 +17,22 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
   end
 
   describe "#call" do
-    it "replaces >= with > and ==" do
+    it "replaces >= with >, ==, and <=" do
       muts = mutations_for("adult?")
-      operators = muts.map { |m| source_diff(m) }
+      replacements = muts.map(&:mutated_source)
 
-      expect(operators).to include(
+      expect(muts.length).to eq(3)
+      expect(replacements).to include(
         a_string_including("> 18"),
-        a_string_including("== 18")
+        a_string_including("== 18"),
+        a_string_including("<= 18")
       )
-      expect(muts.length).to eq(2)
     end
 
-    it "replaces > with >= and ==" do
+    it "replaces > with >=, ==, and < and replaces < with <=, ==, and >" do
       muts = mutations_for("teenager?")
-      muts.select { |m| m.mutated_source.include?("12") && !m.mutated_source.include?("> 12") }
 
-      expect(muts.length).to eq(4)
+      expect(muts.length).to eq(6)
     end
 
     it "replaces == with !=" do
@@ -49,14 +49,15 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
       expect(muts.first.mutated_source).to include("==")
     end
 
-    it "replaces <= with < and ==" do
+    it "replaces <= with <, ==, and >=" do
       muts = mutations_for("at_most?")
 
-      expect(muts.length).to eq(2)
+      expect(muts.length).to eq(3)
       replacements = muts.map(&:mutated_source)
       expect(replacements).to include(
         a_string_including("< limit"),
-        a_string_including("== limit")
+        a_string_including("== limit"),
+        a_string_including(">= limit")
       )
     end
 
