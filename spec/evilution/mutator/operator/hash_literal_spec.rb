@@ -17,11 +17,15 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
   end
 
   describe "#call" do
-    it "replaces { a: 1, b: 2 } with {}" do
+    it "replaces { a: 1, b: 2 } with {} and nil" do
       muts = mutations_for("returns_populated_hash")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_populated_hash\s+\{\}\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_populated_hash\s+\{\}\s+end/),
+        a_string_matching(/def returns_populated_hash\s+nil\s+end/)
+      )
     end
 
     it "produces no mutations for an empty hash" do

@@ -17,11 +17,15 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
   end
 
   describe "#call" do
-    it "replaces :foo with :__evilution_mutated__" do
+    it "replaces :foo with :__evilution_mutated__ and nil" do
       muts = mutations_for("returns_foo")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_foo\s+:__evilution_mutated__\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_foo\s+:__evilution_mutated__\s+end/),
+        a_string_matching(/def returns_foo\s+nil\s+end/)
+      )
     end
 
     it "produces valid Ruby for all mutations" do

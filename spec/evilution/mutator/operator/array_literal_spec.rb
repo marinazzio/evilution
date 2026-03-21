@@ -12,11 +12,15 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
   let(:empty_subject) { subjects.find { |s| s.name.include?("returns_empty_array") } }
 
   describe "#call" do
-    it "replaces [1, 2, 3] with []" do
+    it "replaces [1, 2, 3] with [] and nil" do
       mutations = described_class.new.call(non_empty_subject)
 
-      expect(mutations.length).to eq(1)
-      expect(mutations.first.mutated_source).to match(/\[\]/)
+      expect(mutations.length).to eq(2)
+      mutated_sources = mutations.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/\[\]/),
+        a_string_matching(/nil/)
+      )
     end
 
     it "does not mutate empty arrays" do

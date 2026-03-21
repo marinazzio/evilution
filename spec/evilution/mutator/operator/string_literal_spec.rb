@@ -17,18 +17,26 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
   end
 
   describe "#call" do
-    it 'replaces "hello" with ""' do
+    it 'replaces "hello" with "" and nil' do
       muts = mutations_for("returns_hello")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_hello\s+""\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_hello\s+""\s+end/),
+        a_string_matching(/def returns_hello\s+nil\s+end/)
+      )
     end
 
-    it 'replaces "" with "mutation"' do
+    it 'replaces "" with "mutation" and nil' do
       muts = mutations_for("returns_empty")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_empty\s+"mutation"\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_empty\s+"mutation"\s+end/),
+        a_string_matching(/def returns_empty\s+nil\s+end/)
+      )
     end
 
     it "produces valid Ruby for all mutations" do

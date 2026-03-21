@@ -17,28 +17,37 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
   end
 
   describe "#call" do
-    it "replaces 0 with 1" do
+    it "replaces 0 with 1 and nil" do
       muts = mutations_for("returns_zero")
-
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_zero\s+1\s+end/)
-    end
-
-    it "replaces 1 with 0" do
-      muts = mutations_for("returns_one")
-
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_one\s+0\s+end/)
-    end
-
-    it "replaces 42 with 0 and 43" do
-      muts = mutations_for("returns_forty_two")
 
       expect(muts.length).to eq(2)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
+        a_string_matching(/def returns_zero\s+1\s+end/),
+        a_string_matching(/def returns_zero\s+nil\s+end/)
+      )
+    end
+
+    it "replaces 1 with 0 and nil" do
+      muts = mutations_for("returns_one")
+
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_one\s+0\s+end/),
+        a_string_matching(/def returns_one\s+nil\s+end/)
+      )
+    end
+
+    it "replaces 42 with 0, 43, and nil" do
+      muts = mutations_for("returns_forty_two")
+
+      expect(muts.length).to eq(3)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
         a_string_matching(/def returns_forty_two\s+0\s+end/),
-        a_string_matching(/def returns_forty_two\s+43\s+end/)
+        a_string_matching(/def returns_forty_two\s+43\s+end/),
+        a_string_matching(/def returns_forty_two\s+nil\s+end/)
       )
     end
 

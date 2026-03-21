@@ -17,25 +17,37 @@ RSpec.describe Evilution::Mutator::Operator::FloatLiteral do
   end
 
   describe "#call" do
-    it "replaces 0.0 with 1.0" do
+    it "replaces 0.0 with 1.0 and nil" do
       muts = mutations_for("zero_float")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def zero_float\s+1\.0\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def zero_float\s+1\.0\s+end/),
+        a_string_matching(/def zero_float\s+nil\s+end/)
+      )
     end
 
-    it "replaces 1.0 with 0.0" do
+    it "replaces 1.0 with 0.0 and nil" do
       muts = mutations_for("one_float")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def one_float\s+0\.0\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def one_float\s+0\.0\s+end/),
+        a_string_matching(/def one_float\s+nil\s+end/)
+      )
     end
 
-    it "replaces 3.14 with 0.0" do
+    it "replaces 3.14 with 0.0 and nil" do
       muts = mutations_for("pi_float")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def pi_float\s+0\.0\s+end/)
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def pi_float\s+0\.0\s+end/),
+        a_string_matching(/def pi_float\s+nil\s+end/)
+      )
     end
 
     it "produces valid Ruby for all mutations" do
