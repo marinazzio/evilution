@@ -17,18 +17,20 @@ RSpec.describe Evilution::Mutator::Operator::NilReplacement do
   end
 
   describe "#call" do
-    it "replaces nil with true" do
+    it "replaces nil with true, false, 0, and empty string" do
       muts = mutations_for("returns_nil")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_nil\s+true\s+end/)
+      expect(muts.length).to eq(4)
+      replacements = muts.map { |m| m.mutated_source[/def returns_nil\s+(.+)\s+end/, 1] }
+      expect(replacements).to contain_exactly("true", "false", "0", '""')
     end
 
-    it "replaces nil with true in a method containing a nil literal" do
+    it "replaces nil in conditional context with all variants" do
       muts = mutations_for("nil_with_logic")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/return true if flag/)
+      expect(muts.length).to eq(4)
+      replacements = muts.map { |m| m.mutated_source[/return (.+) if flag/, 1] }
+      expect(replacements).to contain_exactly("true", "false", "0", '""')
     end
 
     it "produces valid Ruby for all mutations" do
