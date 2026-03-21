@@ -17,26 +17,37 @@ RSpec.describe Evilution::Mutator::Operator::RegexpMutation do
   end
 
   describe "#call" do
-    it "replaces simple regexp with never-matching pattern" do
+    it "replaces simple regexp with never-matching and always-matching patterns" do
       muts = mutations_for("simple_match")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('/a\A/')
-      expect(muts.first.mutated_source).not_to include("/foo/")
+      expect(muts.length).to eq(2)
+      replacements = muts.map(&:mutated_source)
+      expect(replacements).to include(
+        a_string_including('/a\A/'),
+        a_string_including("/.*/")
+      )
     end
 
     it "preserves flags when replacing regexp" do
       muts = mutations_for("with_flags")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('/a\A/i')
+      expect(muts.length).to eq(2)
+      replacements = muts.map(&:mutated_source)
+      expect(replacements).to include(
+        a_string_including('/a\A/i'),
+        a_string_including("/.*/i")
+      )
     end
 
     it "replaces complex patterns" do
       muts = mutations_for("complex_pattern")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('/a\A/')
+      expect(muts.length).to eq(2)
+      replacements = muts.map(&:mutated_source)
+      expect(replacements).to include(
+        a_string_including('/a\A/'),
+        a_string_including("/.*/")
+      )
     end
 
     it "skips methods without regexps" do
@@ -48,8 +59,12 @@ RSpec.describe Evilution::Mutator::Operator::RegexpMutation do
     it "mutates regexp in case/when" do
       muts = mutations_for("case_match")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('/a\A/')
+      expect(muts.length).to eq(2)
+      replacements = muts.map(&:mutated_source)
+      expect(replacements).to include(
+        a_string_including('/a\A/'),
+        a_string_including("/.*/")
+      )
     end
 
     it "produces valid Ruby for all mutations" do
