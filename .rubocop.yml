@@ -20,6 +20,7 @@ Metrics/BlockLength:
     - "spec/**/*"
     - "evilution.gemspec"
 
+# target 150
 Metrics/ClassLength:
   Max: 150
   Exclude:

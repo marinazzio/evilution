@@ -45,6 +45,10 @@ RSpec.describe Evilution::Config do
     it "sets spec_files to empty array" do
       expect(config.spec_files).to eq([])
     end
+
+    it "disables suggest_tests by default" do
+      expect(config.suggest_tests).to be false
+    end
   end
 
   describe "custom options" do
@@ -100,6 +104,12 @@ RSpec.describe Evilution::Config do
       config = described_class.new(fail_fast: 3, skip_config_file: true)
 
       expect(config.fail_fast).to eq(3)
+    end
+
+    it "accepts suggest_tests" do
+      config = described_class.new(suggest_tests: true, skip_config_file: true)
+
+      expect(config.suggest_tests).to be true
     end
   end
 
@@ -245,6 +255,20 @@ RSpec.describe Evilution::Config do
       config = described_class.new(skip_config_file: true)
 
       expect(config.fail_fast?).to be false
+    end
+  end
+
+  describe "#suggest_tests?" do
+    it "returns true when suggest_tests is enabled" do
+      config = described_class.new(suggest_tests: true, skip_config_file: true)
+
+      expect(config.suggest_tests?).to be true
+    end
+
+    it "returns false when suggest_tests is disabled" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.suggest_tests?).to be false
     end
   end
 
