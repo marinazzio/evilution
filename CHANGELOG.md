@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.12.0] - 2026-03-22
+
+### Added
+
+- **Concrete RSpec test suggestions** (`--suggest-tests`) — surviving mutants now include ready-to-use RSpec `it` blocks instead of generic guidance; covers all operator families: arithmetic, comparison, boolean, literal, collection, conditional, structural, and nil operators (#209, #215, #216, #217, #218, #219, #220, #221)
+- **MCP tool `suggest_tests` parameter** — enables concrete test suggestions in MCP tool responses (#213)
+
+### Changed
+
+- **RuboCop configuration cleanup** — added metrics targets and refactored cop values/exclusions (#204, #207)
+
 ## [0.11.0] - 2026-03-21
 
 ### Added
