@@ -582,6 +582,35 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "nil_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("nil_replacement", diff: "-   return nil\n+   return true")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("nil_replacement", diff: "-   return nil\n+   return 0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nil")
+        expect(suggestion).to include("0")
+      end
+
+      it "advises asserting non-nil return value" do
+        mutation = build_mutation("nil_replacement", diff: "-   return nil\n+   return false")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nil")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 

@@ -261,6 +261,19 @@ module Evilution
               expect(result).to eq(expected)
             end
           RSPEC
+        },
+        "nil_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'asserts the nil return value from ##{method_name}' do
+              # Assert the method returns nil, not a substituted value
+              result = subject.#{method_name}(input_value)
+              expect(result).to be_nil
+            end
+          RSPEC
         }
       }.freeze
 
