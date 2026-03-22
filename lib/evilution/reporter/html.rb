@@ -5,7 +5,7 @@ require_relative "suggestion"
 
 module Evilution
   module Reporter
-    class HTML # rubocop:disable Metrics/ClassLength
+    class HTML
       def initialize
         @suggestion = Suggestion.new
       end
