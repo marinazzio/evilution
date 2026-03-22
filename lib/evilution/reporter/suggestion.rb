@@ -53,6 +53,45 @@ module Evilution
               expect(result).to eq(expected)
             end
           RSPEC
+        },
+        "boolean_operator_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the correct result when one condition is true and one is false in ##{method_name}' do
+              # Use inputs where only one operand is truthy to distinguish && from ||
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "boolean_literal_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the expected boolean value from ##{method_name}' do
+              # Assert the exact true/false/nil value, not just truthiness
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "negation_insertion" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the correct boolean from the predicate in ##{method_name}' do
+              # Assert the exact true/false result, not just truthiness
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(true).or eq(false)
+            end
+          RSPEC
         }
       }.freeze
 

@@ -171,12 +171,92 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "boolean_operator_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("boolean_operator_replacement", diff: "-   a && b\n+   a || b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators" do
+        mutation = build_mutation("boolean_operator_replacement", diff: "-   a && b\n+   a || b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("&&")
+        expect(suggestion).to include("||")
+      end
+
+      it "advises testing with one condition true and one false" do
+        mutation = build_mutation("boolean_operator_replacement", diff: "-   a && b\n+   a || b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("one")
+        expect(suggestion).to include("true")
+      end
+    end
+
+    describe "boolean_literal_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("boolean_literal_replacement", diff: "-   return true\n+   return false")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("boolean_literal_replacement", diff: "-   return true\n+   return false")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("true")
+        expect(suggestion).to include("false")
+      end
+
+      it "handles true-to-nil mutation" do
+        mutation = build_mutation("boolean_literal_replacement", diff: "-   return true\n+   return nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+      end
+    end
+
+    describe "negation_insertion" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("negation_insertion", diff: "-   foo.valid?\n+   !foo.valid?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "advises asserting the exact boolean result" do
+        mutation = build_mutation("negation_insertion", diff: "-   foo.valid?\n+   !foo.valid?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("true").or include("false").or include("eq")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
-      mutation = build_mutation("boolean_operator_replacement")
+      mutation = build_mutation("statement_deletion")
 
       suggestion = suggestion_reporter.suggestion_for(mutation)
 
-      expect(suggestion).to include("boolean conditions")
+      expect(suggestion).to include("side effect")
     end
 
     it "returns default suggestion for unknown operators" do
