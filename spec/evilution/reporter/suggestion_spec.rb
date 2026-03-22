@@ -486,12 +486,108 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "statement_deletion" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("statement_deletion", diff: "-   @count += 1\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the deleted statement" do
+        mutation = build_mutation("statement_deletion", diff: "-   @count += 1\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("@count += 1")
+      end
+
+      it "advises testing side effects" do
+        mutation = build_mutation("statement_deletion", diff: "-   save!\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("side effect").or include("depend")
+      end
+    end
+
+    describe "method_body_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("method_body_replacement", diff: "-   calculate(x)\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "advises asserting return value or side effects" do
+        mutation = build_mutation("method_body_replacement", diff: "-   calculate(x)\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("return").or include("side effect")
+      end
+    end
+
+    describe "return_value_removal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("return_value_removal", diff: "-   return result\n+   result")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "advises asserting the return value" do
+        mutation = build_mutation("return_value_removal", diff: "-   return result\n+   result")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("return value")
+      end
+    end
+
+    describe "method_call_removal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("method_call_removal", diff: "-   obj.save\n+   obj")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed call" do
+        mutation = build_mutation("method_call_removal", diff: "-   obj.save\n+   obj")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("obj.save")
+      end
+
+      it "advises asserting return value or side effect" do
+        mutation = build_mutation("method_call_removal", diff: "-   list.sort\n+   list")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("return").or include("side effect")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
-      mutation = build_mutation("statement_deletion")
+      mutation = build_mutation("argument_removal")
 
       suggestion = suggestion_reporter.suggestion_for(mutation)
 
-      expect(suggestion).to include("side effect")
+      expect(suggestion).to include("correct arguments")
     end
 
     it "returns default suggestion for unknown operators" do

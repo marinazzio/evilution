@@ -209,6 +209,58 @@ module Evilution
               expect(result).to eq(expected)
             end
           RSPEC
+        },
+        "statement_deletion" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, _mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: deleted `#{original_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'depends on the side effect of the deleted statement in ##{method_name}' do
+              # Assert a side effect or return value that changes when this statement is removed
+              subject.#{method_name}(input_value)
+              expect(observable_side_effect).to eq(expected)
+            end
+          RSPEC
+        },
+        "method_body_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'verifies the return value or side effects of ##{method_name}' do
+              # Assert the method produces a meaningful result, not just nil
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "return_value_removal" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'uses the return value of ##{method_name}' do
+              # Assert the caller depends on the return value, not just side effects
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "method_call_removal" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'depends on the return value or side effect of the call in ##{method_name}' do
+              # Assert the method call's effect is observable
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
         }
       }.freeze
 
