@@ -10,7 +10,8 @@ module Evilution
   module MCP
     class MutateTool < ::MCP::Tool
       tool_name "evilution-mutate"
-      description "Run mutation testing on Ruby source files"
+      description "Run mutation testing on Ruby source files. " \
+                  "Use suggest_tests: true to get concrete RSpec test code for surviving mutants."
       input_schema(
         properties: {
           files: {
