@@ -144,6 +144,45 @@ module Evilution
               expect(result).to eq(expected)
             end
           RSPEC
+        },
+        "array_literal" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the expected array contents from ##{method_name}' do
+              # Assert the exact array elements, not just non-empty or truthy
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "hash_literal" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the expected hash contents from ##{method_name}' do
+              # Assert the exact keys and values, not just non-empty or truthy
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "collection_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'uses the return value of the collection operation in ##{method_name}' do
+              # Assert the return value of the collection method, not just side effects
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
         }
       }.freeze
 
