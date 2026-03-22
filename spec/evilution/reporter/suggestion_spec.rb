@@ -428,6 +428,64 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "conditional_negation" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("conditional_negation", diff: "-   if active?\n+   if !active?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated conditions" do
+        mutation = build_mutation("conditional_negation", diff: "-   if active?\n+   if !active?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("active?")
+        expect(suggestion).to include("!active?")
+      end
+
+      it "advises exercising both branches" do
+        mutation = build_mutation("conditional_negation", diff: "-   if valid?\n+   if !valid?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("both").or include("branch")
+      end
+    end
+
+    describe "conditional_branch" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("conditional_branch", diff: "-   if x > 0 then y else z end\n+   if x > 0 then y else nil end")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated branches" do
+        mutation = build_mutation("conditional_branch", diff: "-   if x > 0 then y else z end\n+   if x > 0 then y else nil end")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("z end")
+        expect(suggestion).to include("nil end")
+      end
+
+      it "advises exercising the removed branch" do
+        mutation = build_mutation("conditional_branch", diff: "-   if flag\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("branch")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("statement_deletion")
 
