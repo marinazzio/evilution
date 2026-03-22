@@ -272,6 +272,24 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--suggest-tests flag" do
+      it "sets suggest_tests to true" do
+        cli = described_class.new(["--suggest-tests"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(suggest_tests: true)
+        )
+      end
+
+      it "defaults to false when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(suggest_tests: false)
+        )
+      end
+    end
+
     describe "--target flag" do
       it "sets target on the config" do
         cli = described_class.new(["--target", "Foo#bar"])

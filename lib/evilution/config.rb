@@ -19,13 +19,15 @@ module Evilution
       baseline: true,
       isolation: :auto,
       incremental: false,
+      suggest_tests: false,
       line_ranges: {},
       spec_files: []
     }.freeze
 
     attr_reader :target_files, :timeout, :format,
                 :target, :min_score, :integration, :verbose, :quiet,
-                :jobs, :fail_fast, :baseline, :isolation, :incremental, :line_ranges, :spec_files
+                :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
+                :line_ranges, :spec_files
 
     def initialize(**options)
       file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -66,6 +68,10 @@ module Evilution
       incremental
     end
 
+    def suggest_tests?
+      suggest_tests
+    end
+
     def self.file_options
       CONFIG_FILES.each do |path|
         next unless File.exist?(path)
@@ -104,6 +110,9 @@ module Evilution
 
         # Stop after N surviving mutants (default: disabled)
         # fail_fast: 1
+
+        # Generate concrete RSpec test code in suggestions (default: false)
+        # suggest_tests: false
       YAML
     end
 
@@ -134,6 +143,7 @@ module Evilution
       @baseline = merged[:baseline]
       @isolation = validate_isolation(merged[:isolation])
       @incremental = merged[:incremental]
+      @suggest_tests = merged[:suggest_tests]
       @line_ranges = merged[:line_ranges] || {}
       @spec_files = Array(merged[:spec_files])
     end
