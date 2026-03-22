@@ -183,6 +183,32 @@ module Evilution
               expect(result).to eq(expected)
             end
           RSPEC
+        },
+        "conditional_negation" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'exercises both branches of the conditional in ##{method_name}' do
+              # Test with inputs that make the condition true AND false
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "conditional_branch" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'exercises the removed branch of the conditional in ##{method_name}' do
+              # Test with inputs that trigger the branch removed by this mutation
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
         }
       }.freeze
 
