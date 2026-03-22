@@ -26,7 +26,41 @@ module Evilution
         "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call"
       }.freeze
 
+      CONCRETE_TEMPLATES = {
+        "comparison_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'returns the correct result at the comparison boundary in ##{method_name}' do
+              # Test with values where the original operator and mutated operator
+              # produce different results (e.g., equal values for > vs >=)
+              result = subject.#{method_name}(boundary_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "arithmetic_replacement" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'computes the correct arithmetic result in ##{method_name}' do
+              # Assert the exact numeric result, not just truthiness or sign
+              result = subject.#{method_name}(input_value)
+              expect(result).to eq(expected)
+            end
+          RSPEC
+        }
+      }.freeze
+
       DEFAULT_SUGGESTION = "Add a more specific test that detects this mutation"
+
+      def initialize(suggest_tests: false)
+        @suggest_tests = suggest_tests
+      end
 
       # Generate suggestions for survived mutations.
       #
@@ -46,7 +80,25 @@ module Evilution
       # @param mutation [Mutation]
       # @return [String]
       def suggestion_for(mutation)
+        if @suggest_tests
+          concrete = CONCRETE_TEMPLATES[mutation.operator_name]
+          return concrete.call(mutation) if concrete
+        end
+
         TEMPLATES.fetch(mutation.operator_name, DEFAULT_SUGGESTION)
+      end
+
+      class << self
+        def parse_method_name(subject_name)
+          subject_name.split(/[#.]/).last
+        end
+
+        def extract_diff_lines(diff)
+          lines = diff.split("\n")
+          original = lines.find { |l| l.start_with?("- ") }
+          mutated = lines.find { |l| l.start_with?("+ ") }
+          [original&.sub(/^- /, "")&.strip, mutated&.sub(/^\+ /, "")&.strip]
+        end
       end
     end
   end
