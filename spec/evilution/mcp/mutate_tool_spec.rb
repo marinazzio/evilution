@@ -116,6 +116,22 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "passes suggest_tests option" do
+      described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: have_attributes(suggest_tests: true)
+      )
+    end
+
+    it "defaults suggest_tests to false" do
+      described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: have_attributes(suggest_tests: false)
+      )
+    end
+
     it "returns error response for Evilution errors" do
       allow(runner).to receive(:call).and_raise(Evilution::Error, "no files found")
 
