@@ -34,16 +34,17 @@ Metrics/MethodLength:
     - hash
     - heredoc
 
+# target 17
 Metrics/AbcSize:
-  Max: 35
+  Max: 34
 
+# target 7
 Metrics/CyclomaticComplexity:
   Max: 12
 
+# target 8
 Metrics/PerceivedComplexity:
   Max: 8
-  Exclude:
-    - "lib/evilution/cli.rb"
 
 Metrics/ParameterLists:
   Max: 8
