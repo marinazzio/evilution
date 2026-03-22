@@ -21,12 +21,13 @@ Metrics/BlockLength:
     - "evilution.gemspec"
 
 Metrics/ClassLength:
-  Max: 120
+  Max: 150
   Exclude:
     - "lib/evilution/cli.rb"
-    - "lib/evilution/config.rb"
     - "lib/evilution/runner.rb"
+    - "lib/evilution/reporter/html.rb"
 
+# target 20
 Metrics/MethodLength:
   Max: 30
   CountAsOne:

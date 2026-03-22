@@ -8,7 +8,7 @@ require_relative "../reporter/json"
 
 module Evilution
   module MCP
-    class MutateTool < ::MCP::Tool # rubocop:disable Metrics/ClassLength
+    class MutateTool < ::MCP::Tool
       tool_name "evilution-mutate"
       description "Run mutation testing on Ruby source files"
       input_schema(
