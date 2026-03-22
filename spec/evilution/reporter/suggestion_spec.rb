@@ -9,13 +9,14 @@ RSpec.describe Evilution::Reporter::Suggestion do
     double("Subject", name: "Foo#bar", file_path: "lib/foo.rb")
   end
 
-  def build_mutation(operator_name)
+  def build_mutation(operator_name, diff: "- a >= b\n+ a > b", subject: nil)
     double(
       "Mutation",
       operator_name: operator_name,
       file_path: "lib/foo.rb",
       line: 5,
-      diff: "- a >= b\n+ a > b"
+      diff: diff,
+      subject: subject || subject_obj
     )
   end
 
@@ -86,6 +87,114 @@ RSpec.describe Evilution::Reporter::Suggestion do
       result = suggestion_reporter.call(summary)
 
       expect(result).to eq([])
+    end
+  end
+
+  describe "concrete suggestions (suggest_tests: true)" do
+    subject(:suggestion_reporter) { described_class.new(suggest_tests: true) }
+
+    describe "comparison_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("comparison_replacement", diff: "-   if a > b\n+   if a >= b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators in a comment" do
+        mutation = build_mutation("comparison_replacement", diff: "-   if a > b\n+   if a >= b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include(">")
+        expect(suggestion).to include(">=")
+      end
+
+      it "includes boundary condition guidance" do
+        mutation = build_mutation("comparison_replacement", diff: "-   x == y\n+   x != y")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+      end
+
+      it "handles namespaced class with instance method" do
+        subj = double("Subject", name: "Foo::Bar#baz", file_path: "lib/foo/bar.rb")
+        mutation = build_mutation("comparison_replacement", diff: "-   a < b\n+   a <= b", subject: subj)
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("baz")
+      end
+
+      it "handles class method syntax" do
+        subj = double("Subject", name: "Foo.bar", file_path: "lib/foo.rb")
+        mutation = build_mutation("comparison_replacement", diff: "-   a < b\n+   a <= b", subject: subj)
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("bar")
+      end
+    end
+
+    describe "arithmetic_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("arithmetic_replacement", diff: "-   a + b\n+   a - b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators" do
+        mutation = build_mutation("arithmetic_replacement", diff: "-   total = x * y\n+   total = x / y")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("*")
+        expect(suggestion).to include("/")
+      end
+
+      it "includes arithmetic verification guidance" do
+        mutation = build_mutation("arithmetic_replacement", diff: "-   a + b\n+   a - b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+      end
+    end
+
+    it "falls back to static template for operators without concrete suggestions" do
+      mutation = build_mutation("boolean_operator_replacement")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("boolean conditions")
+    end
+
+    it "returns default suggestion for unknown operators" do
+      mutation = build_mutation("unknown_operator")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to eq(described_class::DEFAULT_SUGGESTION)
+    end
+  end
+
+  describe "suggest_tests: false (default)" do
+    it "returns static template even for operators with concrete suggestions" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to eq("Add a test for the boundary condition where the comparison operand equals the threshold exactly")
     end
   end
 end
