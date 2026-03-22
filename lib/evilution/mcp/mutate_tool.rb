@@ -39,6 +39,11 @@ module Evilution
             items: { type: "string" },
             description: "Spec files to run (overrides auto-detection)"
           },
+          suggest_tests: {
+            type: "boolean",
+            description: "When true, suggestions for survived mutants include concrete RSpec test code " \
+                         "instead of static description text (default: false)"
+          },
           verbosity: {
             type: "string",
             enum: %w[full summary minimal],
@@ -50,9 +55,12 @@ module Evilution
       )
 
       class << self
-        def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil, fail_fast: nil, spec: nil, verbosity: nil) # rubocop:disable Lint/UnusedMethodArgument
+        # rubocop:disable Lint/UnusedMethodArgument,Metrics/ParameterLists
+        def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil,
+                 fail_fast: nil, spec: nil, suggest_tests: nil, verbosity: nil)
           parsed_files, line_ranges = parse_files(Array(files))
-          config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec)
+          config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec,
+                                          suggest_tests)
           config = Config.new(**config_opts)
           runner = Runner.new(config: config)
           summary = runner.call
@@ -64,6 +72,7 @@ module Evilution
           error_payload = build_error_payload(e)
           ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(error_payload) }], error: true)
         end
+        # rubocop:enable Lint/UnusedMethodArgument,Metrics/ParameterLists
 
         VALID_VERBOSITIES = %w[full summary minimal].freeze
 
@@ -98,13 +107,14 @@ module Evilution
           raise ParseError, "invalid line range: #{str.inspect}"
         end
 
-        def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec)
+        def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec, suggest_tests)
           opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, skip_config_file: true }
           opts[:target] = target if target
           opts[:timeout] = timeout if timeout
           opts[:jobs] = jobs if jobs
           opts[:fail_fast] = fail_fast if fail_fast
           opts[:spec_files] = spec if spec
+          opts[:suggest_tests] = true if suggest_tests
           opts
         end
 
