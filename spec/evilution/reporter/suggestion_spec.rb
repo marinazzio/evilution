@@ -251,6 +251,96 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "integer_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("integer_literal", diff: "-   count = 0\n+   count = 1")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("integer_literal", diff: "-   count = 0\n+   count = 1")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("0")
+        expect(suggestion).to include("1")
+      end
+
+      it "advises asserting exact numeric value" do
+        mutation = build_mutation("integer_literal", diff: "-   limit = 5\n+   limit = 0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("exact")
+      end
+    end
+
+    describe "float_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("float_literal", diff: "-   rate = 0.5\n+   rate = 0.0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("float_literal", diff: "-   rate = 0.5\n+   rate = 0.0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("0.5")
+        expect(suggestion).to include("0.0")
+      end
+    end
+
+    describe "string_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("string_literal", diff: "-   name = \"hello\"\n+   name = \"\"")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "advises asserting exact string content" do
+        mutation = build_mutation("string_literal", diff: "-   name = \"hello\"\n+   name = \"\"")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("exact")
+      end
+    end
+
+    describe "symbol_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("symbol_literal", diff: "-   status = :active\n+   status = :\"evilution_mutated\"")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "advises asserting exact symbol value" do
+        mutation = build_mutation("symbol_literal", diff: "-   status = :active\n+   status = :\"evilution_mutated\"")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("exact")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("statement_deletion")
 
