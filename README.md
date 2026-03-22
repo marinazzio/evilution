@@ -48,6 +48,7 @@ evilution [command] [options] [files...]
 | `--no-baseline`         | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`       | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`       | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
+| `--suggest-tests`       | Boolean | false        | Generate concrete RSpec test code in suggestions instead of static descriptions. |
 | `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
 
 ### Exit Codes
@@ -65,10 +66,11 @@ Generate default config: `bundle exec evilution init`
 Creates `.evilution.yml`:
 
 ```yaml
-# timeout: 10        # seconds per mutation
-# format: text       # text | json
-# min_score: 0.0     # 0.0–1.0
-# integration: rspec # test framework
+# timeout: 10           # seconds per mutation
+# format: text          # text | json
+# min_score: 0.0        # 0.0–1.0
+# integration: rspec    # test framework
+# suggest_tests: false  # concrete RSpec test code in suggestions
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.
@@ -172,6 +174,12 @@ The MCP tool accepts a `verbosity` parameter to control response size:
 
 Use `minimal` when context window budget is tight and you only need to see what survived. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
 
+### Concrete Test Suggestions
+
+The MCP tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete RSpec `it` blocks that an agent can drop into a spec file, instead of static description text.
+
+Pass `suggest_tests: true` in the MCP tool call, or use `--suggest-tests` on the CLI, to activate this mode.
+
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
 ## Recommended Workflows for AI Agents
@@ -234,7 +242,7 @@ Use when you know which file was modified and want to verify its test coverage.
 For each entry in `survived[]`:
 1. Read `file` at `line` to understand the code context
 2. Read `operator` to understand what was changed
-3. Read `suggestion` for a hint on what test to write
+3. Read `suggestion` for a hint on what test to write (use `--suggest-tests` for concrete RSpec code)
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
