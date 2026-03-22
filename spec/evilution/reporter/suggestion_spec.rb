@@ -341,6 +341,93 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "array_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("array_literal", diff: "-   items = [1, 2, 3]\n+   items = []")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("array_literal", diff: "-   items = [1, 2, 3]\n+   items = []")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("[1, 2, 3]")
+        expect(suggestion).to include("[]")
+      end
+
+      it "advises asserting contents or size" do
+        mutation = build_mutation("array_literal", diff: "-   items = [1, 2, 3]\n+   items = nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("contents").or include("size").or include("elements")
+      end
+    end
+
+    describe "hash_literal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("hash_literal", diff: "-   opts = { a: 1 }\n+   opts = {}")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values" do
+        mutation = build_mutation("hash_literal", diff: "-   opts = { a: 1 }\n+   opts = {}")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("{ a: 1 }")
+        expect(suggestion).to include("{}")
+      end
+
+      it "advises asserting keys and values" do
+        mutation = build_mutation("hash_literal", diff: "-   opts = { a: 1 }\n+   opts = nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("keys").or include("values").or include("contents")
+      end
+    end
+
+    describe "collection_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("collection_replacement", diff: "-   items.map { |x| x * 2 }\n+   items.each { |x| x * 2 }")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated calls" do
+        mutation = build_mutation("collection_replacement", diff: "-   items.map { |x| x * 2 }\n+   items.each { |x| x * 2 }")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("map")
+        expect(suggestion).to include("each")
+      end
+
+      it "advises asserting return value" do
+        mutation = build_mutation("collection_replacement", diff: "-   items.select { |x| x > 0 }\n+   items.reject { |x| x > 0 }")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("return")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("statement_deletion")
 
