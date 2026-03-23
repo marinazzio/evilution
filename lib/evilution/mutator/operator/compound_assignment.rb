@@ -88,6 +88,7 @@ module Evilution
             replacement: replacement,
             node: node
           )
+          remove_statement(node)
         end
 
         def mutate_operator_write(node)
@@ -105,6 +106,16 @@ module Evilution
               node: node
             )
           end
+          remove_statement(node)
+        end
+
+        def remove_statement(node)
+          add_mutation(
+            offset: node.location.start_offset,
+            length: node.location.length,
+            replacement: "nil",
+            node: node
+          )
         end
       end
     end

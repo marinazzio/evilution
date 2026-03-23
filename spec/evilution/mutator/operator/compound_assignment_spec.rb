@@ -62,13 +62,15 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
     it "generates correct number of mutations for +=" do
       muts = mutations_for("add_assign")
 
-      expect(muts.length).to eq(2)
+      # 2 swaps (-, *) + 1 removal = 3
+      expect(muts.length).to eq(3)
     end
 
-    it "generates one mutation for single-replacement operators" do
+    it "generates two mutations for single-swap operators" do
       muts = mutations_for("mod_assign")
 
-      expect(muts.length).to eq(1)
+      # 1 swap + 1 removal = 2
+      expect(muts.length).to eq(2)
     end
 
     it "mutates instance variable compound assignments" do
@@ -123,63 +125,94 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
     it "generates correct number of mutations for &=" do
       muts = mutations_for("bitwise_and_assign")
 
-      expect(muts.length).to eq(2)
+      # 2 swaps (|, ^) + 1 removal = 3
+      expect(muts.length).to eq(3)
     end
 
     it "replaces &&= with ||=" do
       muts = mutations_for("logical_and_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("x ||= true")
+      # 1 swap + 1 removal = 2
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?("x ||= true") }).to be true
     end
 
     it "replaces ||= with &&=" do
       muts = mutations_for("logical_or_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('x &&= "default"')
+      # 1 swap + 1 removal = 2
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?('x &&= "default"') }).to be true
     end
 
     it "mutates instance variable &&=" do
       muts = mutations_for("ivar_logical_and_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("@flag ||= false")
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?("@flag ||= false") }).to be true
     end
 
     it "mutates instance variable ||=" do
       muts = mutations_for("ivar_logical_or_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('@ivar_logical_or_assign &&= "unknown"')
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?('@ivar_logical_or_assign &&= "unknown"') }).to be true
     end
 
     it "mutates class variable &&=" do
       muts = mutations_for("cvar_logical_and_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("@@flag ||= false")
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?("@@flag ||= false") }).to be true
     end
 
     it "mutates class variable ||=" do
       muts = mutations_for("cvar_logical_or_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('@@cvar_logical_or_assign &&= "unknown"')
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?('@@cvar_logical_or_assign &&= "unknown"') }).to be true
     end
 
     it "mutates global variable &&=" do
       muts = mutations_for("gvar_logical_and_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("$flag ||= false")
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?("$flag ||= false") }).to be true
     end
 
     it "mutates global variable ||=" do
       muts = mutations_for("gvar_logical_or_assign")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('$gvar_logical_or_assign &&= "unknown"')
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?('$gvar_logical_or_assign &&= "unknown"') }).to be true
+    end
+
+    it "generates removal mutation for arithmetic compound assignment" do
+      muts = mutations_for("add_assign")
+
+      removal = muts.find { |m| m.mutated_source.include?("def add_assign(x)\n    nil\n    x") }
+      expect(removal).not_to be_nil
+    end
+
+    it "generates removal mutation for single-statement compound assignment" do
+      muts = mutations_for("ivar_add_assign")
+
+      removal = muts.find { |m| m.mutated_source.include?("def ivar_add_assign\n    nil\n  end") }
+      expect(removal).not_to be_nil
+    end
+
+    it "generates removal mutation for logical compound assignment" do
+      muts = mutations_for("logical_and_assign")
+
+      removal = muts.find { |m| m.mutated_source.include?("def logical_and_assign(x)\n    nil\n    x") }
+      expect(removal).not_to be_nil
+    end
+
+    it "includes removal in mutation count for +=" do
+      muts = mutations_for("add_assign")
+
+      # 2 swaps (-, *) + 1 removal = 3
+      expect(muts.length).to eq(3)
     end
 
     it "does not mutate methods with no compound assignments" do
