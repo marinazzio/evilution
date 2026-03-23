@@ -38,7 +38,57 @@ module Evilution
           super
         end
 
+        def visit_local_variable_and_write_node(node)
+          mutate_logical_write(node, "||=")
+          super
+        end
+
+        def visit_local_variable_or_write_node(node)
+          mutate_logical_write(node, "&&=")
+          super
+        end
+
+        def visit_instance_variable_and_write_node(node)
+          mutate_logical_write(node, "||=")
+          super
+        end
+
+        def visit_instance_variable_or_write_node(node)
+          mutate_logical_write(node, "&&=")
+          super
+        end
+
+        def visit_class_variable_and_write_node(node)
+          mutate_logical_write(node, "||=")
+          super
+        end
+
+        def visit_class_variable_or_write_node(node)
+          mutate_logical_write(node, "&&=")
+          super
+        end
+
+        def visit_global_variable_and_write_node(node)
+          mutate_logical_write(node, "||=")
+          super
+        end
+
+        def visit_global_variable_or_write_node(node)
+          mutate_logical_write(node, "&&=")
+          super
+        end
+
         private
+
+        def mutate_logical_write(node, replacement)
+          loc = node.operator_loc
+          add_mutation(
+            offset: loc.start_offset,
+            length: loc.length,
+            replacement: replacement,
+            node: node
+          )
+        end
 
         def mutate_operator_write(node)
           replacements = REPLACEMENTS[node.binary_operator]

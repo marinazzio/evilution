@@ -68,6 +68,24 @@ class CompoundAssignment
     x
   end
 
+  def logical_and_assign(x)
+    x &&= true
+    x
+  end
+
+  def logical_or_assign(x)
+    x ||= "default"
+    x
+  end
+
+  def ivar_logical_and_assign
+    @flag &&= false
+  end
+
+  def ivar_logical_or_assign
+    @ivar_logical_or_assign ||= "unknown"
+  end
+
   def no_compound_assignment
     "hello"
   end

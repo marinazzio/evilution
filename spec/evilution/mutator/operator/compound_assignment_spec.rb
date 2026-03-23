@@ -126,6 +126,34 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       expect(muts.length).to eq(2)
     end
 
+    it "replaces &&= with ||=" do
+      muts = mutations_for("logical_and_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("x ||= true")
+    end
+
+    it "replaces ||= with &&=" do
+      muts = mutations_for("logical_or_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include('x &&= "default"')
+    end
+
+    it "mutates instance variable &&=" do
+      muts = mutations_for("ivar_logical_and_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("@flag ||= false")
+    end
+
+    it "mutates instance variable ||=" do
+      muts = mutations_for("ivar_logical_or_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include('@ivar_logical_or_assign &&= "unknown"')
+    end
+
     it "does not mutate methods with no compound assignments" do
       muts = mutations_for("no_compound_assignment")
 
