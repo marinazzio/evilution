@@ -3,9 +3,9 @@ name: Prepare release
 about: Prepare release
 title: Prepare release
 labels: ''
-assignees: ''
+assignees: @marinazzio
 
 ---
 
--[] Bump version
--[] Update CHANGELOG
+- [ ] Bump version
+- [ ] Update CHANGELOG
