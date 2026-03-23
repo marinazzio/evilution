@@ -86,6 +86,22 @@ class CompoundAssignment
     @ivar_logical_or_assign ||= "unknown"
   end
 
+  def cvar_logical_and_assign
+    @@flag &&= false # rubocop:disable Style/ClassVars
+  end
+
+  def cvar_logical_or_assign
+    @@cvar_logical_or_assign ||= "unknown" # rubocop:disable Style/ClassVars
+  end
+
+  def gvar_logical_and_assign
+    $flag &&= false # rubocop:disable Style/GlobalVars
+  end
+
+  def gvar_logical_or_assign
+    $gvar_logical_or_assign ||= "unknown" # rubocop:disable Style/GlobalVars
+  end
+
   def no_compound_assignment
     "hello"
   end

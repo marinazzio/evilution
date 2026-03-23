@@ -154,6 +154,34 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       expect(muts.first.mutated_source).to include('@ivar_logical_or_assign &&= "unknown"')
     end
 
+    it "mutates class variable &&=" do
+      muts = mutations_for("cvar_logical_and_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("@@flag ||= false")
+    end
+
+    it "mutates class variable ||=" do
+      muts = mutations_for("cvar_logical_or_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include('@@cvar_logical_or_assign &&= "unknown"')
+    end
+
+    it "mutates global variable &&=" do
+      muts = mutations_for("gvar_logical_and_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("$flag ||= false")
+    end
+
+    it "mutates global variable ||=" do
+      muts = mutations_for("gvar_logical_or_assign")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include('$gvar_logical_or_assign &&= "unknown"')
+    end
+
     it "does not mutate methods with no compound assignments" do
       muts = mutations_for("no_compound_assignment")
 
