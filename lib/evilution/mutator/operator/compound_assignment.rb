@@ -10,7 +10,12 @@ module Evilution
           :* => [:/],
           :/ => [:*],
           :% => [:*],
-          :** => [:*]
+          :** => [:*],
+          :& => %i[| ^],
+          :| => [:&],
+          :^ => [:&],
+          :<< => [:>>],
+          :>> => [:<<]
         }.freeze
 
         def visit_local_variable_operator_write_node(node)
