@@ -99,8 +99,9 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
         muts.each do |mutation|
-          expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
-                                                                 "Invalid Ruby produced for #{mutation}"
+          result = Prism.parse(mutation.mutated_source)
+          expect(result).not_to be_failure,
+                                "Invalid Ruby produced for #{mutation}"
         end
       end
     end

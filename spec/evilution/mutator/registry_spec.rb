@@ -4,7 +4,7 @@ RSpec.describe Evilution::Mutator::Registry do
   let(:registry) { described_class.new }
 
   describe ".default" do
-    it "returns a registry pre-loaded with all 25 operators" do
+    it "returns a registry pre-loaded with all operators" do
       default_registry = described_class.default
 
       expect(default_registry).to be_a(described_class)
