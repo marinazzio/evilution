@@ -18,6 +18,7 @@ require_relative "result/summary"
 require_relative "baseline"
 require_relative "cache"
 require_relative "parallel/pool"
+require_relative "session/store"
 
 module Evilution
   class Runner
@@ -55,6 +56,7 @@ module Evilution
 
       summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
       output_report(summary)
+      save_session(summary)
 
       summary
     end
@@ -359,6 +361,14 @@ module Evilution
         alloc: stats[:total_allocated_objects],
         freed: stats[:total_freed_objects]
       )
+    end
+
+    def save_session(summary)
+      return unless config.save_session?
+
+      Session::Store.new.save(summary)
+    rescue StandardError => e
+      warn "[evilution] failed to save session: #{e.message}" if config.verbose
     end
 
     def build_reporter
