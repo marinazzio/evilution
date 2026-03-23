@@ -32,7 +32,8 @@ module Evilution
           Operator::RegexpMutation,
           Operator::ReceiverReplacement,
           Operator::SendMutation,
-          Operator::ArgumentNilSubstitution
+          Operator::ArgumentNilSubstitution,
+          Operator::CompoundAssignment
         ].each { |op| registry.register(op) }
         registry
       end
