@@ -23,7 +23,8 @@ module Evilution
         "return_value_removal" => "Add a test that uses the return value of this method",
         "collection_replacement" => "Add a test that checks the return value of the collection operation, not just side effects",
         "method_call_removal" => "Add a test that depends on the return value or side effect of this method call",
-        "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call"
+        "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call",
+        "compound_assignment" => "Add a test that verifies the side effect of this compound assignment (the accumulated value matters)"
       }.freeze
 
       CONCRETE_TEMPLATES = {
@@ -259,6 +260,20 @@ module Evilution
               # Assert the method call's effect is observable
               result = subject.#{method_name}(input_value)
               expect(result).to eq(expected)
+            end
+          RSPEC
+        },
+        "compound_assignment" => lambda { |mutation|
+          method_name = parse_method_name(mutation.subject.name)
+          original_line, mutated_line = extract_diff_lines(mutation.diff)
+          <<~RSPEC.strip
+            # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+            # #{mutation.file_path}:#{mutation.line}
+            it 'verifies the compound assignment side effect in ##{method_name}' do
+              # Assert the accumulated value after the compound assignment
+              # The mutation changes the operator, so the final value will differ
+              subject.#{method_name}(input_value)
+              expect(observable_side_effect).to eq(expected)
             end
           RSPEC
         },

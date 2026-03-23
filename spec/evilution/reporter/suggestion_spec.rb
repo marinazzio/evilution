@@ -611,6 +611,46 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "compound_assignment" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("compound_assignment", diff: "-   x += 1\n+   x -= 1")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators" do
+        mutation = build_mutation("compound_assignment", diff: "-   x += 1\n+   x -= 1")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("+=")
+        expect(suggestion).to include("-=")
+      end
+
+      it "handles removal mutation" do
+        mutation = build_mutation("compound_assignment", diff: "-   @count += 1\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("side effect").or include("assignment")
+      end
+
+      it "handles logical compound assignment" do
+        mutation = build_mutation("compound_assignment", diff: "-   x &&= true\n+   x ||= true")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("&&=")
+        expect(suggestion).to include("||=")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
