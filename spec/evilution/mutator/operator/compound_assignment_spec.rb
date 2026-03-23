@@ -89,6 +89,43 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       expect(muts.any? { |m| m.mutated_source.include?("$counter -= 1") }).to be true
     end
 
+    it "replaces &= with |= and ^=" do
+      muts = mutations_for("bitwise_and_assign")
+
+      expect(muts.any? { |m| m.mutated_source.include?("x |= 0xFF") }).to be true
+      expect(muts.any? { |m| m.mutated_source.include?("x ^= 0xFF") }).to be true
+    end
+
+    it "replaces |= with &=" do
+      muts = mutations_for("bitwise_or_assign")
+
+      expect(muts.any? { |m| m.mutated_source.include?("x &= 0x01") }).to be true
+    end
+
+    it "replaces ^= with &=" do
+      muts = mutations_for("bitwise_xor_assign")
+
+      expect(muts.any? { |m| m.mutated_source.include?("x &= 0x0F") }).to be true
+    end
+
+    it "replaces <<= with >>=" do
+      muts = mutations_for("left_shift_assign")
+
+      expect(muts.any? { |m| m.mutated_source.include?("x >>= 2") }).to be true
+    end
+
+    it "replaces >>= with <<=" do
+      muts = mutations_for("right_shift_assign")
+
+      expect(muts.any? { |m| m.mutated_source.include?("x <<= 2") }).to be true
+    end
+
+    it "generates correct number of mutations for &=" do
+      muts = mutations_for("bitwise_and_assign")
+
+      expect(muts.length).to eq(2)
+    end
+
     it "does not mutate methods with no compound assignments" do
       muts = mutations_for("no_compound_assignment")
 

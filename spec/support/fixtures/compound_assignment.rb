@@ -43,6 +43,31 @@ class CompoundAssignment
     $counter += 1 # rubocop:disable Style/GlobalVars
   end
 
+  def bitwise_and_assign(x)
+    x &= 0xFF
+    x
+  end
+
+  def bitwise_or_assign(x)
+    x |= 0x01
+    x
+  end
+
+  def bitwise_xor_assign(x)
+    x ^= 0x0F
+    x
+  end
+
+  def left_shift_assign(x)
+    x <<= 2
+    x
+  end
+
+  def right_shift_assign(x)
+    x >>= 2
+    x
+  end
+
   def no_compound_assignment
     "hello"
   end
