@@ -6,6 +6,10 @@ AllCops:
     - "spec/support/fixtures/**/*"
     - "vendor/**/*"
 
+Style/ClassAndModuleChildren:
+  Exclude:
+    - "lib/evilution/mutator/operator/integer_literal.rb"
+
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
@@ -39,7 +43,7 @@ Metrics/MethodLength:
 
 # target 17
 Metrics/AbcSize:
-  Max: 34
+  Max: 30
 
 # target 7
 Metrics/CyclomaticComplexity:
