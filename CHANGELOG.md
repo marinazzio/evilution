@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0] - 2026-03-23
+
+### Added
+
+- **CompoundAssignment operator** — new mutation operator for compound assignment expressions; swaps arithmetic (`+=` ↔ `-=`, `*=` ↔ `/=`, `%=` → `*=`, `**=` → `*=`), bitwise (`&=` ↔ `|=`/`^=`, `<<=` ↔ `>>=`), and logical (`&&=` ↔ `||=`) compound assignments; also generates removal mutations (statement → `nil`); covers local, instance, class, and global variables (#234, #236, #239, #243)
+- **Compound assignment suggestion templates** — concrete RSpec `it`-block suggestions for survived compound assignment mutations via `--suggest-tests` (#247)
+
+### Changed
+
+- **Operator count** — 28 operators (up from 27), increasing mutation density for real-world Ruby code
+- **Refactored IntegerLiteral mutation logic** and updated RuboCop configuration (#360)
+
 ## [0.12.0] - 2026-03-22
 
 ### Added
