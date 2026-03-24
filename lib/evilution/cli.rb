@@ -292,6 +292,9 @@ module Evilution
     rescue Error => e
       warn("Error: #{e.message}")
       2
+    rescue ::JSON::ParserError => e
+      warn("Error: invalid session file: #{e.message}")
+      2
     end
 
     def print_session_detail(data)
@@ -301,10 +304,19 @@ module Evilution
     end
 
     def print_session_header(data)
-      git = data["git"]
       $stdout.puts("Session: #{data["timestamp"]}")
       $stdout.puts("Version: #{data["version"]}")
-      $stdout.puts("Git:     #{git["branch"]} (#{git["sha"]})") if git
+      print_git_context(data["git"])
+    end
+
+    def print_git_context(git)
+      return unless git.is_a?(Hash)
+
+      branch = git["branch"]
+      sha = git["sha"]
+      return if branch.to_s.empty? && sha.to_s.empty?
+
+      $stdout.puts("Git:     #{branch} (#{sha})")
     end
 
     def print_session_summary(summary)

@@ -157,6 +157,33 @@ RSpec.describe Evilution::CLI, "session show" do
       expect(output).to include("session file path required")
     end
 
+    it "returns exit code 2 for corrupt session file" do
+      path = write_session_file(results_dir, "20260324T100000-bad00000.json", "not json at all")
+      # write_session_file uses JSON.generate, so write raw content directly
+      File.write(path, "not json at all")
+      cli = described_class.new(["session", "show", path])
+      result = nil
+      capture_stderr { result = cli.call }
+      expect(result).to eq(2)
+    end
+
+    it "prints error for corrupt session file" do
+      path = File.join(results_dir, "corrupt.json")
+      File.write(path, "{{{invalid")
+      cli = described_class.new(["session", "show", path])
+      output = capture_stderr { cli.call }
+      expect(output).to include("invalid session file")
+    end
+
+    it "does not print git line when sha and branch are nil" do
+      data = full_session_data.merge("git" => { "sha" => nil, "branch" => nil })
+      path = write_session_file(results_dir, "20260324T100000-aabb0000.json", data)
+      cli = described_class.new(["session", "show", path])
+      output = capture_stdout { cli.call }
+
+      expect(output).not_to include("Git:")
+    end
+
     it "supports --format json to output raw session data" do
       path = write_session_file(results_dir, "20260324T100000-aabb0000.json", full_session_data)
       cli = described_class.new(["session", "show", "--format", "json", path])
