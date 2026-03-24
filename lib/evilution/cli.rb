@@ -29,6 +29,11 @@ module Evilution
         run_init
       when :mcp
         run_mcp
+      when :session_list
+        run_session_list
+      when :session_error
+        warn("Error: #{@session_error}")
+        2
       when :run
         run_mutations
       end
@@ -47,10 +52,29 @@ module Evilution
       when "mcp"
         @command = :mcp
         argv.shift
+      when "session"
+        argv.shift
+        extract_session_subcommand(argv)
       when "run"
         argv.shift
       end
       argv
+    end
+
+    def extract_session_subcommand(argv)
+      subcommand = argv.first
+      case subcommand
+      when "list"
+        @command = :session_list
+        argv.shift
+      when nil
+        @command = :session_error
+        @session_error = "Missing session subcommand. Available subcommands: list"
+      else
+        @command = :session_error
+        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list"
+        argv.shift
+      end
     end
 
     def preprocess_flags(argv)
@@ -92,7 +116,7 @@ module Evilution
       opts.separator ""
       opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
       opts.separator ""
-      opts.separator "Commands: run (default), init, mcp, version"
+      opts.separator "Commands: run (default), init, session list, mcp, version"
       opts.separator ""
       opts.separator "Options:"
     end
@@ -101,6 +125,7 @@ module Evilution
       add_core_options(opts)
       add_filter_options(opts)
       add_flag_options(opts)
+      add_session_options(opts)
     end
 
     def add_core_options(opts)
@@ -126,6 +151,12 @@ module Evilution
       opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
       opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
       opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
+    end
+
+    def add_session_options(opts)
+      opts.on("--results-dir DIR", "Session results directory") { |d| @options[:results_dir] = d }
+      opts.on("--limit N", Integer, "Show only the N most recent sessions") { |n| @options[:limit] = n }
+      opts.on("--since DATE", "Show sessions since DATE (YYYY-MM-DD)") { |d| @options[:since] = d }
     end
 
     def run_init
@@ -187,6 +218,83 @@ module Evilution
         line = Integer(str)
         line..line
       end
+    end
+
+    def run_session_list
+      require_relative "session/store"
+
+      store_opts = {}
+      store_opts[:results_dir] = @options[:results_dir] if @options[:results_dir]
+      store = Session::Store.new(**store_opts)
+      sessions = store.list
+      sessions = filter_sessions(sessions)
+
+      if sessions.empty?
+        $stdout.puts("No sessions found")
+        return 0
+      end
+
+      if @options[:format] == :json
+        $stdout.puts(JSON.pretty_generate(sessions.map { |s| session_to_hash(s) }))
+      else
+        print_session_table(sessions)
+      end
+
+      0
+    rescue ConfigError => e
+      warn("Error: #{e.message}")
+      2
+    end
+
+    def filter_sessions(sessions)
+      if @options[:since]
+        cutoff = parse_date(@options[:since])
+        sessions = sessions.select do |s|
+          ts = s[:timestamp]
+          next false unless ts.is_a?(String)
+
+          Time.parse(ts) >= cutoff
+        rescue ArgumentError
+          false
+        end
+      end
+      sessions = sessions.first(@options[:limit]) if @options[:limit]
+      sessions
+    end
+
+    def parse_date(value)
+      Time.parse(value)
+    rescue ArgumentError
+      raise ConfigError, "invalid --since date: #{value.inspect}. Use YYYY-MM-DD format"
+    end
+
+    def session_to_hash(session)
+      {
+        "timestamp" => session[:timestamp],
+        "total" => session[:total],
+        "killed" => session[:killed],
+        "survived" => session[:survived],
+        "score" => session[:score],
+        "duration" => session[:duration],
+        "file" => session[:file]
+      }
+    end
+
+    def print_session_table(sessions)
+      header = "Timestamp                       Total Killed  Surv.    Score Duration"
+      $stdout.puts(header)
+      $stdout.puts("-" * header.length)
+      sessions.each { |s| print_session_row(s) }
+    end
+
+    def print_session_row(session)
+      $stdout.puts(
+        format(
+          "%-30<ts>s %6<total>d %6<killed>d %6<surv>d %7.2<score>f%% %7.1<dur>fs",
+          ts: session[:timestamp], total: session[:total], killed: session[:killed],
+          surv: session[:survived], score: session[:score] * 100, dur: session[:duration]
+        )
+      )
     end
 
     def run_mutations

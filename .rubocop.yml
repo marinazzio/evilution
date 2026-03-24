@@ -44,8 +44,6 @@ Metrics/MethodLength:
 # target 17
 Metrics/AbcSize:
   Max: 30
-  Exclude:
-    - "lib/evilution/config.rb"
 
 # target 7
 Metrics/CyclomaticComplexity:

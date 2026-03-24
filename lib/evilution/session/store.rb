@@ -17,10 +17,11 @@ module Evilution
       def save(summary)
         FileUtils.mkdir_p(@results_dir)
 
-        data = build_session_data(summary)
-        filename = "#{format_timestamp(Time.now)}-#{SecureRandom.hex(4)}.json"
+        now = Time.now
+        data = build_session_data(summary, now)
+        filename = "#{format_timestamp(now)}-#{SecureRandom.hex(4)}.json"
         path = File.join(@results_dir, filename)
-        File.write(path, ::JSON.pretty_generate(data))
+        atomic_write(path, ::JSON.pretty_generate(data))
         path
       end
 
@@ -30,7 +31,7 @@ module Evilution
         Dir.glob(File.join(@results_dir, "*.json"))
            .sort_by { |f| File.basename(f) }
            .reverse
-           .map { |f| build_list_entry(f) }
+           .filter_map { |f| build_list_entry(f) }
       end
 
       def load(path)
@@ -41,10 +42,10 @@ module Evilution
 
       private
 
-      def build_session_data(summary)
+      def build_session_data(summary, now)
         {
           version: Evilution::VERSION,
-          timestamp: Time.now.iso8601,
+          timestamp: now.iso8601,
           git: git_context,
           summary: build_summary(summary),
           survived: summary.survived_results.map { |r| build_mutation_detail(r) },
@@ -94,9 +95,20 @@ module Evilution
         time.strftime("%Y%m%dT%H%M%S")
       end
 
+      def atomic_write(path, content)
+        temp_path = "#{path}.tmp-#{Process.pid}-#{SecureRandom.hex(4)}"
+        File.write(temp_path, content)
+        File.rename(temp_path, path)
+      rescue StandardError
+        FileUtils.rm_f(temp_path)
+        raise
+      end
+
       def build_list_entry(file)
         data = ::JSON.parse(File.read(file))
         summary = data["summary"]
+        return nil unless data.is_a?(Hash) && summary.is_a?(Hash)
+
         {
           file: file,
           timestamp: data["timestamp"],
@@ -106,6 +118,8 @@ module Evilution
           score: summary["score"],
           duration: summary["duration"]
         }
+      rescue ::JSON::ParserError, SystemCallError
+        nil
       end
     end
   end

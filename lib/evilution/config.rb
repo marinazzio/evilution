@@ -134,7 +134,7 @@ module Evilution
       raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
     end
 
-    def assign_attributes(merged)
+    def assign_attributes(merged) # rubocop:disable Metrics/AbcSize
       @target_files = Array(merged[:target_files])
       @timeout = merged[:timeout]
       @format = merged[:format].to_sym

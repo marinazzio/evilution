@@ -236,6 +236,16 @@ RSpec.describe Evilution::Session::Store do
       expect(sessions.last[:total]).to eq(1)
     end
 
+    it "skips malformed JSON files" do
+      summary = build_summary
+      store.save(summary)
+      File.write(File.join(results_dir, "20260301T000000-bad00000.json"), "not valid json{{{")
+
+      sessions = store.list
+
+      expect(sessions.length).to eq(1)
+    end
+
     it "includes all summary fields in each entry" do
       mutation = build_mutation
       killed = build_result(mutation, status: :killed)
