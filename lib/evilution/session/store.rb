@@ -107,6 +107,8 @@ module Evilution
       def build_list_entry(file)
         data = ::JSON.parse(File.read(file))
         summary = data["summary"]
+        return nil unless data.is_a?(Hash) && summary.is_a?(Hash)
+
         {
           file: file,
           timestamp: data["timestamp"],

@@ -31,6 +31,9 @@ module Evilution
         run_mcp
       when :session_list
         run_session_list
+      when :session_error
+        warn("Error: #{@session_error}")
+        2
       when :run
         run_mutations
       end
@@ -59,9 +62,17 @@ module Evilution
     end
 
     def extract_session_subcommand(argv)
-      case argv.first
+      subcommand = argv.first
+      case subcommand
       when "list"
         @command = :session_list
+        argv.shift
+      when nil
+        @command = :session_error
+        @session_error = "Missing session subcommand. Available subcommands: list"
+      else
+        @command = :session_error
+        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list"
         argv.shift
       end
     end
@@ -230,15 +241,31 @@ module Evilution
       end
 
       0
+    rescue ConfigError => e
+      warn("Error: #{e.message}")
+      2
     end
 
     def filter_sessions(sessions)
       if @options[:since]
-        cutoff = Time.parse(@options[:since])
-        sessions = sessions.select { |s| Time.parse(s[:timestamp]) >= cutoff }
+        cutoff = parse_date(@options[:since])
+        sessions = sessions.select do |s|
+          ts = s[:timestamp]
+          next false unless ts.is_a?(String)
+
+          Time.parse(ts) >= cutoff
+        rescue ArgumentError
+          false
+        end
       end
       sessions = sessions.first(@options[:limit]) if @options[:limit]
       sessions
+    end
+
+    def parse_date(value)
+      Time.parse(value)
+    rescue ArgumentError
+      raise ConfigError, "invalid --since date: #{value.inspect}. Use YYYY-MM-DD format"
     end
 
     def session_to_hash(session)

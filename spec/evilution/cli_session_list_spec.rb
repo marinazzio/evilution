@@ -20,6 +20,16 @@ RSpec.describe Evilution::CLI, "session list" do
     $stdout = original
   end
 
+  def capture_stderr
+    io = StringIO.new
+    original = $stderr
+    $stderr = io
+    yield
+    io.string
+  ensure
+    $stderr = original
+  end
+
   def write_session(dir, filename, data)
     File.write(File.join(dir, filename), JSON.generate(data))
   end
@@ -35,6 +45,35 @@ RSpec.describe Evilution::CLI, "session list" do
         "duration" => duration
       }
     }
+  end
+
+  describe "session subcommand errors" do
+    it "returns exit code 2 when no subcommand is given" do
+      cli = described_class.new(["session"])
+      result = nil
+      capture_stderr { result = cli.call }
+      expect(result).to eq(2)
+    end
+
+    it "prints error for missing subcommand" do
+      cli = described_class.new(["session"])
+      output = capture_stderr { cli.call }
+      expect(output).to include("Missing session subcommand")
+      expect(output).to include("list")
+    end
+
+    it "returns exit code 2 for unknown subcommand" do
+      cli = described_class.new(%w[session bogus])
+      result = nil
+      capture_stderr { result = cli.call }
+      expect(result).to eq(2)
+    end
+
+    it "prints error for unknown subcommand" do
+      cli = described_class.new(%w[session bogus])
+      output = capture_stderr { cli.call }
+      expect(output).to include("Unknown session subcommand: bogus")
+    end
   end
 
   describe "session list command" do
@@ -124,6 +163,31 @@ RSpec.describe Evilution::CLI, "session list" do
       expect(parsed.length).to eq(1)
       expect(parsed.first["total"]).to eq(10)
       expect(parsed.first["score"]).to eq(0.9)
+    end
+
+    it "returns exit code 2 for invalid --since date" do
+      cli = described_class.new(["session", "list", "--results-dir", results_dir, "--since", "not-a-date"])
+      result = nil
+      capture_stderr { result = cli.call }
+      expect(result).to eq(2)
+    end
+
+    it "prints error message for invalid --since date" do
+      cli = described_class.new(["session", "list", "--results-dir", results_dir, "--since", "not-a-date"])
+      output = capture_stderr { cli.call }
+      expect(output).to include("invalid --since date")
+    end
+
+    it "skips sessions with missing summary structure" do
+      write_session(results_dir, "20260320T100000-aabb0000.json",
+                    session_data(timestamp: "2026-03-20T10:00:00+00:00"))
+      File.write(File.join(results_dir, "20260321T100000-bad00000.json"), JSON.generate({ "no_summary" => true }))
+
+      cli = described_class.new(["session", "list", "--results-dir", results_dir])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("2026-03-20")
+      expect(output).not_to include("no_summary")
     end
 
     it "combines --limit and --since filters" do
