@@ -17,3 +17,7 @@
 .mcp.json
 
 .claude/projects/
+
+# Evilution session results and reports
+.evilution/
+evilution-report.html
