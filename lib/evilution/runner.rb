@@ -368,7 +368,7 @@ module Evilution
 
       Session::Store.new.save(summary)
     rescue StandardError => e
-      warn "[evilution] failed to save session: #{e.message}" if config.verbose
+      warn "[evilution] failed to save session: #{e.message}" unless config.quiet
     end
 
     def build_reporter
