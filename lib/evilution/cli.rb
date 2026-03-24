@@ -31,6 +31,8 @@ module Evilution
         run_mcp
       when :session_list
         run_session_list
+      when :session_show
+        run_session_show
       when :session_error
         warn("Error: #{@session_error}")
         2
@@ -67,12 +69,15 @@ module Evilution
       when "list"
         @command = :session_list
         argv.shift
+      when "show"
+        @command = :session_show
+        argv.shift
       when nil
         @command = :session_error
-        @session_error = "Missing session subcommand. Available subcommands: list"
+        @session_error = "Missing session subcommand. Available subcommands: list, show"
       else
         @command = :session_error
-        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list"
+        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show"
         argv.shift
       end
     end
@@ -266,6 +271,85 @@ module Evilution
       Time.parse(value)
     rescue ArgumentError
       raise ConfigError, "invalid --since date: #{value.inspect}. Use YYYY-MM-DD format"
+    end
+
+    def run_session_show
+      require_relative "session/store"
+
+      path = @files.first
+      raise ConfigError, "session file path required" unless path
+
+      store = Session::Store.new
+      data = store.load(path)
+
+      if @options[:format] == :json
+        $stdout.puts(JSON.pretty_generate(data))
+      else
+        print_session_detail(data)
+      end
+
+      0
+    rescue Error => e
+      warn("Error: #{e.message}")
+      2
+    rescue ::JSON::ParserError => e
+      warn("Error: invalid session file: #{e.message}")
+      2
+    end
+
+    def print_session_detail(data)
+      print_session_header(data)
+      print_session_summary(data["summary"])
+      print_survived_section(data["survived"] || [])
+    end
+
+    def print_session_header(data)
+      $stdout.puts("Session: #{data["timestamp"]}")
+      $stdout.puts("Version: #{data["version"]}")
+      print_git_context(data["git"])
+    end
+
+    def print_git_context(git)
+      return unless git.is_a?(Hash)
+
+      branch = git["branch"]
+      sha = git["sha"]
+      return if branch.to_s.empty? && sha.to_s.empty?
+
+      $stdout.puts("Git:     #{branch} (#{sha})")
+    end
+
+    def print_session_summary(summary)
+      $stdout.puts("")
+      $stdout.puts(
+        format(
+          "Score: %<score>.2f%%  Total: %<total>d  Killed: %<killed>d  Survived: %<surv>d  " \
+          "Timed out: %<to>d  Errors: %<err>d  Duration: %<dur>.1fs",
+          score: summary["score"] * 100, total: summary["total"], killed: summary["killed"],
+          surv: summary["survived"], to: summary["timed_out"], err: summary["errors"],
+          dur: summary["duration"]
+        )
+      )
+    end
+
+    def print_survived_section(survived)
+      $stdout.puts("")
+      if survived.empty?
+        $stdout.puts("No survived mutations")
+      else
+        $stdout.puts("Survived mutations (#{survived.length}):")
+        survived.each_with_index { |m, i| print_mutation_detail(m, i + 1) }
+      end
+    end
+
+    def print_mutation_detail(mutation, index)
+      $stdout.puts("")
+      $stdout.puts("  #{index}. #{mutation["operator"]} — #{mutation["file"]}:#{mutation["line"]}")
+      $stdout.puts("     Subject: #{mutation["subject"]}")
+      return unless mutation["diff"]
+
+      $stdout.puts("     Diff:")
+      mutation["diff"].each_line { |line| $stdout.puts("       #{line}") }
     end
 
     def session_to_hash(session)
