@@ -4,31 +4,16 @@ require "json"
 require "tmpdir"
 require "evilution/cli"
 require "evilution/session/store"
+require "support/cli_helpers"
 
 RSpec.describe Evilution::CLI, "session gc" do
+  include CLIHelpers
+
   let(:results_dir) { Dir.mktmpdir("evilution-sessions") }
+  let(:frozen_time) { Time.new(2026, 4, 1, 12, 0, 0) }
 
+  before { allow(Time).to receive(:now).and_return(frozen_time) }
   after { FileUtils.rm_rf(results_dir) }
-
-  def capture_stdout
-    io = StringIO.new
-    original = $stdout
-    $stdout = io
-    yield
-    io.string
-  ensure
-    $stdout = original
-  end
-
-  def capture_stderr
-    io = StringIO.new
-    original = $stderr
-    $stderr = io
-    yield
-    io.string
-  ensure
-    $stderr = original
-  end
 
   describe "session gc command" do
     it "returns exit code 0" do
@@ -40,14 +25,14 @@ RSpec.describe Evilution::CLI, "session gc" do
 
     it "deletes sessions older than the specified duration" do
       File.write(File.join(results_dir, "20250101T000000-aaaa0000.json"), "{}")
-      File.write(File.join(results_dir, "20260324T000000-bbbb0000.json"), "{}")
+      File.write(File.join(results_dir, "20260325T000000-bbbb0000.json"), "{}")
 
       cli = described_class.new(["session", "gc", "--results-dir", results_dir, "--older-than", "30d"])
       capture_stdout { cli.call }
 
       files = Dir.glob(File.join(results_dir, "*.json"))
       expect(files.length).to eq(1)
-      expect(files.first).to include("20260324")
+      expect(files.first).to include("20260325")
     end
 
     it "reports number of deleted sessions" do
