@@ -294,6 +294,51 @@ RSpec.describe Evilution::Session::Store do
     end
   end
 
+  describe "#gc" do
+    it "returns empty array when no sessions exist" do
+      expect(store.gc(older_than: Time.now)).to eq([])
+    end
+
+    it "deletes sessions older than the given time" do
+      File.write(File.join(results_dir, "20260101T000000-aaaa0000.json"), "{}")
+      File.write(File.join(results_dir, "20260301T000000-bbbb0000.json"), "{}")
+
+      cutoff = Time.new(2026, 2, 1)
+      deleted = store.gc(older_than: cutoff)
+
+      expect(deleted.length).to eq(1)
+      expect(deleted.first).to include("20260101T000000")
+      expect(Dir.glob(File.join(results_dir, "*.json")).length).to eq(1)
+    end
+
+    it "keeps sessions newer than the given time" do
+      File.write(File.join(results_dir, "20260320T000000-aaaa0000.json"), "{}")
+
+      cutoff = Time.new(2026, 1, 1)
+      deleted = store.gc(older_than: cutoff)
+
+      expect(deleted).to eq([])
+      expect(Dir.glob(File.join(results_dir, "*.json")).length).to eq(1)
+    end
+
+    it "deletes all sessions when all are older" do
+      File.write(File.join(results_dir, "20260101T000000-aaaa0000.json"), "{}")
+      File.write(File.join(results_dir, "20260102T000000-bbbb0000.json"), "{}")
+
+      cutoff = Time.new(2026, 12, 31)
+      deleted = store.gc(older_than: cutoff)
+
+      expect(deleted.length).to eq(2)
+      expect(Dir.glob(File.join(results_dir, "*.json")).length).to eq(0)
+    end
+
+    it "returns empty array when results directory does not exist" do
+      nonexistent_store = described_class.new(results_dir: File.join(results_dir, "nonexistent"))
+
+      expect(nonexistent_store.gc(older_than: Time.now)).to eq([])
+    end
+  end
+
   private
 
   def read_saved_session

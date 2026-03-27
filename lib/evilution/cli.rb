@@ -33,6 +33,8 @@ module Evilution
         run_session_list
       when :session_show
         run_session_show
+      when :session_gc
+        run_session_gc
       when :session_error
         warn("Error: #{@session_error}")
         2
@@ -72,12 +74,15 @@ module Evilution
       when "show"
         @command = :session_show
         argv.shift
+      when "gc"
+        @command = :session_gc
+        argv.shift
       when nil
         @command = :session_error
-        @session_error = "Missing session subcommand. Available subcommands: list, show"
+        @session_error = "Missing session subcommand. Available subcommands: list, show, gc"
       else
         @command = :session_error
-        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show"
+        @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show, gc"
         argv.shift
       end
     end
@@ -121,7 +126,7 @@ module Evilution
       opts.separator ""
       opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
       opts.separator ""
-      opts.separator "Commands: run (default), init, session list, mcp, version"
+      opts.separator "Commands: run (default), init, session {list,show,gc}, mcp, version"
       opts.separator ""
       opts.separator "Options:"
     end
@@ -162,6 +167,9 @@ module Evilution
       opts.on("--results-dir DIR", "Session results directory") { |d| @options[:results_dir] = d }
       opts.on("--limit N", Integer, "Show only the N most recent sessions") { |n| @options[:limit] = n }
       opts.on("--since DATE", "Show sessions since DATE (YYYY-MM-DD)") { |d| @options[:since] = d }
+      opts.on("--older-than DURATION", "Delete sessions older than DURATION (e.g., 30d, 24h, 1w)") do |d|
+        @options[:older_than] = d
+      end
     end
 
     def run_init
@@ -295,6 +303,42 @@ module Evilution
     rescue ::JSON::ParserError => e
       warn("Error: invalid session file: #{e.message}")
       2
+    end
+
+    def run_session_gc
+      require_relative "session/store"
+
+      raise ConfigError, "--older-than is required for session gc" unless @options[:older_than]
+
+      cutoff = parse_duration(@options[:older_than])
+      store_opts = {}
+      store_opts[:results_dir] = @options[:results_dir] if @options[:results_dir]
+      store = Session::Store.new(**store_opts)
+      deleted = store.gc(older_than: cutoff)
+
+      if deleted.empty?
+        $stdout.puts("No sessions to delete")
+      else
+        $stdout.puts("Deleted #{deleted.length} session#{"s" unless deleted.length == 1}")
+      end
+
+      0
+    rescue ConfigError => e
+      warn("Error: #{e.message}")
+      2
+    end
+
+    def parse_duration(value)
+      match = value.match(/\A(\d+)([dhw])\z/)
+      raise ConfigError, "invalid --older-than format: #{value.inspect}. Use Nd, Nh, or Nw (e.g., 30d)" unless match
+
+      amount = match[1].to_i
+      seconds = case match[2]
+                when "h" then amount * 3600
+                when "d" then amount * 86_400
+                when "w" then amount * 604_800
+                end
+      Time.now - seconds
     end
 
     def print_session_detail(data)

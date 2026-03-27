@@ -4,31 +4,14 @@ require "json"
 require "tmpdir"
 require "evilution/cli"
 require "evilution/session/store"
+require "support/cli_helpers"
 
 RSpec.describe Evilution::CLI, "session list" do
+  include CLIHelpers
+
   let(:results_dir) { Dir.mktmpdir("evilution-sessions") }
 
   after { FileUtils.rm_rf(results_dir) }
-
-  def capture_stdout
-    io = StringIO.new
-    original = $stdout
-    $stdout = io
-    yield
-    io.string
-  ensure
-    $stdout = original
-  end
-
-  def capture_stderr
-    io = StringIO.new
-    original = $stderr
-    $stderr = io
-    yield
-    io.string
-  ensure
-    $stderr = original
-  end
 
   def write_session(dir, filename, data)
     File.write(File.join(dir, filename), JSON.generate(data))

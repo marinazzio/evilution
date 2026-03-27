@@ -40,6 +40,21 @@ module Evilution
         ::JSON.parse(File.read(path))
       end
 
+      def gc(older_than:)
+        return [] unless Dir.exist?(@results_dir)
+
+        deleted = []
+        Dir.glob(File.join(@results_dir, "*.json")).each do |file|
+          timestamp = parse_filename_timestamp(File.basename(file))
+          next unless timestamp
+          next unless timestamp < older_than
+
+          File.delete(file)
+          deleted << file
+        end
+        deleted
+      end
+
       private
 
       def build_session_data(summary, now)
@@ -89,6 +104,13 @@ module Evilution
           sha: sha.empty? ? nil : sha,
           branch: branch.empty? ? nil : branch
         }
+      end
+
+      def parse_filename_timestamp(basename)
+        match = basename.match(/\A(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/)
+        return nil unless match
+
+        Time.new(*match[1..6].map(&:to_i))
       end
 
       def format_timestamp(time)
