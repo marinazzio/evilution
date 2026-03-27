@@ -52,7 +52,7 @@ module Evilution
           # Fallback: direct write when file isn't under any $LOAD_PATH entry.
           # Acquire an exclusive lock to prevent concurrent workers from corrupting the file.
           lock_path = File.join(Dir.tmpdir, "evilution-#{File.expand_path(mutation.file_path).hash.abs}.lock")
-          @lock_file = File.open(lock_path, File::CREAT | File::RDWR) # rubocop:disable Style/FileOpen
+          @lock_file = File.open(lock_path, File::CREAT | File::RDWR)
           @lock_file.flock(File::LOCK_EX)
           @original_content = File.read(mutation.file_path)
           File.write(mutation.file_path, mutation.mutated_source)
