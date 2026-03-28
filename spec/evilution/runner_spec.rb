@@ -580,6 +580,135 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with method-type selector Foo#" do
+    let(:instance_method) do
+      double("Subject", name: "Example#foo", file_path: "lib/example.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:class_method) do
+      double("Subject", name: "Example.bar", file_path: "lib/example.rb",
+                        line_number: 10, release_node!: nil)
+    end
+
+    let(:other_subject) do
+      double("Subject", name: "Other#baz", file_path: "lib/example.rb",
+                        line_number: 20, release_node!: nil)
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return(
+        [instance_method, class_method, other_subject]
+      )
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "selects only instance methods of the class" do
+      config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Example#",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+      registry = Evilution::Mutator::Registry.default
+
+      expect(registry).to receive(:mutations_for).with(instance_method)
+      expect(registry).not_to receive(:mutations_for).with(class_method)
+      expect(registry).not_to receive(:mutations_for).with(other_subject)
+
+      runner.call
+    end
+  end
+
+  describe "#call with method-type selector Foo." do
+    let(:instance_method) do
+      double("Subject", name: "Example#foo", file_path: "lib/example.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:class_method) do
+      double("Subject", name: "Example.bar", file_path: "lib/example.rb",
+                        line_number: 10, release_node!: nil)
+    end
+
+    let(:other_class_method) do
+      double("Subject", name: "Other.qux", file_path: "lib/example.rb",
+                        line_number: 20, release_node!: nil)
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return(
+        [instance_method, class_method, other_class_method]
+      )
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "selects only class methods of the class" do
+      config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Example.",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+      registry = Evilution::Mutator::Registry.default
+
+      expect(registry).to receive(:mutations_for).with(class_method)
+      expect(registry).not_to receive(:mutations_for).with(instance_method)
+      expect(registry).not_to receive(:mutations_for).with(other_class_method)
+
+      runner.call
+    end
+
+    it "matches exact class method with Foo.bar" do
+      config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Example.bar",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+      registry = Evilution::Mutator::Registry.default
+
+      expect(registry).to receive(:mutations_for).with(class_method)
+      expect(registry).not_to receive(:mutations_for).with(instance_method)
+      expect(registry).not_to receive(:mutations_for).with(other_class_method)
+
+      runner.call
+    end
+  end
+
   describe "#call with spec_files" do
     let(:config) do
       Evilution::Config.new(

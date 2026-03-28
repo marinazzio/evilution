@@ -54,11 +54,19 @@ module Evilution::AST
     end
 
     def visit_def_node(node)
+      separator = node.receiver ? "." : "#"
+      add_subject(node, separator)
+      super
+    end
+
+    private
+
+    def add_subject(node, separator)
       scope = @context.join("::")
       name = if scope.empty?
-               "##{node.name}"
+               "#{separator}#{node.name}"
              else
-               "#{scope}##{node.name}"
+               "#{scope}#{separator}#{node.name}"
              end
 
       loc = node.location
@@ -71,11 +79,7 @@ module Evilution::AST
         source: method_source,
         node: node
       )
-
-      super
     end
-
-    private
 
     def constant_name(node)
       if node.respond_to?(:full_name)

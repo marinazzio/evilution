@@ -135,14 +135,22 @@ class Evilution::Runner
   end
 
   def filter_by_target(subjects)
-    matched = if config.target.include?("#")
-                subjects.select { |s| s.name == config.target }
-              else
-                subjects.select { |s| s.name.start_with?("#{config.target}#") }
-              end
+    matched = subjects.select(&target_matcher)
     raise Evilution::Error, "no method found matching '#{config.target}'" if matched.empty?
 
     matched
+  end
+
+  def target_matcher
+    target = config.target
+    if target.end_with?("#", ".")
+      prefix = target
+      ->(s) { s.name.start_with?(prefix) }
+    elsif target.include?("#") || target.include?(".")
+      ->(s) { s.name == target }
+    else
+      ->(s) { s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
+    end
   end
 
   def filter_by_line_ranges(subjects)

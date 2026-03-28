@@ -107,6 +107,73 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with class methods (def self.foo)" do
+    let(:class_method_source) do
+      <<~RUBY
+        class Service
+          def self.call(input)
+            new(input).run
+          end
+
+          def run
+            :ok
+          end
+        end
+      RUBY
+    end
+
+    it "names class methods with dot separator" do
+      tmpfile = Tempfile.new(["class_method", ".rb"])
+      tmpfile.write(class_method_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      names = subjects.map(&:name)
+
+      expect(names).to contain_exactly("Service.call", "Service#run")
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "captures class method source" do
+      tmpfile = Tempfile.new(["class_method", ".rb"])
+      tmpfile.write(class_method_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      call_subject = subjects.find { |s| s.name == "Service.call" }
+
+      expect(call_subject.source).to include("def self.call")
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
+  context "with namespaced class methods" do
+    let(:namespaced_class_method_source) do
+      <<~RUBY
+        module Api
+          class Client
+            def self.connect(url)
+              new(url)
+            end
+          end
+        end
+      RUBY
+    end
+
+    it "builds fully-qualified names for class methods" do
+      tmpfile = Tempfile.new(["ns_class_method", ".rb"])
+      tmpfile.write(namespaced_class_method_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      expect(subjects.first.name).to eq("Api::Client.connect")
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
   context "with top-level methods" do
     let(:toplevel_source) do
       <<~RUBY
