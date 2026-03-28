@@ -34,7 +34,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::SendMutation,
       Evilution::Mutator::Operator::ArgumentNilSubstitution,
       Evilution::Mutator::Operator::CompoundAssignment,
-      Evilution::Mutator::Operator::MixinRemoval
+      Evilution::Mutator::Operator::MixinRemoval,
+      Evilution::Mutator::Operator::SuperclassRemoval
     ].each { |op| registry.register(op) }
     registry
   end
