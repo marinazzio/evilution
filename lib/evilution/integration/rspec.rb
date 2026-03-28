@@ -6,7 +6,9 @@ require "tmpdir"
 require_relative "base"
 require_relative "../spec_resolver"
 
-class Evilution::Integration::RSpec < Base
+require_relative "../integration"
+
+class Evilution::Integration::RSpec < Evilution::Integration::Base
   def initialize(test_files: nil)
     @test_files = test_files
     @rspec_loaded = false
@@ -117,7 +119,7 @@ class Evilution::Integration::RSpec < Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = SpecResolver.new.call(mutation.file_path)
+    resolved = Evilution::SpecResolver.new.call(mutation.file_path)
     resolved ? [resolved] : ["spec"]
   end
 end

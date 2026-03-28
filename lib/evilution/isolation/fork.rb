@@ -4,6 +4,8 @@ require "fileutils"
 require "tmpdir"
 require_relative "../memory"
 
+require_relative "../isolation"
+
 class Evilution::Isolation::Fork
   GRACE_PERIOD = 2
 
@@ -51,7 +53,7 @@ class Evilution::Isolation::Fork
 
   def execute_in_child(mutation, test_command)
     result = test_command.call(mutation)
-    { child_rss_kb: Memory.rss_kb }.merge(result)
+    { child_rss_kb: Evilution::Memory.rss_kb }.merge(result)
   rescue StandardError => e
     { passed: false, error: e.message }
   end
@@ -94,7 +96,7 @@ class Evilution::Isolation::Fork
                :killed
              end
 
-    Result::MutationResult.new(
+    Evilution::Result::MutationResult.new(
       mutation: mutation,
       status: status,
       duration: duration,

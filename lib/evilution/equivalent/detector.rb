@@ -5,6 +5,8 @@ require_relative "heuristic/method_body_nil"
 require_relative "heuristic/alias_swap"
 require_relative "heuristic/dead_code"
 
+require_relative "../equivalent"
+
 class Evilution::Equivalent::Detector
   def initialize(heuristics: nil)
     @heuristics = heuristics || default_heuristics
@@ -29,10 +31,10 @@ class Evilution::Equivalent::Detector
 
   def default_heuristics
     [
-      Heuristic::NoopSource.new,
-      Heuristic::MethodBodyNil.new,
-      Heuristic::AliasSwap.new,
-      Heuristic::DeadCode.new
+      Evilution::Equivalent::Heuristic::NoopSource.new,
+      Evilution::Equivalent::Heuristic::MethodBodyNil.new,
+      Evilution::Equivalent::Heuristic::AliasSwap.new,
+      Evilution::Equivalent::Heuristic::DeadCode.new
     ]
   end
 end

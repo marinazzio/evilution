@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::NilReplacement < Evilution::Mutator::Base
   REPLACEMENTS = %w[true false 0 ""].freeze
 

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ReturnValueRemoval < Evilution::Mutator::Base
   def visit_return_node(node)
     if node.arguments

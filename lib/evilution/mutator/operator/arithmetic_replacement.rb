@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ArithmeticReplacement < Evilution::Mutator::Base
   REPLACEMENTS = {
     :+ => [:-],

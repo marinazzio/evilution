@@ -3,9 +3,11 @@
 require "cgi"
 require_relative "suggestion"
 
+require_relative "../reporter"
+
 class Evilution::Reporter::HTML
   def initialize
-    @suggestion = Suggestion.new
+    @suggestion = Evilution::Reporter::Suggestion.new
   end
 
   def call(summary)

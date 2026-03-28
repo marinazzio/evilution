@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::FloatLiteral < Evilution::Mutator::Base
   def visit_float_node(node)
     replacement = case node.value

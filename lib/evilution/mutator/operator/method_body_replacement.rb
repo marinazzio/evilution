@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::Base
   def visit_def_node(node)
     if node.body

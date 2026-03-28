@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::Base
   REPLACEMENTS = {
     map: [:each],

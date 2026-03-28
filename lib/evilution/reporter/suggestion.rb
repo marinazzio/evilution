@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../reporter"
+
 class Evilution::Reporter::Suggestion
   TEMPLATES = {
     "comparison_replacement" => "Add a test for the boundary condition where the comparison operand equals the threshold exactly",

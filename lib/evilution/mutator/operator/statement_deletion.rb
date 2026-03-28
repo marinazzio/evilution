@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::StatementDeletion < Evilution::Mutator::Base
   def visit_statements_node(node)
     if node.body.length > 1

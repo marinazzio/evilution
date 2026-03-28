@@ -22,7 +22,7 @@ class Evilution::CLI
   def call
     case @command
     when :version
-      $stdout.puts(VERSION)
+      $stdout.puts(Evilution::VERSION)
       0
     when :init
       run_init
@@ -115,7 +115,7 @@ class Evilution::CLI
   def build_option_parser
     OptionParser.new do |opts|
       opts.banner = "Usage: evilution [command] [options] [files...]"
-      opts.version = VERSION
+      opts.version = Evilution::VERSION
       add_separators(opts)
       add_options(opts)
     end
@@ -178,14 +178,14 @@ class Evilution::CLI
       return 1
     end
 
-    File.write(path, Config.default_template)
+    File.write(path, Evilution::Config.default_template)
     $stdout.puts("Created #{path}")
     0
   end
 
   def run_mcp
     require_relative "mcp/server"
-    server = MCP::Server.build
+    server = Evilution::MCP::Server.build
     transport = ::MCP::Server::Transports::StdioTransport.new(server)
     transport.open
     0
@@ -237,7 +237,7 @@ class Evilution::CLI
 
     store_opts = {}
     store_opts[:results_dir] = @options[:results_dir] if @options[:results_dir]
-    store = Session::Store.new(**store_opts)
+    store = Evilution::Session::Store.new(**store_opts)
     sessions = store.list
     sessions = filter_sessions(sessions)
 
@@ -253,7 +253,7 @@ class Evilution::CLI
     end
 
     0
-  rescue ConfigError => e
+  rescue Evilution::ConfigError => e
     warn("Error: #{e.message}")
     2
   end
@@ -277,16 +277,16 @@ class Evilution::CLI
   def parse_date(value)
     Time.parse(value)
   rescue ArgumentError
-    raise ConfigError, "invalid --since date: #{value.inspect}. Use YYYY-MM-DD format"
+    raise Evilution::ConfigError, "invalid --since date: #{value.inspect}. Use YYYY-MM-DD format"
   end
 
   def run_session_show
     require_relative "session/store"
 
     path = @files.first
-    raise ConfigError, "session file path required" unless path
+    raise Evilution::ConfigError, "session file path required" unless path
 
-    store = Session::Store.new
+    store = Evilution::Session::Store.new
     data = store.load(path)
 
     if @options[:format] == :json
@@ -296,7 +296,7 @@ class Evilution::CLI
     end
 
     0
-  rescue Error => e
+  rescue Evilution::Error => e
     warn("Error: #{e.message}")
     2
   rescue ::JSON::ParserError => e
@@ -307,12 +307,12 @@ class Evilution::CLI
   def run_session_gc
     require_relative "session/store"
 
-    raise ConfigError, "--older-than is required for session gc" unless @options[:older_than]
+    raise Evilution::ConfigError, "--older-than is required for session gc" unless @options[:older_than]
 
     cutoff = parse_duration(@options[:older_than])
     store_opts = {}
     store_opts[:results_dir] = @options[:results_dir] if @options[:results_dir]
-    store = Session::Store.new(**store_opts)
+    store = Evilution::Session::Store.new(**store_opts)
     deleted = store.gc(older_than: cutoff)
 
     if deleted.empty?
@@ -322,14 +322,14 @@ class Evilution::CLI
     end
 
     0
-  rescue ConfigError => e
+  rescue Evilution::ConfigError => e
     warn("Error: #{e.message}")
     2
   end
 
   def parse_duration(value)
     match = value.match(/\A(\d+)([dhw])\z/)
-    raise ConfigError, "invalid --older-than format: #{value.inspect}. Use Nd, Nh, or Nw (e.g., 30d)" unless match
+    raise Evilution::ConfigError, "invalid --older-than format: #{value.inspect}. Use Nd, Nh, or Nw (e.g., 30d)" unless match
 
     amount = match[1].to_i
     seconds = case match[2]
@@ -425,14 +425,14 @@ class Evilution::CLI
   end
 
   def run_mutations
-    raise ConfigError, @stdin_error if @stdin_error
+    raise Evilution::ConfigError, @stdin_error if @stdin_error
 
-    file_options = Config.file_options
-    config = Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
-    runner = Runner.new(config: config)
+    file_options = Evilution::Config.file_options
+    config = Evilution::Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
+    runner = Evilution::Runner.new(config: config)
     summary = runner.call
     summary.success?(min_score: config.min_score) ? 0 : 1
-  rescue Error => e
+  rescue Evilution::Error => e
     if json_format?(config, file_options)
       $stdout.puts(JSON.generate(error_payload(e)))
     else
@@ -450,8 +450,8 @@ class Evilution::CLI
 
   def error_payload(error)
     error_type = case error
-                 when ConfigError then "config_error"
-                 when ParseError then "parse_error"
+                 when Evilution::ConfigError then "config_error"
+                 when Evilution::ParseError then "parse_error"
                  else "runtime_error"
                  end
 

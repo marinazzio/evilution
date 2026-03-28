@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::BooleanLiteralReplacement < Evilution::Mutator::Base
   def visit_true_node(node)
     add_mutation(

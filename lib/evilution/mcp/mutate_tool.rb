@@ -7,6 +7,8 @@ require_relative "../runner"
 require_relative "../reporter/json"
 require_relative "../reporter/suggestion"
 
+require_relative "../mcp"
+
 class Evilution::MCP::MutateTool < MCP::Tool
   tool_name "evilution-mutate"
   description "Run mutation testing on Ruby source files. " \
@@ -61,11 +63,11 @@ class Evilution::MCP::MutateTool < MCP::Tool
       parsed_files, line_ranges = parse_files(Array(files))
       config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec,
                                       suggest_tests)
-      config = Config.new(**config_opts)
+      config = Evilution::Config.new(**config_opts)
       on_result = build_streaming_callback(server_context, suggest_tests)
-      runner = Runner.new(config: config, on_result: on_result)
+      runner = Evilution::Runner.new(config: config, on_result: on_result)
       summary = runner.call
-      report = Reporter::JSON.new(suggest_tests: suggest_tests == true).call(summary)
+      report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true).call(summary)
       compact = trim_report(report, normalize_verbosity(verbosity))
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
@@ -105,7 +107,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
         line..line
       end
     rescue ArgumentError, TypeError
-      raise ParseError, "invalid line range: #{str.inspect}"
+      raise Evilution::ParseError, "invalid line range: #{str.inspect}"
     end
 
     def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec, suggest_tests)
@@ -124,7 +126,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       normalized = "summary" if normalized.empty?
       return normalized if VALID_VERBOSITIES.include?(normalized)
 
-      raise ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
+      raise Evilution::ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
     end
 
     def trim_report(json_string, verbosity)
@@ -157,7 +159,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
     def build_streaming_callback(server_context, suggest_tests)
       return nil unless suggest_tests && server_context.respond_to?(:report_progress)
 
-      suggestion = Reporter::Suggestion.new(suggest_tests: true)
+      suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: true)
       survivor_index = 0
 
       proc do |result|
@@ -185,8 +187,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
     def build_error_payload(error)
       error_type = case error
-                   when ConfigError then "config_error"
-                   when ParseError then "parse_error"
+                   when Evilution::ConfigError then "config_error"
+                   when Evilution::ParseError then "parse_error"
                    else "runtime_error"
                    end
 

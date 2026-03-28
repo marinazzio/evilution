@@ -4,6 +4,8 @@ require "json"
 require "mcp"
 require_relative "../session/store"
 
+require_relative "../mcp"
+
 class Evilution::MCP::SessionListTool < MCP::Tool
   tool_name "evilution-session-list"
   description "List past mutation testing sessions with summary statistics. " \
@@ -26,7 +28,7 @@ class Evilution::MCP::SessionListTool < MCP::Tool
     def call(server_context:, results_dir: nil, limit: nil)
       store_opts = {}
       store_opts[:results_dir] = results_dir if results_dir
-      store = Session::Store.new(**store_opts)
+      store = Evilution::Session::Store.new(**store_opts)
       entries = store.list
       entries = entries.first(limit) if limit
 

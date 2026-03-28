@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::MethodCallRemoval < Evilution::Mutator::Base
   def visit_call_node(node)
     if node.receiver

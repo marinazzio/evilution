@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../result"
+
 class Evilution::Result::Summary
   attr_reader :results, :duration
 

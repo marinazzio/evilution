@@ -5,6 +5,8 @@ require "securerandom"
 require "time"
 require "fileutils"
 
+require_relative "../session"
+
 class Evilution::Session::Store
   DEFAULT_DIR = ".evilution/results"
 

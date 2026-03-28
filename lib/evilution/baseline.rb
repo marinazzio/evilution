@@ -14,7 +14,7 @@ class Evilution::Baseline
     end
   end
 
-  def initialize(spec_resolver: SpecResolver.new, timeout: 30)
+  def initialize(spec_resolver: Evilution::SpecResolver.new, timeout: 30)
     @spec_resolver = spec_resolver
     @timeout = timeout
   end
@@ -51,8 +51,8 @@ class Evilution::Baseline
       $stderr.reopen(File::NULL, "w")
 
       require "rspec/core"
-      ::RSpec.reset
-      status = ::RSpec::Core::Runner.run(
+      RSpec.reset
+      status = RSpec::Core::Runner.run(
         ["--format", "progress", "--no-color", "--order", "defined", spec_file]
       )
       Marshal.dump({ passed: status.zero? }, write_io)

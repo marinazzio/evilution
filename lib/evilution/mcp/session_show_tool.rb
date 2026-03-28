@@ -4,6 +4,8 @@ require "json"
 require "mcp"
 require_relative "../session/store"
 
+require_relative "../mcp"
+
 class Evilution::MCP::SessionShowTool < MCP::Tool
   tool_name "evilution-session-show"
   description "Show full details of a past mutation testing session, " \
@@ -27,7 +29,7 @@ class Evilution::MCP::SessionShowTool < MCP::Tool
         )
       end
 
-      store = Session::Store.new
+      store = Evilution::Session::Store.new
       data = store.load(path)
       ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(data) }])
     rescue Evilution::Error => e

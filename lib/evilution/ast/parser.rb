@@ -5,16 +5,19 @@ require "prism"
 module Evilution::AST
   class Parser
     def call(file_path)
-      raise ParseError.new("file not found: #{file_path}", file: file_path) unless File.exist?(file_path)
+      raise Evilution::ParseError.new("file not found: #{file_path}", file: file_path) unless File.exist?(file_path)
 
       begin
         source = File.read(file_path)
       rescue SystemCallError => e
-        raise ParseError.new("cannot read #{file_path}: #{e.message}", file: file_path)
+        raise Evilution::ParseError.new("cannot read #{file_path}: #{e.message}", file: file_path)
       end
       result = Prism.parse(source)
 
-      raise ParseError.new("failed to parse #{file_path}: #{result.errors.map(&:message).join(", ")}", file: file_path) if result.failure?
+      if result.failure?
+        raise Evilution::ParseError.new("failed to parse #{file_path}: #{result.errors.map(&:message).join(", ")}",
+                                        file: file_path)
+      end
 
       extract_subjects(result.value, source, file_path)
     end
@@ -61,7 +64,7 @@ module Evilution::AST
       loc = node.location
       method_source = @source[loc.start_offset...loc.end_offset]
 
-      @subjects << Subject.new(
+      @subjects << Evilution::Subject.new(
         name: name,
         file_path: @file_path,
         line_number: loc.start_line,

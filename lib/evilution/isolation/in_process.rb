@@ -4,12 +4,14 @@ require "timeout"
 require_relative "../memory"
 require_relative "../result/mutation_result"
 
+require_relative "../isolation"
+
 class Evilution::Isolation::InProcess
   def call(mutation:, test_command:, timeout:)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    rss_before = Memory.rss_kb
+    rss_before = Evilution::Memory.rss_kb
     result = execute_with_timeout(mutation, test_command, timeout)
-    rss_after = Memory.rss_kb
+    rss_after = Evilution::Memory.rss_kb
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
     delta = compute_memory_delta(rss_before, rss_after, result)
 
@@ -62,7 +64,7 @@ class Evilution::Isolation::InProcess
                :killed
              end
 
-    Result::MutationResult.new(
+    Evilution::Result::MutationResult.new(
       mutation: mutation,
       status: status,
       duration: duration,

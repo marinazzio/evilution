@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../heuristic"
+
 class Evilution::Equivalent::Heuristic::DeadCode
   def match?(mutation)
     return false unless mutation.operator_name == "statement_deletion"

@@ -2,6 +2,8 @@
 
 require "English"
 
+require_relative "../git"
+
 class Evilution::Git::ChangedFiles
   MAIN_BRANCHES = %w[main master origin/main origin/master].freeze
   SOURCE_PREFIXES = %w[lib/ app/].freeze
@@ -12,7 +14,7 @@ class Evilution::Git::ChangedFiles
     diff_output = run_git("diff", "--name-only", "--diff-filter=ACMR", "#{merge_base}..HEAD")
 
     files = diff_output.split("\n").select { |f| ruby_source_file?(f) }
-    raise Error, "no changed Ruby files found since merge base with #{main_branch}" if files.empty?
+    raise Evilution::Error, "no changed Ruby files found since merge base with #{main_branch}" if files.empty?
 
     files
   end
@@ -24,13 +26,13 @@ class Evilution::Git::ChangedFiles
       return branch if branch_exists?(branch)
     end
 
-    raise Error, "could not detect main branch (tried #{MAIN_BRANCHES.join(", ")})"
+    raise Evilution::Error, "could not detect main branch (tried #{MAIN_BRANCHES.join(", ")})"
   end
 
   def branch_exists?(name)
     run_git("rev-parse", "--verify", name)
     true
-  rescue Error => e
+  rescue Evilution::Error => e
     raise if e.message.include?("not a git repository")
 
     false
@@ -42,8 +44,8 @@ class Evilution::Git::ChangedFiles
 
   def run_git(*args)
     output = `git #{args.join(" ")} 2>&1`.strip
-    raise Error, "not a git repository" if output.include?("not a git repository")
-    raise Error, "git command failed: git #{args.join(" ")}: #{output}" unless $CHILD_STATUS.success?
+    raise Evilution::Error, "not a git repository" if output.include?("not a git repository")
+    raise Evilution::Error, "git command failed: git #{args.join(" ")}: #{output}" unless $CHILD_STATUS.success?
 
     output
   end

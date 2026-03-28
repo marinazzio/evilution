@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ConditionalBranch < Evilution::Mutator::Base
   def visit_if_node(node)
     if node.statements && node.subsequent.nil?

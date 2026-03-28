@@ -4,6 +4,8 @@ require "json"
 require "mcp"
 require_relative "../session/store"
 
+require_relative "../mcp"
+
 class Evilution::MCP::SessionDiffTool < MCP::Tool
   tool_name "evilution-session-diff"
   description "Compare two mutation testing sessions and return the diff. " \
@@ -27,7 +29,7 @@ class Evilution::MCP::SessionDiffTool < MCP::Tool
       return error_response("config_error", "base is required") unless base
       return error_response("config_error", "head is required") unless head
 
-      store = Session::Store.new
+      store = Evilution::Session::Store.new
       base_data = store.load(base)
       head_data = store.load(head)
 

@@ -1,37 +1,39 @@
 # frozen_string_literal: true
 
+require_relative "../mutator"
+
 class Evilution::Mutator::Registry
   def self.default
     registry = new
     [
-      Operator::ComparisonReplacement,
-      Operator::ArithmeticReplacement,
-      Operator::BooleanOperatorReplacement,
-      Operator::BooleanLiteralReplacement,
-      Operator::NilReplacement,
-      Operator::IntegerLiteral,
-      Operator::FloatLiteral,
-      Operator::StringLiteral,
-      Operator::ArrayLiteral,
-      Operator::HashLiteral,
-      Operator::SymbolLiteral,
-      Operator::ConditionalNegation,
-      Operator::ConditionalBranch,
-      Operator::StatementDeletion,
-      Operator::MethodBodyReplacement,
-      Operator::NegationInsertion,
-      Operator::ReturnValueRemoval,
-      Operator::CollectionReplacement,
-      Operator::MethodCallRemoval,
-      Operator::ArgumentRemoval,
-      Operator::BlockRemoval,
-      Operator::ConditionalFlip,
-      Operator::RangeReplacement,
-      Operator::RegexpMutation,
-      Operator::ReceiverReplacement,
-      Operator::SendMutation,
-      Operator::ArgumentNilSubstitution,
-      Operator::CompoundAssignment
+      Evilution::Mutator::Operator::ComparisonReplacement,
+      Evilution::Mutator::Operator::ArithmeticReplacement,
+      Evilution::Mutator::Operator::BooleanOperatorReplacement,
+      Evilution::Mutator::Operator::BooleanLiteralReplacement,
+      Evilution::Mutator::Operator::NilReplacement,
+      Evilution::Mutator::Operator::IntegerLiteral,
+      Evilution::Mutator::Operator::FloatLiteral,
+      Evilution::Mutator::Operator::StringLiteral,
+      Evilution::Mutator::Operator::ArrayLiteral,
+      Evilution::Mutator::Operator::HashLiteral,
+      Evilution::Mutator::Operator::SymbolLiteral,
+      Evilution::Mutator::Operator::ConditionalNegation,
+      Evilution::Mutator::Operator::ConditionalBranch,
+      Evilution::Mutator::Operator::StatementDeletion,
+      Evilution::Mutator::Operator::MethodBodyReplacement,
+      Evilution::Mutator::Operator::NegationInsertion,
+      Evilution::Mutator::Operator::ReturnValueRemoval,
+      Evilution::Mutator::Operator::CollectionReplacement,
+      Evilution::Mutator::Operator::MethodCallRemoval,
+      Evilution::Mutator::Operator::ArgumentRemoval,
+      Evilution::Mutator::Operator::BlockRemoval,
+      Evilution::Mutator::Operator::ConditionalFlip,
+      Evilution::Mutator::Operator::RangeReplacement,
+      Evilution::Mutator::Operator::RegexpMutation,
+      Evilution::Mutator::Operator::ReceiverReplacement,
+      Evilution::Mutator::Operator::SendMutation,
+      Evilution::Mutator::Operator::ArgumentNilSubstitution,
+      Evilution::Mutator::Operator::CompoundAssignment
     ].each { |op| registry.register(op) }
     registry
   end

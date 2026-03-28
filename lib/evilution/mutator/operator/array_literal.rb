@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ArrayLiteral < Evilution::Mutator::Base
   def visit_array_node(node)
     if node.opening_loc && node.elements.any?

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::RangeReplacement < Evilution::Mutator::Base
   def visit_range_node(node)
     replacement = node.operator == ".." ? "..." : ".."

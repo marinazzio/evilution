@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ComparisonReplacement < Evilution::Mutator::Base
   REPLACEMENTS = {
     :> => %i[>= == <],

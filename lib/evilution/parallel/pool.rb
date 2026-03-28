@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../parallel"
+
 class Evilution::Parallel::Pool
   def initialize(size:)
     raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1

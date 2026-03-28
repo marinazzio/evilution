@@ -83,9 +83,9 @@ class Evilution::Config
       data = YAML.safe_load_file(path, symbolize_names: true)
       return data.is_a?(Hash) ? data : {}
     rescue Psych::SyntaxError, Psych::DisallowedClass => e
-      raise ConfigError.new("failed to parse config file #{path}: #{e.message}", file: path)
+      raise Evilution::ConfigError.new("failed to parse config file #{path}: #{e.message}", file: path)
     rescue SystemCallError => e
-      raise ConfigError.new("cannot read config file #{path}: #{e.message}", file: path)
+      raise Evilution::ConfigError.new("cannot read config file #{path}: #{e.message}", file: path)
     end
 
     {}
@@ -126,11 +126,11 @@ class Evilution::Config
     return nil if value.nil?
 
     value = Integer(value)
-    raise ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
+    raise Evilution::ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
 
     value
   rescue ::ArgumentError, ::TypeError
-    raise ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
+    raise Evilution::ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
   end
 
   def assign_attributes(merged) # rubocop:disable Metrics/AbcSize
@@ -154,23 +154,24 @@ class Evilution::Config
   end
 
   def validate_isolation(value)
-    raise ConfigError, "isolation must be auto, fork, or in_process, got nil" if value.nil?
+    raise Evilution::ConfigError, "isolation must be auto, fork, or in_process, got nil" if value.nil?
 
     value = value.to_sym
-    raise ConfigError, "isolation must be auto, fork, or in_process, got #{value.inspect}" unless %i[auto fork in_process].include?(value)
+    raise Evilution::ConfigError, "isolation must be auto, fork, or in_process, got #{value.inspect}" unless %i[auto fork
+                                                                                                                in_process].include?(value)
 
     value
   end
 
   def validate_jobs(value)
-    raise ConfigError, "jobs must be a positive integer, got #{value.inspect}" if value.is_a?(Float)
+    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}" if value.is_a?(Float)
 
     value = Integer(value)
-    raise ConfigError, "jobs must be a positive integer, got #{value}" unless value >= 1
+    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value}" unless value >= 1
 
     value
   rescue ::ArgumentError, ::TypeError
-    raise ConfigError, "jobs must be a positive integer, got #{value.inspect}"
+    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}"
   end
 
   def load_config_file

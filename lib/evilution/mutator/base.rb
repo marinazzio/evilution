@@ -2,6 +2,8 @@
 
 require "prism"
 
+require_relative "../mutator"
+
 class Evilution::Mutator::Base < Prism::Visitor
   attr_reader :mutations
 
@@ -22,14 +24,14 @@ class Evilution::Mutator::Base < Prism::Visitor
   private
 
   def add_mutation(offset:, length:, replacement:, node:)
-    mutated_source = AST::SourceSurgeon.apply(
+    mutated_source = Evilution::AST::SourceSurgeon.apply(
       @file_source,
       offset: offset,
       length: length,
       replacement: replacement
     )
 
-    @mutations << Mutation.new(
+    @mutations << Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
       original_source: @file_source,

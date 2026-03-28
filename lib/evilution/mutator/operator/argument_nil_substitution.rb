@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator::Base
   SKIP_TYPES = [
     Prism::SplatNode,

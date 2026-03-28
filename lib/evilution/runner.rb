@@ -23,13 +23,13 @@ require_relative "session/store"
 class Evilution::Runner
   attr_reader :config
 
-  def initialize(config: Config.new, on_result: nil)
+  def initialize(config: Evilution::Config.new, on_result: nil)
     @config = config
     @on_result = on_result
-    @parser = AST::Parser.new
-    @registry = Mutator::Registry.default
+    @parser = Evilution::AST::Parser.new
+    @registry = Evilution::Mutator::Registry.default
     @isolator = build_isolator
-    @cache = config.incremental? ? Cache.new : nil
+    @cache = config.incremental? ? Evilution::Cache.new : nil
   end
 
   def call
@@ -54,7 +54,7 @@ class Evilution::Runner
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-    summary = Result::Summary.new(results: results, duration: duration, truncated: truncated)
+    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: truncated)
     output_report(summary)
     save_session(summary)
 
@@ -73,7 +73,7 @@ class Evilution::Runner
   def resolve_target_files
     return config.target_files unless config.target_files.empty?
 
-    Git::ChangedFiles.new.call
+    Evilution::Git::ChangedFiles.new.call
   end
 
   def filter_by_target(subjects)
@@ -82,7 +82,7 @@ class Evilution::Runner
               else
                 subjects.select { |s| s.name.start_with?("#{config.target}#") }
               end
-    raise Error, "no method found matching '#{config.target}'" if matched.empty?
+    raise Evilution::Error, "no method found matching '#{config.target}'" if matched.empty?
 
     matched
   end
@@ -105,7 +105,7 @@ class Evilution::Runner
   end
 
   def filter_equivalent(mutations)
-    Equivalent::Detector.new.call(mutations)
+    Evilution::Equivalent::Detector.new.call(mutations)
   end
 
   def release_subject_nodes(subjects)
@@ -113,14 +113,14 @@ class Evilution::Runner
   end
 
   def equivalent_result(mutation)
-    Result::MutationResult.new(mutation: mutation, status: :equivalent, duration: 0.0)
+    Evilution::Result::MutationResult.new(mutation: mutation, status: :equivalent, duration: 0.0)
   end
 
   def run_baseline(subjects)
     return nil unless config.baseline? && subjects.any?
 
     log_baseline_start
-    baseline = Baseline.new(timeout: config.timeout)
+    baseline = Evilution::Baseline.new(timeout: config.timeout)
     result = baseline.call(subjects)
     log_baseline_complete(result)
     result
@@ -136,7 +136,7 @@ class Evilution::Runner
 
   def run_mutations_sequential(mutations, baseline_result = nil)
     integration = build_integration
-    spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
+    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
     results = []
     survived_count = 0
     truncated = false
@@ -165,9 +165,9 @@ class Evilution::Runner
 
   def run_mutations_parallel(mutations, baseline_result = nil)
     integration = build_integration
-    pool = Parallel::Pool.new(size: config.jobs)
-    worker_isolator = Isolation::InProcess.new
-    spec_resolver = baseline_result&.failed? ? SpecResolver.new : nil
+    pool = Evilution::Parallel::Pool.new(size: config.jobs)
+    worker_isolator = Evilution::Isolation::InProcess.new
+    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
     mutations.each_slice(config.jobs) do |batch|
@@ -227,7 +227,7 @@ class Evilution::Runner
     end
     return result unless neutralize
 
-    Result::MutationResult.new(
+    Evilution::Result::MutationResult.new(
       mutation: result.mutation,
       status: :neutral,
       duration: result.duration,
@@ -250,7 +250,7 @@ class Evilution::Runner
 
   def rebuild_results(batch, compact_results)
     batch.zip(compact_results).map do |mutation, data|
-      Result::MutationResult.new(
+      Evilution::Result::MutationResult.new(
         mutation: mutation,
         status: data[:status],
         duration: data[:duration],
@@ -268,8 +268,8 @@ class Evilution::Runner
 
   def build_isolator
     case resolve_isolation
-    when :fork then Isolation::Fork.new
-    when :in_process then Isolation::InProcess.new
+    when :fork then Evilution::Isolation::Fork.new
+    when :in_process then Evilution::Isolation::InProcess.new
     end
   end
 
@@ -283,9 +283,9 @@ class Evilution::Runner
     case config.integration
     when :rspec
       test_files = config.spec_files.empty? ? nil : config.spec_files
-      Integration::RSpec.new(test_files: test_files)
+      Evilution::Integration::RSpec.new(test_files: test_files)
     else
-      raise Error, "unknown integration: #{config.integration}"
+      raise Evilution::Error, "unknown integration: #{config.integration}"
     end
   end
 
@@ -327,7 +327,7 @@ class Evilution::Runner
   def log_memory(phase, context = nil)
     return unless config.verbose && !config.quiet
 
-    rss = Memory.rss_mb
+    rss = Evilution::Memory.rss_mb
     return unless rss
 
     gc = gc_stats_string
@@ -368,7 +368,7 @@ class Evilution::Runner
   def save_session(summary)
     return unless config.save_session?
 
-    Session::Store.new.save(summary)
+    Evilution::Session::Store.new.save(summary)
   rescue StandardError => e
     warn "[evilution] failed to save session: #{e.message}" unless config.quiet
   end
@@ -376,11 +376,11 @@ class Evilution::Runner
   def build_reporter
     case config.format
     when :json
-      Reporter::JSON.new
+      Evilution::Reporter::JSON.new
     when :text
-      Reporter::CLI.new
+      Evilution::Reporter::CLI.new
     when :html
-      Reporter::HTML.new
+      Evilution::Reporter::HTML.new
     end
   end
 
@@ -422,7 +422,7 @@ class Evilution::Runner
     return nil unless data
     return nil unless %i[killed timeout].include?(data[:status])
 
-    Result::MutationResult.new(
+    Evilution::Result::MutationResult.new(
       mutation: mutation,
       status: data[:status],
       duration: data[:duration],

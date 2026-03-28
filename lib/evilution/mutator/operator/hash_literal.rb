@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::HashLiteral < Evilution::Mutator::Base
   def visit_hash_node(node)
     if node.elements.any?

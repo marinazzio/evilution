@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::NegationInsertion < Evilution::Mutator::Base
   def visit_call_node(node)
     if node.name.to_s.end_with?("?")

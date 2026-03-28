@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
   def visit_string_node(node)
     replacement = node.content.empty? ? '"mutation"' : '""'

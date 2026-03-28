@@ -4,9 +4,11 @@ require "json"
 require "time"
 require_relative "suggestion"
 
+require_relative "../reporter"
+
 class Evilution::Reporter::JSON
   def initialize(suggest_tests: false)
-    @suggestion = Suggestion.new(suggest_tests: suggest_tests)
+    @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests)
   end
 
   def call(summary)

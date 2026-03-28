@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../reporter"
+
 class Evilution::Reporter::CLI
   SEPARATOR = "=" * 44
 
