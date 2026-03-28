@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.14.0] - 2026-03-28
+
+### Added
+
+- **Session result storage** (`--save-results`) — persist mutation run results as timestamped JSON files under `.evilution/results/`; enables cross-run comparison and history browsing (#298)
+- **`evilution session list`** — CLI command to list saved session results with timestamps, scores, and mutation counts (#302)
+- **`evilution session show`** — CLI command to display detailed session results including per-file mutation breakdown (#306)
+- **`evilution session gc`** — CLI command for garbage collection of old session results; supports `--keep` flag to control retention count (#310)
+- **MCP session history tools** — `evilution-session-list` and `evilution-session-show` MCP tools for AI agent browsing of session history (#353)
+- **MCP cross-run diff tool** (`evilution-session-diff`) — compares two sessions and returns fixed mutations, new survivors, and persistent survivors (#354)
+- **MCP streaming test suggestions** — survived mutations stream concrete RSpec suggestions via MCP progress notifications during execution (#355)
+
+### Changed
+
+- **Compact class/module style** — all class and module declarations switched to compact style (e.g. `class Evilution::Session::Store`); intermediate module files added for standalone loading (#359)
+- **Dependency updates** — mcp 0.9.0 → 0.9.1 (#375), rubocop 1.85.1 → 1.86.0 (#376)
+
 ## [0.13.0] - 2026-03-23
 
 ### Added
