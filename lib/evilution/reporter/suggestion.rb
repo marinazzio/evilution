@@ -24,7 +24,9 @@ class Evilution::Reporter::Suggestion
     "collection_replacement" => "Add a test that checks the return value of the collection operation, not just side effects",
     "method_call_removal" => "Add a test that depends on the return value or side effect of this method call",
     "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call",
-    "compound_assignment" => "Add a test that verifies the side effect of this compound assignment (the accumulated value matters)"
+    "compound_assignment" => "Add a test that verifies the side effect of this compound assignment (the accumulated value matters)",
+    "superclass_removal" => "Add a test that exercises inherited behavior from the superclass",
+    "mixin_removal" => "Add a test that exercises behavior provided by the included/extended module"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -287,6 +289,32 @@ class Evilution::Reporter::Suggestion
           # Assert the method returns nil, not a substituted value
           result = subject.#{method_name}(input_value)
           expect(result).to be_nil
+        end
+      RSPEC
+    },
+    "superclass_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, _mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: removed superclass from `#{original_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'depends on inherited behavior in ##{method_name}' do
+          # Assert behavior that comes from the superclass
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "mixin_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, _mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: removed `#{original_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'depends on behavior from the included module in ##{method_name}' do
+          # Assert behavior provided by the mixin
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
         end
       RSPEC
     }
