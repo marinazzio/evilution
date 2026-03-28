@@ -147,7 +147,7 @@ class Evilution::CLI
     opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
     opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
     opts.on("--target EXPR",
-            "Filter: method (Foo#bar), class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
+            "Filter: method (Foo#bar/Foo.bar), type (Foo#/Foo.), class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
       @options[:target] = m
     end
   end
