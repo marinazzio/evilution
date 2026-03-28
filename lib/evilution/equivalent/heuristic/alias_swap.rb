@@ -6,11 +6,14 @@ class Evilution::Equivalent::Heuristic::AliasSwap
   ALIAS_PAIRS = Set[
     Set[:detect, :find],
     Set[:length, :size],
-    Set[:collect, :map]
+    Set[:collect, :map],
+    Set[:count, :length]
   ].freeze
 
+  MATCHING_OPERATORS = Set["send_mutation", "collection_replacement"].freeze
+
   def match?(mutation)
-    return false unless mutation.operator_name == "send_mutation"
+    return false unless MATCHING_OPERATORS.include?(mutation.operator_name)
 
     diff = mutation.diff
     removed = extract_method(diff, "- ")

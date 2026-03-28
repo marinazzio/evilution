@@ -59,6 +59,38 @@ RSpec.describe Evilution::Equivalent::Heuristic::AliasSwap do
     expect(heuristic.match?(mutation)).to be false
   end
 
+  it "matches count -> length swap from collection_replacement" do
+    mutation = double("Mutation",
+                      operator_name: "collection_replacement",
+                      diff: "- items.count\n+ items.length")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
+  it "matches length -> count swap from collection_replacement" do
+    mutation = double("Mutation",
+                      operator_name: "collection_replacement",
+                      diff: "- items.length\n+ items.count")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
+  it "matches detect -> find from collection_replacement" do
+    mutation = double("Mutation",
+                      operator_name: "collection_replacement",
+                      diff: "- list.detect { |x| x > 0 }\n+ list.find { |x| x > 0 }")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
+  it "does not match select -> reject from collection_replacement" do
+    mutation = double("Mutation",
+                      operator_name: "collection_replacement",
+                      diff: "- items.select { |x| x > 0 }\n+ items.reject { |x| x > 0 }")
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
   it "does not match other operators" do
     mutation = double("Mutation",
                       operator_name: "comparison_replacement",
