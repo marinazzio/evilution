@@ -2,6 +2,7 @@
 
 require_relative "config"
 require_relative "ast/parser"
+require_relative "ast/inheritance_scanner"
 require_relative "memory"
 require_relative "mutator/registry"
 require_relative "isolation/fork"
@@ -35,9 +36,7 @@ class Evilution::Runner
   def call
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-    subjects = parse_subjects
-    subjects = filter_by_target(subjects) if method_target?
-    subjects = filter_by_line_ranges(subjects) if config.line_ranges?
+    subjects = parse_and_filter_subjects
     log_memory("after parse_subjects", "#{subjects.length} subjects")
 
     baseline_result = run_baseline(subjects)
@@ -65,6 +64,14 @@ class Evilution::Runner
 
   attr_reader :parser, :registry, :isolator, :cache, :on_result
 
+  def parse_and_filter_subjects
+    subjects = parse_subjects
+    subjects = filter_by_descendants(subjects) if descendants_target?
+    subjects = filter_by_target(subjects) if method_target?
+    subjects = filter_by_line_ranges(subjects) if config.line_ranges?
+    subjects
+  end
+
   def parse_subjects
     files = resolve_target_files
     files.flat_map { |file| parser.call(file) }
@@ -81,8 +88,12 @@ class Evilution::Runner
     config.target&.start_with?("source:")
   end
 
+  def descendants_target?
+    config.target&.start_with?("descendants:")
+  end
+
   def method_target?
-    config.target? && !source_glob_target?
+    config.target? && !source_glob_target? && !descendants_target?
   end
 
   def resolve_source_glob
@@ -91,6 +102,36 @@ class Evilution::Runner
     raise Evilution::Error, "no files found matching '#{pattern}'" if files.empty?
 
     files.sort
+  end
+
+  def filter_by_descendants(subjects)
+    base_name = config.target.delete_prefix("descendants:")
+    files = resolve_target_files
+    inheritance = Evilution::AST::InheritanceScanner.call(files)
+    class_names = resolve_descendant_set(base_name, inheritance)
+    raise Evilution::Error, "no classes found matching '#{config.target}'" if class_names.empty?
+
+    subjects.select { |s| class_names.include?(s.name.split("#").first) }
+  end
+
+  def resolve_descendant_set(base_name, inheritance)
+    descendants = Set.new
+    known = inheritance.key?(base_name) || inheritance.value?(base_name)
+    return descendants unless known
+
+    descendants.add(base_name)
+    changed = true
+    while changed
+      changed = false
+      inheritance.each do |child, parent|
+        next unless descendants.include?(parent)
+        next if descendants.include?(child)
+
+        descendants.add(child)
+        changed = true
+      end
+    end
+    descendants
   end
 
   def filter_by_target(subjects)
