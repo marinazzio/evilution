@@ -38,7 +38,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::SuperclassRemoval,
       Evilution::Mutator::Operator::LocalVariableAssignment,
       Evilution::Mutator::Operator::InstanceVariableWrite,
-      Evilution::Mutator::Operator::ClassVariableWrite
+      Evilution::Mutator::Operator::ClassVariableWrite,
+      Evilution::Mutator::Operator::GlobalVariableWrite
     ].each { |op| registry.register(op) }
     registry
   end
