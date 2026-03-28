@@ -27,7 +27,8 @@ class Evilution::Reporter::Suggestion
     "compound_assignment" => "Add a test that verifies the side effect of this compound assignment (the accumulated value matters)",
     "superclass_removal" => "Add a test that exercises inherited behavior from the superclass",
     "mixin_removal" => "Add a test that exercises behavior provided by the included/extended module",
-    "local_variable_assignment" => "Add a test that depends on the assigned variable being stored, not just the value expression"
+    "local_variable_assignment" => "Add a test that depends on the assigned variable being stored, not just the value expression",
+    "instance_variable_write" => "Add a test that verifies the instance variable is set correctly, not just the return value"
   }.freeze
 
   CONCRETE_TEMPLATES = {

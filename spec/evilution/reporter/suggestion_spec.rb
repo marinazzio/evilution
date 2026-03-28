@@ -51,7 +51,7 @@ RSpec.describe Evilution::Reporter::Suggestion do
       expect(result).to be_empty
     end
 
-    it "generates suggestions for all 21 operator types" do
+    it "generates suggestions for all #{Evilution::Reporter::Suggestion::TEMPLATES.size} operator types" do
       Evilution::Reporter::Suggestion::TEMPLATES.each_key do |operator_name|
         mutation = build_mutation(operator_name)
         suggestion = suggestion_reporter.suggestion_for(mutation)
