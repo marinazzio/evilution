@@ -26,7 +26,8 @@ class Evilution::Reporter::Suggestion
     "argument_removal" => "Add a test that verifies the correct arguments are passed to this method call",
     "compound_assignment" => "Add a test that verifies the side effect of this compound assignment (the accumulated value matters)",
     "superclass_removal" => "Add a test that exercises inherited behavior from the superclass",
-    "mixin_removal" => "Add a test that exercises behavior provided by the included/extended module"
+    "mixin_removal" => "Add a test that exercises behavior provided by the included/extended module",
+    "local_variable_assignment" => "Add a test that depends on the assigned variable being stored, not just the value expression"
   }.freeze
 
   CONCRETE_TEMPLATES = {
