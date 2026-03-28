@@ -682,6 +682,158 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "local_variable_assignment" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("local_variable_assignment",
+                                  diff: "-   result = compute(x)\n+   compute(x)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed assignment in a comment" do
+        mutation = build_mutation("local_variable_assignment",
+                                  diff: "-   result = compute(x)\n+   compute(x)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("result = compute(x)")
+        expect(suggestion).to include("compute(x)")
+      end
+
+      it "advises testing that the variable is used after assignment" do
+        mutation = build_mutation("local_variable_assignment",
+                                  diff: "-   total = a + b\n+   a + b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("variable").or include("assigned")
+      end
+    end
+
+    describe "instance_variable_write" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("instance_variable_write",
+                                  diff: "-   @name = value\n+   value")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed assignment in a comment" do
+        mutation = build_mutation("instance_variable_write",
+                                  diff: "-   @name = value\n+   value")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("@name = value")
+      end
+
+      it "handles nil replacement mutation" do
+        mutation = build_mutation("instance_variable_write",
+                                  diff: "-   @name = value\n+   @name = nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing the instance variable state" do
+        mutation = build_mutation("instance_variable_write",
+                                  diff: "-   @count = 0\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("instance variable").or include("@")
+      end
+    end
+
+    describe "class_variable_write" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("class_variable_write",
+                                  diff: "-   @@count = 0\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed assignment in a comment" do
+        mutation = build_mutation("class_variable_write",
+                                  diff: "-   @@count = 0\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("@@count = 0")
+      end
+
+      it "handles nil replacement mutation" do
+        mutation = build_mutation("class_variable_write",
+                                  diff: "-   @@count = 0\n+   @@count = nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing the class variable state" do
+        mutation = build_mutation("class_variable_write",
+                                  diff: "-   @@count = 0\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("class variable").or include("@@").or include("shared")
+      end
+    end
+
+    describe "global_variable_write" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("global_variable_write",
+                                  diff: "-   $output = compute\n+   compute")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed assignment in a comment" do
+        mutation = build_mutation("global_variable_write",
+                                  diff: "-   $output = compute\n+   compute")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("$output = compute")
+      end
+
+      it "handles nil replacement mutation" do
+        mutation = build_mutation("global_variable_write",
+                                  diff: "-   $output = compute\n+   $output = nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing the global variable state" do
+        mutation = build_mutation("global_variable_write",
+                                  diff: "-   $verbose = true\n+   true")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("global variable").or include("$")
+      end
+    end
+
     describe "mixin_removal" do
       it "generates an RSpec it-block referencing the mixin" do
         mutation = build_mutation("mixin_removal",
