@@ -309,6 +309,58 @@ class Evilution::Reporter::Suggestion
         end
       RSPEC
     },
+    "local_variable_assignment" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the local variable assignment is used in ##{method_name}' do
+          # Assert that the assigned variable is read later, not just the value expression
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "instance_variable_write" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the instance variable @state is set correctly in ##{method_name}' do
+          # Assert that the instance variable holds the expected value after the method runs
+          subject.#{method_name}(input_value)
+          expect(subject.instance_variable_get(:@variable)).to eq(expected)
+        end
+      RSPEC
+    },
+    "class_variable_write" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the class variable @@shared state is set correctly in ##{method_name}' do
+          # Assert that the class variable holds the expected value and affects shared state
+          subject.#{method_name}(input_value)
+          expect(described_class.class_variable_get(:@@variable)).to eq(expected)
+        end
+      RSPEC
+    },
+    "global_variable_write" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the global variable $state is set correctly in ##{method_name}' do
+          # Assert that the global variable holds the expected value after the method runs
+          subject.#{method_name}(input_value)
+          expect($variable).to eq(expected)
+        end
+      RSPEC
+    },
     "mixin_removal" => lambda { |mutation|
       method_name = parse_method_name(mutation.subject.name)
       original_line, _mutated_line = extract_diff_lines(mutation.diff)
