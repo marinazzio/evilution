@@ -31,16 +31,6 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
     @mutations
   end
 
-  def self.parsed_tree_for(file_path, file_source)
-    @parse_cache ||= {}
-    entry = @parse_cache[file_path]
-    return entry[:tree] if entry && entry[:source_hash] == file_source.hash
-
-    tree = Prism.parse(file_source).value
-    @parse_cache[file_path] = { source_hash: file_source.hash, tree: tree }
-    tree
-  end
-
   private
 
   def find_enclosing_scope(tree, target_line)

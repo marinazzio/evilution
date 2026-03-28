@@ -49,4 +49,20 @@ class Evilution::Mutator::Base < Prism::Visitor
               .gsub(/([a-z\d])([A-Z])/, '\1_\2')
               .downcase
   end
+
+  @parse_cache = {}
+
+  def self.parsed_tree_for(file_path, file_source)
+    cache = Evilution::Mutator::Base.instance_variable_get(:@parse_cache)
+    entry = cache[file_path]
+    return entry[:tree] if entry && entry[:source_hash] == file_source.hash
+
+    tree = Prism.parse(file_source).value
+    cache[file_path] = { source_hash: file_source.hash, tree: tree }
+    tree
+  end
+
+  def self.clear_parse_cache!
+    Evilution::Mutator::Base.instance_variable_set(:@parse_cache, {})
+  end
 end
