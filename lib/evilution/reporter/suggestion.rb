@@ -28,7 +28,8 @@ class Evilution::Reporter::Suggestion
     "superclass_removal" => "Add a test that exercises inherited behavior from the superclass",
     "mixin_removal" => "Add a test that exercises behavior provided by the included/extended module",
     "local_variable_assignment" => "Add a test that depends on the assigned variable being stored, not just the value expression",
-    "instance_variable_write" => "Add a test that verifies the instance variable is set correctly, not just the return value"
+    "instance_variable_write" => "Add a test that verifies the instance variable is set correctly, not just the return value",
+    "class_variable_write" => "Add a test that verifies the class variable is set correctly and affects shared state"
   }.freeze
 
   CONCRETE_TEMPLATES = {
