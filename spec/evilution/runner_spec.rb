@@ -479,6 +479,22 @@ RSpec.describe Evilution::Runner do
       runner.call
     end
 
+    it "includes class methods of descendant classes" do
+      class_method_subject = double("Subject", name: "Base.create",
+                                               file_path: "lib/base.rb",
+                                               line_number: 5, release_node!: nil)
+      parser = Evilution::AST::Parser.new
+      allow(parser).to receive(:call).with("lib/base.rb").and_return([base_subject, class_method_subject])
+
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).to receive(:mutations_for).with(base_subject)
+      expect(registry).to receive(:mutations_for).with(class_method_subject)
+      expect(registry).to receive(:mutations_for).with(child_subject)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject)
+
+      runner.call
+    end
+
     it "raises an error when no classes match the descendant target" do
       no_match_config = Evilution::Config.new(
         target_files: ["lib/other.rb"],

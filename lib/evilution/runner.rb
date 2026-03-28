@@ -111,7 +111,7 @@ class Evilution::Runner
     class_names = resolve_descendant_set(base_name, inheritance)
     raise Evilution::Error, "no classes found matching '#{config.target}'" if class_names.empty?
 
-    subjects.select { |s| class_names.include?(s.name.split("#").first) }
+    subjects.select { |s| class_names.include?(s.name.split(/[#.]/).first) }
   end
 
   def resolve_descendant_set(base_name, inheritance)
