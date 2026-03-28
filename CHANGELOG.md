@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.15.0] - 2026-03-29
+
+### Added
+
+- **SuperclassRemoval operator** — mutates `class Foo < Bar` to `class Foo` (removes inheritance) to test whether the superclass is actually needed (#342)
+- **MixinRemoval operator** — removes `include`, `extend`, and `prepend` statements individually to test whether each mixin is actually used; supports both class and module scopes (#343)
+- **Suggestion templates for class/module mutations** — static and concrete RSpec suggestion templates for `superclass_removal` and `mixin_removal` operators (#344)
+- **Namespace wildcard matching** (`Foo::Bar*`) — `--target` now supports trailing `*` to match all classes under a namespace prefix (#329)
+- **Method-type selectors** (`Foo#`, `Foo.`) — `--target` now supports `Foo#` for all instance methods and `Foo.` for all class methods; class methods (`def self.foo`) are now captured by the parser with `.` separator (#332)
+- **Descendant matching** (`descendants:Foo`) — `--target` now supports inheritance-based filtering via `Evilution::AST::InheritanceScanner` Prism visitor (#335)
+- **Source glob matching** (`source:lib/**/*.rb`) — `--target` now supports file glob patterns (#338)
+- **CommentMarking heuristic** — `# evilution:equivalent` inline comment marks mutations as equivalent (#384)
+- **ArithmeticIdentity heuristic** — detects equivalent mutations for arithmetic identity operations like `x + 0`, `x * 1`, `x ** 1` (#383)
+- **AliasSwap heuristic expansion** — added `count`/`length` and `detect`/`find` alias pairs for `collection_replacement` operator (#384)
+
+### Changed
+
+- **Operator count** — 30 operators (up from 28), with new structural mutation operators for class/module definitions
+- **Parse tree caching** — shared parse cache on `Mutator::Base` for structural operators, cleared after each run to prevent unbounded memory growth
+- **Class method support in parser** — `AST::Parser` now distinguishes instance methods (`Foo#bar`) from class methods (`Foo.bar`) via Prism's `DefNode#receiver`
+- **Descendant filter** — uses `/[#.]/` split to include both instance and class methods in inheritance-based matching
+
 ## [0.14.0] - 2026-03-28
 
 ### Added
