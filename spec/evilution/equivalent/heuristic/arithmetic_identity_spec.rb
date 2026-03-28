@@ -51,7 +51,7 @@ RSpec.describe Evilution::Equivalent::Heuristic::ArithmeticIdentity do
     expect(heuristic.match?(mutation)).to be false
   end
 
-  it "does not match when 0 is the left operand of addition" do
+  it "matches when 0 is the left operand of addition" do
     mutation = double("Mutation",
                       operator_name: "integer_literal",
                       diff: "- 0 + x\n+ 1 + x")
@@ -59,7 +59,7 @@ RSpec.describe Evilution::Equivalent::Heuristic::ArithmeticIdentity do
     expect(heuristic.match?(mutation)).to be true
   end
 
-  it "does not match when 1 is the left operand of multiplication" do
+  it "matches when 1 is the left operand of multiplication" do
     mutation = double("Mutation",
                       operator_name: "integer_literal",
                       diff: "- 1 * x\n+ 0 * x")
