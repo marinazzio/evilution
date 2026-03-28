@@ -36,7 +36,7 @@ class Evilution::Runner
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     subjects = parse_subjects
-    subjects = filter_by_target(subjects) if config.target?
+    subjects = filter_by_target(subjects) if method_target?
     subjects = filter_by_line_ranges(subjects) if config.line_ranges?
     log_memory("after parse_subjects", "#{subjects.length} subjects")
 
@@ -71,9 +71,26 @@ class Evilution::Runner
   end
 
   def resolve_target_files
+    return resolve_source_glob if source_glob_target?
     return config.target_files unless config.target_files.empty?
 
     Evilution::Git::ChangedFiles.new.call
+  end
+
+  def source_glob_target?
+    config.target&.start_with?("source:")
+  end
+
+  def method_target?
+    config.target? && !source_glob_target?
+  end
+
+  def resolve_source_glob
+    pattern = config.target.delete_prefix("source:")
+    files = Dir.glob(pattern)
+    raise Evilution::Error, "no files found matching '#{pattern}'" if files.empty?
+
+    files.sort
   end
 
   def filter_by_target(subjects)
