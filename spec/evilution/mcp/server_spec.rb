@@ -16,6 +16,18 @@ RSpec.describe Evilution::MCP::Server do
       expect(tools.keys).to include("evilution-mutate")
     end
 
+    it "registers the session list tool" do
+      tools = server.instance_variable_get(:@tools)
+
+      expect(tools.keys).to include("evilution-session-list")
+    end
+
+    it "registers the session show tool" do
+      tools = server.instance_variable_get(:@tools)
+
+      expect(tools.keys).to include("evilution-session-show")
+    end
+
     it "sets server name and version" do
       expect(server.instance_variable_get(:@name)).to eq("evilution")
       expect(server.instance_variable_get(:@version)).to eq(Evilution::VERSION)
