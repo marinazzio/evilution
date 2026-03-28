@@ -421,6 +421,83 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with descendants target" do
+    let(:base_subject) do
+      double("Subject", name: "Base#run", file_path: "lib/base.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:child_subject) do
+      double("Subject", name: "Child#run", file_path: "lib/child.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:unrelated_subject) do
+      double("Subject", name: "Other#work", file_path: "lib/other.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/base.rb", "lib/child.rb", "lib/other.rb"],
+        target: "descendants:Base",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/base.rb").and_return([base_subject])
+      allow(parser).to receive(:call).with("lib/child.rb").and_return([child_subject])
+      allow(parser).to receive(:call).with("lib/other.rb").and_return([unrelated_subject])
+
+      allow(File).to receive(:read).with("lib/base.rb").and_return("class Base\n  def run; end\nend\n")
+      allow(File).to receive(:read).with("lib/child.rb").and_return("class Child < Base\n  def run; end\nend\n")
+      allow(File).to receive(:read).with("lib/other.rb").and_return("class Other\n  def work; end\nend\n")
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "includes subjects from the base class and its descendants" do
+      registry = Evilution::Mutator::Registry.default
+      expect(registry).to receive(:mutations_for).with(base_subject)
+      expect(registry).to receive(:mutations_for).with(child_subject)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject)
+
+      runner.call
+    end
+
+    it "raises an error when no classes match the descendant target" do
+      no_match_config = Evilution::Config.new(
+        target_files: ["lib/other.rb"],
+        target: "descendants:Nonexistent",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      no_match_runner = described_class.new(config: no_match_config)
+
+      expect { no_match_runner.call }.to raise_error(
+        Evilution::Error, /no classes found matching 'descendants:Nonexistent'/
+      )
+    end
+  end
+
   describe "#call with source glob target" do
     before do
       allow(Dir).to receive(:glob).with("lib/models/**/*.rb").and_return(
