@@ -596,6 +596,88 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with namespace wildcard target" do
+    let(:bar_subject) do
+      double("Subject", name: "Foo::Bar#run", file_path: "lib/foo/bar.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:bar_baz_subject) do
+      double("Subject", name: "Foo::BarBaz#execute", file_path: "lib/foo/bar_baz.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:bar_nested_subject) do
+      double("Subject", name: "Foo::Bar::Qux#call", file_path: "lib/foo/bar/qux.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:bar_class_method) do
+      double("Subject", name: "Foo::Bar.create", file_path: "lib/foo/bar.rb",
+                        line_number: 10, release_node!: nil)
+    end
+
+    let(:unrelated_subject) do
+      double("Subject", name: "Other#work", file_path: "lib/other.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return(
+        [bar_subject, bar_baz_subject, bar_nested_subject, bar_class_method, unrelated_subject]
+      )
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "matches all classes under the namespace prefix" do
+      config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Foo::Bar*",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+      registry = Evilution::Mutator::Registry.default
+
+      expect(registry).to receive(:mutations_for).with(bar_subject)
+      expect(registry).to receive(:mutations_for).with(bar_baz_subject)
+      expect(registry).to receive(:mutations_for).with(bar_nested_subject)
+      expect(registry).to receive(:mutations_for).with(bar_class_method)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject)
+
+      runner.call
+    end
+
+    it "raises an error when no subjects match the wildcard" do
+      config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        target: "Nonexistent::*",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+
+      expect { runner.call }.to raise_error(Evilution::Error, /no method found matching/)
+    end
+  end
+
   describe "#call with method-type selector Foo#" do
     let(:instance_method) do
       double("Subject", name: "Example#foo", file_path: "lib/example.rb",

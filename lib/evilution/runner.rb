@@ -143,7 +143,10 @@ class Evilution::Runner
 
   def target_matcher
     target = config.target
-    if target.end_with?("#", ".")
+    if target.end_with?("*")
+      prefix = target.chomp("*")
+      ->(s) { s.name.split(/[#.]/).first.start_with?(prefix) }
+    elsif target.end_with?("#", ".")
       prefix = target
       ->(s) { s.name.start_with?(prefix) }
     elsif target.include?("#") || target.include?(".")
