@@ -4,6 +4,7 @@ require_relative "heuristic/noop_source"
 require_relative "heuristic/method_body_nil"
 require_relative "heuristic/alias_swap"
 require_relative "heuristic/dead_code"
+require_relative "heuristic/arithmetic_identity"
 
 require_relative "../equivalent"
 
@@ -34,7 +35,8 @@ class Evilution::Equivalent::Detector
       Evilution::Equivalent::Heuristic::NoopSource.new,
       Evilution::Equivalent::Heuristic::MethodBodyNil.new,
       Evilution::Equivalent::Heuristic::AliasSwap.new,
-      Evilution::Equivalent::Heuristic::DeadCode.new
+      Evilution::Equivalent::Heuristic::DeadCode.new,
+      Evilution::Equivalent::Heuristic::ArithmeticIdentity.new
     ]
   end
 end
