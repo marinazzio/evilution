@@ -1474,4 +1474,45 @@ RSpec.describe Evilution::Runner do
       expect(summary.results.first.status).to eq(:killed)
     end
   end
+
+  describe "on_result callback" do
+    let(:survived_result) do
+      Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :survived,
+        duration: 0.1
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(survived_result)
+    end
+
+    it "calls on_result after each mutation in sequential mode" do
+      results_received = []
+      callback = ->(result) { results_received << result }
+      callback_runner = described_class.new(config: config, on_result: callback)
+
+      callback_runner.call
+
+      expect(results_received.length).to eq(1)
+      expect(results_received.first.status).to eq(:survived)
+    end
+
+    it "does not fail when on_result is nil" do
+      runner_without_callback = described_class.new(config: config)
+
+      expect { runner_without_callback.call }.not_to raise_error
+    end
+  end
 end

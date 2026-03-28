@@ -24,8 +24,9 @@ module Evilution
   class Runner
     attr_reader :config
 
-    def initialize(config: Config.new)
+    def initialize(config: Config.new, on_result: nil)
       @config = config
+      @on_result = on_result
       @parser = AST::Parser.new
       @registry = Mutator::Registry.default
       @isolator = build_isolator
@@ -63,7 +64,7 @@ module Evilution
 
     private
 
-    attr_reader :parser, :registry, :isolator, :cache
+    attr_reader :parser, :registry, :isolator, :cache, :on_result
 
     def parse_subjects
       files = resolve_target_files
@@ -150,6 +151,7 @@ module Evilution
         result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
         results << result
         survived_count += 1 if result.survived?
+        on_result&.call(result)
         log_progress(index + 1, result.status)
         log_mutation_diagnostics(result)
 
@@ -206,6 +208,7 @@ module Evilution
         state[:results] << result
         state[:survived_count] += 1 if result.survived?
         state[:completed] += 1
+        on_result&.call(result)
         log_progress(state[:completed], result.status)
         log_mutation_diagnostics(result)
       end

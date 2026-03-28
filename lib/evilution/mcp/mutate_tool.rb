@@ -5,6 +5,7 @@ require "mcp"
 require_relative "../config"
 require_relative "../runner"
 require_relative "../reporter/json"
+require_relative "../reporter/suggestion"
 
 module Evilution
   module MCP
@@ -56,14 +57,15 @@ module Evilution
       )
 
       class << self
-        # rubocop:disable Lint/UnusedMethodArgument,Metrics/ParameterLists
+        # rubocop:disable Metrics/ParameterLists
         def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil,
                  fail_fast: nil, spec: nil, suggest_tests: nil, verbosity: nil)
           parsed_files, line_ranges = parse_files(Array(files))
           config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec,
                                           suggest_tests)
           config = Config.new(**config_opts)
-          runner = Runner.new(config: config)
+          on_result = build_streaming_callback(server_context, suggest_tests)
+          runner = Runner.new(config: config, on_result: on_result)
           summary = runner.call
           report = Reporter::JSON.new.call(summary)
           compact = trim_report(report, normalize_verbosity(verbosity))
@@ -73,7 +75,7 @@ module Evilution
           error_payload = build_error_payload(e)
           ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(error_payload) }], error: true)
         end
-        # rubocop:enable Lint/UnusedMethodArgument,Metrics/ParameterLists
+        # rubocop:enable Metrics/ParameterLists
 
         VALID_VERBOSITIES = %w[full summary minimal].freeze
 
@@ -152,6 +154,32 @@ module Evilution
           return unless data[key]
 
           data[key].each { |entry| entry.delete("diff") }
+        end
+
+        def build_streaming_callback(server_context, suggest_tests)
+          return nil unless suggest_tests && server_context&.progress
+
+          suggestion = Reporter::Suggestion.new(suggest_tests: true)
+          survivor_index = 0
+
+          proc do |result|
+            next unless result.survived?
+
+            survivor_index += 1
+            detail = build_suggestion_detail(result.mutation, suggestion)
+            server_context.progress.report(survivor_index, message: ::JSON.generate(detail))
+          end
+        end
+
+        def build_suggestion_detail(mutation, suggestion)
+          {
+            operator: mutation.operator_name,
+            file: mutation.file_path,
+            line: mutation.line,
+            subject: mutation.subject.name,
+            diff: mutation.diff,
+            suggestion: suggestion.suggestion_for(mutation)
+          }
         end
 
         def build_error_payload(error)
