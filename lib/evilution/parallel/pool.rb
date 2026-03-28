@@ -1,63 +1,61 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Parallel
-    class Pool
-      def initialize(size:)
-        raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
+require_relative "../parallel"
 
-        @size = size
-      end
+class Evilution::Parallel::Pool
+  def initialize(size:)
+    raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
 
-      def map(items, &block)
-        results = []
+    @size = size
+  end
 
-        items.each_slice(@size) do |batch|
-          results.concat(run_batch(batch, &block))
-        end
+  def map(items, &block)
+    results = []
 
-        results
-      end
+    items.each_slice(@size) do |batch|
+      results.concat(run_batch(batch, &block))
+    end
 
-      private
+    results
+  end
 
-      def run_batch(items, &block)
-        entries = items.map do |item|
-          read_io, write_io = IO.pipe
-          pid = fork_worker(item, read_io, write_io, &block)
-          write_io.close
-          { pid: pid, read_io: read_io }
-        end
+  private
 
-        collect_results(entries)
-      end
+  def run_batch(items, &block)
+    entries = items.map do |item|
+      read_io, write_io = IO.pipe
+      pid = fork_worker(item, read_io, write_io, &block)
+      write_io.close
+      { pid: pid, read_io: read_io }
+    end
 
-      def fork_worker(item, read_io, write_io, &block)
-        Process.fork do
-          read_io.close
-          result = block.call(item)
-          Marshal.dump(result, write_io)
-        rescue Exception => e # rubocop:disable Lint/RescueException
-          Marshal.dump(e, write_io)
-        ensure
-          write_io.close
-          exit!
-        end
-      end
+    collect_results(entries)
+  end
 
-      def collect_results(entries)
-        entries.map do |entry|
-          data = entry[:read_io].read
-          entry[:read_io].close
-          Process.wait(entry[:pid])
-          raise Evilution::Error, "worker process failed with no result" if data.empty?
+  def fork_worker(item, read_io, write_io, &block)
+    Process.fork do
+      read_io.close
+      result = block.call(item)
+      Marshal.dump(result, write_io)
+    rescue Exception => e # rubocop:disable Lint/RescueException
+      Marshal.dump(e, write_io)
+    ensure
+      write_io.close
+      exit!
+    end
+  end
 
-          result = Marshal.load(data) # rubocop:disable Security/MarshalLoad
-          raise result if result.is_a?(Exception)
+  def collect_results(entries)
+    entries.map do |entry|
+      data = entry[:read_io].read
+      entry[:read_io].close
+      Process.wait(entry[:pid])
+      raise Evilution::Error, "worker process failed with no result" if data.empty?
 
-          result
-        end
-      end
+      result = Marshal.load(data) # rubocop:disable Security/MarshalLoad
+      raise result if result.is_a?(Exception)
+
+      result
     end
   end
 end

@@ -1,86 +1,85 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Result
-    class Summary
-      attr_reader :results, :duration
+require_relative "../result"
 
-      def initialize(results:, duration: 0.0, truncated: false)
-        @results = results
-        @duration = duration
-        @truncated = truncated
-        freeze
-      end
+class Evilution::Result::Summary
+  attr_reader :results, :duration
 
-      def truncated?
-        @truncated
-      end
+  def initialize(results:, duration: 0.0, truncated: false)
+    @results = results
+    @duration = duration
+    @truncated = truncated
+    freeze
+  end
 
-      def total
-        results.length
-      end
+  def truncated?
+    @truncated
+  end
 
-      def killed
-        results.count(&:killed?)
-      end
+  def total
+    results.length
+  end
 
-      def survived
-        results.count(&:survived?)
-      end
+  def killed
+    results.count(&:killed?)
+  end
 
-      def timed_out
-        results.count(&:timeout?)
-      end
+  def survived
+    results.count(&:survived?)
+  end
 
-      def errors
-        results.count(&:error?)
-      end
+  def timed_out
+    results.count(&:timeout?)
+  end
 
-      def neutral
-        results.count(&:neutral?)
-      end
+  def errors
+    results.count(&:error?)
+  end
 
-      def equivalent
-        results.count(&:equivalent?)
-      end
+  def neutral
+    results.count(&:neutral?)
+  end
 
-      def score
-        denominator = total - errors - neutral - equivalent
-        return 0.0 if denominator.zero?
+  def equivalent
+    results.count(&:equivalent?)
+  end
 
-        killed.to_f / denominator
-      end
+  def score
+    denominator = total - errors - neutral - equivalent
+    return 0.0 if denominator.zero?
 
-      def success?(min_score: 1.0)
-        score >= min_score
-      end
+    killed.to_f / denominator
+  end
 
-      def survived_results
-        results.select(&:survived?)
-      end
+  def success?(min_score: 1.0)
+    score >= min_score
+  end
 
-      def killed_results
-        results.select(&:killed?)
-      end
+  def survived_results
+    results.select(&:survived?)
+  end
 
-      def neutral_results
-        results.select(&:neutral?)
-      end
+  def killed_results
+    results.select(&:killed?)
+  end
 
-      def equivalent_results
-        results.select(&:equivalent?)
-      end
+  def neutral_results
+    results.select(&:neutral?)
+  end
 
-      def peak_memory_mb
-        max_rss = nil
-        results.each do |result|
-          kb = result.child_rss_kb
-          next unless kb
+  def equivalent_results
+    results.select(&:equivalent?)
+  end
 
-          max_rss = kb if max_rss.nil? || kb > max_rss
-        end
-        max_rss && (max_rss / 1024.0)
-      end
+  def peak_memory_mb
+    max_rss = nil
+    results.each do |result|
+      kb = result.child_rss_kb
+      next unless kb
+
+      max_rss = kb if max_rss.nil? || kb > max_rss
     end
+
+    max_rss && (max_rss / 1024.0)
   end
 end

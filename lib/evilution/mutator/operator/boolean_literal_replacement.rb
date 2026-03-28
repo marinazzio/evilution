@@ -1,46 +1,42 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Mutator
-    module Operator
-      class BooleanLiteralReplacement < Base
-        def visit_true_node(node)
-          add_mutation(
-            offset: node.location.start_offset,
-            length: node.location.length,
-            replacement: "false",
-            node: node
-          )
+require_relative "../operator"
 
-          add_nil_mutation(node)
+class Evilution::Mutator::Operator::BooleanLiteralReplacement < Evilution::Mutator::Base
+  def visit_true_node(node)
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "false",
+      node: node
+    )
 
-          super
-        end
+    add_nil_mutation(node)
 
-        def visit_false_node(node)
-          add_mutation(
-            offset: node.location.start_offset,
-            length: node.location.length,
-            replacement: "true",
-            node: node
-          )
+    super
+  end
 
-          add_nil_mutation(node)
+  def visit_false_node(node)
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "true",
+      node: node
+    )
 
-          super
-        end
+    add_nil_mutation(node)
 
-        private
+    super
+  end
 
-        def add_nil_mutation(node)
-          add_mutation(
-            offset: node.location.start_offset,
-            length: node.location.length,
-            replacement: "nil",
-            node: node
-          )
-        end
-      end
-    end
+  private
+
+  def add_nil_mutation(node)
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "nil",
+      node: node
+    )
   end
 end

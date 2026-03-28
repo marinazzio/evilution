@@ -1,39 +1,35 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Mutator
-    module Operator
-      class ArithmeticReplacement < Base
-        REPLACEMENTS = {
-          :+ => [:-],
-          :- => [:+],
-          :* => [:/],
-          :/ => [:*],
-          :% => [:*],
-          :** => [:*],
-          :<< => [:>>],
-          :>> => [:<<]
-        }.freeze
+require_relative "../operator"
 
-        def visit_call_node(node)
-          replacements = REPLACEMENTS[node.name]
-          return super unless replacements
+class Evilution::Mutator::Operator::ArithmeticReplacement < Evilution::Mutator::Base
+  REPLACEMENTS = {
+    :+ => [:-],
+    :- => [:+],
+    :* => [:/],
+    :/ => [:*],
+    :% => [:*],
+    :** => [:*],
+    :<< => [:>>],
+    :>> => [:<<]
+  }.freeze
 
-          loc = node.message_loc
-          return super unless loc
+  def visit_call_node(node)
+    replacements = REPLACEMENTS[node.name]
+    return super unless replacements
 
-          replacements.each do |replacement|
-            add_mutation(
-              offset: loc.start_offset,
-              length: loc.length,
-              replacement: replacement.to_s,
-              node: node
-            )
-          end
+    loc = node.message_loc
+    return super unless loc
 
-          super
-        end
-      end
+    replacements.each do |replacement|
+      add_mutation(
+        offset: loc.start_offset,
+        length: loc.length,
+        replacement: replacement.to_s,
+        node: node
+      )
     end
+
+    super
   end
 end

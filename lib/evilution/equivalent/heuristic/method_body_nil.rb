@@ -1,23 +1,19 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Equivalent
-    module Heuristic
-      class MethodBodyNil
-        def match?(mutation)
-          return false unless mutation.operator_name == "method_body_replacement"
+require_relative "../heuristic"
 
-          node = mutation.subject.node
-          return false unless node
+class Evilution::Equivalent::Heuristic::MethodBodyNil
+  def match?(mutation)
+    return false unless mutation.operator_name == "method_body_replacement"
 
-          body = node.body
-          return true if body.nil? || body.is_a?(Prism::NilNode)
+    node = mutation.subject.node
+    return false unless node
 
-          return body.body.first.is_a?(Prism::NilNode) if body.is_a?(Prism::StatementsNode) && body.body.length == 1
+    body = node.body
+    return true if body.nil? || body.is_a?(Prism::NilNode)
 
-          false
-        end
-      end
-    end
+    return body.body.first.is_a?(Prism::NilNode) if body.is_a?(Prism::StatementsNode) && body.body.length == 1
+
+    false
   end
 end

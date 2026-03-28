@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../operator"
+
 class Evilution::Mutator::Operator::IntegerLiteral < Evilution::Mutator::Base
   def visit_integer_node(node)
     if node.value.zero?

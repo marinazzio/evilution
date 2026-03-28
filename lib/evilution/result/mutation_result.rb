@@ -1,50 +1,47 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Result
-    class MutationResult
-      STATUSES = %i[killed survived timeout error neutral equivalent].freeze
+require_relative "../result"
 
-      attr_reader :mutation, :status, :duration, :killing_test, :test_command,
-                  :child_rss_kb, :memory_delta_kb
+class Evilution::Result::MutationResult
+  STATUSES = %i[killed survived timeout error neutral equivalent].freeze
 
-      def initialize(mutation:, status:, duration: 0.0, killing_test: nil, test_command: nil,
-                     child_rss_kb: nil, memory_delta_kb: nil)
-        raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
+  attr_reader :mutation, :status, :duration, :killing_test, :test_command,
+              :child_rss_kb, :memory_delta_kb
 
-        @mutation = mutation
-        @status = status
-        @duration = duration
-        @killing_test = killing_test
-        @test_command = test_command
-        @child_rss_kb = child_rss_kb
-        @memory_delta_kb = memory_delta_kb
-        freeze
-      end
+  def initialize(mutation:, status:, duration: 0.0, killing_test: nil, test_command: nil, child_rss_kb: nil, memory_delta_kb: nil)
+    raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
-      def killed?
-        status == :killed
-      end
+    @mutation = mutation
+    @status = status
+    @duration = duration
+    @killing_test = killing_test
+    @test_command = test_command
+    @child_rss_kb = child_rss_kb
+    @memory_delta_kb = memory_delta_kb
+    freeze
+  end
 
-      def survived?
-        status == :survived
-      end
+  def killed?
+    status == :killed
+  end
 
-      def timeout?
-        status == :timeout
-      end
+  def survived?
+    status == :survived
+  end
 
-      def error?
-        status == :error
-      end
+  def timeout?
+    status == :timeout
+  end
 
-      def neutral?
-        status == :neutral
-      end
+  def error?
+    status == :error
+  end
 
-      def equivalent?
-        status == :equivalent
-      end
-    end
+  def neutral?
+    status == :neutral
+  end
+
+  def equivalent?
+    status == :equivalent
   end
 end

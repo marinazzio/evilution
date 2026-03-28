@@ -4,75 +4,73 @@ require "timeout"
 require_relative "../memory"
 require_relative "../result/mutation_result"
 
-module Evilution
-  module Isolation
-    class InProcess
-      def call(mutation:, test_command:, timeout:)
-        start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        rss_before = Memory.rss_kb
-        result = execute_with_timeout(mutation, test_command, timeout)
-        rss_after = Memory.rss_kb
-        duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-        delta = compute_memory_delta(rss_before, rss_after, result)
+require_relative "../isolation"
 
-        build_mutation_result(mutation, result, duration, rss_after, delta)
-      end
+class Evilution::Isolation::InProcess
+  def call(mutation:, test_command:, timeout:)
+    start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    rss_before = Evilution::Memory.rss_kb
+    result = execute_with_timeout(mutation, test_command, timeout)
+    rss_after = Evilution::Memory.rss_kb
+    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+    delta = compute_memory_delta(rss_before, rss_after, result)
 
-      private
+    build_mutation_result(mutation, result, duration, rss_after, delta)
+  end
 
-      def execute_with_timeout(mutation, test_command, timeout)
-        result = Timeout.timeout(timeout) do
-          suppress_output { test_command.call(mutation) }
-        end
-        { timeout: false }.merge(result)
-      rescue Timeout::Error
-        { timeout: true }
-      rescue StandardError => e
-        { timeout: false, passed: false, error: e.message }
-      end
+  private
 
-      def suppress_output
-        saved_stdout = $stdout
-        saved_stderr = $stderr
-        File.open(File::NULL, "w") do |null_out|
-          File.open(File::NULL, "w") do |null_err|
-            $stdout = null_out
-            $stderr = null_err
-            yield
-          end
-        end
-      ensure
-        $stdout = saved_stdout
-        $stderr = saved_stderr
-      end
+  def execute_with_timeout(mutation, test_command, timeout)
+    result = Timeout.timeout(timeout) do
+      suppress_output { test_command.call(mutation) }
+    end
+    { timeout: false }.merge(result)
+  rescue Timeout::Error
+    { timeout: true }
+  rescue StandardError => e
+    { timeout: false, passed: false, error: e.message }
+  end
 
-      def compute_memory_delta(rss_before, rss_after, result)
-        return nil if result[:timeout]
-        return nil unless rss_before && rss_after
-
-        rss_after - rss_before
-      end
-
-      def build_mutation_result(mutation, result, duration, rss_after, memory_delta_kb)
-        status = if result[:timeout]
-                   :timeout
-                 elsif result[:error]
-                   :error
-                 elsif result[:passed]
-                   :survived
-                 else
-                   :killed
-                 end
-
-        Result::MutationResult.new(
-          mutation: mutation,
-          status: status,
-          duration: duration,
-          test_command: result[:test_command],
-          child_rss_kb: rss_after,
-          memory_delta_kb: memory_delta_kb
-        )
+  def suppress_output
+    saved_stdout = $stdout
+    saved_stderr = $stderr
+    File.open(File::NULL, "w") do |null_out|
+      File.open(File::NULL, "w") do |null_err|
+        $stdout = null_out
+        $stderr = null_err
+        yield
       end
     end
+  ensure
+    $stdout = saved_stdout
+    $stderr = saved_stderr
+  end
+
+  def compute_memory_delta(rss_before, rss_after, result)
+    return nil if result[:timeout]
+    return nil unless rss_before && rss_after
+
+    rss_after - rss_before
+  end
+
+  def build_mutation_result(mutation, result, duration, rss_after, memory_delta_kb)
+    status = if result[:timeout]
+               :timeout
+             elsif result[:error]
+               :error
+             elsif result[:passed]
+               :survived
+             else
+               :killed
+             end
+
+    Evilution::Result::MutationResult.new(
+      mutation: mutation,
+      status: status,
+      duration: duration,
+      test_command: result[:test_command],
+      child_rss_kb: rss_after,
+      memory_delta_kb: memory_delta_kb
+    )
   end
 end

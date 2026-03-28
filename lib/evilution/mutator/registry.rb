@@ -1,65 +1,63 @@
 # frozen_string_literal: true
 
-module Evilution
-  module Mutator
-    class Registry
-      def self.default
-        registry = new
-        [
-          Operator::ComparisonReplacement,
-          Operator::ArithmeticReplacement,
-          Operator::BooleanOperatorReplacement,
-          Operator::BooleanLiteralReplacement,
-          Operator::NilReplacement,
-          Operator::IntegerLiteral,
-          Operator::FloatLiteral,
-          Operator::StringLiteral,
-          Operator::ArrayLiteral,
-          Operator::HashLiteral,
-          Operator::SymbolLiteral,
-          Operator::ConditionalNegation,
-          Operator::ConditionalBranch,
-          Operator::StatementDeletion,
-          Operator::MethodBodyReplacement,
-          Operator::NegationInsertion,
-          Operator::ReturnValueRemoval,
-          Operator::CollectionReplacement,
-          Operator::MethodCallRemoval,
-          Operator::ArgumentRemoval,
-          Operator::BlockRemoval,
-          Operator::ConditionalFlip,
-          Operator::RangeReplacement,
-          Operator::RegexpMutation,
-          Operator::ReceiverReplacement,
-          Operator::SendMutation,
-          Operator::ArgumentNilSubstitution,
-          Operator::CompoundAssignment
-        ].each { |op| registry.register(op) }
-        registry
-      end
+require_relative "../mutator"
 
-      def initialize
-        @operators = []
-      end
+class Evilution::Mutator::Registry
+  def self.default
+    registry = new
+    [
+      Evilution::Mutator::Operator::ComparisonReplacement,
+      Evilution::Mutator::Operator::ArithmeticReplacement,
+      Evilution::Mutator::Operator::BooleanOperatorReplacement,
+      Evilution::Mutator::Operator::BooleanLiteralReplacement,
+      Evilution::Mutator::Operator::NilReplacement,
+      Evilution::Mutator::Operator::IntegerLiteral,
+      Evilution::Mutator::Operator::FloatLiteral,
+      Evilution::Mutator::Operator::StringLiteral,
+      Evilution::Mutator::Operator::ArrayLiteral,
+      Evilution::Mutator::Operator::HashLiteral,
+      Evilution::Mutator::Operator::SymbolLiteral,
+      Evilution::Mutator::Operator::ConditionalNegation,
+      Evilution::Mutator::Operator::ConditionalBranch,
+      Evilution::Mutator::Operator::StatementDeletion,
+      Evilution::Mutator::Operator::MethodBodyReplacement,
+      Evilution::Mutator::Operator::NegationInsertion,
+      Evilution::Mutator::Operator::ReturnValueRemoval,
+      Evilution::Mutator::Operator::CollectionReplacement,
+      Evilution::Mutator::Operator::MethodCallRemoval,
+      Evilution::Mutator::Operator::ArgumentRemoval,
+      Evilution::Mutator::Operator::BlockRemoval,
+      Evilution::Mutator::Operator::ConditionalFlip,
+      Evilution::Mutator::Operator::RangeReplacement,
+      Evilution::Mutator::Operator::RegexpMutation,
+      Evilution::Mutator::Operator::ReceiverReplacement,
+      Evilution::Mutator::Operator::SendMutation,
+      Evilution::Mutator::Operator::ArgumentNilSubstitution,
+      Evilution::Mutator::Operator::CompoundAssignment
+    ].each { |op| registry.register(op) }
+    registry
+  end
 
-      def register(operator_class)
-        @operators << operator_class
-        self
-      end
+  def initialize
+    @operators = []
+  end
 
-      def mutations_for(subject)
-        @operators.flat_map do |operator_class|
-          operator_class.new.call(subject)
-        end
-      end
+  def register(operator_class)
+    @operators << operator_class
+    self
+  end
 
-      def operator_count
-        @operators.length
-      end
-
-      def operators
-        @operators.dup
-      end
+  def mutations_for(subject)
+    @operators.flat_map do |operator_class|
+      operator_class.new.call(subject)
     end
+  end
+
+  def operator_count
+    @operators.length
+  end
+
+  def operators
+    @operators.dup
   end
 end
