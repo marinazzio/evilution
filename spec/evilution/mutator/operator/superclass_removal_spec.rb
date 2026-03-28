@@ -11,7 +11,7 @@ RSpec.describe Evilution::Mutator::Operator::SuperclassRemoval do
   let(:admin_first) { subjects.find { |s| s.name.include?("admin?") } }
   let(:admin_second) { subjects.find { |s| s.name.include?("role") } }
   let(:no_parent_subject) { subjects.find { |s| s.name.include?("no_parent") } }
-  let(:namespaced_subject) { subjects.find { |s| s.name.include?("save") } }
+  let(:namespaced_superclass_subject) { subjects.find { |s| s.name.include?("save") } }
 
   describe "#call" do
     it "generates one mutation for a class with a superclass" do
@@ -54,7 +54,7 @@ RSpec.describe Evilution::Mutator::Operator::SuperclassRemoval do
     end
 
     it "handles namespaced superclasses" do
-      mutations = described_class.new.call(namespaced_subject)
+      mutations = described_class.new.call(namespaced_superclass_subject)
 
       expect(mutations.length).to eq(1)
       expect(mutations.first.diff).to include("- class Service < ActiveRecord::Base")

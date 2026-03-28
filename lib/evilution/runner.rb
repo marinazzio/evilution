@@ -44,6 +44,7 @@ class Evilution::Runner
     mutations = generate_mutations(subjects)
     equivalent_mutations, mutations = filter_equivalent(mutations)
     release_subject_nodes(subjects)
+    clear_operator_caches
     results, truncated = run_mutations(mutations, baseline_result)
     results += equivalent_mutations.map do |m|
       m.strip_sources!
@@ -179,6 +180,10 @@ class Evilution::Runner
 
   def release_subject_nodes(subjects)
     subjects.each(&:release_node!)
+  end
+
+  def clear_operator_caches
+    Evilution::Mutator::Base.clear_parse_cache!
   end
 
   def equivalent_result(mutation)
