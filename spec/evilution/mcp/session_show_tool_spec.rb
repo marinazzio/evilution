@@ -101,13 +101,38 @@ RSpec.describe Evilution::MCP::SessionShowTool do
     response = call(path: "/nonexistent/session.json")
 
     expect(response.content.first[:text]).to include("session file not found")
-    expect(response.instance_variable_get(:@error)).to be true
+    expect(response.error?).to be true
   end
 
   it "returns error when path is not provided" do
     response = call
 
-    expect(response.instance_variable_get(:@error)).to be true
+    expect(response.error?).to be true
     expect(response.content.first[:text]).to include("path is required")
+  end
+
+  it "returns error for corrupt JSON file" do
+    path = File.join(results_dir, "20260324T100000-bad00000.json")
+    File.write(path, "{{{invalid")
+
+    response = call(path: path)
+
+    expect(response.error?).to be true
+    data = parse_response(response)
+    expect(data["error"]["type"]).to eq("parse_error")
+  end
+
+  it "returns error for unreadable file" do
+    path = File.join(results_dir, "20260324T100000-aabb0000.json")
+    File.write(path, "{}")
+    File.chmod(0o000, path)
+
+    response = call(path: path)
+
+    expect(response.error?).to be true
+    data = parse_response(response)
+    expect(data["error"]["type"]).to eq("runtime_error")
+  ensure
+    File.chmod(0o644, path) if File.exist?(path)
   end
 end

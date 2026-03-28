@@ -14,7 +14,7 @@ module Evilution
         properties: {
           path: {
             type: "string",
-            description: "Absolute path to the session JSON file"
+            description: "Path to the session JSON file (as returned by evilution-session-list)"
           }
         }
       )
@@ -35,6 +35,16 @@ module Evilution
         rescue Evilution::Error => e
           ::MCP::Tool::Response.new(
             [{ type: "text", text: ::JSON.generate({ error: { type: "not_found", message: e.message } }) }],
+            error: true
+          )
+        rescue ::JSON::ParserError => e
+          ::MCP::Tool::Response.new(
+            [{ type: "text", text: ::JSON.generate({ error: { type: "parse_error", message: e.message } }) }],
+            error: true
+          )
+        rescue SystemCallError => e
+          ::MCP::Tool::Response.new(
+            [{ type: "text", text: ::JSON.generate({ error: { type: "runtime_error", message: e.message } }) }],
             error: true
           )
         end
