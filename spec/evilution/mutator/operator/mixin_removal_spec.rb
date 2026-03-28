@@ -12,6 +12,7 @@ RSpec.describe Evilution::Mutator::Operator::MixinRemoval do
   let(:second_method_subject) { subjects.find { |s| s.name.include?("second_method") } }
   let(:no_mixin_subject) { subjects.find { |s| s.name.include?("plain_method") } }
   let(:multiple_mixin_subject) { subjects.find { |s| s.name.include?("with_multiple") } }
+  let(:module_mixin_subject) { subjects.find { |s| s.name.include?("module_method") } }
 
   describe "#call" do
     it "generates one mutation per mixin statement" do
@@ -71,6 +72,13 @@ RSpec.describe Evilution::Mutator::Operator::MixinRemoval do
       mutations = described_class.new.call(multiple_mixin_subject)
 
       expect(mutations.length).to eq(2)
+    end
+
+    it "handles mixins inside modules" do
+      mutations = described_class.new.call(module_mixin_subject)
+
+      expect(mutations.length).to eq(1)
+      expect(mutations.first.diff).to include("extend ActiveSupport")
     end
   end
 end

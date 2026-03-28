@@ -5,15 +5,15 @@ require "prism"
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
-  MIXIN_METHODS = %i[include extend prepend].to_set.freeze
+  MIXIN_METHODS = %i[include extend prepend].freeze
 
   def call(subject)
     @subject = subject
     @file_source = File.read(subject.file_path)
     @mutations = []
 
-    tree = Prism.parse(@file_source).value
-    enclosing = find_enclosing_class(tree, subject.line_number)
+    tree = self.class.parsed_tree_for(subject.file_path, @file_source)
+    enclosing = find_enclosing_scope(tree, subject.line_number)
     return @mutations unless enclosing
 
     first_method_line = find_first_method_line(enclosing)
@@ -31,35 +31,45 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
     @mutations
   end
 
+  def self.parsed_tree_for(file_path, file_source)
+    @parse_cache ||= {}
+    entry = @parse_cache[file_path]
+    return entry[:tree] if entry && entry[:source_hash] == file_source.hash
+
+    tree = Prism.parse(file_source).value
+    @parse_cache[file_path] = { source_hash: file_source.hash, tree: tree }
+    tree
+  end
+
   private
 
-  def find_enclosing_class(tree, target_line)
-    finder = ClassFinder.new(target_line)
+  def find_enclosing_scope(tree, target_line)
+    finder = ScopeFinder.new(target_line)
     finder.visit(tree)
     finder.result
   end
 
-  def find_first_method_line(class_node)
-    return nil unless class_node.body
+  def find_first_method_line(scope_node)
+    return nil unless scope_node.body
 
-    class_node.body.body.each do |node|
+    scope_node.body.body.each do |node|
       return node.location.start_line if node.is_a?(Prism::DefNode)
     end
     nil
   end
 
-  def find_mixin_calls(class_node)
-    return [] unless class_node.body
+  def find_mixin_calls(scope_node)
+    return [] unless scope_node.body
 
-    class_node.body.body.select do |node|
+    scope_node.body.body.select do |node|
       node.is_a?(Prism::CallNode) &&
         MIXIN_METHODS.include?(node.name) &&
         node.receiver.nil?
     end
   end
 
-  # Visitor to find the ClassNode enclosing a given line number.
-  class ClassFinder < Prism::Visitor
+  # Visitor to find the ClassNode or ModuleNode enclosing a given line number.
+  class ScopeFinder < Prism::Visitor
     attr_reader :result
 
     def initialize(target_line)
@@ -68,6 +78,11 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
     end
 
     def visit_class_node(node)
+      @result = node if @target_line.between?(node.location.start_line, node.location.end_line)
+      super
+    end
+
+    def visit_module_node(node)
       @result = node if @target_line.between?(node.location.start_line, node.location.end_line)
       super
     end

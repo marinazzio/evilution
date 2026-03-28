@@ -26,3 +26,11 @@ class MultipleMixinExample
     :ok
   end
 end
+
+module MixinInModule
+  extend ActiveSupport
+
+  def module_method
+    :from_module
+  end
+end
