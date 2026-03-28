@@ -75,6 +75,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb:15-30"], server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(
           target_files: ["lib/foo.rb"],
           line_ranges: { "lib/foo.rb" => 15..30 }
@@ -92,6 +93,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(
           timeout: 60,
           jobs: 4,
@@ -104,6 +106,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb"], target: "Foo#bar", server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(target: "Foo#bar")
       )
     end
@@ -112,6 +115,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb"], spec: ["spec/foo_spec.rb"], server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(spec_files: ["spec/foo_spec.rb"])
       )
     end
@@ -120,6 +124,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(suggest_tests: true)
       )
     end
@@ -128,6 +133,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb"], server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(suggest_tests: false)
       )
     end
@@ -147,6 +153,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(target_files: [])
       )
     end
@@ -155,6 +162,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       described_class.call(files: ["lib/foo.rb"], server_context: nil)
 
       expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
         config: have_attributes(quiet: true)
       )
     end
@@ -481,6 +489,134 @@ RSpec.describe Evilution::MCP::MutateTool do
         equivalent_entry = parsed["equivalent"].first
         expect(equivalent_entry).not_to have_key("diff")
         expect(equivalent_entry["operator"]).to eq("arithmetic_replacement")
+      end
+    end
+
+    describe "streaming suggestions" do
+      let(:subject_obj) do
+        instance_double(Evilution::Subject, name: "Foo#bar")
+      end
+
+      let(:survived_mutation) do
+        instance_double(
+          Evilution::Mutation,
+          operator_name: "arithmetic_replacement",
+          file_path: "lib/foo.rb",
+          line: 10,
+          diff: "- a + b\n+ a - b",
+          subject: subject_obj
+        )
+      end
+
+      let(:survived_result) do
+        instance_double(
+          Evilution::Result::MutationResult,
+          mutation: survived_mutation,
+          status: :survived,
+          duration: 0.1,
+          killed?: false,
+          survived?: true,
+          timeout?: false,
+          error?: false,
+          neutral?: false,
+          test_command: "rspec spec/foo_spec.rb",
+          child_rss_kb: nil,
+          memory_delta_kb: nil
+        )
+      end
+
+      let(:survived_summary) do
+        instance_double(
+          Evilution::Result::Summary,
+          results: [survived_result],
+          total: 1,
+          killed: 0,
+          survived: 1,
+          timed_out: 0,
+          errors: 0,
+          neutral: 0,
+          equivalent: 0,
+          score: 0.0,
+          duration: 0.5,
+          truncated?: false,
+          survived_results: [survived_result],
+          killed_results: [],
+          neutral_results: [],
+          equivalent_results: [],
+          peak_memory_mb: nil
+        )
+      end
+
+      let(:server_context) do
+        # Use a plain double — MCP::ServerContext may not be loaded unless full server is running
+        double("server_context", report_progress: nil)
+      end
+
+      before do
+        allow(runner).to receive(:call).and_return(survived_summary)
+      end
+
+      it "sends progress notification for survived mutations when suggest_tests is true" do
+        # Capture the on_result callback passed to Runner
+        captured_callback = nil
+        allow(Evilution::Runner).to receive(:new) do |**kwargs|
+          captured_callback = kwargs[:on_result]
+          runner
+        end
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: server_context)
+
+        expect(captured_callback).not_to be_nil
+
+        # Simulate the callback being called with a survived result
+        captured_callback.call(survived_result)
+
+        expect(server_context).to have_received(:report_progress) do |index, message:|
+          expect(index).to eq(1)
+          detail = JSON.parse(message)
+          expect(detail["operator"]).to eq("arithmetic_replacement")
+          expect(detail["file"]).to eq("lib/foo.rb")
+          expect(detail["suggestion"]).to be_a(String)
+          expect(detail["suggestion"].length).to be > 0
+        end
+      end
+
+      it "does not send progress for killed mutations" do
+        captured_callback = nil
+        allow(Evilution::Runner).to receive(:new) do |**kwargs|
+          captured_callback = kwargs[:on_result]
+          runner
+        end
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: server_context)
+
+        captured_callback.call(killed_result)
+
+        expect(server_context).not_to have_received(:report_progress)
+      end
+
+      it "does not set callback when suggest_tests is false" do
+        captured_callback = nil
+        allow(Evilution::Runner).to receive(:new) do |**kwargs|
+          captured_callback = kwargs[:on_result]
+          runner
+        end
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: false, server_context: server_context)
+
+        expect(captured_callback).to be_nil
+      end
+
+      it "does not set callback when server_context is nil" do
+        captured_callback = nil
+        allow(Evilution::Runner).to receive(:new) do |**kwargs|
+          captured_callback = kwargs[:on_result]
+          runner
+        end
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: nil)
+
+        expect(captured_callback).to be_nil
       end
     end
   end
