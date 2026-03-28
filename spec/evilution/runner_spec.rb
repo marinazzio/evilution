@@ -421,6 +421,88 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with source glob target" do
+    before do
+      allow(Dir).to receive(:glob).with("lib/models/**/*.rb").and_return(
+        ["lib/models/user.rb", "lib/models/account.rb"]
+      )
+
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      user_subject = double("Subject", name: "User#save",
+                                       file_path: "lib/models/user.rb", line_number: 3, release_node!: nil)
+      account_subject = double("Subject", name: "Account#balance",
+                                          file_path: "lib/models/account.rb", line_number: 5, release_node!: nil)
+      allow(parser).to receive(:call).with("lib/models/user.rb").and_return([user_subject])
+      allow(parser).to receive(:call).with("lib/models/account.rb").and_return([account_subject])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "resolves source: prefix as a file glob" do
+      config = Evilution::Config.new(
+        target: "source:lib/models/**/*.rb",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+
+      parser = Evilution::AST::Parser.new
+      expect(parser).to receive(:call).with("lib/models/user.rb")
+      expect(parser).to receive(:call).with("lib/models/account.rb")
+
+      runner.call
+    end
+
+    it "raises an error when source glob matches no files" do
+      allow(Dir).to receive(:glob).with("lib/nonexistent/**/*.rb").and_return([])
+
+      config = Evilution::Config.new(
+        target: "source:lib/nonexistent/**/*.rb",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+
+      expect { runner.call }.to raise_error(Evilution::Error, %r{no files found matching 'lib/nonexistent/\*\*/\*\.rb'})
+    end
+
+    it "ignores target_files when source glob is used" do
+      config = Evilution::Config.new(
+        target_files: ["lib/other.rb"],
+        target: "source:lib/models/**/*.rb",
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+
+      parser = Evilution::AST::Parser.new
+      expect(parser).not_to receive(:call).with("lib/other.rb")
+      expect(parser).to receive(:call).with("lib/models/user.rb")
+      expect(parser).to receive(:call).with("lib/models/account.rb")
+
+      runner.call
+    end
+  end
+
   describe "#call with spec_files" do
     let(:config) do
       Evilution::Config.new(
