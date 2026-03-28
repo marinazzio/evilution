@@ -7,8 +7,8 @@ require_relative "suggestion"
 module Evilution
   module Reporter
     class JSON
-      def initialize
-        @suggestion = Suggestion.new
+      def initialize(suggest_tests: false)
+        @suggestion = Suggestion.new(suggest_tests: suggest_tests)
       end
 
       def call(summary)

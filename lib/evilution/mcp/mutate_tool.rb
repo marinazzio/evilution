@@ -67,7 +67,7 @@ module Evilution
           on_result = build_streaming_callback(server_context, suggest_tests)
           runner = Runner.new(config: config, on_result: on_result)
           summary = runner.call
-          report = Reporter::JSON.new.call(summary)
+          report = Reporter::JSON.new(suggest_tests: suggest_tests == true).call(summary)
           compact = trim_report(report, normalize_verbosity(verbosity))
 
           ::MCP::Tool::Response.new([{ type: "text", text: compact }])
@@ -157,7 +157,7 @@ module Evilution
         end
 
         def build_streaming_callback(server_context, suggest_tests)
-          return nil unless suggest_tests && server_context&.progress
+          return nil unless suggest_tests && server_context.respond_to?(:report_progress)
 
           suggestion = Reporter::Suggestion.new(suggest_tests: true)
           survivor_index = 0
@@ -165,9 +165,12 @@ module Evilution
           proc do |result|
             next unless result.survived?
 
-            survivor_index += 1
-            detail = build_suggestion_detail(result.mutation, suggestion)
-            server_context.progress.report(survivor_index, message: ::JSON.generate(detail))
+            begin
+              survivor_index += 1
+              detail = build_suggestion_detail(result.mutation, suggestion)
+              server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
+            rescue StandardError # rubocop:disable Lint/SuppressedException
+            end
           end
         end
 

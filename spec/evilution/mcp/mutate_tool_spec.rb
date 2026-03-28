@@ -547,16 +547,16 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
       end
 
-      let(:progress) { instance_double("MCP::Progress") }
-      let(:server_context) { instance_double("MCP::ServerContext", progress: progress) }
+      let(:server_context) do
+        # Use a plain double — MCP::ServerContext may not be loaded unless full server is running
+        double("server_context", report_progress: nil)
+      end
 
       before do
         allow(runner).to receive(:call).and_return(survived_summary)
       end
 
       it "sends progress notification for survived mutations when suggest_tests is true" do
-        allow(progress).to receive(:report)
-
         # Capture the on_result callback passed to Runner
         captured_callback = nil
         allow(Evilution::Runner).to receive(:new) do |**kwargs|
@@ -571,7 +571,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         # Simulate the callback being called with a survived result
         captured_callback.call(survived_result)
 
-        expect(progress).to have_received(:report) do |index, message:|
+        expect(server_context).to have_received(:report_progress) do |index, message:|
           expect(index).to eq(1)
           detail = JSON.parse(message)
           expect(detail["operator"]).to eq("arithmetic_replacement")
@@ -582,8 +582,6 @@ RSpec.describe Evilution::MCP::MutateTool do
       end
 
       it "does not send progress for killed mutations" do
-        allow(progress).to receive(:report)
-
         captured_callback = nil
         allow(Evilution::Runner).to receive(:new) do |**kwargs|
           captured_callback = kwargs[:on_result]
@@ -594,7 +592,7 @@ RSpec.describe Evilution::MCP::MutateTool do
 
         captured_callback.call(killed_result)
 
-        expect(progress).not_to have_received(:report)
+        expect(server_context).not_to have_received(:report_progress)
       end
 
       it "does not set callback when suggest_tests is false" do
@@ -609,16 +607,14 @@ RSpec.describe Evilution::MCP::MutateTool do
         expect(captured_callback).to be_nil
       end
 
-      it "does not set callback when server_context has no progress" do
-        no_progress_context = instance_double("MCP::ServerContext", progress: nil)
-
+      it "does not set callback when server_context is nil" do
         captured_callback = nil
         allow(Evilution::Runner).to receive(:new) do |**kwargs|
           captured_callback = kwargs[:on_result]
           runner
         end
 
-        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: no_progress_context)
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: nil)
 
         expect(captured_callback).to be_nil
       end
