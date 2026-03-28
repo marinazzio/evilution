@@ -51,7 +51,7 @@ RSpec.describe Evilution::Reporter::Suggestion do
       expect(result).to be_empty
     end
 
-    it "generates suggestions for all 18 operator types" do
+    it "generates suggestions for all 20 operator types" do
       Evilution::Reporter::Suggestion::TEMPLATES.each_key do |operator_name|
         mutation = build_mutation(operator_name)
         suggestion = suggestion_reporter.suggestion_for(mutation)
@@ -648,6 +648,68 @@ RSpec.describe Evilution::Reporter::Suggestion do
 
         expect(suggestion).to include("&&=")
         expect(suggestion).to include("||=")
+      end
+    end
+
+    describe "superclass_removal" do
+      it "generates an RSpec it-block referencing the superclass" do
+        mutation = build_mutation("superclass_removal",
+                                  diff: "-   class Admin < User\n+   class Admin")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed superclass in a comment" do
+        mutation = build_mutation("superclass_removal",
+                                  diff: "-   class Admin < User\n+   class Admin")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("User")
+      end
+
+      it "advises testing inherited behavior" do
+        mutation = build_mutation("superclass_removal",
+                                  diff: "-   class Admin < User\n+   class Admin")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("inherit")
+      end
+    end
+
+    describe "mixin_removal" do
+      it "generates an RSpec it-block referencing the mixin" do
+        mutation = build_mutation("mixin_removal",
+                                  diff: "-   include Comparable\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed mixin in a comment" do
+        mutation = build_mutation("mixin_removal",
+                                  diff: "-   include Comparable\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("Comparable")
+      end
+
+      it "advises testing mixin-provided behavior" do
+        mutation = build_mutation("mixin_removal",
+                                  diff: "-   extend ClassMethods\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("mixin").or include("module").or include("include")
       end
     end
 
