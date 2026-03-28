@@ -29,7 +29,7 @@ RSpec.describe Evilution::AST::InheritanceScanner do
     RUBY
     inheritance = scan(source)
 
-    expect(inheritance).to eq("Foo::Bar" => "Baz")
+    expect(inheritance).to eq("Foo::Bar" => "Foo::Baz")
   end
 
   it "detects multiple classes in one file" do
@@ -50,6 +50,38 @@ RSpec.describe Evilution::AST::InheritanceScanner do
     inheritance = described_class.call(["a.rb", "b.rb"])
 
     expect(inheritance).to eq("A" => nil, "B" => "A")
+  end
+
+  it "qualifies unqualified superclass within module context" do
+    source = <<~RUBY
+      module Models
+        class Base; end
+        class User < Base; end
+      end
+    RUBY
+    inheritance = scan(source)
+
+    expect(inheritance["Models::User"]).to eq("Models::Base")
+  end
+
+  it "preserves already-qualified superclass names" do
+    source = <<~RUBY
+      module App
+        class Service < ::Base::Handler; end
+      end
+    RUBY
+    inheritance = scan(source)
+
+    expect(inheritance["App::Service"]).to eq("::Base::Handler")
+  end
+
+  it "skips unreadable files" do
+    allow(File).to receive(:read).with("good.rb").and_return("class Good; end")
+    allow(File).to receive(:read).with("missing.rb").and_raise(Errno::ENOENT)
+
+    inheritance = described_class.call(["good.rb", "missing.rb"])
+
+    expect(inheritance).to eq("Good" => nil)
   end
 
   it "skips files that fail to parse" do

@@ -106,7 +106,7 @@ class Evilution::Runner
 
   def filter_by_descendants(subjects)
     base_name = config.target.delete_prefix("descendants:")
-    files = subjects.map(&:file_path).uniq
+    files = resolve_target_files
     inheritance = Evilution::AST::InheritanceScanner.call(files)
     class_names = resolve_descendant_set(base_name, inheritance)
     raise Evilution::Error, "no classes found matching '#{config.target}'" if class_names.empty?

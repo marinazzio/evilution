@@ -21,6 +21,8 @@ class Evilution::AST::InheritanceScanner < Prism::Visitor
       next if result.failure?
 
       scanner.visit(result.value)
+    rescue SystemCallError
+      next
     end
     scanner.inheritance
   end
@@ -28,7 +30,7 @@ class Evilution::AST::InheritanceScanner < Prism::Visitor
   def visit_class_node(node)
     class_name = qualified_name(node.constant_path)
 
-    @inheritance[class_name] = (constant_name(node.superclass) if node.superclass)
+    @inheritance[class_name] = (qualified_superclass(node.superclass) if node.superclass)
 
     @context.push(constant_name(node.constant_path))
     super
@@ -46,6 +48,14 @@ class Evilution::AST::InheritanceScanner < Prism::Visitor
   def qualified_name(node)
     name = constant_name(node)
     @context.empty? ? name : "#{@context.join("::")}::#{name}"
+  end
+
+  def qualified_superclass(node)
+    name = constant_name(node)
+    return name if name.include?("::")
+    return name if @context.empty?
+
+    "#{@context.join("::")}::#{name}"
   end
 
   def constant_name(node)
