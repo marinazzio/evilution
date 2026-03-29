@@ -71,11 +71,8 @@ RSpec.describe Evilution::Mutator::Operator::RescueBodyReplacement do
     it "skips raise replacement when body is already a bare raise" do
       mutations = described_class.new.call(raise_subject)
 
-      raise_mutations = mutations.select { |m| m.mutated_source.scan("raise").length > 0 }
-      nil_mutation = mutations.find { |m| m.mutated_source.include?("nil") }
-
       expect(mutations.length).to eq(1)
-      expect(nil_mutation).not_to be_nil
+      expect(mutations.first.diff).to include("nil")
     end
 
     it "generates only raise mutation for empty rescue body" do
