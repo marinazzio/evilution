@@ -122,6 +122,41 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".values_at(")
     end
 
+    it "replaces sum with inject" do
+      muts = mutations_for("using_sum")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".inject")
+    end
+
+    it "replaces inject with sum" do
+      muts = mutations_for("using_inject")
+      sum_mut = muts.find { |m| m.mutated_source.include?(".sum(") }
+
+      expect(sum_mut).not_to be_nil
+    end
+
+    it "replaces count with size" do
+      muts = mutations_for("using_count")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".size")
+    end
+
+    it "replaces select with filter" do
+      muts = mutations_for("using_select")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".filter {")
+    end
+
+    it "replaces filter with select" do
+      muts = mutations_for("using_filter")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".select {")
+    end
+
     it "handles nested calls with multiple replaceable methods" do
       muts = mutations_for("using_flat_map_and_map")
 

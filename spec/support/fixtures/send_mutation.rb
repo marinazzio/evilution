@@ -68,4 +68,24 @@ class SendMutationFixture
   def using_fetch_values
     { a: 1 }.fetch_values(:a)
   end
+
+  def using_sum
+    [1, 2, 3].sum
+  end
+
+  def using_inject
+    [1, 2, 3].inject(0) { |acc, x| acc + x }
+  end
+
+  def using_count
+    [1, 2, 3].count
+  end
+
+  def using_select
+    [1, 2, 3].select { |x| x > 1 }
+  end
+
+  def using_filter
+    [1, 2, 3].filter { |x| x > 1 }
+  end
 end

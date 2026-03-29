@@ -14,13 +14,17 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     detect: [:find],
     find: [:detect],
     each_with_object: [:inject],
-    inject: [:each_with_object],
+    inject: %i[each_with_object sum],
     reverse_each: [:each],
     each: [:reverse_each],
     length: [:size],
     size: [:length],
     values_at: [:fetch_values],
-    fetch_values: [:values_at]
+    fetch_values: [:values_at],
+    sum: [:inject],
+    count: [:size],
+    select: [:filter],
+    filter: [:select]
   }.freeze
 
   def visit_call_node(node)
