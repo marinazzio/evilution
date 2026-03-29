@@ -30,7 +30,8 @@ class Evilution::Reporter::Suggestion
     "local_variable_assignment" => "Add a test that depends on the assigned variable being stored, not just the value expression",
     "instance_variable_write" => "Add a test that verifies the instance variable is set correctly, not just the return value",
     "class_variable_write" => "Add a test that verifies the class variable is set correctly and affects shared state",
-    "global_variable_write" => "Add a test that verifies the global variable is set correctly, not just the value expression"
+    "global_variable_write" => "Add a test that verifies the global variable is set correctly, not just the value expression",
+    "rescue_removal" => "Add a test that triggers the rescued exception and verifies the rescue handler behavior"
   }.freeze
 
   CONCRETE_TEMPLATES = {
