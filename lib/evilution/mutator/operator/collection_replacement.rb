@@ -33,7 +33,11 @@ class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::
     min: [:max],
     max: [:min],
     min_by: [:max_by],
-    max_by: [:min_by]
+    max_by: [:min_by],
+    compact: [:flatten],
+    flatten: [:compact],
+    zip: [:product],
+    product: [:zip]
   }.freeze
 
   def visit_call_node(node)
