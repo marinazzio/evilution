@@ -3,10 +3,11 @@
 require_relative "../parallel"
 
 class Evilution::Parallel::Pool
-  def initialize(size:)
+  def initialize(size:, hooks: nil)
     raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
 
     @size = size
+    @hooks = hooks
   end
 
   def map(items, &block)
@@ -35,6 +36,7 @@ class Evilution::Parallel::Pool
   def fork_worker(item, read_io, write_io, &block)
     Process.fork do
       read_io.close
+      @hooks&.fire(:worker_process_start)
       result = block.call(item)
       Marshal.dump(result, write_io)
     rescue Exception => e # rubocop:disable Lint/RescueException

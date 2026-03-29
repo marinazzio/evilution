@@ -24,9 +24,10 @@ require_relative "session/store"
 class Evilution::Runner
   attr_reader :config
 
-  def initialize(config: Evilution::Config.new, on_result: nil)
+  def initialize(config: Evilution::Config.new, on_result: nil, hooks: nil)
     @config = config
     @on_result = on_result
+    @hooks = hooks
     @parser = Evilution::AST::Parser.new
     @registry = Evilution::Mutator::Registry.default
     @isolator = build_isolator
@@ -63,7 +64,7 @@ class Evilution::Runner
 
   private
 
-  attr_reader :parser, :registry, :isolator, :cache, :on_result
+  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks
 
   def parse_and_filter_subjects
     subjects = parse_subjects
@@ -240,7 +241,7 @@ class Evilution::Runner
 
   def run_mutations_parallel(mutations, baseline_result = nil)
     integration = build_integration
-    pool = Evilution::Parallel::Pool.new(size: config.jobs)
+    pool = Evilution::Parallel::Pool.new(size: config.jobs, hooks: @hooks)
     worker_isolator = Evilution::Isolation::InProcess.new
     spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }
@@ -341,7 +342,7 @@ class Evilution::Runner
 
   def build_isolator
     case resolve_isolation
-    when :fork then Evilution::Isolation::Fork.new
+    when :fork then Evilution::Isolation::Fork.new(hooks: @hooks)
     when :in_process then Evilution::Isolation::InProcess.new
     end
   end

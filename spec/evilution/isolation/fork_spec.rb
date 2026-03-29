@@ -183,6 +183,30 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(captured).not_to include("noisy")
     end
 
+    it "fires worker_process_start hook after fork" do
+      hook_fired = false
+      hooks = Evilution::Hooks::Registry.new
+      hooks.register(:worker_process_start) { hook_fired = true }
+      isolator = described_class.new(hooks: hooks)
+
+      test_command = lambda do |_m|
+        # hook_fired is set in the child process; verify via side effect
+        { passed: hook_fired }
+      end
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_survived
+    end
+
+    it "works without hooks (backwards compatible)" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_killed
+    end
+
     it "isolates mutations from parent process" do
       parent_value = "original"
       test_command = lambda do |_m|

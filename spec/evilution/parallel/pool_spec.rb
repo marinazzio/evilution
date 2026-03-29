@@ -56,6 +56,50 @@ RSpec.describe Evilution::Parallel::Pool do
       expect(results).to eq([84])
     end
 
+    it "fires worker_process_start hook after fork in each worker" do
+      tmpfile = Tempfile.new("pool_worker_pids")
+      hooks = Evilution::Hooks::Registry.new
+      hooks.register(:worker_process_start) do
+        File.open(tmpfile.path, "a") { |f| f.puts(Process.pid) }
+      end
+      pool = described_class.new(size: 2, hooks: hooks)
+
+      results = pool.map([1, 2]) { |n| [n, Process.pid] }
+
+      worker_pids = results.map(&:last)
+      hook_pids = File.read(tmpfile.path).split.map(&:to_i).uniq
+
+      expect(worker_pids.uniq.size).to eq(2)
+      expect(worker_pids).not_to include(Process.pid)
+      expect(hook_pids.sort).to eq(worker_pids.uniq.sort)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    it "fires worker_process_start hook before the block runs" do
+      tmpfile = Tempfile.new("pool_hook_order")
+      hooks = Evilution::Hooks::Registry.new
+      hooks.register(:worker_process_start) { File.write(tmpfile.path, "hook_fired") }
+      pool = described_class.new(size: 1, hooks: hooks)
+
+      results = pool.map([1]) do |_n|
+        File.read(tmpfile.path)
+      end
+
+      expect(results.first).to eq("hook_fired")
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    it "works without hooks (backwards compatible)" do
+      pool = described_class.new(size: 2)
+      results = pool.map([1, 2]) { |n| n * 10 }
+
+      expect(results).to eq([10, 20])
+    end
+
     it "propagates exceptions from the block" do
       pool = described_class.new(size: 2)
 
