@@ -33,7 +33,8 @@ class Evilution::Reporter::Suggestion
     "global_variable_write" => "Add a test that verifies the global variable is set correctly, not just the value expression",
     "rescue_removal" => "Add a test that triggers the rescued exception and verifies the rescue handler behavior",
     "rescue_body_replacement" => "Add a test that triggers the rescued exception and verifies the rescue body produces the correct result",
-    "inline_rescue" => "Add a test that triggers the inline rescue and verifies the fallback value is used correctly"
+    "inline_rescue" => "Add a test that triggers the inline rescue and verifies the fallback value is used correctly",
+    "ensure_removal" => "Add a test that verifies the ensure cleanup code runs and its side effects are observable"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -400,6 +401,19 @@ class Evilution::Reporter::Suggestion
           # Trigger the exception and assert the fallback value is correct
           result = subject.#{method_name}(input_that_raises)
           expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "ensure_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, _mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: removed ensure block `#{original_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the ensure cleanup runs in ##{method_name}' do
+          # Assert that the cleanup side effect is observable after the method runs
+          subject.#{method_name}(input_value)
+          expect(observable_cleanup_effect).to eq(expected)
         end
       RSPEC
     }

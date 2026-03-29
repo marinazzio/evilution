@@ -929,6 +929,37 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "ensure_removal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("ensure_removal",
+                                  diff: "-   ensure\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed ensure in a comment" do
+        mutation = build_mutation("ensure_removal",
+                                  diff: "-   ensure\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("ensure")
+      end
+
+      it "advises testing cleanup side effects" do
+        mutation = build_mutation("ensure_removal",
+                                  diff: "-   cleanup\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("cleanup").or include("ensure").or include("side effect")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
