@@ -24,7 +24,12 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     sum: [:inject],
     count: [:size],
     select: [:filter],
-    filter: [:select]
+    filter: [:select],
+    to_s: [:to_i],
+    to_i: [:to_s],
+    to_f: [:to_i],
+    to_a: [:to_h],
+    to_h: [:to_a]
   }.freeze
 
   def visit_call_node(node)
