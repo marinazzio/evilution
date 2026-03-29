@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-RSpec.describe Evilution::Mutator::Operator::IndexToFetch do
-  let(:fixture_path) { File.expand_path("../../../support/fixtures/index_access.rb", __dir__) }
+RSpec.describe Evilution::Mutator::Operator::IndexToDig do
+  let(:fixture_path) { File.expand_path("../../../support/fixtures/nested_index.rb", __dir__) }
   let(:source) { File.read(fixture_path) }
   let(:tree) { Prism.parse(source).value }
 
@@ -17,36 +17,29 @@ RSpec.describe Evilution::Mutator::Operator::IndexToFetch do
   end
 
   describe "#call" do
-    it "replaces hash[:key] with hash.fetch(:key)" do
-      muts = mutations_for("hash_access")
+    it "replaces h[:a][:b] with h.dig(:a, :b)" do
+      muts = mutations_for("two_level")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("h.fetch(:key)")
+      expect(muts.first.mutated_source).to include("h.dig(:a, :b)")
     end
 
-    it "replaces array[0] with array.fetch(0)" do
-      muts = mutations_for("array_access")
+    it "replaces h[:a][:b][:c] with h.dig(:a, :b, :c)" do
+      muts = mutations_for("three_level")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("a.fetch(0)")
+      expect(muts.first.mutated_source).to include("h.dig(:a, :b, :c)")
     end
 
-    it "replaces hash[\"name\"] with hash.fetch(\"name\")" do
-      muts = mutations_for("string_key_access")
+    it "handles mixed key types" do
+      muts = mutations_for("mixed_keys")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('h.fetch("name")')
+      expect(muts.first.mutated_source).to include('h.dig("users", 0, :name)')
     end
 
-    it "replaces hash[k] with hash.fetch(k)" do
-      muts = mutations_for("variable_key_access")
-
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("h.fetch(k)")
-    end
-
-    it "does not mutate multi-argument [] access" do
-      muts = mutations_for("multi_arg_access")
+    it "does not mutate single-level [] access" do
+      muts = mutations_for("single_level")
 
       expect(muts).to be_empty
     end
@@ -62,15 +55,15 @@ RSpec.describe Evilution::Mutator::Operator::IndexToFetch do
     end
 
     it "sets correct operator_name" do
-      muts = mutations_for("hash_access")
+      muts = mutations_for("two_level")
 
       muts.each do |mutation|
-        expect(mutation.operator_name).to eq("index_to_fetch")
+        expect(mutation.operator_name).to eq("index_to_dig")
       end
     end
 
     it "does not mutate methods without [] access" do
-      muts = mutations_for("no_index_access")
+      muts = mutations_for("no_index")
 
       expect(muts).to be_empty
     end
