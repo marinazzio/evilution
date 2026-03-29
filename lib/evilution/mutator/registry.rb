@@ -52,7 +52,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::BitwiseComplement,
       Evilution::Mutator::Operator::ZsuperRemoval,
       Evilution::Mutator::Operator::ExplicitSuperMutation,
-      Evilution::Mutator::Operator::IndexToFetch
+      Evilution::Mutator::Operator::IndexToFetch,
+      Evilution::Mutator::Operator::IndexToDig
     ].each { |op| registry.register(op) }
     registry
   end
