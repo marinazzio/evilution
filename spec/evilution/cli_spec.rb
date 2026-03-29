@@ -121,6 +121,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--format", "json"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(format: :json)
         )
       end
@@ -129,6 +130,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--format", "text"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(format: :text)
         )
       end
@@ -139,6 +141,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--jobs", "4"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(jobs: 4)
         )
       end
@@ -147,6 +150,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["-j", "2"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(jobs: 2)
         )
       end
@@ -155,6 +159,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new([])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(jobs: 1)
         )
       end
@@ -165,6 +170,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--timeout", "30"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(timeout: 30)
         )
       end
@@ -173,6 +179,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["-t", "5"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(timeout: 5)
         )
       end
@@ -183,6 +190,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--spec", "spec/foo_spec.rb,spec/bar_spec.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(spec_files: ["spec/foo_spec.rb", "spec/bar_spec.rb"])
         )
       end
@@ -191,6 +199,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--spec", "spec/foo_spec.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(spec_files: ["spec/foo_spec.rb"])
         )
       end
@@ -201,6 +210,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--quiet"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(quiet: true)
         )
       end
@@ -209,6 +219,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["-q"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(quiet: true)
         )
       end
@@ -219,6 +230,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--fail-fast"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(fail_fast: 1)
         )
       end
@@ -227,6 +239,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--fail-fast", "5"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(fail_fast: 5)
         )
       end
@@ -235,6 +248,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--fail-fast=3"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(fail_fast: 3)
         )
       end
@@ -243,6 +257,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--fail-fast", "lib/foo.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(fail_fast: 1, target_files: ["lib/foo.rb"])
         )
       end
@@ -277,6 +292,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--suggest-tests"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(suggest_tests: true)
         )
       end
@@ -285,6 +301,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new([])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(suggest_tests: false)
         )
       end
@@ -295,6 +312,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--no-progress"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(progress: false)
         )
       end
@@ -303,6 +321,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new([])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(progress: true)
         )
       end
@@ -313,6 +332,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--target", "Foo#bar"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(target: "Foo#bar")
         )
       end
@@ -442,6 +462,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb", "lib/bar.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(target_files: ["lib/foo.rb", "lib/bar.rb"])
         )
       end
@@ -450,6 +471,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["run", "lib/foo.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(target_files: ["lib/foo.rb"])
         )
       end
@@ -461,6 +483,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--stdin"], stdin: stdin)
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(target_files: ["lib/foo.rb", "lib/bar.rb"])
         )
       end
@@ -470,6 +493,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--stdin"], stdin: stdin)
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             line_ranges: { "lib/foo.rb" => 15..30 }
@@ -482,6 +506,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--stdin"], stdin: stdin)
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(target_files: ["lib/foo.rb", "lib/bar.rb"])
         )
       end
@@ -512,6 +537,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["--stdin", "--format", "json", "-j", "4"], stdin: stdin)
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             format: :json,
@@ -526,6 +552,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb:15-30"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             line_ranges: { "lib/foo.rb" => 15..30 }
@@ -537,6 +564,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb:15"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             line_ranges: { "lib/foo.rb" => 15..15 }
@@ -548,6 +576,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb:15-"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             line_ranges: { "lib/foo.rb" => 15..Float::INFINITY }
@@ -559,6 +588,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb"],
             line_ranges: {}
@@ -570,6 +600,7 @@ RSpec.describe Evilution::CLI do
         cli = described_class.new(["lib/foo.rb:10-20", "lib/bar.rb"])
         cli.call
         expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
           config: have_attributes(
             target_files: ["lib/foo.rb", "lib/bar.rb"],
             line_ranges: { "lib/foo.rb" => 10..20 }
