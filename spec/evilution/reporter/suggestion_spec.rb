@@ -1086,6 +1086,38 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "bang_method" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("bang_method",
+                                  diff: "-   items.sort!\n+   items.sort")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated methods in a comment" do
+        mutation = build_mutation("bang_method",
+                                  diff: "-   items.sort!\n+   items.sort")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("sort!")
+        expect(suggestion).to include("sort")
+      end
+
+      it "advises testing in-place vs copy semantics" do
+        mutation = build_mutation("bang_method",
+                                  diff: "-   items.map!\n+   items.map")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("in-place").or include("copy").or include("modified")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
