@@ -272,6 +272,20 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "#progress?" do
+    it "returns true by default" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.progress?).to be true
+    end
+
+    it "returns false when progress is disabled" do
+      config = described_class.new(progress: false, skip_config_file: true)
+
+      expect(config.progress?).to be false
+    end
+  end
+
   describe "fail_fast validation" do
     it "rejects zero" do
       expect { described_class.new(fail_fast: 0, skip_config_file: true) }

@@ -290,6 +290,24 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--no-progress flag" do
+      it "sets progress to false" do
+        cli = described_class.new(["--no-progress"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(progress: false)
+        )
+      end
+
+      it "defaults to true when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(progress: true)
+        )
+      end
+    end
+
     describe "--target flag" do
       it "sets target on the config" do
         cli = described_class.new(["--target", "Foo#bar"])

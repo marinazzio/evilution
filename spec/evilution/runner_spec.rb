@@ -1933,6 +1933,25 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
     end
 
+    it "does not create a progress bar when progress is disabled" do
+      no_progress_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: false,
+        progress: false,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      allow(Evilution::Reporter::ProgressBar).to receive(:new).and_return(progress_bar)
+      allow($stderr).to receive(:tty?).and_return(true)
+
+      described_class.new(config: no_progress_config).call
+
+      expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
+    end
+
     it "does not create a progress bar when output is not TTY" do
       text_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],
