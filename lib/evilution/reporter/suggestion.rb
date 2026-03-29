@@ -37,7 +37,8 @@ class Evilution::Reporter::Suggestion
     "ensure_removal" => "Add a test that verifies the ensure cleanup code runs and its side effects are observable",
     "break_statement" => "Add a test that verifies the break condition and the value returned when the loop exits early",
     "next_statement" => "Add a test that verifies the next condition and the value yielded when the iteration skips",
-    "redo_statement" => "Add a test that verifies the redo restarts the iteration and the retry logic is necessary"
+    "redo_statement" => "Add a test that verifies the redo restarts the iteration and the retry logic is necessary",
+    "bang_method" => "Add a test that distinguishes in-place mutation from copy semantics (bang vs non-bang)"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -467,6 +468,19 @@ class Evilution::Reporter::Suggestion
         # #{mutation.file_path}:#{mutation.line}
         it 'verifies the redo retry logic is necessary in ##{method_name}' do
           # Assert the iteration restart changes the outcome
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "bang_method" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies in-place vs copy semantics matter in ##{method_name}' do
+          # Assert that the original object is or is not modified
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end
