@@ -4,6 +4,9 @@ require "json"
 require "optparse"
 require_relative "version"
 require_relative "config"
+require_relative "hooks"
+require_relative "hooks/registry"
+require_relative "hooks/loader"
 require_relative "runner"
 
 class Evilution::CLI
@@ -434,7 +437,8 @@ class Evilution::CLI
 
     file_options = Evilution::Config.file_options
     config = Evilution::Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
-    runner = Evilution::Runner.new(config: config)
+    hooks = build_hooks(config)
+    runner = Evilution::Runner.new(config: config, hooks: hooks)
     summary = runner.call
     summary.success?(min_score: config.min_score) ? 0 : 1
   rescue Evilution::Error => e
@@ -444,6 +448,14 @@ class Evilution::CLI
       warn("Error: #{e.message}")
     end
     2
+  end
+
+  def build_hooks(config)
+    return nil if config.hooks.empty?
+
+    registry = Evilution::Hooks::Registry.new
+    Evilution::Hooks::Loader.call(registry, config.hooks)
+    registry
   end
 
   def json_format?(config, file_options)

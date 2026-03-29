@@ -28,7 +28,7 @@ class Evilution::Config
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
-              :progress, :save_session, :line_ranges, :spec_files
+              :progress, :save_session, :line_ranges, :spec_files, :hooks
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -122,6 +122,11 @@ class Evilution::Config
 
       # Generate concrete RSpec test code in suggestions (default: false)
       # suggest_tests: false
+
+      # Hooks: Ruby files returning a Proc, keyed by lifecycle event
+      # hooks:
+      #   worker_process_start: config/evilution_hooks/worker_start.rb
+      #   mutation_insert_pre: config/evilution_hooks/mutation_pre.rb
     YAML
   end
 
@@ -157,6 +162,7 @@ class Evilution::Config
     @save_session = merged[:save_session]
     @line_ranges = merged[:line_ranges] || {}
     @spec_files = Array(merged[:spec_files])
+    @hooks = validate_hooks(merged[:hooks])
   end
 
   def validate_isolation(value)
@@ -178,6 +184,13 @@ class Evilution::Config
     value
   rescue ::ArgumentError, ::TypeError
     raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}"
+  end
+
+  def validate_hooks(value)
+    return {} if value.nil?
+    raise Evilution::ConfigError, "hooks must be a mapping of event names to file paths, got #{value.class}" unless value.is_a?(Hash)
+
+    value
   end
 
   def load_config_file
