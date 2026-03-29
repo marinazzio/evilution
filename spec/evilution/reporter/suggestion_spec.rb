@@ -897,6 +897,38 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "inline_rescue" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("inline_rescue",
+                                  diff: "-   dangerous_call rescue fallback\n+   dangerous_call")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values in a comment" do
+        mutation = build_mutation("inline_rescue",
+                                  diff: "-   dangerous_call rescue fallback\n+   dangerous_call rescue nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("fallback")
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing the fallback value" do
+        mutation = build_mutation("inline_rescue",
+                                  diff: "-   dangerous_call rescue fallback\n+   dangerous_call")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("rescue").or include("fallback").or include("exception")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
