@@ -31,7 +31,8 @@ class Evilution::Reporter::Suggestion
     "instance_variable_write" => "Add a test that verifies the instance variable is set correctly, not just the return value",
     "class_variable_write" => "Add a test that verifies the class variable is set correctly and affects shared state",
     "global_variable_write" => "Add a test that verifies the global variable is set correctly, not just the value expression",
-    "rescue_removal" => "Add a test that triggers the rescued exception and verifies the rescue handler behavior"
+    "rescue_removal" => "Add a test that triggers the rescued exception and verifies the rescue handler behavior",
+    "rescue_body_replacement" => "Add a test that triggers the rescued exception and verifies the rescue body produces the correct result"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -371,6 +372,19 @@ class Evilution::Reporter::Suggestion
         it 'depends on behavior from the included module in ##{method_name}' do
           # Assert behavior provided by the mixin
           result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "rescue_body_replacement" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the rescue handler produces the correct result in ##{method_name}' do
+          # Trigger the exception and assert the rescue body's return value or side effect
+          result = subject.#{method_name}(input_that_raises)
           expect(result).to eq(expected)
         end
       RSPEC
