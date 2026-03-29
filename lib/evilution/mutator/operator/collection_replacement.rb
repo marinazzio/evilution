@@ -21,7 +21,11 @@ class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::
     pop: [:shift],
     shift: [:pop],
     push: [:unshift],
-    unshift: [:push]
+    unshift: [:push],
+    each_key: [:each_value],
+    each_value: [:each_key],
+    assoc: [:rassoc],
+    rassoc: [:assoc]
   }.freeze
 
   def visit_call_node(node)
