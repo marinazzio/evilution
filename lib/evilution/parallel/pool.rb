@@ -36,7 +36,7 @@ class Evilution::Parallel::Pool
   def fork_worker(item, read_io, write_io, &block)
     Process.fork do
       read_io.close
-      @hooks&.fire(:worker_process_start)
+      @hooks.fire(:worker_process_start) if @hooks
       result = block.call(item)
       Marshal.dump(result, write_io)
     rescue Exception => e # rubocop:disable Lint/RescueException

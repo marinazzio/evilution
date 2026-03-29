@@ -20,9 +20,9 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @temp_dir = nil
     @lock_file = nil
     ensure_rspec_loaded
-    @hooks&.fire(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
+    @hooks.fire(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path) if @hooks
     apply_mutation(mutation)
-    @hooks&.fire(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
+    @hooks.fire(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path) if @hooks
     run_rspec(mutation)
   ensure
     restore_original(mutation)
@@ -35,8 +35,10 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def ensure_rspec_loaded
     return if @rspec_loaded
 
+    @hooks.fire(:setup_integration_pre, integration: :rspec) if @hooks
     require "rspec/core"
     @rspec_loaded = true
+    @hooks.fire(:setup_integration_post, integration: :rspec) if @hooks
   rescue LoadError => e
     raise Evilution::Error, "rspec-core is required but not available: #{e.message}"
   end

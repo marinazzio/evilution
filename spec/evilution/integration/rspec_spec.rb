@@ -328,6 +328,97 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "setup_integration hooks" do
+    it "fires setup_integration_pre before loading rspec" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:setup_integration_pre) { events << :setup_pre }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      hooked_integration.instance_variable_set(:@rspec_loaded, false)
+
+      allow(hooked_integration).to receive(:require).with("rspec/core") do
+        events << :require
+        # Simulate successful load
+      end
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+
+      expect(events[0]).to eq(:setup_pre)
+      expect(events[1]).to eq(:require)
+    end
+
+    it "fires setup_integration_post after loading rspec" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:setup_integration_post) { events << :setup_post }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      hooked_integration.instance_variable_set(:@rspec_loaded, false)
+
+      allow(hooked_integration).to receive(:require).with("rspec/core") do
+        events << :require
+      end
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+
+      expect(events[0]).to eq(:require)
+      expect(events[1]).to eq(:setup_post)
+    end
+
+    it "fires both setup hooks in correct order" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:setup_integration_pre) { events << :setup_pre }
+      hooks.register(:setup_integration_post) { events << :setup_post }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      hooked_integration.instance_variable_set(:@rspec_loaded, false)
+
+      allow(hooked_integration).to receive(:require).with("rspec/core")
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+
+      expect(events).to eq(%i[setup_pre setup_post])
+    end
+
+    it "provides integration type in hook payload" do
+      hooks = Evilution::Hooks::Registry.new
+      received = nil
+      hooks.register(:setup_integration_pre) { |payload| received = payload }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+
+      expect(received[:integration]).to eq(:rspec)
+    end
+
+    it "only fires setup hooks on first call" do
+      hooks = Evilution::Hooks::Registry.new
+      count = 0
+      hooks.register(:setup_integration_pre) { count += 1 }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+      hooked_integration.call(mutation)
+
+      expect(count).to eq(1)
+    end
+
+    it "works without hooks (backwards compatible)" do
+      no_hooks_integration = described_class.new(test_files: ["spec/some_spec.rb"])
+      no_hooks_integration.instance_variable_set(:@rspec_loaded, false)
+      allow(no_hooks_integration).to receive(:require).with("rspec/core")
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = no_hooks_integration.call(mutation)
+
+      expect(result[:passed]).to be true
+    end
+  end
+
   describe "per-mutation spec targeting" do
     let(:resolver) { instance_double(Evilution::SpecResolver) }
 

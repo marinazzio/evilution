@@ -22,7 +22,7 @@ class Evilution::Isolation::Fork
       ENV["TMPDIR"] = sandbox_dir
       read_io.close
       suppress_child_output
-      @hooks&.fire(:worker_process_start, mutation: mutation)
+      @hooks.fire(:worker_process_start, mutation: mutation) if @hooks
       result = execute_in_child(mutation, test_command)
       Marshal.dump(result, write_io)
       write_io.close
