@@ -42,7 +42,10 @@ class Evilution::Reporter::Suggestion
     "bitwise_replacement" => "Add a test that checks the exact bitwise result to distinguish &, |, and ^ operators",
     "bitwise_complement" => "Add a test that verifies the bitwise complement (~) result, not just the sign or magnitude",
     "zsuper_removal" => "Add a test that verifies inherited behavior from super is needed, not just the subclass logic",
-    "explicit_super_mutation" => "Add a test that verifies the correct arguments are passed to super and the inherited result matters"
+    "explicit_super_mutation" => "Add a test that verifies the correct arguments are passed to super and the inherited result matters",
+    "index_to_fetch" => "Add a test that distinguishes [] (returns nil for missing keys) from .fetch (raises KeyError)",
+    "index_to_dig" => "Add a test that verifies chained [] access returns the correct nested value",
+    "index_assignment_removal" => "Add a test that verifies the []= assignment side effect is observable (the collection is modified)"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -539,6 +542,44 @@ class Evilution::Reporter::Suggestion
           # Assert the inherited method receives the expected arguments
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "index_to_fetch" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'distinguishes [] from .fetch for missing keys in ##{method_name}' do
+          # Access a missing key: [] returns nil, .fetch raises KeyError
+          expect { subject.#{method_name}(collection_with_missing_key) }.to raise_error(KeyError)
+        end
+      RSPEC
+    },
+    "index_to_dig" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the chained [] access returns the correct nested value in ##{method_name}' do
+          # Assert the nested lookup produces the expected value
+          result = subject.#{method_name}(nested_collection)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "index_assignment_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the []= assignment modifies the collection in ##{method_name}' do
+          # Assert the collection contains the assigned value after the method runs
+          result = subject.#{method_name}(collection)
+          expect(result).to include(expected_key => expected_value)
         end
       RSPEC
     }
