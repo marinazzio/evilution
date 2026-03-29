@@ -61,8 +61,8 @@ RSpec.describe Evilution::AST::SourceSurgeon do
     context "with multi-byte UTF-8 characters" do
       it "replaces at correct byte offset after Cyrillic characters" do
         source = 'name = "Подкаст"'
-        # "Подкаст" is 7 chars but 14 bytes; byte offset of closing quote is 23
-        # Byte layout: name = " (9 bytes) + Подкаст (14 bytes) + " (1 byte) = 24 bytes
+        # "Подкаст" is 7 chars but 14 bytes; byte offset of closing quote is 22
+        # Byte layout: name = " (8 bytes) + Подкаст (14 bytes) + " (1 byte) = 23 bytes
         # Replace the whole string literal including quotes (byte offset 7, length 16)
         result = described_class.apply(source, offset: 7, length: 16, replacement: '"replaced"')
 
