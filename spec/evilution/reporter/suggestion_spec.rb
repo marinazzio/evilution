@@ -1245,6 +1245,102 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "index_to_fetch" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("index_to_fetch",
+                                  diff: "-   h[:key]\n+   h.fetch(:key)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("index_to_fetch",
+                                  diff: "-   h[:key]\n+   h.fetch(:key)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("h[:key]")
+        expect(suggestion).to include("h.fetch(:key)")
+      end
+
+      it "advises testing missing key behavior" do
+        mutation = build_mutation("index_to_fetch",
+                                  diff: "-   h[:key]\n+   h.fetch(:key)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("KeyError").or include("fetch").or include("missing")
+      end
+    end
+
+    describe "index_to_dig" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("index_to_dig",
+                                  diff: "-   h[:a][:b]\n+   h.dig(:a, :b)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("index_to_dig",
+                                  diff: "-   h[:a][:b]\n+   h.dig(:a, :b)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("h[:a][:b]")
+        expect(suggestion).to include("h.dig(:a, :b)")
+      end
+
+      it "advises testing nested access" do
+        mutation = build_mutation("index_to_dig",
+                                  diff: "-   h[:a][:b]\n+   h.dig(:a, :b)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("nested").or include("chained").or include("dig")
+      end
+    end
+
+    describe "index_assignment_removal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("index_assignment_removal",
+                                  diff: "-   h[:key] = val\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("index_assignment_removal",
+                                  diff: "-   h[:key] = val\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("h[:key] = val")
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing collection modification" do
+        mutation = build_mutation("index_assignment_removal",
+                                  diff: "-   h[:key] = val\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("collection").or include("[]=").or include("modif")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
