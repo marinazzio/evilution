@@ -836,7 +836,7 @@ RSpec.describe Evilution::Runner do
     end
 
     it "passes spec_files to the RSpec integration" do
-      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: ["spec/example_spec.rb"]).and_call_original
+      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: ["spec/example_spec.rb"], hooks: nil).and_call_original
 
       runner.call
     end
@@ -853,7 +853,7 @@ RSpec.describe Evilution::Runner do
       )
       empty_runner = described_class.new(config: empty_config)
 
-      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: nil).and_call_original
+      expect(Evilution::Integration::RSpec).to receive(:new).with(test_files: nil, hooks: nil).and_call_original
 
       empty_runner.call
     end

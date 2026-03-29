@@ -357,7 +357,7 @@ class Evilution::Runner
     case config.integration
     when :rspec
       test_files = config.spec_files.empty? ? nil : config.spec_files
-      Evilution::Integration::RSpec.new(test_files: test_files)
+      Evilution::Integration::RSpec.new(test_files: test_files, hooks: @hooks)
     else
       raise Evilution::Error, "unknown integration: #{config.integration}"
     end
