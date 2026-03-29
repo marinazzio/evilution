@@ -134,4 +134,20 @@ class CollectionProcessor
   def product_items(a, b)
     a.product(b)
   end
+
+  def first_item(items)
+    items.first
+  end
+
+  def last_item(items)
+    items.last
+  end
+
+  def hash_keys(hash)
+    hash.keys
+  end
+
+  def hash_values(hash)
+    hash.values
+  end
 end

@@ -37,7 +37,11 @@ class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::
     compact: [:flatten],
     flatten: [:compact],
     zip: [:product],
-    product: [:zip]
+    product: [:zip],
+    first: [:last],
+    last: [:first],
+    keys: [:values],
+    values: [:keys]
   }.freeze
 
   def visit_call_node(node)
