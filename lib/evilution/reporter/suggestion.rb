@@ -378,6 +378,19 @@ class Evilution::Reporter::Suggestion
         end
       RSPEC
     },
+    "rescue_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, _mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: removed `#{original_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the rescue handler is needed in ##{method_name}' do
+          # Trigger the rescued exception and assert the handler's effect
+          result = subject.#{method_name}(input_that_raises)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
     "rescue_body_replacement" => lambda { |mutation|
       method_name = parse_method_name(mutation.subject.name)
       original_line, mutated_line = extract_diff_lines(mutation.diff)
