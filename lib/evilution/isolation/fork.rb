@@ -9,6 +9,10 @@ require_relative "../isolation"
 class Evilution::Isolation::Fork
   GRACE_PERIOD = 2
 
+  def initialize(hooks: nil)
+    @hooks = hooks
+  end
+
   def call(mutation:, test_command:, timeout:)
     sandbox_dir = Dir.mktmpdir("evilution-run")
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -18,6 +22,7 @@ class Evilution::Isolation::Fork
       ENV["TMPDIR"] = sandbox_dir
       read_io.close
       suppress_child_output
+      @hooks&.fire(:worker_process_start, mutation: mutation)
       result = execute_in_child(mutation, test_command)
       Marshal.dump(result, write_io)
       write_io.close
