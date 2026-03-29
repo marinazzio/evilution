@@ -38,7 +38,9 @@ class Evilution::Reporter::Suggestion
     "break_statement" => "Add a test that verifies the break condition and the value returned when the loop exits early",
     "next_statement" => "Add a test that verifies the next condition and the value yielded when the iteration skips",
     "redo_statement" => "Add a test that verifies the redo restarts the iteration and the retry logic is necessary",
-    "bang_method" => "Add a test that distinguishes in-place mutation from copy semantics (bang vs non-bang)"
+    "bang_method" => "Add a test that distinguishes in-place mutation from copy semantics (bang vs non-bang)",
+    "bitwise_replacement" => "Add a test that checks the exact bitwise result to distinguish &, |, and ^ operators",
+    "bitwise_complement" => "Add a test that verifies the bitwise complement (~) result, not just the sign or magnitude"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -468,6 +470,32 @@ class Evilution::Reporter::Suggestion
         # #{mutation.file_path}:#{mutation.line}
         it 'verifies the redo retry logic is necessary in ##{method_name}' do
           # Assert the iteration restart changes the outcome
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "bitwise_replacement" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the exact bitwise result in ##{method_name}' do
+          # Assert the exact bit-level result to distinguish &, |, and ^ operators
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "bitwise_complement" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the bitwise complement result in ##{method_name}' do
+          # Assert the exact complement (~) value, not just sign or magnitude
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end

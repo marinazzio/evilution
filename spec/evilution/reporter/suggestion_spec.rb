@@ -1118,6 +1118,69 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "bitwise_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("bitwise_replacement",
+                                  diff: "-   a & b\n+   a | b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators in a comment" do
+        mutation = build_mutation("bitwise_replacement",
+                                  diff: "-   a & b\n+   a | b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("&")
+        expect(suggestion).to include("|")
+      end
+
+      it "advises testing bitwise result precision" do
+        mutation = build_mutation("bitwise_replacement",
+                                  diff: "-   a ^ b\n+   a & b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("bitwise").or include("bit-level")
+      end
+    end
+
+    describe "bitwise_complement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("bitwise_complement",
+                                  diff: "-   ~a\n+   a")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("bitwise_complement",
+                                  diff: "-   ~a\n+   -a")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("~")
+      end
+
+      it "advises testing complement behavior" do
+        mutation = build_mutation("bitwise_complement",
+                                  diff: "-   ~a\n+   a")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("complement").or include("bitwise")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
