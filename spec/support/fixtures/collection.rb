@@ -86,4 +86,20 @@ class CollectionProcessor
   def rassoc_lookup(hash, val)
     hash.rassoc(val)
   end
+
+  def grep_items(items)
+    items.grep(Integer)
+  end
+
+  def grep_v_items(items)
+    items.grep_v(Integer)
+  end
+
+  def take_items(items)
+    items.take(3)
+  end
+
+  def drop_items(items)
+    items.drop(3)
+  end
 end

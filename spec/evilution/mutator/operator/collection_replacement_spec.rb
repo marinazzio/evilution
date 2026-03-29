@@ -178,6 +178,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("hash.assoc")
     end
 
+    it "replaces grep with grep_v" do
+      muts = mutations_for("grep_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.grep_v")
+    end
+
+    it "replaces grep_v with grep" do
+      muts = mutations_for("grep_v_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.grep(")
+    end
+
+    it "replaces take with drop" do
+      muts = mutations_for("take_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.drop")
+    end
+
+    it "replaces drop with take" do
+      muts = mutations_for("drop_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.take")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
