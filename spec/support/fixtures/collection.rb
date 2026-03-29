@@ -54,4 +54,20 @@ class CollectionProcessor
   def length_items(items)
     items.length
   end
+
+  def pop_item(items)
+    items.pop
+  end
+
+  def shift_item(items)
+    items.shift
+  end
+
+  def push_item(items, val)
+    items.push(val)
+  end
+
+  def unshift_item(items, val)
+    items.unshift(val)
+  end
 end
