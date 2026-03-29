@@ -43,7 +43,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RescueRemoval,
       Evilution::Mutator::Operator::RescueBodyReplacement,
       Evilution::Mutator::Operator::InlineRescue,
-      Evilution::Mutator::Operator::EnsureRemoval
+      Evilution::Mutator::Operator::EnsureRemoval,
+      Evilution::Mutator::Operator::BreakStatement
     ].each { |op| registry.register(op) }
     registry
   end
