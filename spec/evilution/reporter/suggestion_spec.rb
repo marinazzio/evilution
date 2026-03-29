@@ -865,6 +865,38 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "rescue_body_replacement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("rescue_body_replacement",
+                                  diff: "-   log(e)\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values in a comment" do
+        mutation = build_mutation("rescue_body_replacement",
+                                  diff: "-   log(e)\n+   raise")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("log(e)")
+        expect(suggestion).to include("raise")
+      end
+
+      it "advises triggering the exception" do
+        mutation = build_mutation("rescue_body_replacement",
+                                  diff: "-   fallback_value\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("rescue").or include("exception").or include("raises")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
