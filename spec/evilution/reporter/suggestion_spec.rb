@@ -1181,6 +1181,70 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "zsuper_removal" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("zsuper_removal",
+                                  diff: "-   super\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("zsuper_removal",
+                                  diff: "-   super\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("super")
+        expect(suggestion).to include("nil")
+      end
+
+      it "advises testing inherited behavior" do
+        mutation = build_mutation("zsuper_removal",
+                                  diff: "-   super\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("inherited").or include("super")
+      end
+    end
+
+    describe "explicit_super_mutation" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("explicit_super_mutation",
+                                  diff: "-   super(a, b)\n+   super")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("explicit_super_mutation",
+                                  diff: "-   super(a, b)\n+   super(a)")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("super(a, b)")
+        expect(suggestion).to include("super(a)")
+      end
+
+      it "advises testing super arguments matter" do
+        mutation = build_mutation("explicit_super_mutation",
+                                  diff: "-   super(a, b)\n+   super()")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("argument").or include("super")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 

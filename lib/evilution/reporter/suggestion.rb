@@ -40,7 +40,9 @@ class Evilution::Reporter::Suggestion
     "redo_statement" => "Add a test that verifies the redo restarts the iteration and the retry logic is necessary",
     "bang_method" => "Add a test that distinguishes in-place mutation from copy semantics (bang vs non-bang)",
     "bitwise_replacement" => "Add a test that checks the exact bitwise result to distinguish &, |, and ^ operators",
-    "bitwise_complement" => "Add a test that verifies the bitwise complement (~) result, not just the sign or magnitude"
+    "bitwise_complement" => "Add a test that verifies the bitwise complement (~) result, not just the sign or magnitude",
+    "zsuper_removal" => "Add a test that verifies inherited behavior from super is needed, not just the subclass logic",
+    "explicit_super_mutation" => "Add a test that verifies the correct arguments are passed to super and the inherited result matters"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -509,6 +511,32 @@ class Evilution::Reporter::Suggestion
         # #{mutation.file_path}:#{mutation.line}
         it 'verifies in-place vs copy semantics matter in ##{method_name}' do
           # Assert that the original object is or is not modified
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "zsuper_removal" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies inherited behavior from super is needed in ##{method_name}' do
+          # Assert that the result depends on the superclass implementation
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "explicit_super_mutation" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the correct arguments are passed to super in ##{method_name}' do
+          # Assert the inherited method receives the expected arguments
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end
