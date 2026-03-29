@@ -15,6 +15,8 @@ class Evilution::Hooks
 
   def register(event, &block)
     validate_event!(event)
+    raise ArgumentError, "a block must be provided when registering handler for #{event}" unless block
+
     @handlers[event] << block
     self
   end
@@ -40,6 +42,8 @@ class Evilution::Hooks
 
   def self.from_config(config_hooks)
     hooks = new
+    return hooks if config_hooks.nil? || config_hooks.empty?
+
     config_hooks.each do |event, callables|
       Array(callables).each { |callable| hooks.register(event) { |payload| callable.call(payload) } }
     end

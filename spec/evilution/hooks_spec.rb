@@ -31,6 +31,11 @@ RSpec.describe Evilution::Hooks do
 
       expect(result).to eq(hooks)
     end
+
+    it "raises when called without a block" do
+      expect { hooks.register(:worker_process_start) }
+        .to raise_error(ArgumentError, /block must be provided/)
+    end
   end
 
   describe "#fire" do
@@ -153,6 +158,13 @@ RSpec.describe Evilution::Hooks do
       result.fire(:worker_process_start)
 
       expect(called).to be true
+    end
+
+    it "returns an empty hooks instance when config is nil" do
+      result = described_class.from_config(nil)
+
+      expect(result).to be_a(described_class)
+      expect(result.handlers_for(:worker_process_start)).to be_empty
     end
 
     it "raises for unknown events in config" do
