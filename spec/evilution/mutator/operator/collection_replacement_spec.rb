@@ -234,6 +234,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(swap).not_to be_nil
     end
 
+    it "replaces compact with flatten" do
+      muts = mutations_for("compact_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.flatten")
+    end
+
+    it "replaces flatten with compact" do
+      muts = mutations_for("flatten_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.compact")
+    end
+
+    it "replaces zip with product" do
+      muts = mutations_for("zip_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("a.product")
+    end
+
+    it "replaces product with zip" do
+      muts = mutations_for("product_items")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("a.zip")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

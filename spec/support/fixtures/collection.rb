@@ -118,4 +118,20 @@ class CollectionProcessor
   def max_by_item(items)
     items.max_by { |i| i.length }
   end
+
+  def compact_items(items)
+    items.compact
+  end
+
+  def flatten_items(items)
+    items.flatten
+  end
+
+  def zip_items(a, b)
+    a.zip(b)
+  end
+
+  def product_items(a, b)
+    a.product(b)
+  end
 end
