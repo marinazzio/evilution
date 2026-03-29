@@ -42,7 +42,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::GlobalVariableWrite,
       Evilution::Mutator::Operator::RescueRemoval,
       Evilution::Mutator::Operator::RescueBodyReplacement,
-      Evilution::Mutator::Operator::InlineRescue
+      Evilution::Mutator::Operator::InlineRescue,
+      Evilution::Mutator::Operator::EnsureRemoval
     ].each { |op| registry.register(op) }
     registry
   end
