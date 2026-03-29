@@ -122,6 +122,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("items.count")
     end
 
+    it "replaces pop with shift" do
+      muts = mutations_for("pop_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.shift")
+    end
+
+    it "replaces shift with pop" do
+      muts = mutations_for("shift_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.pop")
+    end
+
+    it "replaces push with unshift" do
+      muts = mutations_for("push_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.unshift")
+    end
+
+    it "replaces unshift with push" do
+      muts = mutations_for("unshift_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.push")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
