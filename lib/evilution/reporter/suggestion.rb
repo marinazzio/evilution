@@ -34,7 +34,8 @@ class Evilution::Reporter::Suggestion
     "rescue_removal" => "Add a test that triggers the rescued exception and verifies the rescue handler behavior",
     "rescue_body_replacement" => "Add a test that triggers the rescued exception and verifies the rescue body produces the correct result",
     "inline_rescue" => "Add a test that triggers the inline rescue and verifies the fallback value is used correctly",
-    "ensure_removal" => "Add a test that verifies the ensure cleanup code runs and its side effects are observable"
+    "ensure_removal" => "Add a test that verifies the ensure cleanup code runs and its side effects are observable",
+    "break_statement" => "Add a test that verifies the break condition and the value returned when the loop exits early"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -427,6 +428,19 @@ class Evilution::Reporter::Suggestion
           # Assert that the cleanup side effect is observable after the method runs
           subject.#{method_name}(input_value)
           expect(observable_cleanup_effect).to eq(expected)
+        end
+      RSPEC
+    },
+    "break_statement" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the break exits the loop correctly in ##{method_name}' do
+          # Assert the loop exits early and returns the expected value
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
         end
       RSPEC
     }

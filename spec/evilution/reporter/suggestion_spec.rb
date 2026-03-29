@@ -991,6 +991,38 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "break_statement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("break_statement",
+                                  diff: "-   break item.value\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values in a comment" do
+        mutation = build_mutation("break_statement",
+                                  diff: "-   break item.value\n+   next item.value")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("break item.value")
+        expect(suggestion).to include("next item.value")
+      end
+
+      it "advises testing loop exit behavior" do
+        mutation = build_mutation("break_statement",
+                                  diff: "-   break\n+   next")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("break").or include("loop").or include("exit")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
