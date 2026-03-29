@@ -206,6 +206,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("items.take")
     end
 
+    it "replaces min with max" do
+      muts = mutations_for("min_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.max")
+    end
+
+    it "replaces max with min" do
+      muts = mutations_for("max_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.min")
+    end
+
+    it "replaces min_by with max_by" do
+      muts = mutations_for("min_by_item")
+      swap = muts.find { |m| m.mutated_source.include?("items.max_by") }
+
+      expect(swap).not_to be_nil
+    end
+
+    it "replaces max_by with min_by" do
+      muts = mutations_for("max_by_item")
+      swap = muts.find { |m| m.mutated_source.include?("items.min_by") }
+
+      expect(swap).not_to be_nil
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

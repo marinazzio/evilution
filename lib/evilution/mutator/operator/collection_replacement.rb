@@ -29,7 +29,11 @@ class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::
     grep: [:grep_v],
     grep_v: [:grep],
     take: [:drop],
-    drop: [:take]
+    drop: [:take],
+    min: [:max],
+    max: [:min],
+    min_by: [:max_by],
+    max_by: [:min_by]
   }.freeze
 
   def visit_call_node(node)
