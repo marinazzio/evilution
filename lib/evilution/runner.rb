@@ -454,7 +454,7 @@ class Evilution::Runner
   end
 
   def build_progress_bar(total)
-    return nil if config.quiet || config.verbose || !config.text? || !$stderr.tty?
+    return nil if !config.progress? || config.quiet || config.verbose || !config.text? || !$stderr.tty?
 
     Evilution::Reporter::ProgressBar.new(total: total, output: $stderr)
   end

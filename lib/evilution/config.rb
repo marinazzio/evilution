@@ -19,6 +19,7 @@ class Evilution::Config
     isolation: :auto,
     incremental: false,
     suggest_tests: false,
+    progress: true,
     save_session: false,
     line_ranges: {},
     spec_files: []
@@ -27,7 +28,7 @@ class Evilution::Config
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
-              :save_session, :line_ranges, :spec_files
+              :progress, :save_session, :line_ranges, :spec_files
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -70,6 +71,10 @@ class Evilution::Config
 
   def suggest_tests?
     suggest_tests
+  end
+
+  def progress?
+    progress
   end
 
   def save_session?
@@ -148,6 +153,7 @@ class Evilution::Config
     @isolation = validate_isolation(merged[:isolation])
     @incremental = merged[:incremental]
     @suggest_tests = merged[:suggest_tests]
+    @progress = merged[:progress]
     @save_session = merged[:save_session]
     @line_ranges = merged[:line_ranges] || {}
     @spec_files = Array(merged[:spec_files])

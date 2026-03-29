@@ -161,6 +161,7 @@ class Evilution::CLI
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
     opts.on("--suggest-tests", "Generate concrete RSpec test code in suggestions") { @options[:suggest_tests] = true }
+    opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
     opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
     opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
