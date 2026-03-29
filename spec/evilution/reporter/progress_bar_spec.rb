@@ -4,6 +4,11 @@ require "stringio"
 
 RSpec.describe Evilution::Reporter::ProgressBar do
   let(:output) { StringIO.new }
+  let(:tty_output) do
+    io = StringIO.new
+    allow(io).to receive(:tty?).and_return(true)
+    io
+  end
 
   describe "#initialize" do
     it "accepts total count and output stream" do
@@ -108,23 +113,44 @@ RSpec.describe Evilution::Reporter::ProgressBar do
     end
 
     it "uses carriage return for TTY overwrite" do
+      bar = described_class.new(total: 10, output: tty_output)
+
+      bar.tick(status: :killed)
+
+      expect(tty_output.string).to start_with("\r")
+    end
+
+    it "uses newlines for non-TTY output" do
       bar = described_class.new(total: 10, output: output)
 
       bar.tick(status: :killed)
 
-      expect(output.string).to start_with("\r")
+      expect(output.string).not_to include("\r")
+      expect(output.string).to end_with("\n")
     end
   end
 
   describe "#finish" do
-    it "renders a final newline" do
-      bar = described_class.new(total: 2, output: output)
+    it "renders a final newline for TTY" do
+      bar = described_class.new(total: 2, output: tty_output)
 
       bar.tick(status: :killed)
       bar.tick(status: :killed)
       bar.finish
 
-      expect(output.string).to end_with("\n")
+      expect(tty_output.string).to end_with("\n")
+    end
+
+    it "does not add extra newline for non-TTY" do
+      bar = described_class.new(total: 2, output: output)
+
+      bar.tick(status: :killed)
+      bar.tick(status: :killed)
+      lines_before = output.string.count("\n")
+      bar.finish
+      lines_after = output.string.count("\n")
+
+      expect(lines_after).to eq(lines_before + 1)
     end
   end
 
@@ -158,6 +184,24 @@ RSpec.describe Evilution::Reporter::ProgressBar do
 
       rendered = output.string
       expect(rendered).to include("2/2")
+    end
+
+    it "clamps remaining time to zero when over-ticked" do
+      bar = described_class.new(total: 1, output: output)
+
+      bar.tick(status: :killed)
+      bar.tick(status: :killed)
+
+      expect(output.string).to include("~00:00 remaining")
+    end
+
+    it "produces consistent bar width regardless of fill level" do
+      bar = described_class.new(total: 10, output: output, width: 20)
+
+      bar.tick(status: :killed)
+      # Extract bar portion [....] — should be exactly 22 chars (20 interior + 2 brackets)
+      match = output.string.match(/\[[=> ]{20}\]/)
+      expect(match).not_to be_nil
     end
   end
 end

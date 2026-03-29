@@ -12,6 +12,7 @@ class Evilution::Reporter::ProgressBar
     @completed = 0
     @killed = 0
     @survived = 0
+    @tty = self.class.tty?(output)
     @start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
@@ -23,12 +24,17 @@ class Evilution::Reporter::ProgressBar
   end
 
   def render
-    @output.print("\r#{bar_string} #{stats_string} | #{time_string}")
+    line = "#{bar_string} #{stats_string} | #{time_string}"
+    if @tty
+      @output.print("\r#{line}")
+    else
+      @output.puts(line)
+    end
   end
 
   def finish
     render
-    @output.print("\n")
+    @output.print("\n") if @tty
   end
 
   def self.tty?(io)
@@ -39,9 +45,18 @@ class Evilution::Reporter::ProgressBar
 
   def bar_string
     fraction = @total.positive? ? @completed.to_f / @total : 0
-    filled = (fraction * @width).to_i
-    empty = @width - filled
-    "[#{"=" * [filled - 1, 0].max}#{filled.positive? ? ">" : " "}#{" " * empty}]"
+    raw_filled = (fraction * @width).to_i
+    filled = raw_filled.clamp(0, @width)
+
+    interior = if filled <= 0
+                 " " * @width
+               elsif filled >= @width
+                 "#{"=" * (@width - 1)}>"
+               else
+                 "#{"=" * (filled - 1)}>#{" " * (@width - filled)}"
+               end
+
+    "[#{interior}]"
   end
 
   def stats_string
@@ -57,8 +72,8 @@ class Evilution::Reporter::ProgressBar
   def estimate_remaining(elapsed)
     return 0 unless @completed.positive?
 
-    rate = elapsed / @completed
-    rate * (@total - @completed)
+    remaining = (@total - @completed) * (elapsed / @completed)
+    [remaining, 0].max
   end
 
   def format_time(seconds)
