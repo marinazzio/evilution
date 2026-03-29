@@ -150,6 +150,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("items.push")
     end
 
+    it "replaces each_key with each_value" do
+      muts = mutations_for("iterate_keys")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.each_value")
+    end
+
+    it "replaces each_value with each_key" do
+      muts = mutations_for("iterate_values")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.each_key")
+    end
+
+    it "replaces assoc with rassoc" do
+      muts = mutations_for("assoc_lookup")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.rassoc")
+    end
+
+    it "replaces rassoc with assoc" do
+      muts = mutations_for("rassoc_lookup")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.assoc")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

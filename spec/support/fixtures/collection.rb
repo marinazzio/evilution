@@ -70,4 +70,20 @@ class CollectionProcessor
   def unshift_item(items, val)
     items.unshift(val)
   end
+
+  def iterate_keys(hash)
+    hash.each_key { |k| puts k }
+  end
+
+  def iterate_values(hash)
+    hash.each_value { |v| puts v }
+  end
+
+  def assoc_lookup(hash, key)
+    hash.assoc(key)
+  end
+
+  def rassoc_lookup(hash, val)
+    hash.rassoc(val)
+  end
 end
