@@ -262,6 +262,34 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       expect(muts.first.mutated_source).to include("a.zip")
     end
 
+    it "replaces first with last" do
+      muts = mutations_for("first_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.last")
+    end
+
+    it "replaces last with first" do
+      muts = mutations_for("last_item")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.first")
+    end
+
+    it "replaces keys with values" do
+      muts = mutations_for("hash_keys")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.values")
+    end
+
+    it "replaces values with keys" do
+      muts = mutations_for("hash_values")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("hash.keys")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
