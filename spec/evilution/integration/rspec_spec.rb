@@ -254,6 +254,80 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "mutation_insert hooks" do
+    it "fires mutation_insert_pre before applying mutation" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:mutation_insert_pre) { |payload| events << [:pre, payload[:mutation]] }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        events << [:run]
+        0
+      end
+
+      hooked_integration.call(mutation)
+
+      expect(events.first).to eq([:pre, mutation])
+      expect(events[1]).to eq([:run])
+    end
+
+    it "fires mutation_insert_post after applying mutation and before running tests" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:mutation_insert_post) { |payload| events << [:post, payload[:mutation]] }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        events << [:run]
+        0
+      end
+
+      hooked_integration.call(mutation)
+
+      expect(events.first).to eq([:post, mutation])
+      expect(events[1]).to eq([:run])
+    end
+
+    it "fires both hooks in correct order" do
+      hooks = Evilution::Hooks::Registry.new
+      events = []
+      hooks.register(:mutation_insert_pre) { events << :pre }
+      hooks.register(:mutation_insert_post) { events << :post }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        events << :run
+        0
+      end
+
+      hooked_integration.call(mutation)
+
+      expect(events).to eq(%i[pre post run])
+    end
+
+    it "provides file_path in hook payload" do
+      hooks = Evilution::Hooks::Registry.new
+      received_payload = nil
+      hooks.register(:mutation_insert_pre) { |payload| received_payload = payload }
+      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      hooked_integration.call(mutation)
+
+      expect(received_payload[:file_path]).to eq(mutation.file_path)
+    end
+
+    it "works without hooks (backwards compatible)" do
+      no_hooks_integration = described_class.new(test_files: ["spec/some_spec.rb"])
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = no_hooks_integration.call(mutation)
+
+      expect(result[:passed]).to be true
+    end
+  end
+
   describe "per-mutation spec targeting" do
     let(:resolver) { instance_double(Evilution::SpecResolver) }
 

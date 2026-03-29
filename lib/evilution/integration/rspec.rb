@@ -9,10 +9,10 @@ require_relative "../spec_resolver"
 require_relative "../integration"
 
 class Evilution::Integration::RSpec < Evilution::Integration::Base
-  def initialize(test_files: nil)
+  def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @rspec_loaded = false
-    super()
+    super(hooks: hooks)
   end
 
   def call(mutation)
@@ -20,7 +20,9 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @temp_dir = nil
     @lock_file = nil
     ensure_rspec_loaded
+    @hooks&.fire(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
     apply_mutation(mutation)
+    @hooks&.fire(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_rspec(mutation)
   ensure
     restore_original(mutation)
