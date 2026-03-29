@@ -44,7 +44,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RescueBodyReplacement,
       Evilution::Mutator::Operator::InlineRescue,
       Evilution::Mutator::Operator::EnsureRemoval,
-      Evilution::Mutator::Operator::BreakStatement
+      Evilution::Mutator::Operator::BreakStatement,
+      Evilution::Mutator::Operator::NextStatement
     ].each { |op| registry.register(op) }
     registry
   end

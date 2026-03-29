@@ -1023,6 +1023,38 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "next_statement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("next_statement",
+                                  diff: "-   next item.default\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated values in a comment" do
+        mutation = build_mutation("next_statement",
+                                  diff: "-   next item.default\n+   break item.default")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("next item.default")
+        expect(suggestion).to include("break item.default")
+      end
+
+      it "advises testing iteration skip behavior" do
+        mutation = build_mutation("next_statement",
+                                  diff: "-   next\n+   break")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("next").or include("iteration").or include("skip")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
