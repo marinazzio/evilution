@@ -35,8 +35,10 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def ensure_rspec_loaded
     return if @rspec_loaded
 
+    @hooks&.fire(:setup_integration_pre, integration: :rspec)
     require "rspec/core"
     @rspec_loaded = true
+    @hooks&.fire(:setup_integration_post, integration: :rspec)
   rescue LoadError => e
     raise Evilution::Error, "rspec-core is required but not available: #{e.message}"
   end
