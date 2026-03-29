@@ -201,11 +201,14 @@ class Evilution::Runner
   end
 
   def run_mutations(mutations, baseline_result = nil)
-    if config.jobs > 1
-      run_mutations_parallel(mutations, baseline_result)
-    else
-      run_mutations_sequential(mutations, baseline_result)
-    end
+    @progress_bar = build_progress_bar(mutations.length)
+    result = if config.jobs > 1
+               run_mutations_parallel(mutations, baseline_result)
+             else
+               run_mutations_sequential(mutations, baseline_result)
+             end
+    @progress_bar&.finish
+    result
   end
 
   def run_mutations_sequential(mutations, baseline_result = nil)
@@ -224,9 +227,7 @@ class Evilution::Runner
       result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
       results << result
       survived_count += 1 if result.survived?
-      on_result&.call(result)
-      log_progress(index + 1, result.status)
-      log_mutation_diagnostics(result)
+      notify_result(result, index + 1)
 
       if config.fail_fast? && survived_count >= config.fail_fast
         truncated = true
@@ -281,9 +282,7 @@ class Evilution::Runner
       state[:results] << result
       state[:survived_count] += 1 if result.survived?
       state[:completed] += 1
-      on_result&.call(result)
-      log_progress(state[:completed], result.status)
-      log_mutation_diagnostics(result)
+      notify_result(result, state[:completed])
     end
 
     log_memory("after batch", "#{state[:completed]} complete")
@@ -445,6 +444,19 @@ class Evilution::Runner
     Evilution::Session::Store.new.save(summary)
   rescue StandardError => e
     warn "[evilution] failed to save session: #{e.message}" unless config.quiet
+  end
+
+  def notify_result(result, index)
+    on_result&.call(result)
+    @progress_bar&.tick(status: result.status)
+    log_progress(index, result.status)
+    log_mutation_diagnostics(result)
+  end
+
+  def build_progress_bar(total)
+    return nil if config.quiet || config.verbose || !config.text? || !$stderr.tty?
+
+    Evilution::Reporter::ProgressBar.new(total: total, output: $stderr)
   end
 
   def build_reporter

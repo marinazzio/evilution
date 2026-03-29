@@ -1861,6 +1861,97 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "progress bar integration" do
+    let(:progress_bar) { instance_double(Evilution::Reporter::ProgressBar, tick: nil, finish: nil) }
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "creates and ticks the progress bar when output is TTY and not quiet" do
+      tty_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: false,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      allow(Evilution::Reporter::ProgressBar).to receive(:new).and_return(progress_bar)
+      allow($stderr).to receive(:tty?).and_return(true)
+
+      described_class.new(config: tty_config).call
+
+      expect(progress_bar).to have_received(:tick).with(status: :killed)
+      expect(progress_bar).to have_received(:finish)
+    end
+
+    it "does not create a progress bar when quiet" do
+      quiet_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      allow(Evilution::Reporter::ProgressBar).to receive(:new).and_return(progress_bar)
+
+      described_class.new(config: quiet_config).call
+
+      expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
+    end
+
+    it "does not create a progress bar when verbose" do
+      verbose_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: false,
+        verbose: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      allow(Evilution::Reporter::ProgressBar).to receive(:new).and_return(progress_bar)
+      allow($stderr).to receive(:tty?).and_return(true)
+
+      described_class.new(config: verbose_config).call
+
+      expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
+    end
+
+    it "does not create a progress bar when output is not TTY" do
+      text_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :text,
+        timeout: 5,
+        quiet: false,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      allow(Evilution::Reporter::ProgressBar).to receive(:new).and_return(progress_bar)
+      allow($stderr).to receive(:tty?).and_return(false)
+
+      described_class.new(config: text_config).call
+
+      expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
+    end
+  end
+
   describe "on_result callback" do
     let(:survived_result) do
       Evilution::Result::MutationResult.new(
