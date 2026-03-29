@@ -102,4 +102,20 @@ class CollectionProcessor
   def drop_items(items)
     items.drop(3)
   end
+
+  def min_item(items)
+    items.min
+  end
+
+  def max_item(items)
+    items.max
+  end
+
+  def min_by_item(items)
+    items.min_by { |i| i.length }
+  end
+
+  def max_by_item(items)
+    items.max_by { |i| i.length }
+  end
 end
