@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.16.0] - 2026-03-29
+
+### Added
+
+- **Variable mutation operators** — `LocalVariableAssignment`, `InstanceVariableWrite`, `ClassVariableWrite`, `GlobalVariableWrite` replace variable assignments with `nil` to test whether stored values are actually used (#394, #395, #396, #397)
+- **Rescue/ensure mutation operators** — `RescueRemoval` removes rescue clauses, `RescueBodyReplacement` replaces rescue bodies with `nil`, `InlineRescue` removes inline `rescue` fallback values, `EnsureRemoval` removes ensure blocks (#399, #400, #401, #402)
+- **Loop control mutation operators** — `BreakStatement`, `NextStatement`, `RedoStatement` remove loop control flow statements to test whether early exits and restarts are necessary (#404, #405, #406)
+- **BangMethod operator** — swaps bang methods with their non-bang counterparts (`sort!` → `sort`, `map!` → `map`, etc.) to test whether in-place mutation semantics matter (#413)
+- **Bitwise mutation operators** — `BitwiseReplacement` swaps `&`, `|`, `^` with each other; `BitwiseComplement` removes `~` or swaps it with unary minus (#416, #417)
+- **Super call mutation operators** — `ZsuperRemoval` replaces implicit `super` with `nil`; `ExplicitSuperMutation` removes arguments, removes individual arguments, or replaces `super(args)` with implicit `super` (#419, #420)
+- **CollectionReplacement expansions** — added method swap pairs: `pop`/`shift`, `push`/`unshift`, `each_key`/`each_value`, `assoc`/`rassoc`, `grep`/`grep_v`, `take`/`drop`, `min`/`max`, `min_by`/`max_by`, `compact`/`flatten`, `zip`/`product`, `first`/`last`, `keys`/`values` (#407, #408, #409, #410, #411, #412)
+- **SendMutation expansions** — enumerable reduction method swaps (`reduce`/`inject`, `sum`/`count`, `tally`/`group_by`, etc.) and conversion method swaps (`to_s`/`to_i`/`to_f`/`to_a`/`to_h`) (#414, #415)
+- **Suggestion templates** — concrete RSpec suggestion templates for variable mutations, rescue/ensure mutations, bitwise mutations, and super call mutations (#398, #403, #418, #421)
+- **TTY progress bar** — real-time progress display showing `[=====>    ] 45/100 mutations | 38 killed | 2 survived | 00:23 elapsed | ~00:28 remaining`; TTY-aware rendering (carriage return for TTY, newlines for piped output); integrated into Runner for both sequential and parallel execution (#422, #423)
+- **`--no-progress` flag** — CLI flag and config option to disable the progress bar for CI/piped environments (#424)
+
+### Changed
+
+- **Operator count** — 46 operators (up from 30), covering variables, rescue/ensure, loop control, bang methods, bitwise operators, and super calls
+- **Runner refactoring** — extracted `notify_result` method for unified result callbacks, progress bar updates, and diagnostic logging across sequential and parallel execution modes
+
 ## [0.15.0] - 2026-03-29
 
 ### Added
