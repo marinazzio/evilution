@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.16.1] - 2026-03-30
+
+### Fixed
+
+- **Critical: SourceSurgeon crashes on multi-byte UTF-8 source files** — `SourceSurgeon.apply` used `String#[]=` with Prism byte offsets, but Ruby interprets indices as character offsets for UTF-8 strings, causing `IndexError` on files containing non-ASCII characters (Cyrillic, CJK, emoji). Fixed by operating on ASCII-8BIT binary encoding before restoring original encoding (#434)
+
 ## [0.16.0] - 2026-03-29
 
 ### Added
