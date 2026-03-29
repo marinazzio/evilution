@@ -88,4 +88,24 @@ class SendMutationFixture
   def using_filter
     [1, 2, 3].filter { |x| x > 1 }
   end
+
+  def using_to_s
+    42.to_s
+  end
+
+  def using_to_i
+    "42".to_i
+  end
+
+  def using_to_f
+    "3.14".to_f
+  end
+
+  def using_to_a
+    { a: 1 }.to_a
+  end
+
+  def using_to_h
+    [[:a, 1]].to_h
+  end
 end

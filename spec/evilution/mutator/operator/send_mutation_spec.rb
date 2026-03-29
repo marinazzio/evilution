@@ -157,6 +157,41 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".select {")
     end
 
+    it "replaces to_s with to_i" do
+      muts = mutations_for("using_to_s")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".to_i")
+    end
+
+    it "replaces to_i with to_s" do
+      muts = mutations_for("using_to_i")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".to_s")
+    end
+
+    it "replaces to_f with to_i" do
+      muts = mutations_for("using_to_f")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".to_i")
+    end
+
+    it "replaces to_a with to_h" do
+      muts = mutations_for("using_to_a")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".to_h")
+    end
+
+    it "replaces to_h with to_a" do
+      muts = mutations_for("using_to_h")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".to_a")
+    end
+
     it "handles nested calls with multiple replaceable methods" do
       muts = mutations_for("using_flat_map_and_map")
 
