@@ -48,7 +48,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::NextStatement,
       Evilution::Mutator::Operator::RedoStatement,
       Evilution::Mutator::Operator::BangMethod,
-      Evilution::Mutator::Operator::BitwiseReplacement
+      Evilution::Mutator::Operator::BitwiseReplacement,
+      Evilution::Mutator::Operator::BitwiseComplement
     ].each { |op| registry.register(op) }
     registry
   end
