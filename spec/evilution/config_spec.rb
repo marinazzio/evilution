@@ -113,6 +113,16 @@ RSpec.describe Evilution::Config do
       expect(config.hooks).to eq(hooks_config)
     end
 
+    it "rejects non-hash hooks value" do
+      expect { described_class.new(hooks: "not_a_hash", skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
+    end
+
+    it "rejects array hooks value" do
+      expect { described_class.new(hooks: ["file.rb"], skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
+    end
+
     it "accepts fail_fast" do
       config = described_class.new(fail_fast: 3, skip_config_file: true)
 

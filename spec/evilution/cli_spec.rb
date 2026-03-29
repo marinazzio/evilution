@@ -457,6 +457,59 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "hooks integration" do
+      it "passes a Registry to Runner when hooks are configured" do
+        hook_file = Tempfile.new(["hook", ".rb"])
+        hook_file.write("proc { |_| nil }")
+        hook_file.flush
+
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "hooks:\n  worker_process_start: #{hook_file.path}\n")
+            allow(Evilution::Runner).to receive(:new).and_return(runner)
+
+            cli = described_class.new([])
+            cli.call
+
+            expect(Evilution::Runner).to have_received(:new).with(
+              hooks: an_instance_of(Evilution::Hooks::Registry),
+              config: anything
+            )
+          end
+        end
+      ensure
+        hook_file&.close
+        hook_file&.unlink
+      end
+
+      it "returns exit code 2 when hook file is missing" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "hooks:\n  worker_process_start: /nonexistent/hook.rb\n")
+            allow(Evilution::Runner).to receive(:new).and_return(runner)
+
+            cli = described_class.new([])
+            output = capture_stderr { expect(cli.call).to eq(2) }
+
+            expect(output).to include("hook file not found")
+          end
+        end
+      end
+
+      it "returns exit code 2 when hooks is not a hash" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "hooks: not_a_hash\n")
+
+            cli = described_class.new([])
+            output = capture_stderr { expect(cli.call).to eq(2) }
+
+            expect(output).to include("hooks must be a mapping")
+          end
+        end
+      end
+    end
+
     describe "positional file arguments" do
       it "passes remaining args as target_files" do
         cli = described_class.new(["lib/foo.rb", "lib/bar.rb"])

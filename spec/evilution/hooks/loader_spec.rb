@@ -129,6 +129,13 @@ RSpec.describe Evilution::Hooks::Loader do
       expect(result).to eq(registry)
     end
 
+    it "raises ConfigError when config_hooks is not a Hash" do
+      registry = Evilution::Hooks::Registry.new
+
+      expect { described_class.call(registry, "not_a_hash") }
+        .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
+    end
+
     it "handles string event keys from YAML" do
       hook_file = Tempfile.new(["hook", ".rb"])
       hook_file.write("proc { |_| nil }")

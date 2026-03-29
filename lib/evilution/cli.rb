@@ -4,6 +4,9 @@ require "json"
 require "optparse"
 require_relative "version"
 require_relative "config"
+require_relative "hooks"
+require_relative "hooks/registry"
+require_relative "hooks/loader"
 require_relative "runner"
 
 class Evilution::CLI

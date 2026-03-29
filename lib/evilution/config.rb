@@ -162,7 +162,7 @@ class Evilution::Config
     @save_session = merged[:save_session]
     @line_ranges = merged[:line_ranges] || {}
     @spec_files = Array(merged[:spec_files])
-    @hooks = merged[:hooks] || {}
+    @hooks = validate_hooks(merged[:hooks])
   end
 
   def validate_isolation(value)
@@ -184,6 +184,13 @@ class Evilution::Config
     value
   rescue ::ArgumentError, ::TypeError
     raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}"
+  end
+
+  def validate_hooks(value)
+    return {} if value.nil?
+    raise Evilution::ConfigError, "hooks must be a mapping of event names to file paths, got #{value.class}" unless value.is_a?(Hash)
+
+    value
   end
 
   def load_config_file
