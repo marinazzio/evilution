@@ -57,17 +57,24 @@ RSpec.describe Evilution::Parallel::Pool do
     end
 
     it "fires worker_process_start hook after fork in each worker" do
+      tmpfile = Tempfile.new("pool_worker_pids")
       hooks = Evilution::Hooks::Registry.new
-      hook_pids = []
-      hooks.register(:worker_process_start) { hook_pids << Process.pid }
+      hooks.register(:worker_process_start) do
+        File.open(tmpfile.path, "a") { |f| f.puts(Process.pid) }
+      end
       pool = described_class.new(size: 2, hooks: hooks)
 
       results = pool.map([1, 2]) { |n| [n, Process.pid] }
 
       worker_pids = results.map(&:last)
-      # hooks fire in child processes, so hook_pids stays empty in parent
+      hook_pids = File.read(tmpfile.path).split.map(&:to_i).uniq
+
       expect(worker_pids.uniq.size).to eq(2)
       expect(worker_pids).not_to include(Process.pid)
+      expect(hook_pids.sort).to eq(worker_pids.uniq.sort)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
     end
 
     it "fires worker_process_start hook before the block runs" do
