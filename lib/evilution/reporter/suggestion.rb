@@ -36,7 +36,8 @@ class Evilution::Reporter::Suggestion
     "inline_rescue" => "Add a test that triggers the inline rescue and verifies the fallback value is used correctly",
     "ensure_removal" => "Add a test that verifies the ensure cleanup code runs and its side effects are observable",
     "break_statement" => "Add a test that verifies the break condition and the value returned when the loop exits early",
-    "next_statement" => "Add a test that verifies the next condition and the value yielded when the iteration skips"
+    "next_statement" => "Add a test that verifies the next condition and the value yielded when the iteration skips",
+    "redo_statement" => "Add a test that verifies the redo restarts the iteration and the retry logic is necessary"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -453,6 +454,19 @@ class Evilution::Reporter::Suggestion
         # #{mutation.file_path}:#{mutation.line}
         it 'verifies the next skips the iteration correctly in ##{method_name}' do
           # Assert the iteration is skipped and the expected value is yielded
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "redo_statement" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the redo retry logic is necessary in ##{method_name}' do
+          # Assert the iteration restart changes the outcome
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end

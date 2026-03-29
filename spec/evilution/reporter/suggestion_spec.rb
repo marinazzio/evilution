@@ -1055,6 +1055,37 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "redo_statement" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("redo_statement",
+                                  diff: "-   redo\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the removed redo in a comment" do
+        mutation = build_mutation("redo_statement",
+                                  diff: "-   redo\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("redo")
+      end
+
+      it "advises testing retry logic" do
+        mutation = build_mutation("redo_statement",
+                                  diff: "-   redo\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("redo").or include("retry").or include("restart")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
