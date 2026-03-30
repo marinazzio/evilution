@@ -2011,4 +2011,106 @@ RSpec.describe Evilution::Runner do
       expect { runner_without_callback.call }.not_to raise_error
     end
   end
+
+  describe "hooks wiring" do
+    let(:hooks) { Evilution::Hooks::Registry.new }
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+    end
+
+    it "passes hooks to Isolation::Fork" do
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      expect(Evilution::Isolation::Fork).to receive(:new).with(hooks: hooks).and_return(isolator)
+
+      hooked_runner = described_class.new(config: config, hooks: hooks)
+      hooked_runner.call
+    end
+
+    it "passes hooks to Integration::RSpec" do
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      expect(Evilution::Integration::RSpec).to receive(:new)
+        .with(test_files: nil, hooks: hooks).and_call_original
+
+      hooked_runner = described_class.new(
+        config: Evilution::Config.new(
+          target_files: ["lib/example.rb"],
+          format: :json,
+          timeout: 5,
+          quiet: true,
+          baseline: false,
+          isolation: :fork,
+          skip_config_file: true
+        ),
+        hooks: hooks
+      )
+      hooked_runner.call
+    end
+
+    it "passes hooks to Parallel::Pool" do
+      mutation2 = double(
+        "Mutation2",
+        subject: subject_obj,
+        operator_name: "boolean_literal_replacement",
+        original_source: "true",
+        mutated_source: "false",
+        file_path: "lib/example.rb",
+        line: 5,
+        column: 4,
+        diff: "- true\n+ false",
+        strip_sources!: nil
+      )
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation, mutation2])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      pool = instance_double(Evilution::Parallel::Pool)
+      compact = [
+        { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
+        { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
+      ]
+      allow(pool).to receive(:map).and_return(compact)
+
+      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks).and_return(pool)
+
+      parallel_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        jobs: 2,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      hooked_runner = described_class.new(config: parallel_config, hooks: hooks)
+      hooked_runner.call
+    end
+
+    it "passes nil hooks by default" do
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+
+      expect(Evilution::Isolation::Fork).to receive(:new).with(hooks: nil).and_return(isolator)
+
+      default_runner = described_class.new(config: config)
+      default_runner.call
+    end
+  end
 end
