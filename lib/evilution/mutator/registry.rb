@@ -55,7 +55,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::IndexToFetch,
       Evilution::Mutator::Operator::IndexToDig,
       Evilution::Mutator::Operator::IndexAssignmentRemoval,
-      Evilution::Mutator::Operator::PatternMatchingGuard
+      Evilution::Mutator::Operator::PatternMatchingGuard,
+      Evilution::Mutator::Operator::PatternMatchingAlternative
     ].each { |op| registry.register(op) }
     registry
   end
