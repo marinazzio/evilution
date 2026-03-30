@@ -186,6 +186,38 @@ RSpec.describe Evilution::Config do
 
       expect(config.timeout).to eq(30) # default
     end
+
+    it "loads ignore_patterns from YAML" do
+      yaml = <<~YAML
+        ignore_patterns:
+          - "call{name=info, receiver=call{name=logger}}"
+          - "call{name=debug|warn}"
+      YAML
+      File.write(".evilution.yml", yaml)
+
+      config = described_class.new
+
+      expect(config.ignore_patterns).to eq([
+                                             "call{name=info, receiver=call{name=logger}}",
+                                             "call{name=debug|warn}"
+                                           ])
+    end
+
+    it "defaults ignore_patterns to empty when not in YAML" do
+      File.write(".evilution.yml", "timeout: 10\n")
+
+      config = described_class.new
+
+      expect(config.ignore_patterns).to eq([])
+    end
+
+    it "CLI options override ignore_patterns from file" do
+      File.write(".evilution.yml", "ignore_patterns:\n  - \"call{name=log}\"\n")
+
+      config = described_class.new(ignore_patterns: ["call{name=debug}"])
+
+      expect(config.ignore_patterns).to eq(["call{name=debug}"])
+    end
   end
 
   describe ".default_template" do
