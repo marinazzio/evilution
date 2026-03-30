@@ -92,7 +92,7 @@ call{receiver=call{name=logger}}
 Nesting can go arbitrarily deep:
 
 ```
-call{receiver=call{receiver=call{name=Rails}, name=logger}}
+call{receiver=call{receiver=constant_read{name=Rails}, name=logger}}
 # Matches: Rails.logger.info("msg")
 ```
 
@@ -132,7 +132,7 @@ ignore_patterns:
   - "call{name=puts|p|pp|print}"
 
   # Suppress mutations on Rails logger at any depth
-  - "call{receiver=call{receiver=call{name=Rails}, name=logger}}"
+  - "call{receiver=call{receiver=constant_read{name=Rails}, name=logger}}"
 
   # Suppress mutations inside any method named `to_s`
   - "def{name=to_s}"
@@ -154,18 +154,22 @@ ignore_patterns:
 ## Grammar (EBNF)
 
 ```ebnf
-pattern     = node_type [ "{" attributes "}" ]
-node_type   = identifier | "_" | "**"
-attributes  = attribute { "," attribute }
-attribute   = identifier "=" value
-value       = "!" value
-            | pattern
-            | alternatives
-            | "*"
-alternatives = atom { "|" atom }
-atom         = identifier | "*"
-identifier   = [a-zA-Z_] [a-zA-Z0-9_]*
+pattern        = node_type [ "{" attributes "}" ]
+node_type      = identifier | "_" | "**"
+attributes     = attribute { "," attribute }
+attribute      = identifier "=" value
+value          = "!" value
+               | nested_pattern
+               | alternatives
+               | "*"
+nested_pattern = node_type "{" attributes "}"
+alternatives   = atom { "|" atom }
+atom           = identifier | "*"
+identifier     = [a-zA-Z_] [a-zA-Z0-9_]*
 ```
+
+A bare `identifier` without `{` is parsed as a scalar value (matched via `.to_s`).
+An `identifier` followed by `{` is parsed as a nested pattern.
 
 ## Examples
 
