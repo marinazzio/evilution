@@ -41,8 +41,8 @@ module Evilution::AST::Pattern
   end
 
   class AnyNodeMatcher
-    def match?(_node)
-      true
+    def match?(node)
+      !node.nil?
     end
   end
 

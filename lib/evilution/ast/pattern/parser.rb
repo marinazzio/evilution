@@ -116,7 +116,12 @@ class Evilution::AST::Pattern::Parser
     while current_char == "|"
       advance(1)
       skip_whitespace
-      values << consume_identifier
+      if current_char == "*" && !peek_string("**")
+        advance(1)
+        values << "*"
+      else
+        values << consume_identifier
+      end
     end
 
     if values.length == 1
@@ -127,9 +132,15 @@ class Evilution::AST::Pattern::Parser
   end
 
   def consume_identifier
+    raise Evilution::ConfigError, "unexpected end of pattern at position #{@pos}" if current_char.nil?
+
+    unless current_char.match?(/[a-zA-Z_]/)
+      raise Evilution::ConfigError, "invalid identifier starting with '#{current_char}' at position #{@pos}"
+    end
+
     start = @pos
+    advance(1)
     advance(1) while @pos < @input.length && @input[@pos].match?(/[a-zA-Z0-9_]/)
-    raise Evilution::ConfigError, "unexpected end of pattern at position #{@pos}" if @pos == start
 
     @input[start...@pos]
   end
@@ -156,8 +167,19 @@ class Evilution::AST::Pattern::Parser
   end
 
   def expect_char(char, message = nil)
-    raise Evilution::ConfigError, message || "unexpected end of pattern, expected '#{char}' at position #{@pos}" if current_char != char
+    current = current_char
 
-    advance(1)
+    if current == char
+      advance(1)
+      return
+    end
+
+    if current.nil?
+      raise Evilution::ConfigError,
+            (message || "unexpected end of pattern, expected '#{char}' at position #{@pos}")
+    else
+      raise Evilution::ConfigError,
+            (message || "unexpected character '#{current}', expected '#{char}' at position #{@pos}")
+    end
   end
 end

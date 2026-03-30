@@ -79,6 +79,20 @@ RSpec.describe Evilution::AST::Pattern::Parser do
       expect(matcher.match?(parse_node("foo()"))).to be false
     end
 
+    it "parses _ wildcard value in attribute" do
+      matcher = parse("call{receiver=_}")
+
+      expect(matcher.match?(parse_node("obj.foo()"))).to be true
+      expect(matcher.match?(parse_node("foo()"))).to be false
+    end
+
+    it "parses ** deep wildcard value in attribute" do
+      matcher = parse("call{receiver=**}")
+
+      expect(matcher.match?(parse_node("obj.foo()"))).to be true
+      expect(matcher.match?(parse_node("foo()"))).to be true
+    end
+
     it "parses negation of value" do
       matcher = parse("call{name=!log}")
 

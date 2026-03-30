@@ -111,6 +111,12 @@ RSpec.describe Evilution::AST::Pattern do
 
       expect(matcher.match?(node)).to be true
     end
+
+    it "does not match nil" do
+      matcher = described_class.new
+
+      expect(matcher.match?(nil)).to be false
+    end
   end
 
   describe Evilution::AST::Pattern::ValueMatcher do
