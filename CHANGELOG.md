@@ -1,13 +1,21 @@
 # Changelog
 
-## [Unreleased]
+## [0.17.0] - 2026-03-30
 
 ### Added
 
-- **Pattern matching mutation operators** — `PatternMatchingGuard` removes or negates guard clauses in `case/in` patterns; `PatternMatchingAlternative` removes, reorders alternatives in `pat1 | pat2` patterns; `PatternMatchingArray` removes or wildcards elements in array and find patterns (#293, #295, #297)
-- **Suggestion templates for pattern matching** — static and concrete RSpec suggestion templates for `pattern_matching_guard`, `pattern_matching_alternative`, and `pattern_matching_array` operators (#299)
-- **Hooks system test coverage** — comprehensive RSpec tests for hooks registration, dispatch, error isolation, configuration loading, and Runner hooks wiring (#295)
-- **AST pattern language design** — syntax spec for `ignore_patterns` configuration (`docs/ast_pattern_syntax.md`): node type matching, attribute constraints, nested patterns, wildcards (`_`, `*`, `**`), negation, and alternatives; enables semantic exclusion of mutations on logging/debug/infrastructure code (#312)
+- **Hooks system** — lifecycle hooks for mutation testing pipeline: `worker_process_start` for parallel workers, `mutation_insert_pre`/`post` for RSpec integration, `setup_integration_pre`/`post` for test setup; hook registry with registration, dispatch, and error isolation; `.evilution.yml` hooks configuration (#265, #272, #277, #282, #286, #290)
+- **Index access mutation operators** — `IndexToFetch` replaces `[]` with `.fetch()`, `IndexToDig` replaces `[]` chains with `.dig()`, `IndexAssignmentRemoval` removes `[]=` assignments (#280, #283, #288)
+- **Pattern matching mutation operators** — `PatternMatchingGuard` removes or negates guard clauses in `case/in` patterns; `PatternMatchingAlternative` removes, reorders alternatives in `pat1 | pat2` patterns; `PatternMatchingArray` removes or wildcards elements in array and find patterns (#293, #297, #301)
+- **AST pattern language** — custom DSL for `ignore_patterns` configuration: node type matching, attribute constraints, nested patterns, wildcards (`_`, `*`, `**`), negation, and alternatives; recursive descent parser producing matcher objects; syntax spec in `docs/ast_pattern_syntax.md` (#312, #315)
+- **AST pattern filter integration** — mutations matching `ignore_patterns` are skipped during generation; skipped count reported in CLI, JSON, HTML reporters and session data (#317)
+- **`ignore_patterns` config** — new `.evilution.yml` key accepting an array of AST pattern strings to exclude mutations on logging/debug/infrastructure code (#320)
+- **Suggestion templates** — concrete RSpec suggestions for index access mutations (`index_to_fetch`, `index_to_dig`, `index_assignment_removal`) and pattern matching mutations (`pattern_matching_guard`, `pattern_matching_alternative`, `pattern_matching_array`) (#292, #305)
+
+### Changed
+
+- **Operator count** — 52 operators (up from 46), with new index access, pattern matching, and hooks integration
+- **Hooks wiring** — Runner passes hooks through to Fork isolator, RSpec integration, and Parallel::Pool; comprehensive test coverage for hooks lifecycle (#295)
 
 ## [0.16.1] - 2026-03-30
 
