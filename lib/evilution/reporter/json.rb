@@ -46,6 +46,7 @@ class Evilution::Reporter::JSON
       duration: summary.duration.round(4)
     }
     data[:truncated] = true if summary.truncated?
+    data[:skipped] = summary.skipped if summary.skipped.positive?
     peak = summary.peak_memory_mb
     data[:peak_memory_mb] = peak.round(1) if peak
     data

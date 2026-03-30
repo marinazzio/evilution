@@ -20,5 +20,57 @@ RSpec.describe Evilution::Mutator::Base do
 
       expect(result).to eq([])
     end
+
+    it "skips mutations when filter matches the node" do
+      operator_class = Class.new(described_class) do
+        def visit_call_node(node)
+          add_mutation(
+            offset: node.location.start_offset,
+            length: node.location.end_offset - node.location.start_offset,
+            replacement: "nil",
+            node: node
+          )
+        end
+      end
+
+      fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      code = "log()"
+      tree = Prism.parse(code).value
+      node = tree.statements.body.first
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+
+      filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+      operator = operator_class.new
+      result = operator.call(subject_obj, filter: filter)
+
+      expect(result).to be_empty
+      expect(filter.skipped_count).to eq(1)
+    end
+
+    it "allows mutations when filter does not match" do
+      operator_class = Class.new(described_class) do
+        def visit_call_node(node)
+          add_mutation(
+            offset: node.location.start_offset,
+            length: node.location.end_offset - node.location.start_offset,
+            replacement: "nil",
+            node: node
+          )
+        end
+      end
+
+      fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      code = "info()"
+      tree = Prism.parse(code).value
+      node = tree.statements.body.first
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+
+      filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+      operator = operator_class.new
+      result = operator.call(subject_obj, filter: filter)
+
+      expect(result.length).to eq(1)
+      expect(filter.skipped_count).to eq(0)
+    end
   end
 end

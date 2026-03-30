@@ -13,10 +13,11 @@ class Evilution::Mutator::Base < Prism::Visitor
     @file_source = nil
   end
 
-  def call(subject)
+  def call(subject, filter: nil)
     @subject = subject
     @file_source = File.read(subject.file_path)
     @mutations = []
+    @filter = filter
     visit(subject.node)
     @mutations
   end
@@ -24,6 +25,8 @@ class Evilution::Mutator::Base < Prism::Visitor
   private
 
   def add_mutation(offset:, length:, replacement:, node:)
+    return if @filter && @filter.skip?(node)
+
     mutated_source = Evilution::AST::SourceSurgeon.apply(
       @file_source,
       offset: offset,

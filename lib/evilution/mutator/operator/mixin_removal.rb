@@ -7,10 +7,11 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
   MIXIN_METHODS = %i[include extend prepend].freeze
 
-  def call(subject)
+  def call(subject, filter: nil)
     @subject = subject
     @file_source = File.read(subject.file_path)
     @mutations = []
+    @filter = filter
 
     tree = self.class.parsed_tree_for(subject.file_path, @file_source)
     enclosing = find_enclosing_scope(tree, subject.line_number)

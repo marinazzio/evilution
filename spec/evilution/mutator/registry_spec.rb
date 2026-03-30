@@ -134,6 +134,33 @@ RSpec.describe Evilution::Mutator::Registry do
 
       expect(registry.mutations_for(subject_obj)).to eq([])
     end
+
+    it "passes filter to operators and skips matching mutations" do
+      operator_class = Class.new(Evilution::Mutator::Base) do
+        def visit_call_node(node)
+          add_mutation(
+            offset: node.location.start_offset,
+            length: node.location.end_offset - node.location.start_offset,
+            replacement: "nil",
+            node: node
+          )
+        end
+      end
+
+      registry.register(operator_class)
+
+      fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      code = "log()"
+      tree = Prism.parse(code).value
+      node = tree.statements.body.first
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+
+      filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+      mutations = registry.mutations_for(subject_obj, filter: filter)
+
+      expect(mutations).to be_empty
+      expect(filter.skipped_count).to eq(1)
+    end
   end
 
   describe "#operators" do

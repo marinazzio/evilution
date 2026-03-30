@@ -3,12 +3,13 @@
 require_relative "../result"
 
 class Evilution::Result::Summary
-  attr_reader :results, :duration
+  attr_reader :results, :duration, :skipped
 
-  def initialize(results:, duration: 0.0, truncated: false)
+  def initialize(results:, duration: 0.0, truncated: false, skipped: 0)
     @results = results
     @duration = duration
     @truncated = truncated
+    @skipped = skipped
     freeze
   end
 

@@ -22,13 +22,15 @@ class Evilution::Config
     progress: true,
     save_session: false,
     line_ranges: {},
-    spec_files: []
+    spec_files: [],
+    ignore_patterns: []
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
-              :progress, :save_session, :line_ranges, :spec_files, :hooks
+              :progress, :save_session, :line_ranges, :spec_files, :hooks,
+              :ignore_patterns
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -162,6 +164,7 @@ class Evilution::Config
     @save_session = merged[:save_session]
     @line_ranges = merged[:line_ranges] || {}
     @spec_files = Array(merged[:spec_files])
+    @ignore_patterns = Array(merged[:ignore_patterns])
     @hooks = validate_hooks(merged[:hooks])
   end
 
