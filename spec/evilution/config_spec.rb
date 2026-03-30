@@ -395,6 +395,30 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "ignore_patterns" do
+    it "defaults to empty array" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.ignore_patterns).to eq([])
+    end
+
+    it "accepts an array of strings" do
+      config = described_class.new(ignore_patterns: ["call{name=log}"], skip_config_file: true)
+
+      expect(config.ignore_patterns).to eq(["call{name=log}"])
+    end
+
+    it "rejects non-string elements" do
+      expect { described_class.new(ignore_patterns: [123], skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /ignore_patterns must be an array of strings/)
+    end
+
+    it "rejects hash elements" do
+      expect { described_class.new(ignore_patterns: [{ name: "log" }], skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /ignore_patterns must be an array of strings/)
+    end
+  end
+
   describe "immutability" do
     it "is frozen after initialization" do
       config = described_class.new(skip_config_file: true)

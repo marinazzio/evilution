@@ -60,6 +60,7 @@ class Evilution::Reporter::CLI
             "#{summary.survived} survived, #{summary.timed_out} timed out"
     parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
     parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
+    parts += ", #{summary.skipped} skipped" if summary.skipped.positive?
     parts
   end
 

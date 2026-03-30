@@ -217,4 +217,16 @@ RSpec.describe Evilution::Result::Summary do
       expect(truncated_summary).to be_truncated
     end
   end
+
+  describe "#skipped" do
+    it "defaults to zero" do
+      expect(summary.skipped).to eq(0)
+    end
+
+    it "returns the skipped count" do
+      s = described_class.new(results: results, duration: 1.0, skipped: 5)
+
+      expect(s.skipped).to eq(5)
+    end
+  end
 end

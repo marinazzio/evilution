@@ -22,13 +22,15 @@ class Evilution::Config
     progress: true,
     save_session: false,
     line_ranges: {},
-    spec_files: []
+    spec_files: [],
+    ignore_patterns: []
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
-              :progress, :save_session, :line_ranges, :spec_files, :hooks
+              :progress, :save_session, :line_ranges, :spec_files, :hooks,
+              :ignore_patterns
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -127,6 +129,12 @@ class Evilution::Config
       # hooks:
       #   worker_process_start: config/evilution_hooks/worker_start.rb
       #   mutation_insert_pre: config/evilution_hooks/mutation_pre.rb
+
+      # AST patterns to skip during mutation generation (default: [])
+      # See docs/ast_pattern_syntax.md for pattern syntax
+      # ignore_patterns:
+      #   - "call{name=info, receiver=call{name=logger}}"
+      #   - "call{name=debug|warn}"
     YAML
   end
 
@@ -162,6 +170,7 @@ class Evilution::Config
     @save_session = merged[:save_session]
     @line_ranges = merged[:line_ranges] || {}
     @spec_files = Array(merged[:spec_files])
+    @ignore_patterns = validate_ignore_patterns(merged[:ignore_patterns])
     @hooks = validate_hooks(merged[:hooks])
   end
 
@@ -184,6 +193,17 @@ class Evilution::Config
     value
   rescue ::ArgumentError, ::TypeError
     raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}"
+  end
+
+  def validate_ignore_patterns(value)
+    patterns = Array(value)
+    patterns.each do |pattern|
+      unless pattern.is_a?(String)
+        raise Evilution::ConfigError,
+              "ignore_patterns must be an array of strings, got #{pattern.class} (#{pattern.inspect})"
+      end
+    end
+    patterns
   end
 
   def validate_hooks(value)

@@ -69,12 +69,13 @@ class Evilution::Session::Store
       timed_out_count: summary.timed_out,
       error_count: summary.errors,
       neutral_count: summary.neutral,
-      equivalent_count: summary.equivalent
+      equivalent_count: summary.equivalent,
+      skipped_count: summary.skipped
     }
   end
 
   def build_summary(summary)
-    {
+    data = {
       total: summary.total,
       killed: summary.killed,
       survived: summary.survived,
@@ -85,6 +86,8 @@ class Evilution::Session::Store
       score: summary.score.round(4),
       duration: summary.duration.round(4)
     }
+    data[:skipped] = summary.skipped if summary.skipped.positive?
+    data
   end
 
   def build_mutation_detail(result)

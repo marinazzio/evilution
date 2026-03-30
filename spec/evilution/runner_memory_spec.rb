@@ -37,7 +37,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     registry = instance_double(Evilution::Mutator::Registry)
     allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-    allow(registry).to receive(:mutations_for).with(subject_obj).and_return([mutation])
+    allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything).and_return([mutation])
 
     isolator = instance_double(Evilution::Isolation::Fork)
     allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)

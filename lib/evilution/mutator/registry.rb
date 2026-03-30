@@ -71,9 +71,9 @@ class Evilution::Mutator::Registry
     self
   end
 
-  def mutations_for(subject)
+  def mutations_for(subject, filter: nil)
     @operators.flat_map do |operator_class|
-      operator_class.new.call(subject)
+      operator_class.new.call(subject, filter: filter)
     end
   end
 

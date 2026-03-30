@@ -210,5 +210,27 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["survived"].first).not_to have_key("test_command")
       expect(parsed["killed"].first).not_to have_key("test_command")
     end
+
+    context "with skipped mutations" do
+      let(:skipped_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result],
+          duration: 0.5,
+          skipped: 4
+        )
+      end
+
+      it "includes skipped count in summary" do
+        parsed = JSON.parse(reporter.call(skipped_summary))
+
+        expect(parsed["summary"]["skipped"]).to eq(4)
+      end
+
+      it "omits skipped when count is zero" do
+        parsed = JSON.parse(reporter.call(summary))
+
+        expect(parsed["summary"]).not_to have_key("skipped")
+      end
+    end
   end
 end

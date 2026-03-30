@@ -20,6 +20,7 @@ require_relative "baseline"
 require_relative "cache"
 require_relative "parallel/pool"
 require_relative "session/store"
+require_relative "ast/pattern/filter"
 
 class Evilution::Runner
   attr_reader :config
@@ -42,7 +43,7 @@ class Evilution::Runner
 
     baseline_result = run_baseline(subjects)
 
-    mutations = generate_mutations(subjects)
+    mutations, skipped_count = generate_mutations(subjects)
     equivalent_mutations, mutations = filter_equivalent(mutations)
     release_subject_nodes(subjects)
     clear_operator_caches
@@ -55,7 +56,8 @@ class Evilution::Runner
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: truncated)
+    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: truncated,
+                                             skipped: skipped_count)
     output_report(summary)
     save_session(summary)
 
@@ -170,9 +172,18 @@ class Evilution::Runner
   end
 
   def generate_mutations(subjects)
-    subjects.flat_map do |subject|
-      registry.mutations_for(subject)
+    filter = build_ignore_filter
+    mutations = subjects.flat_map do |subject|
+      registry.mutations_for(subject, filter: filter)
     end
+    [mutations, filter ? filter.skipped_count : 0]
+  end
+
+  def build_ignore_filter
+    patterns = config.ignore_patterns
+    return nil if patterns.nil? || patterns.empty?
+
+    Evilution::AST::Pattern::Filter.new(patterns)
   end
 
   def filter_equivalent(mutations)

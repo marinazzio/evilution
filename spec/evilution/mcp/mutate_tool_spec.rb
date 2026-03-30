@@ -49,7 +49,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       killed_results: [killed_result],
       neutral_results: [],
       equivalent_results: [],
-      peak_memory_mb: nil
+      peak_memory_mb: nil,
+      skipped: 0
     )
   end
 
@@ -220,7 +221,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [],
           equivalent: 0,
           equivalent_results: [],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
 
@@ -262,7 +264,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [],
           equivalent: 0,
           equivalent_results: [],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
         allow(runner).to receive(:call).and_return(error_summary)
 
@@ -304,7 +307,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [neutral_result],
           equivalent: 0,
           equivalent_results: [],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
@@ -355,7 +359,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [],
           equivalent: 0,
           equivalent_results: [],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
         allow(runner).to receive(:call).and_return(survived_summary)
 
@@ -479,7 +484,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           killed_results: [],
           neutral_results: [],
           equivalent_results: [equivalent_result],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
         allow(runner).to receive(:call).and_return(equivalent_summary)
 
@@ -543,7 +549,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           killed_results: [],
           neutral_results: [],
           equivalent_results: [],
-          peak_memory_mb: nil
+          peak_memory_mb: nil,
+          skipped: 0
         )
       end
 

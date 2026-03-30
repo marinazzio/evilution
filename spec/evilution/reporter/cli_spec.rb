@@ -212,5 +212,27 @@ RSpec.describe Evilution::Reporter::CLI do
 
       expect(output).not_to include("TRUNCATED")
     end
+
+    context "with skipped mutations" do
+      let(:skipped_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result],
+          duration: 1.0,
+          skipped: 3
+        )
+      end
+
+      it "includes skipped count in mutations line" do
+        output = reporter.call(skipped_summary)
+
+        expect(output).to include("3 skipped")
+      end
+
+      it "does not show skipped when count is zero" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("skipped")
+      end
+    end
   end
 end
