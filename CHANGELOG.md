@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Pattern matching mutation operators** — `PatternMatchingGuard` removes or negates guard clauses in `case/in` patterns; `PatternMatchingAlternative` removes, reorders alternatives in `pat1 | pat2` patterns; `PatternMatchingArray` removes or wildcards elements in array and find patterns (#293, #295, #297)
+- **Suggestion templates for pattern matching** — static and concrete RSpec suggestion templates for `pattern_matching_guard`, `pattern_matching_alternative`, and `pattern_matching_array` operators (#299)
+- **Hooks system test coverage** — comprehensive RSpec tests for hooks registration, dispatch, error isolation, configuration loading, and Runner hooks wiring (#295)
+- **AST pattern language design** — syntax spec for `ignore_patterns` configuration (`docs/ast_pattern_syntax.md`): node type matching, attribute constraints, nested patterns, wildcards (`_`, `*`, `**`), negation, and alternatives; enables semantic exclusion of mutations on logging/debug/infrastructure code (#312)
+
 ## [0.16.1] - 2026-03-30
 
 ### Fixed
