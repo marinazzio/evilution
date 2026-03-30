@@ -1341,6 +1341,102 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "pattern_matching_guard" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("pattern_matching_guard",
+                                  diff: "-   in Integer => n if n > 0\n+   in Integer => n")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("pattern_matching_guard",
+                                  diff: "-   in Integer => n if n > 0\n+   in Integer => n")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("in Integer => n if n > 0")
+        expect(suggestion).to include("in Integer => n")
+      end
+
+      it "advises testing guard condition filtering" do
+        mutation = build_mutation("pattern_matching_guard",
+                                  diff: "-   in Integer => n if n > 0\n+   in Integer => n")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("guard").or include("pattern")
+      end
+    end
+
+    describe "pattern_matching_alternative" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("pattern_matching_alternative",
+                                  diff: "-   in Integer | Float\n+   in Float")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("pattern_matching_alternative",
+                                  diff: "-   in Integer | Float\n+   in Float")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("Integer | Float")
+        expect(suggestion).to include("Float")
+      end
+
+      it "advises testing each alternative" do
+        mutation = build_mutation("pattern_matching_alternative",
+                                  diff: "-   in Integer | Float\n+   in Float")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("alternative")
+      end
+    end
+
+    describe "pattern_matching_array" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("pattern_matching_array",
+                                  diff: "-   in [Integer, String]\n+   in [_, String]")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("pattern_matching_array",
+                                  diff: "-   in [Integer, String]\n+   in [_, String]")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("[Integer, String]")
+        expect(suggestion).to include("[_, String]")
+      end
+
+      it "advises testing array element positions" do
+        mutation = build_mutation("pattern_matching_array",
+                                  diff: "-   in [Integer, String]\n+   in [_, String]")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("element").or include("array").or include("position")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 

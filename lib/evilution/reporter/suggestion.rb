@@ -45,7 +45,10 @@ class Evilution::Reporter::Suggestion
     "explicit_super_mutation" => "Add a test that verifies the correct arguments are passed to super and the inherited result matters",
     "index_to_fetch" => "Add a test that distinguishes [] (returns nil for missing keys) from .fetch (raises KeyError)",
     "index_to_dig" => "Add a test that verifies chained [] access returns the correct nested value",
-    "index_assignment_removal" => "Add a test that verifies the []= assignment side effect is observable (the collection is modified)"
+    "index_assignment_removal" => "Add a test that verifies the []= assignment side effect is observable (the collection is modified)",
+    "pattern_matching_guard" => "Add a test with input that matches the pattern but fails the guard to verify filtering",
+    "pattern_matching_alternative" => "Add a test with input that matches only one specific alternative to verify each branch is reachable",
+    "pattern_matching_array" => "Add a test that verifies each element position in the array pattern matches the expected type or value"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -580,6 +583,48 @@ class Evilution::Reporter::Suggestion
           # Assert the collection contains the assigned value after the method runs
           result = subject.#{method_name}(collection)
           expect(result).to include(expected_key => expected_value)
+        end
+      RSPEC
+    },
+    "pattern_matching_guard" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies the pattern guard filters correctly in ##{method_name}' do
+          # Test with input that matches the pattern but fails the guard condition
+          # The guard should prevent matching, routing to a different branch
+          result = subject.#{method_name}(input_matching_pattern_but_failing_guard)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "pattern_matching_alternative" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies each pattern alternative is reachable in ##{method_name}' do
+          # Test with input that matches only one specific alternative
+          # Each alternative should have a dedicated test case
+          result = subject.#{method_name}(input_for_specific_alternative)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "pattern_matching_array" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'verifies each array pattern element matters in ##{method_name}' do
+          # Test with input where changing one element type causes a different match
+          # Each position in the array pattern should be validated
+          result = subject.#{method_name}(input_with_wrong_element_type)
+          expect(result).to eq(expected)
         end
       RSPEC
     }
