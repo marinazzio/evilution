@@ -165,6 +165,90 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       expect(results).to eq([10, 20])
     end
 
+    context "with prefetch" do
+      it "defaults prefetch to 1" do
+        queue = described_class.new(size: 2)
+        results = queue.map([1, 2, 3, 4]) { |n| n * 10 }
+
+        expect(results).to eq([10, 20, 30, 40])
+      end
+
+      it "pre-buffers items in worker pipes when prefetch > 1" do
+        queue = described_class.new(size: 2, prefetch: 2)
+        results = queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
+
+        expect(results).to eq([10, 20, 30, 40, 50, 60])
+      end
+
+      it "rejects prefetch less than 1" do
+        expect { described_class.new(size: 2, prefetch: 0) }.to raise_error(ArgumentError, /prefetch must be a positive integer/)
+      end
+
+      it "handles prefetch larger than item count" do
+        queue = described_class.new(size: 2, prefetch: 10)
+        results = queue.map([1, 2]) { |n| n * 5 }
+
+        expect(results).to eq([5, 10])
+      end
+
+      it "reduces idle time with prefetch on variable-cost work" do
+        temp = Tempfile.new("wq_prefetch_order")
+
+        begin
+          # With prefetch=2, worker A gets items 1,3 and worker B gets items 2,4
+          # When worker A finishes item 1 quickly, item 3 is already in its pipe
+          queue = described_class.new(size: 2, prefetch: 2)
+          results = queue.map([1, 2, 3, 4, 5, 6]) do |n|
+            sleep(n == 2 ? 0.3 : 0.05)
+            File.open(temp.path, "a") { |f| f.puts(n) }
+            n * 10
+          end
+
+          expect(results).to eq([10, 20, 30, 40, 50, 60])
+
+          completion_order = File.read(temp.path).lines.map(&:to_i)
+          expect(completion_order.sort).to eq([1, 2, 3, 4, 5, 6])
+        ensure
+          temp.close!
+        end
+      end
+    end
+
+    context "with worker stats" do
+      it "tracks per-worker completion counts" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
+
+        stats = queue.worker_stats
+        expect(stats.length).to eq(2)
+        expect(stats.sum(&:items_completed)).to eq(6)
+        stats.each do |stat|
+          expect(stat.items_completed).to be >= 1
+        end
+      end
+
+      it "tracks worker PIDs in stats" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2]) { |_n| Process.pid }
+
+        stats = queue.worker_stats
+        pids = stats.map(&:pid)
+        expect(pids.uniq.size).to eq(2)
+        expect(pids).not_to include(Process.pid)
+      end
+
+      it "returns empty stats before map is called" do
+        queue = described_class.new(size: 2)
+        expect(queue.worker_stats).to eq([])
+      end
+
+      it "returns empty stats for empty input" do
+        queue = described_class.new(size: 2)
+        queue.map([]) { |n| n }
+        expect(queue.worker_stats).to eq([])
+      end
+    end
+
     it "cleans up worker processes even on error" do
       tmpfile = Tempfile.new("wq_cleanup_pids")
       hooks = Evilution::Hooks::Registry.new
