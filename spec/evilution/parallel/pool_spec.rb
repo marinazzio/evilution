@@ -26,7 +26,7 @@ RSpec.describe Evilution::Parallel::Pool do
       results = pool.map([1, 2, 3]) { |n| [n, Process.pid] }
 
       pids = results.map(&:last)
-      expect(pids.uniq.size).to be <= 3
+      expect(pids.uniq.size).to eq(3)
       expect(pids).not_to include(Process.pid)
     end
 
