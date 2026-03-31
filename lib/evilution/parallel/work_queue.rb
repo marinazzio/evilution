@@ -5,11 +5,16 @@ require_relative "../parallel"
 class Evilution::Parallel::WorkQueue
   SHUTDOWN = :__shutdown__
 
-  def initialize(size:, hooks: nil)
+  WorkerStat = Struct.new(:pid, :items_completed)
+
+  def initialize(size:, hooks: nil, prefetch: 1)
     raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
+    raise ArgumentError, "prefetch must be a positive integer, got #{prefetch.inspect}" unless prefetch.is_a?(Integer) && prefetch >= 1
 
     @size = size
     @hooks = hooks
+    @prefetch = prefetch
+    @worker_stats = []
   end
 
   def map(items, &)
@@ -21,8 +26,13 @@ class Evilution::Parallel::WorkQueue
     begin
       distribute_and_collect(items, workers)
     ensure
+      @worker_stats = build_worker_stats(workers)
       shutdown_workers(workers)
     end
+  end
+
+  def worker_stats
+    @worker_stats.map { |stat| stat.dup.freeze }
   end
 
   private
@@ -41,7 +51,7 @@ class Evilution::Parallel::WorkQueue
       cmd_read.close
       res_write.close
 
-      { pid: pid, cmd_write: cmd_write, res_read: res_read }
+      { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0 }
     end
   end
 
@@ -76,10 +86,12 @@ class Evilution::Parallel::WorkQueue
   end
 
   def seed_workers(items, workers, state)
-    workers.each do |worker|
-      break unless state.next_index < items.length
+    @prefetch.times do
+      workers.each do |worker|
+        break unless state.next_index < items.length
 
-      send_item(worker, items, state)
+        send_item(worker, items, state)
+      end
     end
   end
 
@@ -106,6 +118,7 @@ class Evilution::Parallel::WorkQueue
     state.first_error = value if status == :error && state.first_error.nil?
     state.results[index] = value if status == :ok
     state.in_flight -= 1
+    worker[:items_completed] += 1
 
     send_item(worker, items, state) if state.next_index < items.length && state.first_error.nil?
   end
@@ -114,6 +127,12 @@ class Evilution::Parallel::WorkQueue
     write_message(worker[:cmd_write], [state.next_index, items[state.next_index]])
     state.next_index += 1
     state.in_flight += 1
+  end
+
+  def build_worker_stats(workers)
+    workers.map do |worker|
+      WorkerStat.new(worker[:pid], worker[:items_completed])
+    end
   end
 
   def shutdown_workers(workers)
