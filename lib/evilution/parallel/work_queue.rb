@@ -49,7 +49,7 @@ class Evilution::Parallel::WorkQueue
     @hooks.fire(:worker_process_start) if @hooks
 
     loop do
-      data = read_message(cmd_read)
+      data = read_command(cmd_read)
       break if data == SHUTDOWN
 
       index, item = data
@@ -94,8 +94,15 @@ class Evilution::Parallel::WorkQueue
   end
 
   def handle_result(io, worker, items, state)
-    index, status, value = read_message(io)
+    message = read_result(io)
 
+    if message.nil?
+      state.first_error = Evilution::Error.new("worker process exited unexpectedly") if state.first_error.nil?
+      state.in_flight -= 1
+      return
+    end
+
+    index, status, value = message
     state.first_error = value if status == :error && state.first_error.nil?
     state.results[index] = value if status == :ok
     state.in_flight -= 1
@@ -132,12 +139,25 @@ class Evilution::Parallel::WorkQueue
     io.flush
   end
 
-  def read_message(io)
+  def read_command(io)
     header = io.read(4)
-    return SHUTDOWN if header.nil?
+    return SHUTDOWN if header.nil? || header.bytesize < 4
 
     length = header.unpack1("N")
     payload = io.read(length)
+    return SHUTDOWN if payload.nil? || payload.bytesize < length
+
+    Marshal.load(payload) # rubocop:disable Security/MarshalLoad
+  end
+
+  def read_result(io)
+    header = io.read(4)
+    return nil if header.nil? || header.bytesize < 4
+
+    length = header.unpack1("N")
+    payload = io.read(length)
+    return nil if payload.nil? || payload.bytesize < length
+
     Marshal.load(payload) # rubocop:disable Security/MarshalLoad
   end
 

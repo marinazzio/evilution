@@ -69,10 +69,32 @@ RSpec.describe Evilution::Parallel::WorkQueue do
 
     it "distributes work dynamically (fast items finish first)" do
       queue = described_class.new(size: 2)
-      # Items with varying "cost" — the queue should not wait for a batch
-      results = queue.map([1, 2, 3, 4]) { |n| n * 10 }
+      temp = Tempfile.new("work_queue_dynamic_order")
 
-      expect(results).to eq([10, 20, 30, 40])
+      begin
+        results = queue.map([1, 2, 3, 4]) do |n|
+          # Make item 2 significantly slower than the others
+          if n == 2
+            sleep 0.3
+          else
+            sleep 0.05
+          end
+
+          File.open(temp.path, "a") { |f| f.puts(n) }
+          n * 10
+        end
+
+        expect(results).to eq([10, 20, 30, 40])
+
+        completion_order = File.read(temp.path).lines.map(&:to_i)
+        expect(completion_order.sort).to eq([1, 2, 3, 4])
+
+        # The slow item (2) should finish after faster items 3 and 4
+        expect(completion_order.index(3)).to be < completion_order.index(2)
+        expect(completion_order.index(4)).to be < completion_order.index(2)
+      ensure
+        temp.close!
+      end
     end
 
     it "propagates exceptions from the block" do
@@ -124,6 +146,18 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       tmpfile&.unlink
     end
 
+    it "raises a clear error when a worker exits unexpectedly" do
+      queue = described_class.new(size: 2)
+
+      expect do
+        queue.map([1, 2, 3]) do |n|
+          exit!(1) if n == 2
+
+          n
+        end
+      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
+    end
+
     it "works without hooks" do
       queue = described_class.new(size: 2)
       results = queue.map([1, 2]) { |n| n * 10 }
@@ -132,7 +166,12 @@ RSpec.describe Evilution::Parallel::WorkQueue do
     end
 
     it "cleans up worker processes even on error" do
-      queue = described_class.new(size: 2)
+      tmpfile = Tempfile.new("wq_cleanup_pids")
+      hooks = Evilution::Hooks::Registry.new
+      hooks.register(:worker_process_start) do
+        File.open(tmpfile.path, "a") { |f| f.puts(Process.pid) }
+      end
+      queue = described_class.new(size: 2, hooks: hooks)
 
       expect do
         queue.map([1, 2, 3]) do |n|
@@ -142,8 +181,13 @@ RSpec.describe Evilution::Parallel::WorkQueue do
         end
       end.to raise_error(RuntimeError, "fail")
 
-      # Verify no zombie processes by checking that all children have been reaped
-      expect { Process.waitpid(-1, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
+      worker_pids = File.read(tmpfile.path).split.map(&:to_i)
+      worker_pids.each do |pid|
+        expect { Process.waitpid(pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
+      end
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
     end
   end
 end
