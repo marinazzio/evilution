@@ -108,4 +108,20 @@ RSpec.describe Evilution::Parallel::Pool do
       end.to raise_error(RuntimeError, "boom")
     end
   end
+
+  describe "#worker_stats" do
+    it "delegates to the underlying work queue" do
+      pool = described_class.new(size: 2)
+      pool.map([1, 2, 3, 4]) { |n| n * 10 }
+
+      stats = pool.worker_stats
+      expect(stats.length).to eq(2)
+      expect(stats.sum(&:items_completed)).to eq(4)
+      stats.each do |stat|
+        expect(stat.busy_time).to be_a(Float)
+        expect(stat.wall_time).to be_a(Float)
+        expect(stat.utilization).to be > 0.0
+      end
+    end
+  end
 end
