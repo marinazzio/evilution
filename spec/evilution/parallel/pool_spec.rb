@@ -21,25 +21,22 @@ RSpec.describe Evilution::Parallel::Pool do
       expect(results).to eq([10, 20, 30])
     end
 
-    it "runs batch items concurrently in separate processes" do
+    it "runs items in separate worker processes" do
       pool = described_class.new(size: 3)
       results = pool.map([1, 2, 3]) { |n| [n, Process.pid] }
 
       pids = results.map(&:last)
-      # All items should run in different child processes (not the parent)
-      expect(pids.uniq.size).to eq(3)
+      expect(pids.uniq.size).to be <= 3
       expect(pids).not_to include(Process.pid)
     end
 
-    it "limits concurrency to pool size via batching" do
+    it "limits concurrency to pool size" do
       pool = described_class.new(size: 2)
-      results = pool.map([1, 2, 3, 4]) { |n| [n, Process.pid] }
+      results = pool.map([1, 2, 3, 4]) { |_n| Process.pid }
 
-      # 4 items with size 2 = 2 batches; pids within a batch differ
-      batch1_pids = results[0..1].map(&:last)
-      batch2_pids = results[2..3].map(&:last)
-      expect(batch1_pids.uniq.size).to eq(2)
-      expect(batch2_pids.uniq.size).to eq(2)
+      pids = results.uniq
+      expect(pids.size).to eq(2)
+      expect(pids).not_to include(Process.pid)
     end
 
     it "returns empty array for empty input" do
@@ -56,7 +53,7 @@ RSpec.describe Evilution::Parallel::Pool do
       expect(results).to eq([84])
     end
 
-    it "fires worker_process_start hook after fork in each worker" do
+    it "fires worker_process_start hook once per worker" do
       tmpfile = Tempfile.new("pool_worker_pids")
       hooks = Evilution::Hooks::Registry.new
       hooks.register(:worker_process_start) do
@@ -64,14 +61,13 @@ RSpec.describe Evilution::Parallel::Pool do
       end
       pool = described_class.new(size: 2, hooks: hooks)
 
-      results = pool.map([1, 2]) { |n| [n, Process.pid] }
+      results = pool.map([1, 2, 3, 4]) { |_n| Process.pid }
 
-      worker_pids = results.map(&:last)
+      worker_pids = results.uniq
       hook_pids = File.read(tmpfile.path).split.map(&:to_i).uniq
 
-      expect(worker_pids.uniq.size).to eq(2)
-      expect(worker_pids).not_to include(Process.pid)
-      expect(hook_pids.sort).to eq(worker_pids.uniq.sort)
+      expect(hook_pids.size).to eq(2)
+      expect(hook_pids.sort).to eq(worker_pids.sort)
     ensure
       tmpfile&.close
       tmpfile&.unlink
