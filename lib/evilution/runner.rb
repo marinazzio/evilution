@@ -257,14 +257,17 @@ class Evilution::Runner
     spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
+    all_worker_stats = []
+
     mutations.each_slice(config.jobs) do |batch|
       break if state[:truncated]
 
       batch_results = run_parallel_batch(batch, pool, worker_isolator, integration)
+      all_worker_stats.concat(pool.worker_stats)
       process_batch(batch_results, baseline_result, spec_resolver, state)
     end
 
-    log_worker_stats(pool.worker_stats)
+    log_worker_stats(aggregate_worker_stats(all_worker_stats))
 
     [state[:results], state[:truncated]]
   end
@@ -466,6 +469,19 @@ class Evilution::Runner
     stats.each do |stat|
       pct = format("%.1f", stat.utilization * 100)
       $stderr.write("[verbose] worker #{stat.pid}: #{stat.items_completed} items, utilization #{pct}%\n")
+    end
+  end
+
+  def aggregate_worker_stats(stats)
+    return stats if stats.empty?
+
+    stats.group_by(&:pid).map do |pid, entries|
+      Evilution::Parallel::WorkQueue::WorkerStat.new(
+        pid,
+        entries.sum(&:items_completed),
+        entries.sum(&:busy_time),
+        entries.sum(&:wall_time)
+      )
     end
   end
 
