@@ -174,10 +174,26 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end
 
       it "pre-buffers items in worker pipes when prefetch > 1" do
-        queue = described_class.new(size: 2, prefetch: 2)
-        results = queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
+        temp = Tempfile.new("wq_prefetch_prebuffer")
 
-        expect(results).to eq([10, 20, 30, 40, 50, 60])
+        begin
+          queue = described_class.new(size: 2, prefetch: 2)
+          results = queue.map([1, 2, 3, 4, 5, 6]) do |n|
+            # Make even-numbered items slower so completion order reflects scheduling
+            sleep(n.even? ? 0.2 : 0.05)
+            File.open(temp.path, "a") { |f| f.puts(n) }
+            n * 10
+          end
+
+          expect(results).to eq([10, 20, 30, 40, 50, 60])
+
+          completion_order = File.read(temp.path).lines.map(&:to_i)
+          # With effective prefetch and concurrent workers, completion order should
+          # differ from simple input order, indicating out-of-order processing
+          expect(completion_order).not_to eq(completion_order.sort)
+        ensure
+          temp.close!
+        end
       end
 
       it "rejects prefetch less than 1" do
@@ -195,7 +211,7 @@ RSpec.describe Evilution::Parallel::WorkQueue do
         temp = Tempfile.new("wq_prefetch_order")
 
         begin
-          # With prefetch=2, worker A gets items 1,3 and worker B gets items 2,4
+          # With prefetch=2 and round-robin seeding, worker A gets items 1,3 and worker B gets 2,4
           # When worker A finishes item 1 quickly, item 3 is already in its pipe
           queue = described_class.new(size: 2, prefetch: 2)
           results = queue.map([1, 2, 3, 4, 5, 6]) do |n|

@@ -32,7 +32,7 @@ class Evilution::Parallel::WorkQueue
   end
 
   def worker_stats
-    @worker_stats.dup
+    @worker_stats.map { |stat| stat.dup.freeze }
   end
 
   private
@@ -86,8 +86,8 @@ class Evilution::Parallel::WorkQueue
   end
 
   def seed_workers(items, workers, state)
-    workers.each do |worker|
-      @prefetch.times do
+    @prefetch.times do
+      workers.each do |worker|
         break unless state.next_index < items.length
 
         send_item(worker, items, state)
