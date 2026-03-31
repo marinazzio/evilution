@@ -263,6 +263,73 @@ RSpec.describe Evilution::Parallel::WorkQueue do
         queue.map([]) { |n| n }
         expect(queue.worker_stats).to eq([])
       end
+
+      it "tracks busy_time per worker" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2, 3, 4]) do |_n|
+          sleep 0.05
+          :done
+        end
+
+        stats = queue.worker_stats
+        stats.each do |stat|
+          expect(stat.busy_time).to be_a(Float)
+          expect(stat.busy_time).to be > 0.0
+        end
+      end
+
+      it "tracks wall_time per worker" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2, 3, 4]) { |n| n }
+
+        stats = queue.worker_stats
+        stats.each do |stat|
+          expect(stat.wall_time).to be_a(Float)
+          expect(stat.wall_time).to be > 0.0
+        end
+      end
+
+      it "computes idle_time as wall_time minus busy_time" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2, 3, 4]) { |n| n }
+
+        stats = queue.worker_stats
+        stats.each do |stat|
+          expect(stat.idle_time).to be_a(Float)
+          expect(stat.idle_time).to be >= 0.0
+          expect(stat.idle_time).to be_within(0.001).of(stat.wall_time - stat.busy_time)
+        end
+      end
+
+      it "computes utilization as busy_time / wall_time" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2]) do |_n|
+          sleep 0.05
+          :done
+        end
+
+        stats = queue.worker_stats
+        stats.each do |stat|
+          expect(stat.utilization).to be_a(Float)
+          expect(stat.utilization).to be > 0.0
+          expect(stat.utilization).to be <= 1.0
+        end
+      end
+
+      it "reports positive utilization for all workers" do
+        queue = described_class.new(size: 2)
+        queue.map([1, 2, 3, 4]) do |_n|
+          sleep 0.05
+          :done
+        end
+
+        stats = queue.worker_stats
+        stats.each do |stat|
+          expect(stat.utilization).to be > 0.0
+          expect(stat.utilization).to be <= 1.0
+          expect(stat.busy_time).to be <= stat.wall_time
+        end
+      end
     end
 
     it "cleans up worker processes even on error" do

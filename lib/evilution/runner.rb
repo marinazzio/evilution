@@ -264,6 +264,8 @@ class Evilution::Runner
       process_batch(batch_results, baseline_result, spec_resolver, state)
     end
 
+    log_worker_stats(pool.worker_stats)
+
     [state[:results], state[:truncated]]
   end
 
@@ -456,6 +458,15 @@ class Evilution::Runner
     Evilution::Session::Store.new.save(summary)
   rescue StandardError => e
     warn "[evilution] failed to save session: #{e.message}" unless config.quiet
+  end
+
+  def log_worker_stats(stats)
+    return unless config.verbose && !config.quiet && stats.any?
+
+    stats.each do |stat|
+      pct = format("%.1f", stat.utilization * 100)
+      $stderr.write("[verbose] worker #{stat.pid}: #{stat.items_completed} items, utilization #{pct}%\n")
+    end
   end
 
   def notify_result(result, index)

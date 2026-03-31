@@ -5,7 +5,19 @@ require_relative "../parallel"
 class Evilution::Parallel::WorkQueue
   SHUTDOWN = :__shutdown__
 
-  WorkerStat = Struct.new(:pid, :items_completed)
+  STATS = :__stats__
+
+  WorkerStat = Struct.new(:pid, :items_completed, :busy_time, :wall_time) do
+    def idle_time
+      wall_time - busy_time
+    end
+
+    def utilization
+      return 0.0 if wall_time.nil? || wall_time.zero?
+
+      busy_time / wall_time
+    end
+  end
 
   def initialize(size:, hooks: nil, prefetch: 1)
     raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
@@ -26,8 +38,8 @@ class Evilution::Parallel::WorkQueue
     begin
       distribute_and_collect(items, workers)
     ensure
-      @worker_stats = build_worker_stats(workers)
       shutdown_workers(workers)
+      @worker_stats = build_worker_stats(workers)
     end
   end
 
@@ -57,6 +69,8 @@ class Evilution::Parallel::WorkQueue
 
   def worker_loop(cmd_read, res_write, &block)
     @hooks.fire(:worker_process_start) if @hooks
+    start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    busy_time = 0.0
 
     loop do
       data = read_command(cmd_read)
@@ -64,12 +78,18 @@ class Evilution::Parallel::WorkQueue
 
       index, item = data
       begin
+        t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         result = block.call(item)
+        busy_time += Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
         write_message(res_write, [index, :ok, result])
       rescue Exception => e # rubocop:disable Lint/RescueException
+        busy_time += Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
         write_message(res_write, [index, :error, e])
       end
     end
+
+    wall_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+    write_message(res_write, [STATS, busy_time, wall_time])
   ensure
     cmd_read.close
     res_write.close
@@ -131,7 +151,7 @@ class Evilution::Parallel::WorkQueue
 
   def build_worker_stats(workers)
     workers.map do |worker|
-      WorkerStat.new(worker[:pid], worker[:items_completed])
+      WorkerStat.new(worker[:pid], worker[:items_completed], worker[:busy_time] || 0.0, worker[:wall_time] || 0.0)
     end
   end
 
@@ -142,12 +162,27 @@ class Evilution::Parallel::WorkQueue
       # Worker already exited
     end
 
-    workers.each do |worker| # rubocop:disable Style/CombinableLoops
+    collect_worker_timing(workers)
+
+    workers.each do |worker|
       worker[:cmd_write].close unless worker[:cmd_write].closed?
       worker[:res_read].close unless worker[:res_read].closed?
       Process.wait(worker[:pid])
     rescue Errno::ECHILD
       # Already reaped
+    end
+  end
+
+  def collect_worker_timing(workers)
+    workers.each do |worker|
+      message = read_result(worker[:res_read])
+      next if message.nil?
+
+      tag, busy_time, wall_time = message
+      next unless tag == STATS
+
+      worker[:busy_time] = busy_time
+      worker[:wall_time] = wall_time
     end
   end
 

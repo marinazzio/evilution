@@ -10,4 +10,8 @@ class Evilution::Parallel::Pool
   def map(items, &)
     @queue.map(items, &)
   end
+
+  def worker_stats
+    @queue.worker_stats
+  end
 end
