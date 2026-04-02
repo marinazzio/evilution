@@ -43,7 +43,10 @@ class Evilution::Reporter::JSON
       neutral: summary.neutral,
       equivalent: summary.equivalent,
       score: summary.score.round(4),
-      duration: summary.duration.round(4)
+      duration: summary.duration.round(4),
+      killtime: summary.killtime.round(4),
+      efficiency: summary.efficiency.round(4),
+      mutations_per_second: summary.mutations_per_second.round(2)
     }
     data[:truncated] = true if summary.truncated?
     data[:skipped] = summary.skipped if summary.skipped.positive?

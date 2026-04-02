@@ -266,6 +266,28 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include("line 5")
     end
 
+    it "includes efficiency metrics" do
+      r1 = Evilution::Result::MutationResult.new(mutation: killed_mutation, status: :killed, duration: 3.0)
+      r2 = Evilution::Result::MutationResult.new(mutation: survived_mutation, status: :survived, duration: 2.0)
+      s = Evilution::Result::Summary.new(results: [r1, r2], duration: 10.0)
+
+      output = reporter.call(s)
+
+      expect(output).to include("Efficiency")
+      expect(output).to include("50.0%")
+      expect(output).to include("Rate")
+      expect(output).to include("0.20/s")
+    end
+
+    it "omits efficiency cards when duration is zero" do
+      s = Evilution::Result::Summary.new(results: [killed_result], duration: 0.0)
+
+      output = reporter.call(s)
+
+      expect(output).not_to include("Efficiency")
+      expect(output).not_to include("Rate")
+    end
+
     it "includes peak memory when available" do
       result_with_memory = Evilution::Result::MutationResult.new(
         mutation: killed_mutation,

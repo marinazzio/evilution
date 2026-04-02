@@ -79,9 +79,19 @@ class Evilution::Reporter::HTML
         <div class="card"><span class="card-value">#{summary.equivalent}</span><span class="card-label">Equivalent</span></div>
         #{build_skipped_card(summary)}
         <div class="card"><span class="card-value">#{format("%.2f", summary.duration)}s</span><span class="card-label">Duration</span></div>
+        #{build_efficiency_cards(summary)}
         #{peak_html}
       </section>
     HTML
+  end
+
+  def build_efficiency_cards(summary)
+    return "" unless summary.duration.positive?
+
+    pct = format("%.1f%%", summary.efficiency * 100)
+    rate = format("%.2f", summary.mutations_per_second)
+    %(<div class="card"><span class="card-value">#{pct}</span><span class="card-label">Efficiency</span></div>) +
+      %(<div class="card"><span class="card-value">#{rate}/s</span><span class="card-label">Rate</span></div>)
   end
 
   def build_skipped_card(summary)

@@ -13,6 +13,7 @@ class Evilution::Reporter::CLI
     lines << mutations_line(summary)
     lines << score_line(summary)
     lines << duration_line(summary)
+    lines << efficiency_line(summary) if summary.duration.positive?
     peak = summary.peak_memory_mb
     lines << peak_memory_line(peak) if peak
     append_survived(lines, summary)
@@ -72,6 +73,12 @@ class Evilution::Reporter::CLI
 
   def duration_line(summary)
     "Duration: #{format("%.2f", summary.duration)}s"
+  end
+
+  def efficiency_line(summary)
+    pct = format("%.2f%%", summary.efficiency * 100)
+    rate = format("%.2f", summary.mutations_per_second)
+    "Efficiency: #{pct} killtime, #{rate} mutations/s"
   end
 
   def format_survived(result)

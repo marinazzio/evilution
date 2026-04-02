@@ -86,6 +86,30 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("Duration: 12.34s")
     end
 
+    it "shows efficiency metrics" do
+      output = reporter.call(summary)
+
+      expect(output).to match(%r{Efficiency: \d+\.\d+% killtime, \d+\.\d+ mutations/s})
+    end
+
+    it "calculates correct efficiency values" do
+      r1 = Evilution::Result::MutationResult.new(mutation: killed_mutation, status: :killed, duration: 3.0)
+      r2 = Evilution::Result::MutationResult.new(mutation: survived_mutation, status: :survived, duration: 2.0)
+      s = Evilution::Result::Summary.new(results: [r1, r2], duration: 10.0)
+
+      output = reporter.call(s)
+
+      expect(output).to include("Efficiency: 50.00% killtime, 0.20 mutations/s")
+    end
+
+    it "omits efficiency line when duration is zero" do
+      s = Evilution::Result::Summary.new(results: [killed_result], duration: 0.0)
+
+      output = reporter.call(s)
+
+      expect(output).not_to include("Efficiency:")
+    end
+
     it "lists survived mutations with operator and location" do
       output = reporter.call(summary)
 

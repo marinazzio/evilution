@@ -72,6 +72,22 @@ class Evilution::Result::Summary
     results.select(&:equivalent?)
   end
 
+  def killtime
+    results.sum(0.0, &:duration)
+  end
+
+  def efficiency
+    return 0.0 if duration.zero?
+
+    killtime / duration
+  end
+
+  def mutations_per_second
+    return 0.0 if duration.zero?
+
+    total.to_f / duration
+  end
+
   def peak_memory_mb
     max_rss = nil
     results.each do |result|
