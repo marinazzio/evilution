@@ -305,6 +305,8 @@ class Evilution::CLI
     return config.target_files unless config.target_files.empty?
 
     Evilution::Git::ChangedFiles.new.call
+  rescue Evilution::Error
+    []
   end
 
   def print_explicit_spec_files(spec_files)

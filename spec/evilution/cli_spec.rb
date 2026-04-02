@@ -804,10 +804,11 @@ RSpec.describe Evilution::CLI do
     end
 
     it "shows message when no files given and no changed files" do
-      allow(Evilution::Git::ChangedFiles).to receive_message_chain(:new, :call).and_return([])
+      allow(Evilution::Git::ChangedFiles).to receive_message_chain(:new, :call)
+        .and_raise(Evilution::Error, "no changed Ruby files found since merge base with master")
 
       cli = described_class.new(%w[tests list])
-      output = capture_stdout { cli.call }
+      output = capture_stdout { expect(cli.call).to eq(0) }
 
       expect(output).to include("No source files found")
     end
