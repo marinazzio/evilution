@@ -40,6 +40,11 @@ class Evilution::CLI
     when :session_error
       warn("Error: #{@session_error}")
       2
+    when :environment_show
+      run_environment_show
+    when :environment_error
+      warn("Error: #{@environment_error}")
+      2
     when :run
       run_mutations
     end
@@ -61,6 +66,9 @@ class Evilution::CLI
     when "session"
       argv.shift
       extract_session_subcommand(argv)
+    when "environment"
+      argv.shift
+      extract_environment_subcommand(argv)
     when "run"
       argv.shift
     end
@@ -85,6 +93,22 @@ class Evilution::CLI
     else
       @command = :session_error
       @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show, gc"
+      argv.shift
+    end
+  end
+
+  def extract_environment_subcommand(argv)
+    subcommand = argv.first
+    case subcommand
+    when "show"
+      @command = :environment_show
+      argv.shift
+    when nil
+      @command = :environment_error
+      @environment_error = "Missing environment subcommand. Available subcommands: show"
+    else
+      @command = :environment_error
+      @environment_error = "Unknown environment subcommand: #{subcommand}. Available subcommands: show"
       argv.shift
     end
   end
@@ -189,6 +213,56 @@ class Evilution::CLI
     File.write(path, Evilution::Config.default_template)
     $stdout.puts("Created #{path}")
     0
+  end
+
+  def run_environment_show
+    config = Evilution::Config.new(**@options)
+    $stdout.puts(format_environment(config))
+    0
+  rescue Evilution::ConfigError => e
+    warn("Error: #{e.message}")
+    2
+  end
+
+  def format_environment(config)
+    config_file = Evilution::Config::CONFIG_FILES.find { |path| File.exist?(path) }
+    lines = environment_header(config_file)
+    lines.concat(environment_settings(config))
+    lines.join("\n")
+  end
+
+  def environment_header(config_file)
+    [
+      "Evilution Environment",
+      ("=" * 30),
+      "",
+      "evilution: #{Evilution::VERSION}",
+      "ruby: #{RUBY_VERSION}",
+      "config_file: #{config_file || "(none)"}",
+      "",
+      "Settings:"
+    ]
+  end
+
+  def environment_settings(config)
+    [
+      "  timeout: #{config.timeout}",
+      "  format: #{config.format}",
+      "  integration: #{config.integration}",
+      "  jobs: #{config.jobs}",
+      "  isolation: #{config.isolation}",
+      "  baseline: #{config.baseline}",
+      "  incremental: #{config.incremental}",
+      "  verbose: #{config.verbose}",
+      "  quiet: #{config.quiet}",
+      "  progress: #{config.progress}",
+      "  fail_fast: #{config.fail_fast || "(disabled)"}",
+      "  min_score: #{config.min_score}",
+      "  suggest_tests: #{config.suggest_tests}",
+      "  save_session: #{config.save_session}",
+      "  target: #{config.target || "(all files)"}",
+      "  ignore_patterns: #{config.ignore_patterns.empty? ? "(none)" : config.ignore_patterns.inspect}"
+    ]
   end
 
   def run_mcp
