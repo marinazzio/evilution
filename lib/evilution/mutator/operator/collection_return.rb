@@ -4,14 +4,15 @@ require_relative "../operator"
 
 class Evilution::Mutator::Operator::CollectionReturn < Evilution::Mutator::Base
   def visit_def_node(node)
-    if node.body
-      return_node = last_expression(node.body)
+    body = node.body
+    if body.is_a?(Prism::StatementsNode) && body.body.length > 1
+      return_node = body.body.last
       replacement = collection_replacement(return_node)
 
       if replacement
         add_mutation(
-          offset: node.body.location.start_offset,
-          length: node.body.location.length,
+          offset: body.location.start_offset,
+          length: body.location.length,
           replacement: replacement,
           node: node
         )
@@ -19,16 +20,6 @@ class Evilution::Mutator::Operator::CollectionReturn < Evilution::Mutator::Base
     end
 
     super
-  end
-
-  private
-
-  def last_expression(body)
-    if body.is_a?(Prism::StatementsNode)
-      body.body.last
-    else
-      body
-    end
   end
 
   def collection_replacement(node)

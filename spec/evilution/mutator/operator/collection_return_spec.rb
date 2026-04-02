@@ -17,18 +17,16 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReturn do
   end
 
   describe "#call" do
-    it "replaces non-empty array return with []" do
+    it "skips single-expression array return to avoid overlap with ArrayLiteral" do
       muts = mutations_for("returns_array")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_array\s+\[\]\s+end/)
+      expect(muts).to be_empty
     end
 
-    it "replaces non-empty hash return with {}" do
+    it "skips single-expression hash return to avoid overlap with HashLiteral" do
       muts = mutations_for("returns_hash")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def returns_hash\s+\{\}\s+end/)
+      expect(muts).to be_empty
     end
 
     it "does not mutate empty array return" do
@@ -55,14 +53,14 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReturn do
       expect(muts).to be_empty
     end
 
-    it "replaces body with [] when last expression is array" do
+    it "replaces body with [] when last expression is array in multi-line method" do
       muts = mutations_for("multi_line_returns_array")
 
       expect(muts.length).to eq(1)
       expect(muts.first.mutated_source).to match(/def multi_line_returns_array\s+\[\]\s+end/)
     end
 
-    it "replaces body with {} when last expression is hash" do
+    it "replaces body with {} when last expression is hash in multi-line method" do
       muts = mutations_for("multi_line_returns_hash")
 
       expect(muts.length).to eq(1)
@@ -73,14 +71,14 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReturn do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
         muts.each do |mutation|
-          expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
-                                                                 "Invalid Ruby produced for #{mutation}"
+          result = Prism.parse(mutation.mutated_source)
+          expect(result.errors).to be_empty, "Invalid Ruby produced for #{mutation}"
         end
       end
     end
 
     it "sets correct operator_name" do
-      muts = mutations_for("returns_array")
+      muts = mutations_for("multi_line_returns_array")
 
       muts.each do |mutation|
         expect(mutation.operator_name).to eq("collection_return")
