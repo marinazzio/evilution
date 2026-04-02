@@ -183,6 +183,7 @@ class Evilution::Runner
     skipped_count = filter ? filter.skipped_count : 0
 
     mutations, disabled = filter_disabled(mutations)
+    disabled.each(&:strip_sources!) if config.show_disabled?
     disabled_mutations = config.show_disabled? ? disabled : []
     [mutations, skipped_count + disabled.length, disabled_mutations]
   end
