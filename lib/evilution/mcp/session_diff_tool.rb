@@ -3,6 +3,7 @@
 require "json"
 require "mcp"
 require_relative "../session/store"
+require_relative "../session/diff"
 
 require_relative "../mcp"
 
@@ -33,7 +34,10 @@ class Evilution::MCP::SessionDiffTool < MCP::Tool
       base_data = store.load(base)
       head_data = store.load(head)
 
-      ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(build_diff(base_data, head_data)) }])
+      diff = Evilution::Session::Diff.new
+      result = diff.call(base_data, head_data)
+
+      ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(result.to_h) }])
     rescue Evilution::Error => e
       error_response("not_found", e.message)
     rescue ::JSON::ParserError => e
@@ -44,40 +48,6 @@ class Evilution::MCP::SessionDiffTool < MCP::Tool
     # rubocop:enable Lint/UnusedMethodArgument
 
     private
-
-    def build_diff(base_data, head_data)
-      base_survivors = base_data["survived"] || []
-      head_survivors = head_data["survived"] || []
-
-      base_keys = base_survivors.to_set { |m| mutation_key(m) }
-      head_keys = head_survivors.to_set { |m| mutation_key(m) }
-
-      {
-        "summary" => build_summary_diff(base_data, head_data),
-        "fixed" => base_survivors.reject { |m| head_keys.include?(mutation_key(m)) },
-        "new_survivors" => head_survivors.reject { |m| base_keys.include?(mutation_key(m)) },
-        "persistent" => head_survivors.select { |m| base_keys.include?(mutation_key(m)) }
-      }
-    end
-
-    def build_summary_diff(base_data, head_data)
-      base_summary = base_data["summary"] || {}
-      head_summary = head_data["summary"] || {}
-      base_score = base_summary["score"] || 0.0
-      head_score = head_summary["score"] || 0.0
-
-      {
-        "base_score" => base_score,
-        "head_score" => head_score,
-        "score_delta" => (head_score - base_score).round(4),
-        "base_survived" => base_summary["survived"] || 0,
-        "head_survived" => head_summary["survived"] || 0
-      }
-    end
-
-    def mutation_key(mutation)
-      [mutation["operator"], mutation["file"], mutation["line"], mutation["subject"]]
-    end
 
     def error_response(type, message)
       ::MCP::Tool::Response.new(
