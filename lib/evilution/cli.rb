@@ -40,6 +40,8 @@ class Evilution::CLI
     when :session_error
       warn("Error: #{@session_error}")
       2
+    when :subjects
+      run_subjects
     when :environment_show
       run_environment_show
     when :environment_error
@@ -66,6 +68,9 @@ class Evilution::CLI
     when "session"
       argv.shift
       extract_session_subcommand(argv)
+    when "subjects"
+      @command = :subjects
+      argv.shift
     when "environment"
       argv.shift
       extract_environment_subcommand(argv)
@@ -213,6 +218,45 @@ class Evilution::CLI
     File.write(path, Evilution::Config.default_template)
     $stdout.puts("Created #{path}")
     0
+  end
+
+  def run_subjects
+    require_relative "ast/parser"
+    require_relative "mutator/registry"
+
+    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, skip_config_file: false, **@options)
+    parser = Evilution::AST::Parser.new
+    subjects = config.target_files.flat_map { |f| parser.call(f) }
+
+    if subjects.empty?
+      $stdout.puts("No subjects found")
+      return 0
+    end
+
+    registry = Evilution::Mutator::Registry.default
+    filter = build_subject_filter(config)
+    total_mutations = 0
+
+    subjects.each do |subj|
+      count = registry.mutations_for(subj, filter: filter).length
+      total_mutations += count
+      label = count == 1 ? "1 mutation" : "#{count} mutations"
+      $stdout.puts("  #{subj.name}  #{subj.file_path}:#{subj.line_number}  (#{label})")
+    end
+
+    $stdout.puts("")
+    $stdout.puts("#{subjects.length} subjects, #{total_mutations} mutations")
+    0
+  rescue Evilution::Error => e
+    warn("Error: #{e.message}")
+    2
+  end
+
+  def build_subject_filter(config)
+    return nil if config.ignore_patterns.empty?
+
+    require_relative "ast/pattern/filter"
+    Evilution::AST::Pattern::Filter.new(config.ignore_patterns)
   end
 
   def run_environment_show
