@@ -273,7 +273,7 @@ RSpec.describe Evilution::Reporter::HTML do
 
       output = reporter.call(s)
 
-      expect(output).to include("Killtime")
+      expect(output).to include("Efficiency")
       expect(output).to include("50.0%")
       expect(output).to include("Rate")
       expect(output).to include("0.20/s")
@@ -284,7 +284,7 @@ RSpec.describe Evilution::Reporter::HTML do
 
       output = reporter.call(s)
 
-      expect(output).not_to include("Killtime")
+      expect(output).not_to include("Efficiency")
       expect(output).not_to include("Rate")
     end
 

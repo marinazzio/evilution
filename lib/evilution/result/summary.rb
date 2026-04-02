@@ -73,7 +73,7 @@ class Evilution::Result::Summary
   end
 
   def killtime
-    results.sum(&:duration)
+    results.sum(0.0, &:duration)
   end
 
   def efficiency

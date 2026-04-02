@@ -90,7 +90,7 @@ class Evilution::Reporter::HTML
 
     pct = format("%.1f%%", summary.efficiency * 100)
     rate = format("%.2f", summary.mutations_per_second)
-    %(<div class="card"><span class="card-value">#{pct}</span><span class="card-label">Killtime</span></div>) +
+    %(<div class="card"><span class="card-value">#{pct}</span><span class="card-label">Efficiency</span></div>) +
       %(<div class="card"><span class="card-value">#{rate}/s</span><span class="card-label">Rate</span></div>)
   end
 
