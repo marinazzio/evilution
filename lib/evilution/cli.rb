@@ -8,6 +8,8 @@ require_relative "hooks"
 require_relative "hooks/registry"
 require_relative "hooks/loader"
 require_relative "runner"
+require_relative "spec_resolver"
+require_relative "git/changed_files"
 
 class Evilution::CLI
   def initialize(argv, stdin: $stdin)
@@ -22,37 +24,35 @@ class Evilution::CLI
     read_stdin_files if @options.delete(:stdin) && %i[run subjects].include?(@command)
   end
 
-  def call
+  def call # rubocop:disable Metrics/CyclomaticComplexity
     case @command
-    when :version
-      $stdout.puts(Evilution::VERSION)
-      0
-    when :init
-      run_init
-    when :mcp
-      run_mcp
-    when :session_list
-      run_session_list
-    when :session_show
-      run_session_show
-    when :session_gc
-      run_session_gc
-    when :session_error
-      warn("Error: #{@session_error}")
-      2
-    when :subjects
-      run_subjects
-    when :environment_show
-      run_environment_show
-    when :environment_error
-      warn("Error: #{@environment_error}")
-      2
-    when :run
-      run_mutations
+    when :version             then run_version
+    when :init                then run_init
+    when :mcp                 then run_mcp
+    when :session_list        then run_session_list
+    when :session_show        then run_session_show
+    when :session_gc          then run_session_gc
+    when :session_error       then run_subcommand_error(@session_error)
+    when :subjects            then run_subjects
+    when :tests_list          then run_tests_list
+    when :tests_error         then run_subcommand_error(@tests_error)
+    when :environment_show    then run_environment_show
+    when :environment_error   then run_subcommand_error(@environment_error)
+    when :run                 then run_mutations
     end
   end
 
   private
+
+  def run_version
+    $stdout.puts(Evilution::VERSION)
+    0
+  end
+
+  def run_subcommand_error(message)
+    warn("Error: #{message}")
+    2
+  end
 
   def extract_command(argv)
     case argv.first
@@ -71,6 +71,9 @@ class Evilution::CLI
     when "subjects"
       @command = :subjects
       argv.shift
+    when "tests"
+      argv.shift
+      extract_tests_subcommand(argv)
     when "environment"
       argv.shift
       extract_environment_subcommand(argv)
@@ -118,6 +121,22 @@ class Evilution::CLI
     end
   end
 
+  def extract_tests_subcommand(argv)
+    subcommand = argv.first
+    case subcommand
+    when "list"
+      @command = :tests_list
+      argv.shift
+    when nil
+      @command = :tests_error
+      @tests_error = "Missing tests subcommand. Available subcommands: list"
+    else
+      @command = :tests_error
+      @tests_error = "Unknown tests subcommand: #{subcommand}. Available subcommands: list"
+      argv.shift
+    end
+  end
+
   def preprocess_flags(argv)
     result = []
     i = 0
@@ -157,7 +176,7 @@ class Evilution::CLI
     opts.separator ""
     opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
     opts.separator ""
-    opts.separator "Commands: run (default), init, session {list,show,gc}, mcp, version"
+    opts.separator "Commands: run (default), init, session {list,show,gc}, subjects, tests {list}, environment {show}, mcp, version"
     opts.separator ""
     opts.separator "Options:"
   end
@@ -258,6 +277,61 @@ class Evilution::CLI
 
     require_relative "ast/pattern/filter"
     Evilution::AST::Pattern::Filter.new(config.ignore_patterns)
+  end
+
+  def run_tests_list
+    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, **@options)
+
+    if config.spec_files.any?
+      print_explicit_spec_files(config.spec_files)
+      return 0
+    end
+
+    source_files = resolve_source_files(config)
+    if source_files.empty?
+      $stdout.puts("No source files found")
+      return 0
+    end
+
+    resolver = Evilution::SpecResolver.new
+    print_resolved_specs(source_files, resolver)
+    0
+  rescue Evilution::Error => e
+    warn("Error: #{e.message}")
+    2
+  end
+
+  def resolve_source_files(config)
+    return config.target_files unless config.target_files.empty?
+
+    Evilution::Git::ChangedFiles.new.call
+  rescue Evilution::Error
+    []
+  end
+
+  def print_explicit_spec_files(spec_files)
+    spec_files.each { |f| $stdout.puts("  #{f}") }
+    label = spec_files.length == 1 ? "1 spec file" : "#{spec_files.length} spec files"
+    $stdout.puts("")
+    $stdout.puts(label)
+  end
+
+  def print_resolved_specs(source_files, resolver)
+    unique_specs = []
+    source_files.each do |source|
+      spec = resolver.call(source)
+      if spec
+        unique_specs << spec
+        $stdout.puts("  #{spec}  (#{source})")
+      else
+        $stdout.puts("  #{source}  (no spec found)")
+      end
+    end
+
+    unique_specs.uniq!
+    $stdout.puts("")
+    spec_label = unique_specs.length == 1 ? "1 spec file" : "#{unique_specs.length} spec files"
+    $stdout.puts("#{source_files.length} source files, #{spec_label}")
   end
 
   def run_environment_show

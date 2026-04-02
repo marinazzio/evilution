@@ -744,6 +744,97 @@ RSpec.describe Evilution::CLI do
     end
   end
 
+  describe "tests list command" do
+    let(:resolver) { instance_double(Evilution::SpecResolver) }
+
+    before do
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+    end
+
+    it "returns exit code 0" do
+      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+
+      cli = described_class.new(%w[tests list lib/example.rb])
+      capture_stdout { expect(cli.call).to eq(0) }
+    end
+
+    it "lists spec files with source mapping" do
+      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+
+      cli = described_class.new(%w[tests list lib/example.rb lib/user.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("spec/example_spec.rb")
+      expect(output).to include("lib/example.rb")
+      expect(output).to include("spec/user_spec.rb")
+      expect(output).to include("lib/user.rb")
+    end
+
+    it "shows unresolved source files" do
+      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/orphan.rb").and_return(nil)
+
+      cli = described_class.new(%w[tests list lib/example.rb lib/orphan.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("spec/example_spec.rb")
+      expect(output).to include("lib/orphan.rb")
+      expect(output).to include("no spec found")
+    end
+
+    it "shows summary with counts" do
+      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+
+      cli = described_class.new(%w[tests list lib/example.rb lib/user.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("2 source files, 2 spec files")
+    end
+
+    it "deduplicates spec files" do
+      allow(resolver).to receive(:call).with("lib/foo/bar.rb").and_return("spec/foo_spec.rb")
+      allow(resolver).to receive(:call).with("lib/foo/baz.rb").and_return("spec/foo_spec.rb")
+
+      cli = described_class.new(%w[tests list lib/foo/bar.rb lib/foo/baz.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("2 source files, 1 spec file")
+    end
+
+    it "shows message when no files given and no changed files" do
+      allow(Evilution::Git::ChangedFiles).to receive_message_chain(:new, :call)
+        .and_raise(Evilution::Error, "no changed Ruby files found since merge base with master")
+
+      cli = described_class.new(%w[tests list])
+      output = capture_stdout { expect(cli.call).to eq(0) }
+
+      expect(output).to include("No source files found")
+    end
+
+    it "uses --spec files when provided" do
+      cli = described_class.new(%w[tests list --spec spec/custom_spec.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("spec/custom_spec.rb")
+    end
+
+    it "shows error for unknown tests subcommand" do
+      cli = described_class.new(%w[tests bogus])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("Unknown tests subcommand")
+    end
+
+    it "shows error for missing tests subcommand" do
+      cli = described_class.new(%w[tests])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("Missing tests subcommand")
+    end
+  end
+
   describe "subjects command" do
     let(:subject1) do
       double("Subject",
