@@ -720,6 +720,15 @@ RSpec.describe Evilution::CLI do
       expect(output).to include("evilution: #{Evilution::VERSION}")
     end
 
+    it "handles invalid config file gracefully" do
+      File.write(".evilution.yml", "{{invalid yaml")
+
+      cli = described_class.new(%w[environment show])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("Error:")
+    end
+
     it "shows error for unknown environment subcommand" do
       cli = described_class.new(%w[environment bogus])
       output = capture_stderr { cli.call }

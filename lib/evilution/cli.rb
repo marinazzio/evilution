@@ -219,6 +219,9 @@ class Evilution::CLI
     config = Evilution::Config.new(**@options)
     $stdout.puts(format_environment(config))
     0
+  rescue Evilution::ConfigError => e
+    warn("Error: #{e.message}")
+    2
   end
 
   def format_environment(config)
