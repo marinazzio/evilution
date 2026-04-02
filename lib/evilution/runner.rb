@@ -21,6 +21,7 @@ require_relative "cache"
 require_relative "parallel/pool"
 require_relative "session/store"
 require_relative "ast/pattern/filter"
+require_relative "disable_comment"
 
 class Evilution::Runner
   attr_reader :config
@@ -33,6 +34,8 @@ class Evilution::Runner
     @registry = Evilution::Mutator::Registry.default
     @isolator = build_isolator
     @cache = config.incremental? ? Evilution::Cache.new : nil
+    @disable_detector = Evilution::DisableComment.new
+    @disabled_ranges_cache = {}
   end
 
   def call
@@ -74,7 +77,7 @@ class Evilution::Runner
 
   private
 
-  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks
+  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks, :disable_detector
 
   def parse_subjects
     files = resolve_target_files
@@ -176,7 +179,39 @@ class Evilution::Runner
     mutations = subjects.flat_map do |subject|
       registry.mutations_for(subject, filter: filter)
     end
-    [mutations, filter ? filter.skipped_count : 0]
+    skipped_count = filter ? filter.skipped_count : 0
+
+    mutations, disabled_count = filter_disabled(mutations)
+    [mutations, skipped_count + disabled_count]
+  end
+
+  def filter_disabled(mutations)
+    enabled = []
+    disabled_count = 0
+
+    mutations.each do |mutation|
+      if mutation_disabled?(mutation)
+        disabled_count += 1
+      else
+        enabled << mutation
+      end
+    end
+
+    [enabled, disabled_count]
+  end
+
+  def mutation_disabled?(mutation)
+    ranges = disabled_ranges_for(mutation.file_path)
+    ranges.any? { |range| range.cover?(mutation.line) }
+  end
+
+  def disabled_ranges_for(file_path)
+    @disabled_ranges_cache[file_path] ||= begin
+      source = File.read(file_path)
+      @disable_detector.call(source)
+    rescue SystemCallError
+      []
+    end
   end
 
   def build_ignore_filter

@@ -457,9 +457,11 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).with("lib/child.rb").and_return([child_subject])
       allow(parser).to receive(:call).with("lib/other.rb").and_return([unrelated_subject])
 
+      allow(File).to receive(:read).and_call_original
       allow(File).to receive(:read).with("lib/base.rb").and_return("class Base\n  def run; end\nend\n")
       allow(File).to receive(:read).with("lib/child.rb").and_return("class Child < Base\n  def run; end\nend\n")
       allow(File).to receive(:read).with("lib/other.rb").and_return("class Other\n  def work; end\nend\n")
+      allow(File).to receive(:read).with("lib/example.rb").and_return("class Example\n  def foo; end\nend\n")
 
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
@@ -1974,6 +1976,87 @@ RSpec.describe Evilution::Runner do
       described_class.new(config: text_config).call
 
       expect(Evilution::Reporter::ProgressBar).not_to have_received(:new)
+    end
+  end
+
+  describe "disable comment filtering" do
+    let(:disabled_mutation) do
+      double(
+        "DisabledMutation",
+        subject: subject_obj,
+        operator_name: "comparison_replacement",
+        original_source: "a >= b",
+        mutated_source: "a > b",
+        file_path: "lib/example.rb",
+        line: 5,
+        column: 4,
+        diff: "- a >= b\n+ a > b",
+        strip_sources!: nil
+      )
+    end
+
+    let(:enabled_mutation) do
+      double(
+        "EnabledMutation",
+        subject: subject_obj,
+        operator_name: "boolean_literal_replacement",
+        original_source: "true",
+        mutated_source: "false",
+        file_path: "lib/example.rb",
+        line: 10,
+        column: 4,
+        diff: "- true\n+ false",
+        strip_sources!: nil
+      )
+    end
+
+    let(:enabled_result) do
+      Evilution::Result::MutationResult.new(
+        mutation: enabled_mutation,
+        status: :killed,
+        duration: 0.1
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything)
+                                                .and_return([disabled_mutation, enabled_mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(enabled_result)
+
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with("lib/example.rb").and_return("# source with disable\n")
+
+      detector = instance_double(Evilution::DisableComment)
+      allow(Evilution::DisableComment).to receive(:new).and_return(detector)
+      allow(detector).to receive(:call).and_return([3..7])
+    end
+
+    it "filters mutations in disabled ranges" do
+      result = runner.call
+
+      expect(result.total).to eq(1)
+    end
+
+    it "counts disabled mutations as skipped" do
+      result = runner.call
+
+      expect(result.skipped).to eq(1)
+    end
+
+    it "does not run disabled mutations" do
+      isolator = Evilution::Isolation::Fork.new
+      runner.call
+
+      expect(isolator).not_to have_received(:call).with(hash_including(mutation: disabled_mutation))
     end
   end
 
