@@ -101,6 +101,7 @@ require_relative "evilution/spec_resolver"
 require_relative "evilution/baseline"
 require_relative "evilution/cache"
 require_relative "evilution/cli"
+require_relative "evilution/disable_comment"
 require_relative "evilution/runner"
 
 module Evilution
