@@ -662,4 +662,76 @@ RSpec.describe Evilution::CLI do
       end
     end
   end
+
+  describe "environment show command" do
+    around do |example|
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) { example.run }
+      end
+    end
+
+    it "returns exit code 0" do
+      cli = described_class.new(%w[environment show])
+      capture_stdout { expect(cli.call).to eq(0) }
+    end
+
+    it "displays default configuration values" do
+      cli = described_class.new(%w[environment show])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("timeout: 30")
+      expect(output).to include("format: text")
+      expect(output).to include("integration: rspec")
+      expect(output).to include("jobs: 1")
+      expect(output).to include("isolation: auto")
+    end
+
+    it "displays config file path when present" do
+      File.write(".evilution.yml", "timeout: 60\njobs: 4\n")
+
+      cli = described_class.new(%w[environment show])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("config_file: .evilution.yml")
+      expect(output).to include("timeout: 60")
+      expect(output).to include("jobs: 4")
+    end
+
+    it "shows no config file when none exists" do
+      cli = described_class.new(%w[environment show])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("config_file: (none)")
+    end
+
+    it "reflects CLI overrides" do
+      cli = described_class.new(["environment", "show", "--jobs", "8", "--timeout", "15"])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("jobs: 8")
+      expect(output).to include("timeout: 15")
+    end
+
+    it "shows the Ruby and gem versions" do
+      cli = described_class.new(%w[environment show])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("ruby: #{RUBY_VERSION}")
+      expect(output).to include("evilution: #{Evilution::VERSION}")
+    end
+
+    it "shows error for unknown environment subcommand" do
+      cli = described_class.new(%w[environment bogus])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("Unknown environment subcommand")
+    end
+
+    it "shows error for missing environment subcommand" do
+      cli = described_class.new(%w[environment])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("Missing environment subcommand")
+    end
+  end
 end
