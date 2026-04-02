@@ -176,6 +176,18 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first["duration"]).to eq(0.456)
     end
 
+    it "includes efficiency metrics in summary" do
+      parsed = JSON.parse(reporter.call(summary))
+      stats = parsed["summary"]
+
+      expect(stats).to have_key("killtime")
+      expect(stats).to have_key("efficiency")
+      expect(stats).to have_key("mutations_per_second")
+      expect(stats["killtime"]).to eq(0.579)
+      expect(stats["efficiency"]).to be_within(0.001).of(0.965)
+      expect(stats["mutations_per_second"]).to be_within(0.01).of(3.33)
+    end
+
     it "includes truncated when summary is truncated" do
       truncated_summary = Evilution::Result::Summary.new(results: [survived_result, killed_result], duration: 0.6, truncated: true)
       parsed = JSON.parse(reporter.call(truncated_summary))

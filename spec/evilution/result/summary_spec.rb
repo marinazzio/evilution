@@ -229,4 +229,52 @@ RSpec.describe Evilution::Result::Summary do
       expect(s.skipped).to eq(5)
     end
   end
+
+  describe "#killtime" do
+    it "sums individual mutation durations" do
+      r1 = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 1.5)
+      r2 = Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 2.3)
+      s = described_class.new(results: [r1, r2], duration: 10.0)
+
+      expect(s.killtime).to be_within(0.001).of(3.8)
+    end
+
+    it "returns 0.0 for empty results" do
+      s = described_class.new(results: [])
+
+      expect(s.killtime).to eq(0.0)
+    end
+  end
+
+  describe "#efficiency" do
+    it "calculates killtime / duration as a ratio" do
+      r1 = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 3.0)
+      r2 = Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 2.0)
+      s = described_class.new(results: [r1, r2], duration: 10.0)
+
+      expect(s.efficiency).to be_within(0.001).of(0.5)
+    end
+
+    it "returns 0.0 when duration is zero" do
+      s = described_class.new(results: [make_result(:killed)], duration: 0.0)
+
+      expect(s.efficiency).to eq(0.0)
+    end
+  end
+
+  describe "#mutations_per_second" do
+    it "calculates total / duration" do
+      r1 = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 1.0)
+      r2 = Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 1.0)
+      s = described_class.new(results: [r1, r2], duration: 4.0)
+
+      expect(s.mutations_per_second).to be_within(0.001).of(0.5)
+    end
+
+    it "returns 0.0 when duration is zero" do
+      s = described_class.new(results: [make_result(:killed)], duration: 0.0)
+
+      expect(s.mutations_per_second).to eq(0.0)
+    end
+  end
 end
