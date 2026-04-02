@@ -3,72 +3,84 @@
 require "prism"
 
 class Evilution::DisableComment
-  DISABLE_PATTERN = /\A[^"']*#\s*evilution:disable\s*$/
-  ENABLE_PATTERN = /\A[^"']*#\s*evilution:enable\s*$/
-  STANDALONE_DISABLE_PATTERN = /\A\s*#\s*evilution:disable\s*$/
+  DISABLE_MARKER = /\A#\s*evilution:disable\s*\z/
+  ENABLE_MARKER = /\A#\s*evilution:enable\s*\z/
 
   def call(source)
     return [] if source.empty?
 
-    lines = source.lines
-    method_ranges = extract_method_ranges(source)
-    scan_lines(lines, method_ranges)
+    result = Prism.parse(source)
+    return [] if result.failure?
+
+    method_ranges = collect_def_ranges(result.value)
+    comments = classify_comments(result, source)
+    scan_comments(comments, method_ranges, source.lines.length)
   end
 
   private
 
-  def scan_lines(lines, method_ranges)
+  def classify_comments(parse_result, source)
+    parse_result.comments.filter_map do |comment|
+      loc = comment.location
+      text = source[loc.start_offset...loc.end_offset]
+
+      if text.match?(DISABLE_MARKER)
+        line = source.lines[loc.start_line - 1]
+        standalone = line.strip == text.strip
+        { type: :disable, line: loc.start_line, standalone: standalone }
+      elsif text.match?(ENABLE_MARKER)
+        { type: :enable, line: loc.start_line }
+      end
+    end
+  end
+
+  def scan_comments(comments, method_ranges, total_lines)
     disabled = []
     range_start = nil
 
-    lines.each_with_index do |line, index|
-      line_number = index + 1
-
-      if line.match?(ENABLE_PATTERN) && range_start
-        disabled << (range_start..line_number)
+    comments.each do |comment|
+      if comment[:type] == :enable && range_start
+        disabled << (range_start..comment[:line])
         range_start = nil
-      elsif line.match?(DISABLE_PATTERN)
-        range_start = process_disable(line, line_number, method_ranges, disabled)
+      elsif comment[:type] == :disable && range_start.nil?
+        range_start = process_disable(comment, method_ranges, disabled)
       end
     end
 
-    disabled << (range_start..lines.length) if range_start
+    disabled << (range_start..total_lines) if range_start
 
     disabled
   end
 
-  def process_disable(line, line_number, method_ranges, disabled)
-    unless line.match?(STANDALONE_DISABLE_PATTERN)
-      disabled << (line_number..line_number)
+  def process_disable(comment, method_ranges, disabled)
+    unless comment[:standalone]
+      disabled << (comment[:line]..comment[:line])
       return nil
     end
 
-    method_range = find_method_range(method_ranges, line_number + 1)
+    method_range = find_method_range(method_ranges, comment[:line] + 1)
     if method_range
-      disabled << (line_number..method_range.last)
+      disabled << (comment[:line]..method_range.last)
       nil
     else
-      line_number
+      comment[:line]
     end
   end
 
-  def extract_method_ranges(source)
-    result = Prism.parse(source)
-    return [] if result.failure?
-
+  def collect_def_ranges(node)
     ranges = []
-    collect_def_ranges(result.value, ranges)
+    walk_def_nodes(node, ranges)
     ranges
   end
 
-  def collect_def_ranges(node, ranges)
+  def walk_def_nodes(node, ranges)
     if node.is_a?(Prism::DefNode)
       loc = node.location
       ranges << (loc.start_line..loc.end_line)
     end
 
     node.child_nodes.each do |child|
-      collect_def_ranges(child, ranges) if child
+      walk_def_nodes(child, ranges) if child
     end
   end
 

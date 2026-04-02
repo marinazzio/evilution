@@ -205,5 +205,57 @@ RSpec.describe Evilution::DisableComment do
         expect(result).to eq([2..2])
       end
     end
+
+    context "with inline disable after string literal" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = "string" # evilution:disable
+            y = 2
+          end
+        RUBY
+      end
+
+      it "disables the line with the real comment" do
+        result = detector.call(source)
+
+        expect(result).to eq([2..2])
+      end
+    end
+
+    context "with disable marker inside %q string" do
+      let(:source) do
+        <<~RUBY
+          def foo
+            x = %q(# evilution:disable)
+            y = 2
+          end
+        RUBY
+      end
+
+      it "does not treat the string content as a disable comment" do
+        result = detector.call(source)
+
+        expect(result).to eq([])
+      end
+    end
+
+    context "with inline disable inside active range" do
+      let(:source) do
+        <<~RUBY
+          # evilution:disable
+          a = 1
+          x = "hi" # evilution:disable
+          b = 2
+          # evilution:enable
+        RUBY
+      end
+
+      it "does not break the outer range" do
+        result = detector.call(source)
+
+        expect(result).to eq([1..5])
+      end
+    end
   end
 end
