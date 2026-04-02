@@ -22,6 +22,7 @@ require_relative "parallel/pool"
 require_relative "session/store"
 require_relative "ast/pattern/filter"
 require_relative "disable_comment"
+require_relative "ast/sorbet_sig_detector"
 
 class Evilution::Runner
   attr_reader :config
