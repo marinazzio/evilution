@@ -23,25 +23,28 @@ RSpec.describe Evilution::Mutator::Operator::ScalarReturn do
       expect(mutations_for("returns_float")).to be_empty
     end
 
-    it "replaces body with empty string when last expression is a non-empty string" do
+    it "replaces entire body with empty string when last expression is a non-empty string" do
       muts = mutations_for("multi_line_returns_string")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def multi_line_returns_string\s+""\s+end/)
+      method_body = muts.first.mutated_source[/def multi_line_returns_string\n(.+?)\n  end/m, 1]
+      expect(method_body.strip).to eq('""')
     end
 
-    it "replaces body with 0 when last expression is a non-zero integer" do
+    it "replaces entire body with 0 when last expression is a non-zero integer" do
       muts = mutations_for("multi_line_returns_integer")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def multi_line_returns_integer\s+0\s+end/)
+      method_body = muts.first.mutated_source[/def multi_line_returns_integer\n(.+?)\n  end/m, 1]
+      expect(method_body.strip).to eq("0")
     end
 
-    it "replaces body with 0.0 when last expression is a non-zero float" do
+    it "replaces entire body with 0.0 when last expression is a non-zero float" do
       muts = mutations_for("multi_line_returns_float")
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def multi_line_returns_float\s+0\.0\s+end/)
+      method_body = muts.first.mutated_source[/def multi_line_returns_float\n(.+?)\n  end/m, 1]
+      expect(method_body.strip).to eq("0.0")
     end
 
     it "does not mutate when last expression is already the zero value" do
