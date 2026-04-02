@@ -49,7 +49,8 @@ class Evilution::Reporter::Suggestion
     "pattern_matching_guard" => "Add a test with input that matches the pattern but fails the guard to verify filtering",
     "pattern_matching_alternative" => "Add a test with input that matches only one specific alternative to verify each branch is reachable",
     "pattern_matching_array" => "Add a test that verifies each element position in the array pattern matches the expected type or value",
-    "collection_return" => "Add a test that verifies the method returns a non-empty collection, not just any array or hash"
+    "collection_return" => "Add a test that verifies the method returns a non-empty collection, not just any array or hash",
+    "scalar_return" => "Add a test that verifies the method returns a non-zero/non-empty scalar value, not just any type"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -623,6 +624,19 @@ class Evilution::Reporter::Suggestion
         # #{mutation.file_path}:#{mutation.line}
         it 'returns a non-empty collection from ##{method_name}' do
           # Assert the collection has the expected elements, not just non-empty
+          result = subject.#{method_name}(input_value)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "scalar_return" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'returns a non-zero/non-empty value from ##{method_name}' do
+          # Assert the exact scalar value, not just presence or type
           result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end
