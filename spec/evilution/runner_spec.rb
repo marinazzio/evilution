@@ -1441,6 +1441,7 @@ RSpec.describe Evilution::Runner do
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
       allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:worker_stats).and_return([])
 
       parallel_runner = described_class.new(config: parallel_config)
       result = parallel_runner.call
@@ -1474,6 +1475,7 @@ RSpec.describe Evilution::Runner do
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
       allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:worker_stats).and_return([])
 
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
@@ -1489,6 +1491,7 @@ RSpec.describe Evilution::Runner do
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
       allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:worker_stats).and_return([])
 
       expect(mutation).to receive(:strip_sources!)
       expect(mutation2).to receive(:strip_sources!)
@@ -1506,6 +1509,7 @@ RSpec.describe Evilution::Runner do
         captured_block = block
         batch.map { |item| block.call(item) }
       end
+      allow(pool).to receive(:worker_stats).and_return([])
 
       worker_isolator = instance_double(Evilution::Isolation::InProcess)
       allow(Evilution::Isolation::InProcess).to receive(:new).and_return(worker_isolator)
@@ -1607,6 +1611,7 @@ RSpec.describe Evilution::Runner do
       allow(pool).to receive(:map) do |batch, &block|
         batch.map { |item| block.call(item) }
       end
+      allow(pool).to receive(:worker_stats).and_return([])
 
       described_class.new(config: auto_config).call
 
@@ -1633,6 +1638,7 @@ RSpec.describe Evilution::Runner do
       allow(pool).to receive(:map) do |batch, &block|
         batch.map { |item| block.call(item) }
       end
+      allow(pool).to receive(:worker_stats).and_return([])
 
       described_class.new(config: fork_config).call
 
@@ -2086,6 +2092,7 @@ RSpec.describe Evilution::Runner do
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
       allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:worker_stats).and_return([])
 
       expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks).and_return(pool)
 
