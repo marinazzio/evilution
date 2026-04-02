@@ -19,6 +19,7 @@ class Evilution::Reporter::CLI
     append_survived(lines, summary)
     append_neutral(lines, summary)
     append_equivalent(lines, summary)
+    append_disabled(lines, summary)
     lines << ""
     lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
     lines << result_line(summary)
@@ -50,6 +51,14 @@ class Evilution::Reporter::CLI
     lines << ""
     lines << "Equivalent mutations (provably identical behavior):"
     summary.equivalent_results.each { |result| lines << format_neutral(result) }
+  end
+
+  def append_disabled(lines, summary)
+    return unless summary.disabled_mutations.any?
+
+    lines << ""
+    lines << "Disabled mutations (skipped by # evilution:disable):"
+    summary.disabled_mutations.each { |mutation| lines << format_disabled(mutation) }
   end
 
   def header
@@ -90,6 +99,10 @@ class Evilution::Reporter::CLI
 
   def format_neutral(result)
     mutation = result.mutation
+    "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
+  end
+
+  def format_disabled(mutation)
     "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
   end
 

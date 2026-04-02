@@ -341,6 +341,20 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "#show_disabled?" do
+    it "returns false by default" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.show_disabled?).to be false
+    end
+
+    it "returns true when show_disabled is enabled" do
+      config = described_class.new(show_disabled: true, skip_config_file: true)
+
+      expect(config.show_disabled?).to be true
+    end
+  end
+
   describe "fail_fast validation" do
     it "rejects zero" do
       expect { described_class.new(fail_fast: 0, skip_config_file: true) }

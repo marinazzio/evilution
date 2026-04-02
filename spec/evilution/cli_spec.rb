@@ -307,6 +307,26 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--show-disabled flag" do
+      it "sets show_disabled to true" do
+        cli = described_class.new(["--show-disabled"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(show_disabled: true)
+        )
+      end
+
+      it "defaults to false when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(show_disabled: false)
+        )
+      end
+    end
+
     describe "--no-progress flag" do
       it "sets progress to false" do
         cli = described_class.new(["--no-progress"])

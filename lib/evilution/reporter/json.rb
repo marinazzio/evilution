@@ -19,7 +19,7 @@ class Evilution::Reporter::JSON
 
   # rubocop:disable Metrics/PerceivedComplexity
   def build_report(summary)
-    {
+    report = {
       version: Evilution::VERSION,
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),
@@ -30,8 +30,16 @@ class Evilution::Reporter::JSON
       errors: summary.results.select(&:error?).map { |r| build_mutation_detail(r) },
       equivalent: summary.equivalent_results.map { |r| build_mutation_detail(r) }
     }
+    append_disabled_to_report(report, summary)
+    report
   end
   # rubocop:enable Metrics/PerceivedComplexity
+
+  def append_disabled_to_report(report, summary)
+    return unless summary.disabled_mutations.any?
+
+    report[:disabled] = summary.disabled_mutations.map { |m| build_disabled_detail(m) }
+  end
 
   def build_summary(summary)
     data = {
@@ -70,5 +78,14 @@ class Evilution::Reporter::JSON
     detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
     detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
     detail
+  end
+
+  def build_disabled_detail(mutation)
+    {
+      operator: mutation.operator_name,
+      file: mutation.file_path,
+      line: mutation.line,
+      diff: mutation.diff
+    }
   end
 end

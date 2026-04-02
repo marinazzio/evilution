@@ -46,7 +46,7 @@ class Evilution::Runner
 
     baseline_result = run_baseline(subjects)
 
-    mutations, skipped_count = generate_mutations(subjects)
+    mutations, skipped_count, disabled_mutations = generate_mutations(subjects)
     equivalent_mutations, mutations = filter_equivalent(mutations)
     release_subject_nodes(subjects)
     clear_operator_caches
@@ -60,7 +60,8 @@ class Evilution::Runner
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
     summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: truncated,
-                                             skipped: skipped_count)
+                                             skipped: skipped_count,
+                                             disabled_mutations: disabled_mutations)
     output_report(summary)
     save_session(summary)
 
@@ -181,23 +182,24 @@ class Evilution::Runner
     end
     skipped_count = filter ? filter.skipped_count : 0
 
-    mutations, disabled_count = filter_disabled(mutations)
-    [mutations, skipped_count + disabled_count]
+    mutations, disabled = filter_disabled(mutations)
+    disabled_mutations = config.show_disabled? ? disabled : []
+    [mutations, skipped_count + disabled.length, disabled_mutations]
   end
 
   def filter_disabled(mutations)
     enabled = []
-    disabled_count = 0
+    disabled = []
 
     mutations.each do |mutation|
       if mutation_disabled?(mutation)
-        disabled_count += 1
+        disabled << mutation
       else
         enabled << mutation
       end
     end
 
-    [enabled, disabled_count]
+    [enabled, disabled]
   end
 
   def mutation_disabled?(mutation)

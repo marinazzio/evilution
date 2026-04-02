@@ -277,4 +277,17 @@ RSpec.describe Evilution::Result::Summary do
       expect(s.mutations_per_second).to eq(0.0)
     end
   end
+
+  describe "#disabled_mutations" do
+    it "returns empty array by default" do
+      expect(summary.disabled_mutations).to eq([])
+    end
+
+    it "returns disabled mutations when provided" do
+      disabled = [double("Mutation1"), double("Mutation2")]
+      s = described_class.new(results: results, duration: 1.0, disabled_mutations: disabled)
+
+      expect(s.disabled_mutations).to eq(disabled)
+    end
+  end
 end

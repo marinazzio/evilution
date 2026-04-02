@@ -244,5 +244,41 @@ RSpec.describe Evilution::Reporter::JSON do
         expect(parsed["summary"]).not_to have_key("skipped")
       end
     end
+
+    context "with disabled mutations" do
+      let(:disabled_mutation) do
+        double(
+          "Mutation",
+          operator_name: "boolean_literal_replacement",
+          file_path: "lib/user.rb",
+          line: 15,
+          diff: "- true\n+ false"
+        )
+      end
+
+      let(:disabled_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result],
+          duration: 1.0,
+          disabled_mutations: [disabled_mutation]
+        )
+      end
+
+      it "includes disabled mutations in report" do
+        parsed = JSON.parse(reporter.call(disabled_summary))
+
+        expect(parsed["disabled"]).to be_an(Array)
+        expect(parsed["disabled"].length).to eq(1)
+        expect(parsed["disabled"].first["operator"]).to eq("boolean_literal_replacement")
+        expect(parsed["disabled"].first["file"]).to eq("lib/user.rb")
+        expect(parsed["disabled"].first["line"]).to eq(15)
+      end
+
+      it "omits disabled when empty" do
+        parsed = JSON.parse(reporter.call(summary))
+
+        expect(parsed).not_to have_key("disabled")
+      end
+    end
   end
 end
