@@ -32,6 +32,6 @@ class Evilution::AST::SorbetSigDetector
       node.name == :sig &&
       node.receiver.nil? &&
       node.arguments.nil? &&
-      node.block
+      !node.block.nil?
   end
 end

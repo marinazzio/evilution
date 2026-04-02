@@ -20,7 +20,7 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
         ranges = detector.call(source)
 
         expect(ranges.length).to eq(1)
-        expect(source[ranges.first]).to eq("sig { returns(Integer) }")
+        expect(source.byteslice(ranges.first)).to eq("sig { returns(Integer) }")
       end
     end
 
@@ -45,8 +45,8 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
         ranges = detector.call(source)
 
         expect(ranges.length).to eq(1)
-        expect(source[ranges.first]).to start_with("sig do")
-        expect(source[ranges.first]).to end_with("end")
+        expect(source.byteslice(ranges.first)).to start_with("sig do")
+        expect(source.byteslice(ranges.first)).to end_with("end")
       end
     end
 
@@ -71,8 +71,8 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
         ranges = detector.call(source)
 
         expect(ranges.length).to eq(2)
-        expect(source[ranges[0]]).to eq("sig { returns(Integer) }")
-        expect(source[ranges[1]]).to eq("sig { params(x: String).returns(String) }")
+        expect(source.byteslice(ranges[0])).to eq("sig { returns(Integer) }")
+        expect(source.byteslice(ranges[1])).to eq("sig { params(x: String).returns(String) }")
       end
     end
 
