@@ -2091,6 +2091,89 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "sig block filtering" do
+    let(:sig_mutation) do
+      double(
+        "SigMutation",
+        subject: subject_obj,
+        operator_name: "boolean_literal_replacement",
+        original_source: "true",
+        mutated_source: "false",
+        file_path: "lib/example.rb",
+        line: 4,
+        column: 4,
+        diff: "- true\n+ false",
+        strip_sources!: nil
+      )
+    end
+
+    let(:normal_mutation) do
+      double(
+        "NormalMutation",
+        subject: subject_obj,
+        operator_name: "comparison_replacement",
+        original_source: "a >= b",
+        mutated_source: "a > b",
+        file_path: "lib/example.rb",
+        line: 10,
+        column: 4,
+        diff: "- a >= b\n+ a > b",
+        strip_sources!: nil
+      )
+    end
+
+    let(:normal_result) do
+      Evilution::Result::MutationResult.new(
+        mutation: normal_mutation,
+        status: :killed,
+        duration: 0.1
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything)
+                                                .and_return([sig_mutation, normal_mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(normal_result)
+
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with("lib/example.rb").and_return(
+        "class Foo\n  extend T::Sig\n\n  sig { returns(T::Boolean) }\n  def bar\n    true\n  end\n\n  def baz\n    a >= b\n  end\nend\n"
+      )
+
+      sig_detector = instance_double(Evilution::AST::SorbetSigDetector)
+      allow(Evilution::AST::SorbetSigDetector).to receive(:new).and_return(sig_detector)
+      allow(sig_detector).to receive(:line_ranges).and_return([4..4])
+    end
+
+    it "filters mutations inside sig blocks" do
+      result = runner.call
+
+      expect(result.total).to eq(1)
+    end
+
+    it "counts sig block mutations as skipped" do
+      result = runner.call
+
+      expect(result.skipped).to eq(1)
+    end
+
+    it "does not run mutations inside sig blocks" do
+      isolator = Evilution::Isolation::Fork.new
+      runner.call
+
+      expect(isolator).not_to have_received(:call).with(hash_including(mutation: sig_mutation))
+    end
+  end
+
   describe "on_result callback" do
     let(:survived_result) do
       Evilution::Result::MutationResult.new(

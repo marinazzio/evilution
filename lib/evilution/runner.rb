@@ -22,6 +22,7 @@ require_relative "parallel/pool"
 require_relative "session/store"
 require_relative "ast/pattern/filter"
 require_relative "disable_comment"
+require_relative "ast/sorbet_sig_detector"
 
 class Evilution::Runner
   attr_reader :config
@@ -36,6 +37,8 @@ class Evilution::Runner
     @cache = config.incremental? ? Evilution::Cache.new : nil
     @disable_detector = Evilution::DisableComment.new
     @disabled_ranges_cache = {}
+    @sig_detector = Evilution::AST::SorbetSigDetector.new
+    @sig_ranges_cache = {}
   end
 
   def call
@@ -78,7 +81,7 @@ class Evilution::Runner
 
   private
 
-  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks, :disable_detector
+  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks, :disable_detector, :sig_detector
 
   def parse_subjects
     files = resolve_target_files
@@ -185,7 +188,10 @@ class Evilution::Runner
     mutations, disabled = filter_disabled(mutations)
     disabled.each(&:strip_sources!) if config.show_disabled?
     disabled_mutations = config.show_disabled? ? disabled : []
-    [mutations, skipped_count + disabled.length, disabled_mutations]
+
+    mutations, sig_skipped = filter_sig_blocks(mutations)
+
+    [mutations, skipped_count + disabled.length + sig_skipped, disabled_mutations]
   end
 
   def filter_disabled(mutations)
@@ -212,6 +218,35 @@ class Evilution::Runner
     @disabled_ranges_cache[file_path] ||= begin
       source = File.read(file_path)
       @disable_detector.call(source)
+    rescue SystemCallError
+      []
+    end
+  end
+
+  def filter_sig_blocks(mutations)
+    enabled = []
+    skipped = 0
+
+    mutations.each do |mutation|
+      if mutation_in_sig_block?(mutation)
+        skipped += 1
+      else
+        enabled << mutation
+      end
+    end
+
+    [enabled, skipped]
+  end
+
+  def mutation_in_sig_block?(mutation)
+    ranges = sig_line_ranges_for(mutation.file_path)
+    ranges.any? { |range| range.cover?(mutation.line) }
+  end
+
+  def sig_line_ranges_for(file_path)
+    @sig_ranges_cache[file_path] ||= begin
+      source = File.read(file_path)
+      @sig_detector.line_ranges(source)
     rescue SystemCallError
       []
     end
