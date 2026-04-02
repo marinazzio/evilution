@@ -743,4 +743,116 @@ RSpec.describe Evilution::CLI do
       expect(output).to include("Missing environment subcommand")
     end
   end
+
+  describe "subjects command" do
+    let(:subject1) do
+      double("Subject",
+             name: "Example#foo",
+             file_path: "lib/example.rb",
+             line_number: 10,
+             source: "def foo\n  x + 1\nend",
+             release_node!: nil)
+    end
+
+    let(:subject2) do
+      double("Subject",
+             name: "Example#bar",
+             file_path: "lib/example.rb",
+             line_number: 25,
+             source: "def bar\n  y\nend",
+             release_node!: nil)
+    end
+
+    before do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1, subject2])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject1, filter: anything).and_return([double, double, double])
+      allow(registry).to receive(:mutations_for).with(subject2, filter: anything).and_return([double])
+    end
+
+    it "returns exit code 0" do
+      cli = described_class.new(%w[subjects lib/example.rb])
+      capture_stdout { expect(cli.call).to eq(0) }
+    end
+
+    it "lists subjects with file path and line number" do
+      cli = described_class.new(%w[subjects lib/example.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("Example#foo")
+      expect(output).to include("lib/example.rb:10")
+      expect(output).to include("Example#bar")
+      expect(output).to include("lib/example.rb:25")
+    end
+
+    it "shows mutation count per subject" do
+      cli = described_class.new(%w[subjects lib/example.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to match(/Example#foo.*3 mutations/)
+      expect(output).to match(/Example#bar.*1 mutation[^s]/)
+    end
+
+    it "shows total summary" do
+      cli = described_class.new(%w[subjects lib/example.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("2 subjects, 4 mutations")
+    end
+
+    it "shows message when no subjects found" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([])
+
+      cli = described_class.new(%w[subjects lib/empty.rb])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("No subjects found")
+    end
+
+    it "passes target option to runner config" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      cli = described_class.new(%w[subjects --target Example#foo lib/example.rb])
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(target: "Example#foo")
+      )
+    end
+
+    it "passes line ranges to runner config" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      cli = described_class.new(%w[subjects lib/example.rb:10-20])
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(line_ranges: { "lib/example.rb" => 10..20 })
+      )
+    end
+
+    it "handles stdin file list" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      stdin = StringIO.new("lib/example.rb\n")
+      cli = described_class.new(%w[subjects --stdin], stdin: stdin)
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(target_files: %w[lib/example.rb])
+      )
+    end
+
+    it "reports error for invalid config" do
+      allow(runner).to receive(:parse_and_filter_subjects)
+        .and_raise(Evilution::Error, "no files found matching 'nope'")
+
+      cli = described_class.new(%w[subjects lib/example.rb])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("no files found matching")
+    end
+  end
 end

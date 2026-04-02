@@ -19,7 +19,7 @@ class Evilution::CLI
     argv = preprocess_flags(argv)
     raw_args = build_option_parser.parse!(argv)
     @files, @line_ranges = parse_file_args(raw_args)
-    read_stdin_files if @options.delete(:stdin) && @command == :run
+    read_stdin_files if @options.delete(:stdin) && %i[run subjects].include?(@command)
   end
 
   def call
@@ -40,6 +40,8 @@ class Evilution::CLI
     when :session_error
       warn("Error: #{@session_error}")
       2
+    when :subjects
+      run_subjects
     when :environment_show
       run_environment_show
     when :environment_error
@@ -66,6 +68,9 @@ class Evilution::CLI
     when "session"
       argv.shift
       extract_session_subcommand(argv)
+    when "subjects"
+      @command = :subjects
+      argv.shift
     when "environment"
       argv.shift
       extract_environment_subcommand(argv)
@@ -213,6 +218,46 @@ class Evilution::CLI
     File.write(path, Evilution::Config.default_template)
     $stdout.puts("Created #{path}")
     0
+  end
+
+  def run_subjects
+    raise Evilution::ConfigError, @stdin_error if @stdin_error
+
+    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, **@options)
+    runner = Evilution::Runner.new(config: config)
+    subjects = runner.parse_and_filter_subjects
+
+    if subjects.empty?
+      $stdout.puts("No subjects found")
+      return 0
+    end
+
+    registry = Evilution::Mutator::Registry.default
+    filter = build_subject_filter(config)
+    total_mutations = 0
+
+    subjects.each do |subj|
+      count = registry.mutations_for(subj, filter: filter).length
+      total_mutations += count
+      label = count == 1 ? "1 mutation" : "#{count} mutations"
+      $stdout.puts("  #{subj.name}  #{subj.file_path}:#{subj.line_number}  (#{label})")
+    ensure
+      subj.release_node!
+    end
+
+    $stdout.puts("")
+    $stdout.puts("#{subjects.length} subjects, #{total_mutations} mutations")
+    0
+  rescue Evilution::Error => e
+    warn("Error: #{e.message}")
+    2
+  end
+
+  def build_subject_filter(config)
+    return nil if config.ignore_patterns.empty?
+
+    require_relative "ast/pattern/filter"
+    Evilution::AST::Pattern::Filter.new(config.ignore_patterns)
   end
 
   def run_environment_show
