@@ -164,4 +164,60 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
       end
     end
   end
+
+  describe "#line_ranges" do
+    context "with inline sig block" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            sig { returns(Integer) }
+            def bar
+              42
+            end
+          end
+        RUBY
+      end
+
+      it "returns line ranges of sig blocks" do
+        ranges = detector.line_ranges(source)
+
+        expect(ranges).to eq([2..2])
+      end
+    end
+
+    context "with multi-line sig block" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            sig do
+              params(name: String).returns(T::Boolean)
+            end
+            def bar(name)
+              true
+            end
+          end
+        RUBY
+      end
+
+      it "returns the full line range of the sig block" do
+        ranges = detector.line_ranges(source)
+
+        expect(ranges).to eq([2..4])
+      end
+    end
+
+    context "with no sig blocks" do
+      it "returns an empty array" do
+        ranges = detector.line_ranges("def foo; end")
+
+        expect(ranges).to eq([])
+      end
+    end
+
+    context "with empty source" do
+      it "returns an empty array" do
+        expect(detector.line_ranges("")).to eq([])
+      end
+    end
+  end
 end
