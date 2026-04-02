@@ -53,7 +53,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       neutral_results: [],
       equivalent_results: [],
       peak_memory_mb: nil,
-      skipped: 0
+      skipped: 0,
+      disabled_mutations: []
     )
   end
 
@@ -228,7 +229,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent: 0,
           equivalent_results: [],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
 
@@ -274,7 +276,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent: 0,
           equivalent_results: [],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
         allow(runner).to receive(:call).and_return(error_summary)
 
@@ -320,7 +323,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent: 0,
           equivalent_results: [],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
@@ -375,7 +379,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent: 0,
           equivalent_results: [],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
         allow(runner).to receive(:call).and_return(survived_summary)
 
@@ -503,7 +508,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [],
           equivalent_results: [equivalent_result],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
         allow(runner).to receive(:call).and_return(equivalent_summary)
 
@@ -571,7 +577,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral_results: [],
           equivalent_results: [],
           peak_memory_mb: nil,
-          skipped: 0
+          skipped: 0,
+          disabled_mutations: []
         )
       end
 

@@ -258,5 +258,37 @@ RSpec.describe Evilution::Reporter::CLI do
         expect(output).not_to include("skipped")
       end
     end
+
+    context "with disabled mutations" do
+      let(:disabled_mutation) do
+        double(
+          "Mutation",
+          operator_name: "boolean_literal_replacement",
+          file_path: "lib/user.rb",
+          line: 15
+        )
+      end
+
+      let(:disabled_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result],
+          duration: 1.0,
+          disabled_mutations: [disabled_mutation]
+        )
+      end
+
+      it "shows disabled mutations section" do
+        output = reporter.call(disabled_summary)
+
+        expect(output).to include("Disabled mutations (skipped by # evilution:disable):")
+        expect(output).to include("boolean_literal_replacement: lib/user.rb:15")
+      end
+
+      it "does not show disabled section when empty" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("Disabled mutations")
+      end
+    end
   end
 end

@@ -2058,6 +2058,37 @@ RSpec.describe Evilution::Runner do
 
       expect(isolator).not_to have_received(:call).with(hash_including(mutation: disabled_mutation))
     end
+
+    context "with show_disabled enabled" do
+      let(:show_disabled_config) do
+        Evilution::Config.new(
+          target_files: ["lib/example.rb"],
+          format: :json,
+          timeout: 5,
+          quiet: true,
+          baseline: false,
+          isolation: :fork,
+          show_disabled: true,
+          skip_config_file: true
+        )
+      end
+
+      let(:show_disabled_runner) { described_class.new(config: show_disabled_config) }
+
+      it "includes disabled mutations in summary" do
+        result = show_disabled_runner.call
+
+        expect(result.disabled_mutations).to eq([disabled_mutation])
+      end
+    end
+
+    context "with show_disabled not enabled" do
+      it "does not include disabled mutations in summary" do
+        result = runner.call
+
+        expect(result.disabled_mutations).to eq([])
+      end
+    end
   end
 
   describe "on_result callback" do
