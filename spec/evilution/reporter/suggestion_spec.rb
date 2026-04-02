@@ -1437,6 +1437,70 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "collection_return" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("collection_return",
+                                  diff: "-   x = compute\n-   [x, x + 1]\n+   []")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("collection_return",
+                                  diff: "-   x = compute\n-   [x, x + 1]\n+   []")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("x = compute")
+        expect(suggestion).to include("[]")
+      end
+
+      it "advises testing non-empty collection return" do
+        mutation = build_mutation("collection_return",
+                                  diff: "-   x = compute\n-   [x, x + 1]\n+   []")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("collection").or include("non-empty")
+      end
+    end
+
+    describe "scalar_return" do
+      it "generates an RSpec it-block with the method name" do
+        mutation = build_mutation("scalar_return",
+                                  diff: "-   x = compute\n-   42\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("it")
+        expect(suggestion).to include("expect")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated code in a comment" do
+        mutation = build_mutation("scalar_return",
+                                  diff: "-   x = compute\n-   42\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("x = compute")
+        expect(suggestion).to include("0")
+      end
+
+      it "advises testing non-zero scalar return" do
+        mutation = build_mutation("scalar_return",
+                                  diff: "-   x = compute\n-   42\n+   0")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("non-zero").or include("non-empty").or include("scalar")
+      end
+    end
+
     it "falls back to static template for operators without concrete suggestions" do
       mutation = build_mutation("argument_removal")
 
