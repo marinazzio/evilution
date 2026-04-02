@@ -19,7 +19,7 @@ class Evilution::CLI
     argv = preprocess_flags(argv)
     raw_args = build_option_parser.parse!(argv)
     @files, @line_ranges = parse_file_args(raw_args)
-    read_stdin_files if @options.delete(:stdin) && @command == :run
+    read_stdin_files if @options.delete(:stdin) && %i[run subjects].include?(@command)
   end
 
   def call
@@ -221,12 +221,11 @@ class Evilution::CLI
   end
 
   def run_subjects
-    require_relative "ast/parser"
-    require_relative "mutator/registry"
+    raise Evilution::ConfigError, @stdin_error if @stdin_error
 
-    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, skip_config_file: false, **@options)
-    parser = Evilution::AST::Parser.new
-    subjects = config.target_files.flat_map { |f| parser.call(f) }
+    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, **@options)
+    runner = Evilution::Runner.new(config: config)
+    subjects = runner.parse_and_filter_subjects
 
     if subjects.empty?
       $stdout.puts("No subjects found")
@@ -242,6 +241,8 @@ class Evilution::CLI
       total_mutations += count
       label = count == 1 ? "1 mutation" : "#{count} mutations"
       $stdout.puts("  #{subj.name}  #{subj.file_path}:#{subj.line_number}  (#{label})")
+    ensure
+      subj.release_node!
     end
 
     $stdout.puts("")

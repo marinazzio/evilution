@@ -764,9 +764,7 @@ RSpec.describe Evilution::CLI do
     end
 
     before do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).and_return([subject1, subject2])
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1, subject2])
 
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
@@ -805,14 +803,56 @@ RSpec.describe Evilution::CLI do
     end
 
     it "shows message when no subjects found" do
-      parser = instance_double(Evilution::AST::Parser)
-      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
-      allow(parser).to receive(:call).and_return([])
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([])
 
       cli = described_class.new(%w[subjects lib/empty.rb])
       output = capture_stdout { cli.call }
 
       expect(output).to include("No subjects found")
+    end
+
+    it "passes target option to runner config" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      cli = described_class.new(%w[subjects --target Example#foo lib/example.rb])
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(target: "Example#foo")
+      )
+    end
+
+    it "passes line ranges to runner config" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      cli = described_class.new(%w[subjects lib/example.rb:10-20])
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(line_ranges: { "lib/example.rb" => 10..20 })
+      )
+    end
+
+    it "handles stdin file list" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1])
+
+      stdin = StringIO.new("lib/example.rb\n")
+      cli = described_class.new(%w[subjects --stdin], stdin: stdin)
+      capture_stdout { cli.call }
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        config: having_attributes(target_files: %w[lib/example.rb])
+      )
+    end
+
+    it "reports error for invalid config" do
+      allow(runner).to receive(:parse_and_filter_subjects)
+        .and_raise(Evilution::Error, "no files found matching 'nope'")
+
+      cli = described_class.new(%w[subjects lib/example.rb])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("no files found matching")
     end
   end
 end

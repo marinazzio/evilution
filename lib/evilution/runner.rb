@@ -64,10 +64,6 @@ class Evilution::Runner
     summary
   end
 
-  private
-
-  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks
-
   def parse_and_filter_subjects
     subjects = parse_subjects
     subjects = filter_by_descendants(subjects) if descendants_target?
@@ -75,6 +71,10 @@ class Evilution::Runner
     subjects = filter_by_line_ranges(subjects) if config.line_ranges?
     subjects
   end
+
+  private
+
+  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks
 
   def parse_subjects
     files = resolve_target_files
