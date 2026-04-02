@@ -89,7 +89,7 @@ RSpec.describe Evilution::Reporter::CLI do
     it "shows efficiency metrics" do
       output = reporter.call(summary)
 
-      expect(output).to match(/Efficiency: \d+\.\d+% killtime, \d+\.\d+ mutations\/s/)
+      expect(output).to match(%r{Efficiency: \d+\.\d+% killtime, \d+\.\d+ mutations/s})
     end
 
     it "calculates correct efficiency values" do
