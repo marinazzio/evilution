@@ -48,7 +48,8 @@ class Evilution::Reporter::Suggestion
     "index_assignment_removal" => "Add a test that verifies the []= assignment side effect is observable (the collection is modified)",
     "pattern_matching_guard" => "Add a test with input that matches the pattern but fails the guard to verify filtering",
     "pattern_matching_alternative" => "Add a test with input that matches only one specific alternative to verify each branch is reachable",
-    "pattern_matching_array" => "Add a test that verifies each element position in the array pattern matches the expected type or value"
+    "pattern_matching_array" => "Add a test that verifies each element position in the array pattern matches the expected type or value",
+    "collection_return" => "Add a test that verifies the method returns a non-empty collection, not just any array or hash"
   }.freeze
 
   CONCRETE_TEMPLATES = {
@@ -610,6 +611,19 @@ class Evilution::Reporter::Suggestion
           # Test with input that matches only one specific alternative
           # Each alternative should have a dedicated test case
           result = subject.#{method_name}(input_for_specific_alternative)
+          expect(result).to eq(expected)
+        end
+      RSPEC
+    },
+    "collection_return" => lambda { |mutation|
+      method_name = parse_method_name(mutation.subject.name)
+      original_line, mutated_line = extract_diff_lines(mutation.diff)
+      <<~RSPEC.strip
+        # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
+        # #{mutation.file_path}:#{mutation.line}
+        it 'returns a non-empty collection from ##{method_name}' do
+          # Assert the collection has the expected elements, not just non-empty
+          result = subject.#{method_name}(input_value)
           expect(result).to eq(expected)
         end
       RSPEC
