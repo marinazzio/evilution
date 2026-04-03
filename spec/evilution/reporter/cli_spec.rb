@@ -8,12 +8,14 @@ RSpec.describe Evilution::Reporter::CLI do
   subject(:reporter) { described_class.new }
 
   let(:survived_mutation) do
+    subj = double("Subject", name: "User#check")
     double(
       "Mutation",
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 9,
-      diff: "- x >= 10\n+ x > 10"
+      diff: "- x >= 10\n+ x > 10",
+      subject: subj
     )
   end
 
@@ -115,6 +117,12 @@ RSpec.describe Evilution::Reporter::CLI do
 
       expect(output).to include("Survived mutations:")
       expect(output).to include("comparison_replacement: lib/user.rb:9")
+    end
+
+    it "shows the subject name for survived mutations" do
+      output = reporter.call(summary)
+
+      expect(output).to include("User#check")
     end
 
     it "shows the diff for survived mutations" do
