@@ -39,7 +39,7 @@ evilution [command] [options] [files...]
 | `session list`       | List saved session results                          |         |
 | `session show FILE`  | Display detailed session results                    |         |
 | `session diff A B`   | Compare two sessions (fixed/new/persistent)         |         |
-| `session gc`         | Garbage-collect old session results                 |         |
+| `session gc --older-than D` | Garbage-collect sessions older than D (e.g. 30d) |         |
 | `util mutation`      | Preview mutations for a file or inline code         |         |
 | `environment show`   | Display runtime environment and settings            |         |
 
@@ -47,9 +47,9 @@ evilution [command] [options] [files...]
 
 | Flag                         | Type    | Default      | Description                                       |
 |------------------------------|---------|--------------|---------------------------------------------------|
-| `-t`, `--timeout N`          | Integer | 10           | Per-mutation timeout in seconds.                   |
+| `-t`, `--timeout N`          | Integer | 30           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
-| `--target METHOD`            | String  | _(none)_     | Only mutate the named method (e.g. `Foo::Bar#calculate`). Supports class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
+| `--target EXPR`              | String  | _(none)_     | Only mutate matching methods. Supports method name (`Foo::Bar#calculate`), class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
@@ -60,7 +60,7 @@ evilution [command] [options] [files...]
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
 | `--incremental`              | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. |
-| `--save-results`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
+| `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
@@ -81,7 +81,7 @@ Generate default config: `bundle exec evilution init`
 Creates `.evilution.yml`:
 
 ```yaml
-# timeout: 10              # seconds per mutation
+# timeout: 30              # seconds per mutation
 # format: text             # text | json | html
 # min_score: 0.0           # 0.0–1.0
 # integration: rspec       # test framework
