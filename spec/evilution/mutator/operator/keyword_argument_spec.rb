@@ -94,8 +94,27 @@ RSpec.describe Evilution::Mutator::Operator::KeywordArgument do
       source = "def foo(**opts)\n  opts\nend\n"
       mutations = mutations_for(source)
 
-      removed = mutations.select { |m| m.mutated_source.include?("def foo()") || m.mutated_source.include?("def foo") }
+      removed = mutations.reject { |m| m.mutated_source.include?("**opts") }
       expect(removed).not_to be_empty
+    end
+  end
+
+  describe "valid Ruby output" do
+    it "produces valid Ruby for all mutations" do
+      sources = [
+        "def foo(bar: 42)\n  bar\nend\n",
+        "def foo(x, bar: 1, baz: 2)\n  x\nend\n",
+        "def foo(x, **opts)\n  x\nend\n",
+        "def foo(**opts)\n  opts\nend\n"
+      ]
+
+      sources.each do |source|
+        mutations_for(source).each do |mutation|
+          result = Prism.parse(mutation.mutated_source)
+          expect(result.errors).to be_empty,
+                                   "Invalid Ruby produced for #{mutation}: #{result.errors.map(&:message)}"
+        end
+      end
     end
   end
 
