@@ -8,13 +8,15 @@ RSpec.describe Evilution::Reporter::HTML do
   subject(:reporter) { described_class.new }
 
   let(:survived_mutation) do
+    subj = double("Subject", name: "User#check")
     double(
       "Mutation",
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 9,
       column: 4,
-      diff: "- x >= 10\n+ x > 10"
+      diff: "- x >= 10\n+ x > 10",
+      subject: subj
     )
   end
 
@@ -323,13 +325,15 @@ RSpec.describe Evilution::Reporter::HTML do
     end
 
     it "marks new survivors as regressions" do
+      new_subj = double("Subject", name: "User#new_method")
       new_survived_mutation = double(
         "Mutation",
         operator_name: "boolean_literal_replacement",
         file_path: "lib/user.rb",
         line: 15,
         column: 4,
-        diff: "- true\n+ false"
+        diff: "- true\n+ false",
+        subject: new_subj
       )
       new_survived_result = Evilution::Result::MutationResult.new(
         mutation: new_survived_mutation,
@@ -342,7 +346,7 @@ RSpec.describe Evilution::Reporter::HTML do
       )
       output = reporter_with_baseline.call(s)
 
-      expect(output).to include("regression")
+      expect(output).to include("NEW REGRESSION")
     end
 
     it "does not mark pre-existing survivors as regressions" do

@@ -243,7 +243,7 @@ class Evilution::Reporter::HTML
   def regression?(mutation)
     return false if @baseline_keys.nil?
 
-    key = [mutation.operator_name, mutation.file_path, mutation.line]
+    key = [mutation.operator_name, mutation.file_path, mutation.line, mutation.subject.name]
     !@baseline_keys.include?(key)
   end
 
@@ -251,7 +251,7 @@ class Evilution::Reporter::HTML
     return nil unless baseline
 
     survived = baseline["survived"] || []
-    survived.to_set { |m| [m["operator"], m["file"], m["line"]] }
+    survived.to_set { |m| [m["operator"], m["file"], m["line"], m["subject"]] }
   end
 
   def h(text)
