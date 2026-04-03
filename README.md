@@ -29,27 +29,42 @@ evilution [command] [options] [files...]
 
 ### Commands
 
-| Command   | Description                              | Default |
-|-----------|------------------------------------------|---------|
-| `run`     | Execute mutation testing against files   | Yes     |
-| `init`    | Generate `.evilution.yml` config file    |         |
-| `version` | Print version string                     |         |
+| Command              | Description                                        | Default |
+|----------------------|----------------------------------------------------|---------|
+| `run`                | Execute mutation testing against files              | Yes     |
+| `init`               | Generate `.evilution.yml` config file               |         |
+| `version`            | Print version string                                |         |
+| `subjects [files]`   | List mutation subjects with locations and counts    |         |
+| `tests list [files]` | List spec files mapped to source files              |         |
+| `session list`       | List saved session results                          |         |
+| `session show FILE`  | Display detailed session results                    |         |
+| `session diff A B`   | Compare two sessions (fixed/new/persistent)         |         |
+| `session gc --older-than D` | Garbage-collect sessions older than D (e.g. 30d) |         |
+| `util mutation`      | Preview mutations for a file or inline code         |         |
+| `environment show`   | Display runtime environment and settings            |         |
 
 ### Options (for `run` command)
 
-| Flag                    | Type    | Default      | Description                                       |
-|-------------------------|---------|--------------|---------------------------------------------------|
-| `-t`, `--timeout N`     | Integer | 10           | Per-mutation timeout in seconds.                   |
-| `-f`, `--format FORMAT` | String  | `text`       | Output format: `text` or `json`.                  |
-| `--target METHOD`       | String  | _(none)_     | Only mutate the named method (e.g. `Foo::Bar#calculate`). |
-| `--min-score FLOAT`     | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
-| `--spec FILES`          | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
-| `-j`, `--jobs N`        | Integer | 1            | Number of parallel workers. Pool forks per batch; mutations run in-process inside workers. |
-| `--no-baseline`         | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
-| `--fail-fast [N]`       | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
-| `-v`, `--verbose`       | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
-| `--suggest-tests`       | Boolean | false        | Generate concrete RSpec test code in suggestions instead of static descriptions. |
-| `-q`, `--quiet`         | Boolean | false        | Suppress output.                                   |
+| Flag                         | Type    | Default      | Description                                       |
+|------------------------------|---------|--------------|---------------------------------------------------|
+| `-t`, `--timeout N`          | Integer | 30           | Per-mutation timeout in seconds.                   |
+| `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
+| `--target EXPR`              | String  | _(none)_     | Only mutate matching methods. Supports method name (`Foo::Bar#calculate`), class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
+| `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
+| `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
+| `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
+| `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
+| `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
+| `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
+| `--suggest-tests`            | Boolean | false        | Generate concrete RSpec test code in suggestions instead of static descriptions. |
+| `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
+| `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
+| `--incremental`              | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. |
+| `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
+| `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
+| `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
+| `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
+| `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
 
 ### Exit Codes
 
@@ -66,14 +81,42 @@ Generate default config: `bundle exec evilution init`
 Creates `.evilution.yml`:
 
 ```yaml
-# timeout: 10           # seconds per mutation
-# format: text          # text | json
-# min_score: 0.0        # 0.0–1.0
-# integration: rspec    # test framework
-# suggest_tests: false  # concrete RSpec test code in suggestions
+# timeout: 30              # seconds per mutation
+# format: text             # text | json | html
+# min_score: 0.0           # 0.0–1.0
+# integration: rspec       # test framework
+# suggest_tests: false     # concrete RSpec test code in suggestions
+# save_session: false      # persist results under .evilution/results/
+# show_disabled: false     # report mutations skipped by disable comments
+# baseline_session: null   # path to session file for HTML comparison
+# ignore_patterns: []      # AST patterns to exclude (see docs/ast_pattern_syntax.md)
+# progress: true           # TTY progress bar
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.
+
+## Disable Comments
+
+Suppress mutations on specific code with inline comments:
+
+```ruby
+# Disable a single line
+log(message) # evilution:disable
+
+# Disable an entire method (place comment immediately before def)
+# evilution:disable
+def infrastructure_method
+  # no mutations generated for this method body
+end
+
+# Disable a region
+# evilution:disable
+setup_logging
+configure_metrics
+# evilution:enable
+```
+
+Use `--show-disabled` to see which mutations were skipped.
 
 ## JSON Output Schema
 
@@ -112,30 +155,72 @@ Use `--format json` for machine-readable output. Schema:
 
 **Key metric**: `summary.score` — the mutation score. Higher is better. 1.0 means all mutations were caught.
 
-## Mutation Operators (18 total)
+## Mutation Operators (60 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
-| Operator                  | What it does                              | Example                            |
-|---------------------------|-------------------------------------------|------------------------------------|
-| `arithmetic_replacement`  | Swap arithmetic operators                 | `a + b` -> `a - b`                |
-| `comparison_replacement`  | Swap comparison operators                 | `a >= b` -> `a > b`               |
-| `boolean_operator_replacement` | Swap `&&` / `\|\|`                   | `a && b` -> `a \|\| b`            |
-| `boolean_literal_replacement`  | Flip boolean literals                 | `true` -> `false`                  |
-| `nil_replacement`         | Replace expression with `nil`             | `expr` -> `nil`                    |
-| `integer_literal`         | Boundary-value integer mutations          | `n` -> `0`, `1`, `n+1`, `n-1`     |
-| `float_literal`           | Boundary-value float mutations            | `f` -> `0.0`, `1.0`               |
-| `string_literal`          | Empty the string                          | `"str"` -> `""`                    |
-| `array_literal`           | Empty the array                           | `[a, b]` -> `[]`                   |
-| `hash_literal`            | Empty the hash                            | `{k: v}` -> `{}`                  |
-| `symbol_literal`          | Replace with sentinel symbol              | `:foo` -> `:__evilution_mutated__` |
-| `conditional_negation`    | Replace condition with `true`/`false`     | `if cond` -> `if true`            |
-| `conditional_branch`      | Remove if/else branch                     | Deletes branch body                |
-| `statement_deletion`      | Remove statements from method bodies      | Deletes a statement                |
-| `method_body_replacement` | Replace entire method body with `nil`     | Method body -> `nil`               |
-| `negation_insertion`      | Negate predicate methods                  | `x.empty?` -> `!x.empty?`         |
-| `return_value_removal`    | Strip return values                       | `return x` -> `return`            |
-| `collection_replacement`  | Swap collection methods                   | `map` -> `each`, `select` <-> `reject` |
+| Operator | What it does | Example |
+|---|---|---|
+| `arithmetic_replacement` | Swap arithmetic operators | `a + b` -> `a - b` |
+| `comparison_replacement` | Swap comparison operators | `a >= b` -> `a > b` |
+| `boolean_operator_replacement` | Swap `&&` / `\|\|` | `a && b` -> `a \|\| b` |
+| `boolean_literal_replacement` | Flip boolean literals | `true` -> `false` |
+| `nil_replacement` | Replace `nil` with `true`, `false`, `0`, `""` | `nil` -> `true` |
+| `integer_literal` | Boundary-value integer mutations | `n` -> `0`, `1`, `n+1`, `n-1` |
+| `float_literal` | Boundary-value float mutations | `f` -> `0.0`, `1.0` |
+| `string_literal` | Empty the string | `"str"` -> `""` |
+| `array_literal` | Empty the array | `[a, b]` -> `[]` |
+| `hash_literal` | Empty the hash | `{k: v}` -> `{}` |
+| `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
+| `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |
+| `conditional_branch` | Remove if/else branch | Deletes branch body |
+| `conditional_flip` | Flip `if` to `unless` and vice versa | `if cond` -> `unless cond` |
+| `statement_deletion` | Remove statements from method bodies | Deletes a statement |
+| `method_body_replacement` | Replace entire method body with `nil` | Method body -> `nil` |
+| `negation_insertion` | Negate predicate methods | `x.empty?` -> `!x.empty?` |
+| `return_value_removal` | Strip return values | `return x` -> `return` |
+| `collection_replacement` | Swap collection methods | `map` -> `each`, `select` <-> `reject` |
+| `collection_return` | Replace collection return values | `return [1]` -> `return []` |
+| `scalar_return` | Replace scalar return values | `return 42` -> `return 0` |
+| `method_call_removal` | Remove method calls, keep receiver | `obj.foo(x)` -> `obj` |
+| `argument_removal` | Remove individual arguments | `foo(a, b)` -> `foo(b)` |
+| `argument_nil_substitution` | Replace arguments with `nil` | `foo(a, b)` -> `foo(nil, b)` |
+| `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
+| `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
+| `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
+| `range_replacement` | Swap inclusive/exclusive ranges | `1..10` -> `1...10` |
+| `regexp_mutation` | Replace regexp with always/never matching | `/pat/` -> `/a\A/` |
+| `receiver_replacement` | Drop explicit `self` receiver | `self.foo` -> `foo` |
+| `send_mutation` | Swap semantically related methods | `detect` -> `find`, `map` -> `flat_map` |
+| `compound_assignment` | Swap compound assignment operators | `+=` -> `-=`, `&&=` -> `\|\|=` |
+| `local_variable_assignment` | Replace variable assignment with `nil` | `x = expr` -> `x = nil` |
+| `instance_variable_write` | Replace ivar assignment with `nil` | `@x = expr` -> `@x = nil` |
+| `class_variable_write` | Replace cvar assignment with `nil` | `@@x = expr` -> `@@x = nil` |
+| `global_variable_write` | Replace gvar assignment with `nil` | `$x = expr` -> `$x = nil` |
+| `mixin_removal` | Remove include/extend/prepend | `include Foo` -> removed |
+| `superclass_removal` | Remove class inheritance | `class Foo < Bar` -> `class Foo` |
+| `rescue_removal` | Remove rescue clauses | Deletes rescue block |
+| `rescue_body_replacement` | Replace rescue body with `nil` | Rescue body -> `nil` |
+| `inline_rescue` | Remove inline rescue fallback | `expr rescue val` -> `expr` |
+| `ensure_removal` | Remove ensure blocks | Deletes ensure block |
+| `break_statement` | Remove break statements | `break` -> removed |
+| `next_statement` | Remove next statements | `next` -> removed |
+| `redo_statement` | Remove redo statements | `redo` -> removed |
+| `bang_method` | Swap bang with non-bang methods | `sort!` -> `sort` |
+| `bitwise_replacement` | Swap bitwise operators | `a & b` -> `a \| b` |
+| `bitwise_complement` | Remove or swap `~` | `~x` -> `x`, `~x` -> `-x` |
+| `zsuper_removal` | Replace implicit `super` with `nil` | `super` -> `nil` |
+| `explicit_super_mutation` | Mutate explicit super arguments | `super(a, b)` -> `super` |
+| `index_to_fetch` | Replace `[]` with `.fetch()` | `h[k]` -> `h.fetch(k)` |
+| `index_to_dig` | Replace `[]` chains with `.dig()` | `h[a][b]` -> `h.dig(a, b)` |
+| `index_assignment_removal` | Remove `[]=` assignments | `h[k] = v` -> removed |
+| `pattern_matching_guard` | Remove/negate pattern guards | `in x if cond` -> `in x` |
+| `pattern_matching_alternative` | Remove/reorder alternatives | `pat1 \| pat2` -> `pat1` |
+| `pattern_matching_array` | Remove/wildcard array elements | `[a, b]` -> `[a, _]` |
+| `yield_statement` | Remove yield or its arguments | `yield(x)` -> `yield` |
+| `splat_operator` | Remove splat/double-splat | `foo(*args)` -> `foo(args)` |
+| `defined_check` | Replace `defined?` with `true` | `defined?(x)` -> `true` |
+| `regex_capture` | Swap or nil-ify capture refs | `$1` -> `$2`, `$1` -> `nil` |
 
 ## MCP Server (AI Agent Integration)
 
@@ -160,7 +245,14 @@ Create a `.mcp.json` file in your project root:
 
 If using Bundler, set the command to `bundle` and args to `["exec", "evilution", "mcp"]`.
 
-The server exposes an `evilution-mutate` tool that accepts target files, method targets, spec overrides, parallelism, and timeout options — returning structured JSON results directly to the agent.
+The server exposes the following tools:
+
+| Tool | Description |
+|---|---|
+| `evilution-mutate` | Run mutation testing on target files with structured JSON results |
+| `evilution-session-list` | Browse saved session history |
+| `evilution-session-show` | Display detailed session results |
+| `evilution-session-diff` | Compare two sessions (fixed/new/persistent survivors, score delta) |
 
 ### Verbosity Control
 
@@ -274,11 +366,12 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
-3. **Mutate** — Operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
-4. **Isolate** — Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
-5. **Test** — RSpec executes against the mutated source
-6. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
-7. **Report** — Results aggregated into text or JSON, including peak memory usage
+3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
+4. **Mutate** — 60 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
+5. **Isolate** — Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
+6. **Test** — RSpec executes against the mutated source
+7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
+8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
 
 ## Repository
 
