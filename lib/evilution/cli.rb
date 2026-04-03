@@ -488,6 +488,8 @@ class Evilution::CLI
   rescue Evilution::Error => e
     warn("Error: #{e.message}")
     2
+  ensure
+    @util_tmpfile&.close!
   end
 
   def resolve_util_mutation_source
@@ -501,7 +503,11 @@ class Evilution::CLI
       path = @files.first
       raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
 
-      [File.read(path), path]
+      begin
+        [File.read(path), path]
+      rescue SystemCallError => e
+        raise Evilution::Error, e.message
+      end
     else
       raise Evilution::Error, "source required: use -e 'code' or provide a file path"
     end

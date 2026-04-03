@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
-require "stringio"
 require "evilution/cli"
+require_relative "../support/cli_helpers"
 
 RSpec.describe Evilution::CLI, "util mutation command" do
+  include CLIHelpers
+
   let(:summary) do
     instance_double(Evilution::Result::Summary, score: 1.0, success?: true)
   end
@@ -13,26 +15,6 @@ RSpec.describe Evilution::CLI, "util mutation command" do
   before do
     allow(Evilution::Runner).to receive(:new).and_return(runner)
     allow(summary).to receive(:success?).with(min_score: anything).and_return(true)
-  end
-
-  def capture_stdout
-    io = StringIO.new
-    original = $stdout
-    $stdout = io
-    yield
-    io.string
-  ensure
-    $stdout = original
-  end
-
-  def capture_stderr
-    io = StringIO.new
-    original = $stderr
-    $stderr = io
-    yield
-    io.string
-  ensure
-    $stderr = original
   end
 
   describe "with -e flag" do
@@ -70,7 +52,7 @@ RSpec.describe Evilution::CLI, "util mutation command" do
       expect(output).to match(/\d+ mutation/)
     end
 
-    it "handles class methods" do
+    it "handles methods inside a class" do
       cli = described_class.new(["util", "mutation", "-e", "class Foo; def bar; true; end; end"])
       output = capture_stdout { cli.call }
 
