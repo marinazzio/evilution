@@ -64,7 +64,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::MultipleAssignment,
       Evilution::Mutator::Operator::YieldStatement,
       Evilution::Mutator::Operator::SplatOperator,
-      Evilution::Mutator::Operator::DefinedCheck
+      Evilution::Mutator::Operator::DefinedCheck,
+      Evilution::Mutator::Operator::RegexCapture
     ].each { |op| registry.register(op) }
     registry
   end
