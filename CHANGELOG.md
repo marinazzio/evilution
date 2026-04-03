@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.18.0] - 2026-04-03
+
+### Added
+
+- **Disable comments** — `# evilution:disable` comments to suppress mutations on specific lines, methods, or regions; inline disable for single lines, standalone disable before `def` for entire methods, range disable/enable pairs for arbitrary regions; `--show-disabled` flag reports skipped mutations in CLI, JSON, and HTML output (#321, #323, #325)
+- **Sorbet `sig` filtering** — automatically detects and excludes mutations inside Sorbet `sig { ... }` blocks; cached per file for performance (#330, #334)
+- **Session diff engine** — `Evilution::Session::Diff` compares two saved sessions, reporting fixed mutations, new survivors, persistent survivors, and score delta; identity matching by `[operator, file, line, subject]` (#333)
+- **`session diff` CLI command** — `evilution session diff <base> <head>` with color-coded text output (green=fixed, red=new survivors, yellow=persistent) and `--format json` support (#336)
+- **HTML report baseline comparison** — `--baseline-session PATH` overlays a saved session on the HTML report, highlighting regressions with badges and showing score delta (#339)
+- **`util mutation` CLI command** — `evilution util mutation [-e CODE | FILE]` previews all mutations for a source file or inline Ruby snippet; supports `--format json` (#328)
+- **`subjects` CLI command** — `evilution subjects [files...]` lists all mutation subjects (methods) with file locations and mutation counts; supports `--stdin` (#322)
+- **`tests list` CLI command** — `evilution tests list [files...]` lists spec files mapped to source files via `SpecResolver` (#326)
+- **`environment show` CLI command** — `evilution environment show` displays runtime environment: version, Ruby version, config path, and all active settings (#319)
+- **Type-aware return mutation operators** — `CollectionReturn` replaces collection return values with type-aware alternatives (`[]`, `{}`); `ScalarReturn` replaces scalar return values with type-aware alternatives (`0`, `""`, `nil`) (#300, #304)
+- **Keyword argument mutations** — `KeywordArgument` operator removes default values, removes optional keywords entirely, and removes `**kwargs` rest parameters (#345)
+- **Multiple assignment mutations** — `MultipleAssignment` operator removes individual assignment targets and swaps 2-element order (#346)
+- **Yield statement mutations** — `YieldStatement` operator removes yield, removes yield arguments, and replaces yield value with `nil` (#347)
+- **Splat operator mutations** — `SplatOperator` operator removes `*` (splat) and `**` (double-splat) from method calls and array literals (#348)
+- **`defined?` check mutations** — `DefinedCheck` operator replaces `defined?(expr)` with `true` (#356)
+- **Regex capture reference mutations** — `RegexCapture` operator swaps numbered capture references (`$1`↔`$2`) and replaces with `nil` (#357)
+- **Suggestion templates** — concrete RSpec suggestions for `collection_return` and `scalar_return` operators (#308)
+- **Efficiency metrics** — summary output includes `efficiency` (killtime/wall-clock ratio), `mutations_per_second` throughput, and `killtime` aggregate; reported in CLI, JSON, and HTML (#313)
+- **Parallel execution metrics** — worker statistics tracking with `busy_time`, `wall_time`, `idle_time`, and `utilization` per worker (#314)
+- **Demand-driven work distribution** — `Parallel::Pool` uses pipe-based shared work queue with demand-driven dispatch and configurable prefetch; replaces batch-based distribution (#303, #307, #311)
+
+### Changed
+
+- **Operator count** — 60 operators (up from 52), with new return-type, keyword, assignment, yield, splat, defined?, and regex capture operators
+- **CLI reporter** — survived mutations now include subject name and code diffs (#341)
+- **Dependency updates** — Ruby 3.3.10 → 3.3.11 in CI (#447), ruby/setup-ruby 1.295.0 → 1.299.0, rubygems/release-gem 1.1.4 → 1.2.0
+
 ## [0.17.0] - 2026-03-30
 
 ### Added
