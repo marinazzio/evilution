@@ -2,6 +2,7 @@
 
 require "json"
 require "optparse"
+require "tempfile"
 require_relative "version"
 require_relative "config"
 require_relative "hooks"
@@ -39,6 +40,8 @@ class Evilution::CLI
     when :tests_error         then run_subcommand_error(@tests_error)
     when :environment_show    then run_environment_show
     when :environment_error   then run_subcommand_error(@environment_error)
+    when :util_mutation       then run_util_mutation
+    when :util_error          then run_subcommand_error(@util_error)
     when :run                 then run_mutations
     end
   end
@@ -78,6 +81,9 @@ class Evilution::CLI
     when "environment"
       argv.shift
       extract_environment_subcommand(argv)
+    when "util"
+      argv.shift
+      extract_util_subcommand(argv)
     when "run"
       argv.shift
     end
@@ -141,6 +147,22 @@ class Evilution::CLI
     end
   end
 
+  def extract_util_subcommand(argv)
+    subcommand = argv.first
+    case subcommand
+    when "mutation"
+      @command = :util_mutation
+      argv.shift
+    when nil
+      @command = :util_error
+      @util_error = "Missing util subcommand. Available subcommands: mutation"
+    else
+      @command = :util_error
+      @util_error = "Unknown util subcommand: #{subcommand}. Available subcommands: mutation"
+      argv.shift
+    end
+  end
+
   def preprocess_flags(argv)
     result = []
     i = 0
@@ -180,7 +202,8 @@ class Evilution::CLI
     opts.separator ""
     opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
     opts.separator ""
-    opts.separator "Commands: run (default), init, session {list,show,diff,gc}, subjects, tests {list}, environment {show}, mcp, version"
+    opts.separator "Commands: run (default), init, session {list,show,diff,gc}, subjects, tests {list},"
+    opts.separator "         util {mutation}, environment {show}, mcp, version"
     opts.separator ""
     opts.separator "Options:"
   end
@@ -217,9 +240,14 @@ class Evilution::CLI
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
     opts.on("--suggest-tests", "Generate concrete RSpec test code in suggestions") { @options[:suggest_tests] = true }
     opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }
+    add_extra_flag_options(opts)
+  end
+
+  def add_extra_flag_options(opts)
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
     opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
+    opts.on("-e", "--eval CODE", "Evaluate code snippet (for util mutation)") { |c| @options[:eval] = c }
     opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
     opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
   end
@@ -437,6 +465,73 @@ class Evilution::CLI
       line = Integer(str)
       line..line
     end
+  end
+
+  def run_util_mutation
+    source, file_path = resolve_util_mutation_source
+    subjects = parse_source_to_subjects(source, file_path)
+    registry = Evilution::Mutator::Registry.default
+    mutations = subjects.flat_map { |s| registry.mutations_for(s) }
+
+    if mutations.empty?
+      $stdout.puts("No mutations generated")
+      return 0
+    end
+
+    if @options[:format] == :json
+      print_util_mutations_json(mutations)
+    else
+      print_util_mutations_text(mutations)
+    end
+
+    0
+  rescue Evilution::Error => e
+    warn("Error: #{e.message}")
+    2
+  end
+
+  def resolve_util_mutation_source
+    if @options[:eval]
+      tmpfile = Tempfile.new(["evilution_eval", ".rb"])
+      tmpfile.write(@options[:eval])
+      tmpfile.flush
+      @util_tmpfile = tmpfile
+      [@options[:eval], tmpfile.path]
+    elsif @files.first
+      path = @files.first
+      raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
+
+      [File.read(path), path]
+    else
+      raise Evilution::Error, "source required: use -e 'code' or provide a file path"
+    end
+  end
+
+  def parse_source_to_subjects(source, file_label)
+    result = Prism.parse(source)
+    raise Evilution::Error, "failed to parse source: #{result.errors.map(&:message).join(", ")}" if result.failure?
+
+    finder = Evilution::AST::SubjectFinder.new(source, file_label)
+    finder.visit(result.value)
+    finder.subjects
+  end
+
+  def print_util_mutations_text(mutations)
+    mutations.each_with_index do |m, i|
+      $stdout.puts("#{i + 1}. #{m.operator_name} — #{m.subject.name} (line #{m.line})")
+      m.diff.each_line { |line| $stdout.puts("   #{line}") }
+      $stdout.puts("")
+    end
+    label = mutations.length == 1 ? "1 mutation" : "#{mutations.length} mutations"
+    $stdout.puts(label)
+  end
+
+  def print_util_mutations_json(mutations)
+    data = mutations.map do |m|
+      { operator: m.operator_name, subject: m.subject.name,
+        file: m.file_path, line: m.line, diff: m.diff }
+    end
+    $stdout.puts(JSON.pretty_generate(data))
   end
 
   def run_session_list
