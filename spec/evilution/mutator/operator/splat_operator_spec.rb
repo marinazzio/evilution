@@ -82,6 +82,13 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       splat_mutations = mutations.select { |m| m.operator_name == "splat_operator" }
       expect(splat_mutations).to be_empty
     end
+
+    it "still mutates double-splat in a call nested inside a hash value" do
+      mutations = mutations_for("def foo\n  {key: bar(**opts)}\nend\n")
+
+      removed = mutations.select { |m| m.mutated_source.include?("bar(opts)") }
+      expect(removed).not_to be_empty
+    end
   end
 
   describe "valid Ruby output" do
@@ -93,7 +100,8 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
         "def foo\n  bar(**opts)\nend\n",
         "def foo\n  bar(x, **opts)\nend\n",
         "def foo\n  {**opts}\nend\n",
-        "def foo\n  {a: 1, **rest}\nend\n"
+        "def foo\n  {a: 1, **rest}\nend\n",
+        "def foo\n  {key: bar(**opts)}\nend\n"
       ]
 
       sources.each do |source|
