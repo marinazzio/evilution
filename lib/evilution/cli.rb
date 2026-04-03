@@ -530,7 +530,7 @@ class Evilution::CLI
     end
 
     0
-  rescue Evilution::Error => e
+  rescue Evilution::Error, SystemCallError => e
     warn("Error: #{e.message}")
     2
   rescue ::JSON::ParserError => e

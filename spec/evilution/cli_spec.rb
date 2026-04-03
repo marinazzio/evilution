@@ -1105,6 +1105,17 @@ RSpec.describe Evilution::CLI do
       expect(output).to include("two session file paths required")
     end
 
+    it "returns exit code 2 for unreadable session file" do
+      head = write_session("head.json", session_data(score: 0.8, survivors: []))
+      base_dir = File.join(results_dir, "not_a_file")
+      Dir.mkdir(base_dir)
+
+      cli = described_class.new(["session", "diff", base_dir, head])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("Error:")
+    end
+
     it "updates available subcommands in error messages" do
       cli = described_class.new(%w[session bogus])
       output = capture_stderr { cli.call }
