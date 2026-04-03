@@ -94,7 +94,7 @@ class Evilution::Reporter::CLI
     mutation = result.mutation
     location = "#{mutation.file_path}:#{mutation.line}"
     diff_lines = mutation.diff.split("\n").map { |l| "    #{l}" }.join("\n")
-    "  #{mutation.operator_name}: #{location}\n#{diff_lines}"
+    "  #{mutation.operator_name}: #{location} (#{mutation.subject.name})\n#{diff_lines}"
   end
 
   def format_neutral(result)
