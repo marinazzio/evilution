@@ -578,8 +578,16 @@ class Evilution::Runner
     when :text
       Evilution::Reporter::CLI.new
     when :html
-      Evilution::Reporter::HTML.new
+      Evilution::Reporter::HTML.new(baseline: load_baseline_session)
     end
+  end
+
+  def load_baseline_session
+    path = config.baseline_session
+    return nil unless path
+
+    store = Evilution::Session::Store.new
+    store.load(path)
   end
 
   def partition_cached(batch)
