@@ -31,6 +31,7 @@ class Evilution::CLI
     when :mcp                 then run_mcp
     when :session_list        then run_session_list
     when :session_show        then run_session_show
+    when :session_diff        then run_session_diff
     when :session_gc          then run_session_gc
     when :session_error       then run_subcommand_error(@session_error)
     when :subjects            then run_subjects
@@ -92,15 +93,18 @@ class Evilution::CLI
     when "show"
       @command = :session_show
       argv.shift
+    when "diff"
+      @command = :session_diff
+      argv.shift
     when "gc"
       @command = :session_gc
       argv.shift
     when nil
       @command = :session_error
-      @session_error = "Missing session subcommand. Available subcommands: list, show, gc"
+      @session_error = "Missing session subcommand. Available subcommands: list, show, diff, gc"
     else
       @command = :session_error
-      @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show, gc"
+      @session_error = "Unknown session subcommand: #{subcommand}. Available subcommands: list, show, diff, gc"
       argv.shift
     end
   end
@@ -176,7 +180,7 @@ class Evilution::CLI
     opts.separator ""
     opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
     opts.separator ""
-    opts.separator "Commands: run (default), init, session {list,show,gc}, subjects, tests {list}, environment {show}, mcp, version"
+    opts.separator "Commands: run (default), init, session {list,show,diff,gc}, subjects, tests {list}, environment {show}, mcp, version"
     opts.separator ""
     opts.separator "Options:"
   end
@@ -504,6 +508,70 @@ class Evilution::CLI
   rescue ::JSON::ParserError => e
     warn("Error: invalid session file: #{e.message}")
     2
+  end
+
+  def run_session_diff
+    require_relative "session/store"
+    require_relative "session/diff"
+
+    raise Evilution::ConfigError, "two session file paths required" unless @files.length == 2
+
+    store = Evilution::Session::Store.new
+    base_data = store.load(@files[0])
+    head_data = store.load(@files[1])
+
+    diff = Evilution::Session::Diff.new
+    result = diff.call(base_data, head_data)
+
+    if @options[:format] == :json
+      $stdout.puts(JSON.pretty_generate(result.to_h))
+    else
+      print_session_diff(result)
+    end
+
+    0
+  rescue Evilution::Error => e
+    warn("Error: #{e.message}")
+    2
+  rescue ::JSON::ParserError => e
+    warn("Error: invalid session file: #{e.message}")
+    2
+  end
+
+  def print_session_diff(result)
+    print_diff_summary(result.summary)
+    print_diff_section("Fixed (survived \u2192 killed)", result.fixed, "\e[32m")
+    print_diff_section("New survivors (killed \u2192 survived)", result.new_survivors, "\e[31m")
+    print_diff_section("Persistent survivors", result.persistent, "\e[33m")
+
+    return unless result.fixed.empty? && result.new_survivors.empty? && result.persistent.empty?
+
+    $stdout.puts("")
+    $stdout.puts("No mutation changes between sessions")
+  end
+
+  def print_diff_summary(summary)
+    delta_str = format("%+.2f%%", summary.score_delta * 100)
+    $stdout.puts("Session Diff")
+    $stdout.puts("=" * 40)
+    $stdout.puts(format("Base score:  %<score>6.2f%%  (%<killed>d/%<total>d killed)",
+                        score: summary.base_score * 100, killed: summary.base_killed,
+                        total: summary.base_total))
+    $stdout.puts(format("Head score:  %<score>6.2f%%  (%<killed>d/%<total>d killed)",
+                        score: summary.head_score * 100, killed: summary.head_killed,
+                        total: summary.head_total))
+    $stdout.puts("Delta:       #{delta_str}")
+  end
+
+  def print_diff_section(title, mutations, color)
+    return if mutations.empty?
+
+    reset = "\e[0m"
+    $stdout.puts("")
+    $stdout.puts("#{color}#{title} (#{mutations.length}):#{reset}")
+    mutations.each do |m|
+      $stdout.puts("  #{m["operator"]} — #{m["file"]}:#{m["line"]}  #{m["subject"]}")
+    end
   end
 
   def run_session_gc
