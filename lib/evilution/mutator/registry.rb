@@ -62,7 +62,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ScalarReturn,
       Evilution::Mutator::Operator::KeywordArgument,
       Evilution::Mutator::Operator::MultipleAssignment,
-      Evilution::Mutator::Operator::YieldStatement
+      Evilution::Mutator::Operator::YieldStatement,
+      Evilution::Mutator::Operator::SplatOperator
     ].each { |op| registry.register(op) }
     registry
   end
