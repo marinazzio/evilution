@@ -218,6 +218,7 @@ class Evilution::CLI
     opts.on("--suggest-tests", "Generate concrete RSpec test code in suggestions") { @options[:suggest_tests] = true }
     opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
+    opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
     opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
     opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }

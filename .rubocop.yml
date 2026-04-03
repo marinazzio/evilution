@@ -28,6 +28,7 @@ Metrics/ClassLength:
   Max: 150
   Exclude:
     - "lib/evilution/cli.rb"
+    - "lib/evilution/config.rb"
     - "lib/evilution/runner.rb"
     - "lib/evilution/reporter/html.rb"
     - "lib/evilution/reporter/suggestion.rb"

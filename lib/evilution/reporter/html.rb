@@ -6,8 +6,10 @@ require_relative "suggestion"
 require_relative "../reporter"
 
 class Evilution::Reporter::HTML
-  def initialize
+  def initialize(baseline: nil)
     @suggestion = Evilution::Reporter::Suggestion.new
+    @baseline = baseline
+    @baseline_keys = build_baseline_keys(baseline)
   end
 
   def call(summary)
@@ -40,6 +42,7 @@ class Evilution::Reporter::HTML
       <body>
         #{build_header(summary)}
         #{build_summary_cards(summary)}
+        #{build_baseline_comparison(summary)}
         #{build_truncation_notice(summary)}
         #{build_file_sections(files)}
         #{build_footer}
@@ -166,10 +169,13 @@ class Evilution::Reporter::HTML
     mutation = result.mutation
     suggestion_text = @suggestion.suggestion_for(mutation)
     diff_html = format_diff(mutation.diff)
+    regression = regression?(mutation)
+    entry_class = regression ? "survived-entry regression" : "survived-entry"
+    regression_badge = regression ? ' <span class="regression-badge">NEW REGRESSION</span>' : ""
     <<~HTML
-      <div class="survived-entry">
+      <div class="#{entry_class}">
         <div class="survived-header">
-          <span class="operator">#{h(mutation.operator_name)}</span>
+          <span class="operator">#{h(mutation.operator_name)}#{regression_badge}</span>
           <span class="location">#{h(mutation.file_path)}:#{mutation.line}</span>
         </div>
         <pre class="diff">#{diff_html}</pre>
@@ -204,6 +210,48 @@ class Evilution::Reporter::HTML
     else
       "score-low"
     end
+  end
+
+  def build_baseline_comparison(summary)
+    return "" unless @baseline
+
+    base_summary = @baseline["summary"] || {}
+    base_score = base_summary["score"] || 0.0
+    head_score = summary.score
+    delta = head_score - base_score
+    delta_str = format("%+.2f%%", delta * 100)
+    delta_class = if delta.positive?
+                    "delta-positive"
+                  elsif delta.negative?
+                    "delta-negative"
+                  else
+                    "delta-neutral"
+                  end
+
+    <<~HTML
+      <section class="baseline-comparison">
+        <h2>Baseline Comparison</h2>
+        <div class="comparison-scores">
+          <span>Baseline: #{format("%.2f%%", base_score * 100)}</span>
+          <span>Current: #{format("%.2f%%", head_score * 100)}</span>
+          <span class="#{delta_class}">Delta: #{delta_str}</span>
+        </div>
+      </section>
+    HTML
+  end
+
+  def regression?(mutation)
+    return false if @baseline_keys.nil?
+
+    key = [mutation.operator_name, mutation.file_path, mutation.line]
+    !@baseline_keys.include?(key)
+  end
+
+  def build_baseline_keys(baseline)
+    return nil unless baseline
+
+    survived = baseline["survived"] || []
+    survived.to_set { |m| [m["operator"], m["file"], m["line"]] }
   end
 
   def h(text)
@@ -260,6 +308,14 @@ class Evilution::Reporter::HTML
         .diff-added { color: #3fb950; display: block; }
         .suggestion { color: #d29922; font-size: 0.8rem; margin-top: 0.5rem; font-style: italic; }
         .empty { color: #8b949e; text-align: center; padding: 2rem; }
+        .baseline-comparison { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: 2rem; }
+        .baseline-comparison h2 { font-size: 1rem; color: #f0f6fc; margin-bottom: 0.75rem; }
+        .comparison-scores { display: flex; gap: 2rem; font-size: 0.9rem; }
+        .delta-positive { color: #3fb950; font-weight: bold; }
+        .delta-negative { color: #f85149; font-weight: bold; }
+        .delta-neutral { color: #8b949e; font-weight: bold; }
+        .survived-entry.regression { border-color: #f85149; background: #2a1010; }
+        .regression-badge { background: #da3633; color: #fff; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; text-transform: uppercase; font-weight: bold; }
         footer { text-align: center; color: #484f58; font-size: 0.75rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #21262d; }
       </style>
     HTML

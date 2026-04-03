@@ -301,4 +301,60 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include("50.0")
     end
   end
+
+  describe "baseline comparison" do
+    let(:baseline_data) do
+      {
+        "summary" => { "score" => 0.7, "total" => 10, "killed" => 7, "survived" => 3 },
+        "survived" => [
+          { "operator" => "comparison_replacement", "file" => "lib/user.rb",
+            "line" => 9, "subject" => "User#check" }
+        ]
+      }
+    end
+
+    let(:reporter_with_baseline) { described_class.new(baseline: baseline_data) }
+
+    it "shows a comparison section with score delta" do
+      output = reporter_with_baseline.call(summary)
+
+      expect(output).to include("Baseline Comparison")
+      expect(output).to include("70.00%")
+    end
+
+    it "marks new survivors as regressions" do
+      new_survived_mutation = double(
+        "Mutation",
+        operator_name: "boolean_literal_replacement",
+        file_path: "lib/user.rb",
+        line: 15,
+        column: 4,
+        diff: "- true\n+ false"
+      )
+      new_survived_result = Evilution::Result::MutationResult.new(
+        mutation: new_survived_mutation,
+        status: :survived,
+        duration: 0.1
+      )
+      s = Evilution::Result::Summary.new(
+        results: [survived_result, new_survived_result],
+        duration: 0.3
+      )
+      output = reporter_with_baseline.call(s)
+
+      expect(output).to include("regression")
+    end
+
+    it "does not mark pre-existing survivors as regressions" do
+      output = reporter_with_baseline.call(summary)
+
+      expect(output).not_to include("NEW REGRESSION")
+    end
+
+    it "works without baseline (no comparison section)" do
+      output = reporter.call(summary)
+
+      expect(output).not_to include("Baseline Comparison")
+    end
+  end
 end

@@ -327,6 +327,26 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--baseline-session flag" do
+      it "sets baseline_session to the given path" do
+        cli = described_class.new(["--baseline-session", "/tmp/session.json"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(baseline_session: "/tmp/session.json")
+        )
+      end
+
+      it "defaults to nil when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(baseline_session: nil)
+        )
+      end
+    end
+
     describe "--no-progress flag" do
       it "sets progress to false" do
         cli = described_class.new(["--no-progress"])
