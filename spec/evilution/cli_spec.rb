@@ -966,4 +966,161 @@ RSpec.describe Evilution::CLI do
       expect(output).to include("no files found matching")
     end
   end
+
+  describe "session diff command" do
+    let(:results_dir) { Dir.mktmpdir("evilution-sessions") }
+
+    after { FileUtils.rm_rf(results_dir) }
+
+    def write_session(filename, data)
+      path = File.join(results_dir, filename)
+      File.write(path, JSON.generate(data))
+      path
+    end
+
+    def session_data(score:, total: 10, killed: 8, survived: 2, survivors: [])
+      {
+        "timestamp" => "2026-03-24T10:00:00+00:00",
+        "summary" => {
+          "total" => total,
+          "killed" => killed,
+          "survived" => survived,
+          "timed_out" => 0,
+          "errors" => 0,
+          "neutral" => 0,
+          "equivalent" => 0,
+          "score" => score,
+          "duration" => 5.0
+        },
+        "survived" => survivors
+      }
+    end
+
+    def mutation(operator:, file:, line:, subject:)
+      { "operator" => operator, "file" => file, "line" => line, "subject" => subject,
+        "diff" => "- old\n+ new" }
+    end
+
+    let(:mutation_a) { mutation(operator: "arithmetic_replacement", file: "lib/foo.rb", line: 10, subject: "Foo#bar") }
+    let(:mutation_b) { mutation(operator: "comparison_replacement", file: "lib/foo.rb", line: 20, subject: "Foo#baz") }
+
+    it "returns exit code 0" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: [mutation_a]))
+      head = write_session("head.json", session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a]))
+
+      cli = described_class.new(["session", "diff", base, head])
+      capture_stdout { expect(cli.call).to eq(0) }
+    end
+
+    it "displays score delta" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: [mutation_a, mutation_b]))
+      head = write_session("head.json", session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a]))
+
+      cli = described_class.new(["session", "diff", base, head])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("80.00%")
+      expect(output).to include("90.00%")
+      expect(output).to include("+10.00")
+    end
+
+    it "displays fixed mutations" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: [mutation_a, mutation_b]))
+      head = write_session("head.json", session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a]))
+
+      cli = described_class.new(["session", "diff", base, head])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("Fixed")
+      expect(output).to include("Foo#baz")
+    end
+
+    it "displays new survivors" do
+      base = write_session("base.json", session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a]))
+      head = write_session("head.json", session_data(score: 0.8, survivors: [mutation_a, mutation_b]))
+
+      cli = described_class.new(["session", "diff", base, head])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("New survivors")
+      expect(output).to include("Foo#baz")
+    end
+
+    it "displays persistent survivors" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: [mutation_a]))
+      head = write_session("head.json", session_data(score: 0.8, survivors: [mutation_a]))
+
+      cli = described_class.new(["session", "diff", base, head])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("Persistent")
+      expect(output).to include("Foo#bar")
+    end
+
+    it "shows no changes message when sessions are identical" do
+      base = write_session("base.json", session_data(score: 1.0, total: 10, killed: 10, survived: 0, survivors: []))
+      head = write_session("head.json", session_data(score: 1.0, total: 10, killed: 10, survived: 0, survivors: []))
+
+      cli = described_class.new(["session", "diff", base, head])
+      output = capture_stdout { cli.call }
+
+      expect(output).to include("No mutation changes")
+    end
+
+    it "outputs JSON when --format json is given" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: [mutation_a]))
+      head = write_session("head.json", session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a]))
+
+      cli = described_class.new(["session", "diff", "--format", "json", base, head])
+      output = capture_stdout { cli.call }
+      parsed = JSON.parse(output)
+
+      expect(parsed["summary"]["score_delta"]).to eq(0.1)
+      expect(parsed["fixed"]).to eq([])
+      expect(parsed["new_survivors"]).to eq([])
+    end
+
+    it "returns exit code 2 when base file is missing" do
+      head = write_session("head.json", session_data(score: 0.8, survivors: []))
+
+      cli = described_class.new(["session", "diff", "/nonexistent.json", head])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("Error:")
+    end
+
+    it "returns exit code 2 when no file paths given" do
+      cli = described_class.new(%w[session diff])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("two session file paths required")
+    end
+
+    it "returns exit code 2 when only one file path given" do
+      base = write_session("base.json", session_data(score: 0.8, survivors: []))
+
+      cli = described_class.new(["session", "diff", base])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("two session file paths required")
+    end
+
+    it "returns exit code 2 for unreadable session file" do
+      head = write_session("head.json", session_data(score: 0.8, survivors: []))
+      base_dir = File.join(results_dir, "not_a_file")
+      Dir.mkdir(base_dir)
+
+      cli = described_class.new(["session", "diff", base_dir, head])
+      output = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(output).to include("Error:")
+    end
+
+    it "updates available subcommands in error messages" do
+      cli = described_class.new(%w[session bogus])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("diff")
+    end
+  end
 end
