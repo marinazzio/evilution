@@ -101,7 +101,11 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     # runners) without fork isolation. clear_examples reuses the existing World
     # and Configuration (avoiding per-run instance growth) while clearing loaded
     # example groups, constants, and configuration state.
-    ::RSpec.clear_examples
+    if ::RSpec.respond_to?(:clear_examples)
+      ::RSpec.clear_examples
+    else
+      ::RSpec.reset
+    end
 
     out = StringIO.new
     err = StringIO.new

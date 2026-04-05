@@ -21,7 +21,6 @@ RSpec.describe Evilution::Integration::RSpec do
   before do
     source_file.write(original_source)
     source_file.flush
-    allow(RSpec).to receive(:reset)
     allow(RSpec).to receive(:clear_examples)
   end
 
@@ -131,13 +130,25 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(RSpec).to have_received(:clear_examples)
     end
 
-    it "releases RSpec state after each run to prevent memory leaks" do
-      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
-      allow(integration).to receive(:release_rspec_state).with(instance_of(Set))
+    it "clears instance variables from mutation-created ExampleGroups" do
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # Simulate RSpec creating a new ExampleGroup during the run
+        eg = Class.new(RSpec::Core::ExampleGroup)
+        eg.instance_variable_set(:@retained_object, Object.new)
+        0
+      end
 
       integration.call(mutation)
 
-      expect(integration).to have_received(:release_rspec_state).with(instance_of(Set))
+      # All mutation-created EG classes should have ivars cleared
+      ObjectSpace.each_object(Class) do |klass|
+        next unless klass < RSpec::Core::ExampleGroup
+        next if klass == RSpec::Core::AnonymousExampleGroup
+
+        expect(klass.instance_variables).not_to include(:@retained_object)
+      rescue TypeError
+        nil
+      end
     end
 
     it "removes ExampleGroup constants after each run" do
