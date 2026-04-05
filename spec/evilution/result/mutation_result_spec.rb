@@ -82,6 +82,18 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.test_command).to be_nil
   end
 
+  it "stores parent_rss_kb" do
+    result = described_class.new(mutation: mutation, status: :killed, parent_rss_kb: 50_000)
+
+    expect(result.parent_rss_kb).to eq(50_000)
+  end
+
+  it "defaults parent_rss_kb to nil" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.parent_rss_kb).to be_nil
+  end
+
   it "is frozen" do
     result = described_class.new(mutation: mutation, status: :killed)
 

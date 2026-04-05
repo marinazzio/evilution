@@ -132,6 +132,17 @@ RSpec.describe Evilution::Isolation::InProcess do
       isolator.call(mutation:, test_command:, timeout: 5)
     end
 
+    it "captures parent_rss_kb (RSS before execution)" do
+      skip "RSS measurement unavailable" unless Evilution::Memory.rss_kb
+
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.parent_rss_kb).to be_a(Integer)
+      expect(result.parent_rss_kb).to be > 0
+    end
+
     it "does not interfere with $LOADED_FEATURES" do
       features_before = $LOADED_FEATURES.dup
 
