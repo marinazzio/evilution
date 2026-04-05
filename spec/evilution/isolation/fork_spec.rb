@@ -101,6 +101,17 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_timeout
     end
 
+    it "returns error when child writes empty result" do
+      test_command = lambda { |_m|
+        # Close write_io without writing, simulating empty result
+        exit!(0)
+      }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_error
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 
