@@ -332,6 +332,28 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end
     end
 
+    it "raises an error when a worker hangs beyond the item timeout" do
+      queue = described_class.new(size: 1, item_timeout: 1)
+
+      expect do
+        queue.map([1]) do |_n|
+          sleep 60
+          :done
+        end
+      end.to raise_error(Evilution::Error, /timed out/)
+    end
+
+    it "removes dead worker pipes from the select set" do
+      queue = described_class.new(size: 2)
+
+      expect do
+        queue.map([1, 2, 3, 4]) do |n|
+          exit!(1) if n == 1
+          n * 10
+        end
+      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
+    end
+
     it "cleans up worker processes even on error" do
       tmpfile = Tempfile.new("wq_cleanup_pids")
       hooks = Evilution::Hooks::Registry.new
