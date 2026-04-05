@@ -7,6 +7,8 @@ class Evilution::Parallel::WorkQueue
 
   STATS = :__stats__
 
+  TIMING_GRACE_PERIOD = 5
+
   WorkerStat = Struct.new(:pid, :items_completed, :busy_time, :wall_time) do
     def idle_time
       wall_time - busy_time
@@ -200,16 +202,29 @@ class Evilution::Parallel::WorkQueue
   end
 
   def collect_worker_timing(workers)
-    workers.each do |worker|
-      message = read_result(worker[:res_read])
-      next if message.nil?
+    io_to_worker = workers.reject { |w| w[:res_read].closed? }.to_h { |w| [w[:res_read], w] }
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + TIMING_GRACE_PERIOD
 
-      tag, busy_time, wall_time = message
-      next unless tag == STATS
+    until io_to_worker.empty?
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      break if remaining <= 0
 
-      worker[:busy_time] = busy_time
-      worker[:wall_time] = wall_time
+      readable, = IO.select(io_to_worker.keys, nil, nil, remaining)
+      break unless readable
+
+      readable.each { |io| apply_worker_timing(io_to_worker.delete(io), io) }
     end
+  end
+
+  def apply_worker_timing(worker, io)
+    message = read_result(io)
+    return if message.nil?
+
+    tag, busy_time, wall_time = message
+    return unless tag == STATS
+
+    worker[:busy_time] = busy_time
+    worker[:wall_time] = wall_time
   end
 
   def write_message(io, data)
