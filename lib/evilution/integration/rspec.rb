@@ -98,9 +98,10 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     # process exits after each run.
     #
     # This integration can also be invoked directly (e.g. in specs or alternative
-    # runners) without fork isolation. RSpec.reset is called here as
-    # defense-in-depth to clear RSpec state between mutation runs in those cases.
-    ::RSpec.reset
+    # runners) without fork isolation. clear_examples reuses the existing World
+    # and Configuration (avoiding per-run instance growth) while clearing loaded
+    # example groups, constants, and configuration state.
+    ::RSpec.clear_examples
 
     out = StringIO.new
     err = StringIO.new
@@ -108,11 +109,60 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     args = build_args(mutation)
     command = "rspec #{args.join(" ")}"
 
+    eg_before = snapshot_example_groups
     status = ::RSpec::Core::Runner.run(args, out, err)
 
     { passed: status.zero?, test_command: command }
   rescue StandardError => e
     { passed: false, error: e.message, test_command: command }
+  ensure
+    release_rspec_state(eg_before)
+  end
+
+  def snapshot_example_groups
+    groups = Set.new
+    ObjectSpace.each_object(Class) do |klass|
+      groups << klass.object_id if klass < ::RSpec::Core::ExampleGroup
+    rescue TypeError # rubocop:disable Lint/SuppressedException
+    end
+    groups
+  end
+
+  def release_rspec_state(eg_before)
+    release_example_groups(eg_before)
+    # Remove ExampleGroups constants so the named reference is dropped.
+    # We avoid a full RSpec.reset here because it creates new World and
+    # Configuration instances each call; the pre-run reset already handles
+    # that. Instead, clear the world's example_groups array (which holds
+    # direct class references) and the source cache.
+    ::RSpec::ExampleGroups.remove_all_constants if defined?(::RSpec::ExampleGroups)
+    release_world_example_groups
+  end
+
+  def release_example_groups(eg_before)
+    return unless eg_before
+
+    ObjectSpace.each_object(Class) do |klass|
+      next unless klass < ::RSpec::Core::ExampleGroup
+      next if eg_before.include?(klass.object_id)
+
+      # Remove nested module constants (LetDefinitions, NamedSubjectPreventSuper)
+      klass.constants(false).each do |const|
+        klass.send(:remove_const, const)
+      rescue NameError # rubocop:disable Lint/SuppressedException
+      end
+
+      klass.instance_variables.each do |ivar|
+        klass.remove_instance_variable(ivar)
+      end
+    rescue TypeError # rubocop:disable Lint/SuppressedException
+    end
+  end
+
+  def release_world_example_groups
+    world = ::RSpec.world
+    world.instance_variable_get(:@example_groups).clear if world.instance_variable_defined?(:@example_groups)
+    world.instance_variable_set(:@sources_by_path, {}) if world.instance_variable_defined?(:@sources_by_path)
   end
 
   def build_args(mutation)
