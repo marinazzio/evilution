@@ -75,6 +75,7 @@ class Evilution::Reporter::JSON
     }
     detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
     detail[:test_command] = result.test_command if result.test_command
+    detail[:parent_rss_kb] = result.parent_rss_kb if result.parent_rss_kb
     detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
     detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
     detail

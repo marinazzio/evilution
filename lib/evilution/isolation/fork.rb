@@ -16,6 +16,7 @@ class Evilution::Isolation::Fork
   def call(mutation:, test_command:, timeout:)
     sandbox_dir = Dir.mktmpdir("evilution-run")
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    parent_rss = Evilution::Memory.rss_kb
     read_io, write_io = IO.pipe
 
     pid = ::Process.fork do
@@ -33,7 +34,7 @@ class Evilution::Isolation::Fork
     result = wait_for_result(pid, read_io, timeout)
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-    build_mutation_result(mutation, result, duration)
+    build_mutation_result(mutation, result, duration, parent_rss)
   ensure
     read_io&.close
     write_io&.close
@@ -92,7 +93,7 @@ class Evilution::Isolation::Fork
     ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
   end
 
-  def build_mutation_result(mutation, result, duration)
+  def build_mutation_result(mutation, result, duration, parent_rss_kb)
     status = if result[:timeout]
                :timeout
              elsif result[:error]
@@ -103,12 +104,23 @@ class Evilution::Isolation::Fork
                :killed
              end
 
+    child_rss = result[:child_rss_kb]
+    delta = compute_memory_delta(parent_rss_kb, child_rss)
+
     Evilution::Result::MutationResult.new(
       mutation: mutation,
       status: status,
       duration: duration,
       test_command: result[:test_command],
-      child_rss_kb: result[:child_rss_kb]
+      child_rss_kb: child_rss,
+      memory_delta_kb: delta,
+      parent_rss_kb: parent_rss_kb
     )
+  end
+
+  def compute_memory_delta(parent_rss_kb, child_rss_kb)
+    return nil unless parent_rss_kb && child_rss_kb
+
+    child_rss_kb - parent_rss_kb
   end
 end

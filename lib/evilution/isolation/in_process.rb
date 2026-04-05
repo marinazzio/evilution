@@ -15,7 +15,7 @@ class Evilution::Isolation::InProcess
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
     delta = compute_memory_delta(rss_before, rss_after, result)
 
-    build_mutation_result(mutation, result, duration, rss_after, delta)
+    build_mutation_result(mutation, result, duration, rss_before, rss_after, delta)
   end
 
   private
@@ -53,7 +53,7 @@ class Evilution::Isolation::InProcess
     rss_after - rss_before
   end
 
-  def build_mutation_result(mutation, result, duration, rss_after, memory_delta_kb)
+  def build_mutation_result(mutation, result, duration, rss_before, rss_after, memory_delta_kb)
     status = if result[:timeout]
                :timeout
              elsif result[:error]
@@ -70,7 +70,8 @@ class Evilution::Isolation::InProcess
       duration: duration,
       test_command: result[:test_command],
       child_rss_kb: rss_after,
-      memory_delta_kb: memory_delta_kb
+      memory_delta_kb: memory_delta_kb,
+      parent_rss_kb: rss_before
     )
   end
 end

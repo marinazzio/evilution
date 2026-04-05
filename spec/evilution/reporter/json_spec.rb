@@ -216,6 +216,25 @@ RSpec.describe Evilution::Reporter::JSON do
       )
     end
 
+    it "includes parent_rss_kb when present in mutation result" do
+      result_with_rss = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :killed,
+        duration: 0.456,
+        parent_rss_kb: 50_000
+      )
+      rss_summary = Evilution::Result::Summary.new(results: [result_with_rss], duration: 0.5)
+      parsed = JSON.parse(reporter.call(rss_summary))
+
+      expect(parsed["killed"].first["parent_rss_kb"]).to eq(50_000)
+    end
+
+    it "omits parent_rss_kb when not present in mutation result" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("parent_rss_kb")
+    end
+
     it "omits test_command when not present in mutation result" do
       parsed = JSON.parse(reporter.call(summary))
 

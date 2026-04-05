@@ -218,6 +218,23 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_killed
     end
 
+    it "captures parent_rss_kb before forking" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.parent_rss_kb).to be_a(Integer)
+      expect(result.parent_rss_kb).to be > 0
+    end
+
+    it "computes memory_delta_kb from child and parent RSS" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.memory_delta_kb).to be_a(Integer) if result.child_rss_kb && result.parent_rss_kb
+    end
+
     it "isolates mutations from parent process" do
       parent_value = "original"
       test_command = lambda do |_m|

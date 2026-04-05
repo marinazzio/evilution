@@ -396,7 +396,8 @@ class Evilution::Runner
       duration: result.duration,
       test_command: result.test_command,
       child_rss_kb: result.child_rss_kb,
-      memory_delta_kb: result.memory_delta_kb
+      memory_delta_kb: result.memory_delta_kb,
+      parent_rss_kb: result.parent_rss_kb
     )
   end
 
@@ -407,7 +408,8 @@ class Evilution::Runner
       killing_test: result.killing_test,
       test_command: result.test_command,
       child_rss_kb: result.child_rss_kb,
-      memory_delta_kb: result.memory_delta_kb
+      memory_delta_kb: result.memory_delta_kb,
+      parent_rss_kb: result.parent_rss_kb
     }
   end
 
@@ -420,7 +422,8 @@ class Evilution::Runner
         killing_test: data[:killing_test],
         test_command: data[:test_command],
         child_rss_kb: data[:child_rss_kb],
-        memory_delta_kb: data[:memory_delta_kb]
+        memory_delta_kb: data[:memory_delta_kb],
+        parent_rss_kb: data[:parent_rss_kb]
       )
     end
   end
