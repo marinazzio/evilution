@@ -67,10 +67,12 @@ class Evilution::Isolation::Fork
     if read_io.wait_readable(timeout)
       data = read_io.read
       ::Process.wait(pid)
-      return { timeout: false }.merge(Marshal.load(data)) unless data.empty? # rubocop:disable Security/MarshalLoad
 
-      ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
-      { timeout: false, passed: false, error: "empty result from child" }
+      if data.empty?
+        { timeout: false, passed: false, error: "empty result from child" }
+      else
+        { timeout: false }.merge(Marshal.load(data)) # rubocop:disable Security/MarshalLoad
+      end
     else
       terminate_child(pid)
       { timeout: true }
