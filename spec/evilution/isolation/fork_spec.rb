@@ -103,7 +103,7 @@ RSpec.describe Evilution::Isolation::Fork do
 
     it "returns error when child writes empty result" do
       test_command = lambda { |_m|
-        # Close write_io without writing, simulating empty result
+        # Exit without writing a result, causing the OS to close the pipe
         exit!(0)
       }
 
