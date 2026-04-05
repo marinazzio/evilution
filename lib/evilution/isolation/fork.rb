@@ -104,23 +104,13 @@ class Evilution::Isolation::Fork
                :killed
              end
 
-    child_rss = result[:child_rss_kb]
-    delta = compute_memory_delta(parent_rss_kb, child_rss)
-
     Evilution::Result::MutationResult.new(
       mutation: mutation,
       status: status,
       duration: duration,
       test_command: result[:test_command],
-      child_rss_kb: child_rss,
-      memory_delta_kb: delta,
+      child_rss_kb: result[:child_rss_kb],
       parent_rss_kb: parent_rss_kb
     )
-  end
-
-  def compute_memory_delta(parent_rss_kb, child_rss_kb)
-    return nil unless parent_rss_kb && child_rss_kb
-
-    child_rss_kb - parent_rss_kb
   end
 end

@@ -219,6 +219,8 @@ RSpec.describe Evilution::Isolation::Fork do
     end
 
     it "captures parent_rss_kb before forking" do
+      skip "RSS measurement unavailable" unless Evilution::Memory.rss_kb
+
       test_command = ->(_m) { { passed: false } }
 
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
@@ -227,12 +229,12 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.parent_rss_kb).to be > 0
     end
 
-    it "computes memory_delta_kb from child and parent RSS" do
+    it "does not compute memory_delta_kb (cross-process comparison)" do
       test_command = ->(_m) { { passed: false } }
 
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
 
-      expect(result.memory_delta_kb).to be_a(Integer) if result.child_rss_kb && result.parent_rss_kb
+      expect(result.memory_delta_kb).to be_nil
     end
 
     it "isolates mutations from parent process" do

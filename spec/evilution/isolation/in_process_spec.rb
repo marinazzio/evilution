@@ -133,6 +133,8 @@ RSpec.describe Evilution::Isolation::InProcess do
     end
 
     it "captures parent_rss_kb (RSS before execution)" do
+      skip "RSS measurement unavailable" unless Evilution::Memory.rss_kb
+
       test_command = ->(_m) { { passed: false } }
 
       result = isolator.call(mutation:, test_command:, timeout: 5)
