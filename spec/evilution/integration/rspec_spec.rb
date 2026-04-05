@@ -21,7 +21,7 @@ RSpec.describe Evilution::Integration::RSpec do
   before do
     source_file.write(original_source)
     source_file.flush
-    allow(RSpec).to receive(:reset)
+    allow(RSpec).to receive(:clear_examples)
   end
 
   after do
@@ -108,26 +108,56 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(first_result[:passed]).to be true
       expect(second_result[:passed]).to be false
       expect(call_count).to eq(2)
-      # Ensure each call clears RSpec world state independently
-      expect(RSpec).to have_received(:reset).twice
+      # Ensure each call clears RSpec state
+      expect(RSpec).to have_received(:clear_examples).twice
     end
 
-    it "calls RSpec.reset before each run to clear world state" do
+    it "clears RSpec examples before each run" do
       allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        # Verify reset was called before the runner executes
-        expect(RSpec).to have_received(:reset)
+        # Verify clear_examples was called before the runner executes
+        expect(RSpec).to have_received(:clear_examples)
         0
       end
 
       integration.call(mutation)
     end
 
-    it "resets RSpec between runs" do
+    it "clears RSpec state between runs" do
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       integration.call(mutation)
 
-      expect(RSpec).to have_received(:reset)
+      expect(RSpec).to have_received(:clear_examples)
+    end
+
+    it "clears instance variables from mutation-created ExampleGroups" do
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # Simulate RSpec creating a new ExampleGroup during the run
+        eg = Class.new(RSpec::Core::ExampleGroup)
+        eg.instance_variable_set(:@retained_object, Object.new)
+        0
+      end
+
+      integration.call(mutation)
+
+      # All mutation-created EG classes should have ivars cleared
+      ObjectSpace.each_object(Class) do |klass|
+        next unless klass < RSpec::Core::ExampleGroup
+        next if klass == RSpec::Core::AnonymousExampleGroup
+
+        expect(klass.instance_variables).not_to include(:@retained_object)
+      rescue TypeError
+        nil
+      end
+    end
+
+    it "removes ExampleGroup constants after each run" do
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+      allow(RSpec::ExampleGroups).to receive(:remove_all_constants)
+
+      integration.call(mutation)
+
+      expect(RSpec::ExampleGroups).to have_received(:remove_all_constants).at_least(:once)
     end
 
     it "raises Evilution::Error when rspec-core is not available" do
