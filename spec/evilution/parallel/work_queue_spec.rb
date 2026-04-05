@@ -349,11 +349,11 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end
 
       it "skips timing for workers that do not respond within the grace period" do
-        queue = described_class.new(size: 1, item_timeout: 1)
+        queue = described_class.new(size: 1, item_timeout: 0.5)
 
         expect do
           queue.map([1]) do |_n|
-            sleep 60
+            sleep 5
             :done
           end
         end.to raise_error(Evilution::Error, /timed out/)
