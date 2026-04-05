@@ -94,12 +94,13 @@ end
 
 # 5. RSpec integration per-mutation (exercises clear_examples + release_rspec_state)
 integration = Evilution::Integration::RSpec.new(test_files: [FIXTURE_SPEC])
-rspec_test_command = ->(m) { integration.call(m) }
 
-all_passed &= run_check("RSpec integration per-mutation") do
+all_passed &= run_check("RSpec integration per-mutation", iterations: 20, max_growth_kb: 20_480) do
   mutation = mutations.sample
-  isolator = Evilution::Isolation::InProcess.new
-  isolator.call(mutation: mutation, test_command: rspec_test_command, timeout: 30)
+  result = integration.call(mutation)
+  raise "RSpec integration memory check failed: #{result[:error]}" if result[:error]
+
+  result
 end
 
 puts all_passed ? "All memory checks passed." : "Some memory checks failed!"
