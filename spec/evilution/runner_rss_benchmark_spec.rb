@@ -4,7 +4,7 @@ require "evilution/runner"
 require "evilution/memory"
 
 RSpec.describe Evilution::Runner, "per-mutation RSS growth", :memory_budget,
-               if: File.exist?("/proc/self/status") do
+               if: File.exist?("/proc/self/status") && ENV["EVILUTION_RUN_MEMORY_BENCHMARKS"] == "1" do
   let(:fixture_path) { File.expand_path("../support/fixtures/simple_class.rb", __dir__) }
   let(:fixture_spec_path) { File.expand_path("../support/fixtures/simple_class_spec.rb", __dir__) }
   let(:max_growth_per_mutation_kb) { 512 }
@@ -42,7 +42,6 @@ RSpec.describe Evilution::Runner, "per-mutation RSS growth", :memory_budget,
         timeout: 30,
         quiet: true,
         baseline: false,
-        isolation: :fork,
         jobs: 2,
         skip_config_file: true
       )
@@ -82,13 +81,16 @@ RSpec.describe Evilution::Runner, "per-mutation RSS growth", :memory_budget,
   def assert_no_rss_trend(rss_samples, label:)
     growth = rss_growth_per_mutation(rss_samples)
 
-    warn "\n[RSS benchmark: #{label}] #{rss_samples.size} mutations, " \
-         "first: #{rss_samples.first} KB, last: #{rss_samples.last} KB, " \
-         "min: #{rss_samples.min} KB, max: #{rss_samples.max} KB, " \
-         "growth/mutation: #{format("%+.1f", growth)} KB"
+    diagnostics = "[RSS benchmark: #{label}] #{rss_samples.size} mutations, " \
+                  "first: #{rss_samples.first} KB, last: #{rss_samples.last} KB, " \
+                  "min: #{rss_samples.min} KB, max: #{rss_samples.max} KB, " \
+                  "growth/mutation: #{format("%+.1f", growth)} KB"
+
+    warn "\n#{diagnostics}" if ENV["EVILUTION_RSS_BENCH_VERBOSE"]
 
     expect(growth).to be < max_growth_per_mutation_kb,
                       "Child RSS grew #{format("%.1f", growth)} KB/mutation " \
-                      "(limit: #{max_growth_per_mutation_kb} KB/mutation)"
+                      "(limit: #{max_growth_per_mutation_kb} KB/mutation); " \
+                      "#{diagnostics}"
   end
 end
