@@ -216,7 +216,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "logs memory after each batch" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
       allow(pool).to receive(:map).and_return(compact)
       allow(pool).to receive(:worker_stats).and_return([])
@@ -227,7 +227,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "logs worker utilization stats after parallel execution" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
       allow(pool).to receive(:map).and_return(compact)
 
@@ -242,7 +242,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "does not log worker stats when no workers ran" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
       allow(pool).to receive(:map).and_return(compact)
       allow(pool).to receive(:worker_stats).and_return([])

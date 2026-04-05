@@ -17,6 +17,24 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       queue = described_class.new(size: 2)
       expect(queue).to be_a(described_class)
     end
+
+    it "rejects zero item_timeout" do
+      expect { described_class.new(size: 1, item_timeout: 0) }.to raise_error(ArgumentError, /item_timeout/)
+    end
+
+    it "rejects negative item_timeout" do
+      expect { described_class.new(size: 1, item_timeout: -1) }.to raise_error(ArgumentError, /item_timeout/)
+    end
+
+    it "accepts nil item_timeout" do
+      queue = described_class.new(size: 1, item_timeout: nil)
+      expect(queue).to be_a(described_class)
+    end
+
+    it "accepts positive item_timeout" do
+      queue = described_class.new(size: 1, item_timeout: 5)
+      expect(queue).to be_a(described_class)
+    end
   end
 
   describe "#map" do
@@ -330,6 +348,39 @@ RSpec.describe Evilution::Parallel::WorkQueue do
           expect(stat.busy_time).to be <= stat.wall_time
         end
       end
+    end
+
+    it "raises an error when a worker hangs beyond the item timeout" do
+      queue = described_class.new(size: 1, item_timeout: 1)
+
+      expect do
+        queue.map([1]) do |_n|
+          sleep 60
+          :done
+        end
+      end.to raise_error(Evilution::Error, /timed out/)
+    end
+
+    it "removes dead worker pipes from the select set" do
+      queue = described_class.new(size: 2)
+
+      expect do
+        queue.map([1, 2, 3, 4]) do |n|
+          exit!(1) if n == 1
+          n * 10
+        end
+      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
+    end
+
+    it "does not hang when a worker dies with prefetched items in its pipe" do
+      queue = described_class.new(size: 2, prefetch: 2)
+
+      expect do
+        queue.map([1, 2, 3, 4, 5, 6]) do |n|
+          exit!(1) if n == 1
+          n * 10
+        end
+      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
     end
 
     it "cleans up worker processes even on error" do
