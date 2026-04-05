@@ -15,7 +15,7 @@ class User
   end
 end
 
-class Admin < User
+class Admin
   def admin?
     true
   end
