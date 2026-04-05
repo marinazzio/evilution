@@ -325,7 +325,7 @@ class Evilution::Runner
 
   def run_mutations_parallel(mutations, baseline_result = nil)
     integration = build_integration
-    pool = Evilution::Parallel::Pool.new(size: config.jobs, hooks: @hooks, item_timeout: config.timeout * 2)
+    pool = Evilution::Parallel::Pool.new(size: config.jobs, hooks: @hooks, item_timeout: config.timeout ? config.timeout * 2 : nil)
     worker_isolator = Evilution::Isolation::InProcess.new
     spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }

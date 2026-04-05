@@ -22,6 +22,9 @@ class Evilution::Parallel::WorkQueue
   def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil)
     raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
     raise ArgumentError, "prefetch must be a positive integer, got #{prefetch.inspect}" unless prefetch.is_a?(Integer) && prefetch >= 1
+    unless item_timeout.nil? || (item_timeout.is_a?(Numeric) && item_timeout.positive?)
+      raise ArgumentError, "item_timeout must be nil or a positive number, got #{item_timeout.inspect}"
+    end
 
     @size = size
     @hooks = hooks
@@ -64,7 +67,7 @@ class Evilution::Parallel::WorkQueue
       cmd_read.close
       res_write.close
 
-      { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0 }
+      { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0, pending: 0 }
     end
   end
 
@@ -141,7 +144,8 @@ class Evilution::Parallel::WorkQueue
 
     if message.nil?
       state.first_error = Evilution::Error.new("worker process exited unexpectedly") if state.first_error.nil?
-      state.in_flight -= 1
+      state.in_flight -= worker[:pending]
+      worker[:pending] = 0
       return false
     end
 
@@ -149,6 +153,7 @@ class Evilution::Parallel::WorkQueue
     state.first_error = value if status == :error && state.first_error.nil?
     state.results[index] = value if status == :ok
     state.in_flight -= 1
+    worker[:pending] -= 1
     worker[:items_completed] += 1
 
     send_item(worker, items, state) if state.next_index < items.length && state.first_error.nil?
@@ -159,6 +164,7 @@ class Evilution::Parallel::WorkQueue
     write_message(worker[:cmd_write], [state.next_index, items[state.next_index]])
     state.next_index += 1
     state.in_flight += 1
+    worker[:pending] += 1
   end
 
   def build_worker_stats(workers)
