@@ -334,6 +334,36 @@ RSpec.describe Evilution::Parallel::WorkQueue do
         end
       end
 
+      it "does not hang collecting timing from a crashed worker" do
+        queue = described_class.new(size: 2)
+
+        expect do
+          queue.map([1, 2, 3, 4]) do |n|
+            exit!(1) if n == 2
+            n * 10
+          end
+        end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
+
+        stats = queue.worker_stats
+        expect(stats.length).to eq(2)
+      end
+
+      it "skips timing for workers that do not respond within the grace period" do
+        queue = described_class.new(size: 1, item_timeout: 1)
+
+        expect do
+          queue.map([1]) do |_n|
+            sleep 60
+            :done
+          end
+        end.to raise_error(Evilution::Error, /timed out/)
+
+        stats = queue.worker_stats
+        expect(stats.length).to eq(1)
+        expect(stats.first.busy_time).to eq(0.0)
+        expect(stats.first.wall_time).to eq(0.0)
+      end
+
       it "reports positive utilization for all workers" do
         queue = described_class.new(size: 2)
         queue.map([1, 2, 3, 4]) do |_n|

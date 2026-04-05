@@ -7,6 +7,8 @@ class Evilution::Parallel::WorkQueue
 
   STATS = :__stats__
 
+  TIMING_GRACE_PERIOD = 5
+
   WorkerStat = Struct.new(:pid, :items_completed, :busy_time, :wall_time) do
     def idle_time
       wall_time - busy_time
@@ -201,7 +203,11 @@ class Evilution::Parallel::WorkQueue
 
   def collect_worker_timing(workers)
     workers.each do |worker|
-      message = read_result(worker[:res_read])
+      io = worker[:res_read]
+      next if io.closed?
+      next unless io.wait_readable(TIMING_GRACE_PERIOD)
+
+      message = read_result(io)
       next if message.nil?
 
       tag, busy_time, wall_time = message
