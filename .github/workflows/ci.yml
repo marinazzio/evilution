@@ -29,3 +29,19 @@ jobs:
       - name: Run tests
         run: bundle exec rspec spec
         timeout-minutes: 5
+
+  memory_check:
+    runs-on: ubuntu-latest
+    name: Memory leak check
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@3ff19f5e2baf30647122352b96108b1fbe250c64 # v1.299.0
+        with:
+          ruby-version: '3.4.9'
+          bundler-cache: true
+      - name: Run memory check
+        run: bundle exec rake memory:check
+        timeout-minutes: 5
