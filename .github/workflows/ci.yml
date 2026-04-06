@@ -15,7 +15,7 @@ jobs:
           - '4.0.2'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
       - name: Set up Ruby
@@ -31,10 +31,10 @@ jobs:
         timeout-minutes: 5
 
   memory_check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Memory leak check
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
       - name: Set up Ruby
@@ -45,3 +45,6 @@ jobs:
       - name: Run memory check
         run: bundle exec rake memory:check
         timeout-minutes: 5
+        env:
+          MEMORY_CHECK_ITERATIONS: '50'
+          MEMORY_CHECK_MAX_GROWTH_KB: '10240'
