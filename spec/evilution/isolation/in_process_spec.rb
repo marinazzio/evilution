@@ -143,6 +143,21 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.parent_rss_kb).to be > 0
     end
 
+    it "does not close /dev/null handles between calls (formatter reuse safe)" do
+      stdout_ref = nil
+      test_command = lambda { |_m|
+        stdout_ref = $stdout
+        { passed: false }
+      }
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+      captured_first = stdout_ref
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(captured_first).not_to be_closed
+    end
+
     it "does not interfere with $LOADED_FEATURES" do
       features_before = $LOADED_FEATURES.dup
 
