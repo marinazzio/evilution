@@ -43,6 +43,7 @@ class Evilution::SpecResolver
 
   def controller_to_request_spec(stripped_path)
     return nil unless stripped_path.start_with?(CONTROLLER_PREFIX)
+    return nil unless stripped_path.end_with?("_controller_spec.rb")
 
     request_path = stripped_path
                    .delete_prefix(CONTROLLER_PREFIX)

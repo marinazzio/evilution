@@ -166,6 +166,12 @@ RSpec.describe Evilution::SpecResolver do
 
         expect(resolver.call("app/services/foo_service.rb")).to eq("spec/services/foo_service_spec.rb")
       end
+
+      it "does not apply request spec mapping to controller concerns" do
+        create_file("spec/controllers/concerns/set_locale_spec.rb")
+
+        expect(resolver.call("app/controllers/concerns/set_locale.rb")).to eq("spec/controllers/concerns/set_locale_spec.rb")
+      end
     end
 
     context "Rails concerns" do
