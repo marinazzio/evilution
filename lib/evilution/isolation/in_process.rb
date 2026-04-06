@@ -7,6 +7,11 @@ require_relative "../result/mutation_result"
 require_relative "../isolation"
 
 class Evilution::Isolation::InProcess
+  def initialize
+    @null_out = File.open(File::NULL, "w")
+    @null_err = File.open(File::NULL, "w")
+  end
+
   def call(mutation:, test_command:, timeout:)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     rss_before = Evilution::Memory.rss_kb
@@ -34,13 +39,9 @@ class Evilution::Isolation::InProcess
   def suppress_output
     saved_stdout = $stdout
     saved_stderr = $stderr
-    File.open(File::NULL, "w") do |null_out|
-      File.open(File::NULL, "w") do |null_err|
-        $stdout = null_out
-        $stderr = null_err
-        yield
-      end
-    end
+    $stdout = @null_out
+    $stderr = @null_err
+    yield
   ensure
     $stdout = saved_stdout
     $stderr = saved_stderr
