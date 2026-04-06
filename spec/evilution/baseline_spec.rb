@@ -58,6 +58,14 @@ RSpec.describe Evilution::Baseline do
       expect(result.failed_spec_files).to contain_exactly("spec")
     end
 
+    it "warns when falling back to full spec suite" do
+      allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
+
+      expect { baseline.call([subject1]) }
+        .to output(%r{no matching spec.*lib/user\.rb.*--spec}i).to_stderr
+    end
+
     it "records duration" do
       allow(baseline).to receive(:run_spec_file).and_return(true)
 

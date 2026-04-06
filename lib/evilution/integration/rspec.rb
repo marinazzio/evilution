@@ -12,6 +12,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @rspec_loaded = false
+    @spec_resolver = Evilution::SpecResolver.new
+    @warned_files = Set.new
     super(hooks: hooks)
   end
 
@@ -177,7 +179,20 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = Evilution::SpecResolver.new.call(mutation.file_path)
-    resolved ? [resolved] : ["spec"]
+    resolved = @spec_resolver.call(mutation.file_path)
+    if resolved
+      [resolved]
+    else
+      warn_unresolved_spec(mutation.file_path)
+      ["spec"]
+    end
+  end
+
+  def warn_unresolved_spec(file_path)
+    return if @warned_files.include?(file_path)
+
+    @warned_files << file_path
+    warn "[evilution] No matching spec found for #{file_path}, running full suite. " \
+         "Use --spec to specify the spec file."
   end
 end
