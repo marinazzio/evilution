@@ -2,6 +2,7 @@
 
 class Evilution::SpecResolver
   STRIPPABLE_PREFIXES = %w[lib/ app/].freeze
+  CONTROLLER_PREFIX = "controllers/"
 
   def call(source_path)
     return nil if source_path.nil? || source_path.empty?
@@ -29,7 +30,8 @@ class Evilution::SpecResolver
 
     candidates = if prefix
                    stripped = base.delete_prefix(prefix)
-                   ["spec/#{stripped}", "spec/#{base}"]
+                   request_spec = controller_to_request_spec(stripped)
+                   [request_spec, "spec/#{stripped}", "spec/#{base}"].compact
                  else
                    ["spec/#{base}"]
                  end
@@ -37,6 +39,15 @@ class Evilution::SpecResolver
     fallbacks = candidates.flat_map { |c| parent_fallback_candidates(c) }.uniq
 
     candidates + fallbacks
+  end
+
+  def controller_to_request_spec(stripped_path)
+    return nil unless stripped_path.start_with?(CONTROLLER_PREFIX)
+
+    request_path = stripped_path
+                   .delete_prefix(CONTROLLER_PREFIX)
+                   .sub(/_controller_spec\.rb\z/, "_spec.rb")
+    "spec/requests/#{request_path}"
   end
 
   def parent_fallback_candidates(spec_path)
