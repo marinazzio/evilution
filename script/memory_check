@@ -7,6 +7,8 @@ require_relative "../lib/evilution/integration/rspec"
 
 FIXTURE = File.expand_path("../spec/support/fixtures/simple_class.rb", __dir__)
 FIXTURE_SPEC = File.expand_path("../spec/support/fixtures/simple_class_spec.rb", __dir__)
+COMPLEX_FIXTURE = File.expand_path("../lib/evilution/config.rb", __dir__)
+COMPLEX_FIXTURE_SPEC = File.expand_path("../spec/evilution/config_spec.rb", __dir__)
 ITERATIONS = Integer(ENV.fetch("MEMORY_CHECK_ITERATIONS", 50))
 MAX_GROWTH_KB = Integer(ENV.fetch("MEMORY_CHECK_MAX_GROWTH_KB", 10_240))
 
@@ -92,11 +94,18 @@ if mutations.size >= 2
   end
 end
 
-# 5. RSpec integration per-mutation (exercises clear_examples + release_rspec_state)
-integration = Evilution::Integration::RSpec.new(test_files: [FIXTURE_SPEC])
+# 5. RSpec integration per-mutation with complex fixture
+#    Uses Config (227 LOC, 73 specs, 564 mutations) for realistic per-mutation load:
+#    more ExampleGroup subclasses, deeper spec nesting, heavier metadata.
+complex_parser = Evilution::AST::Parser.new
+complex_registry = Evilution::Mutator::Registry.default
+complex_subjects = complex_parser.call(COMPLEX_FIXTURE)
+complex_mutations = complex_subjects.flat_map { |s| complex_registry.mutations_for(s) }
 
-all_passed &= run_check("RSpec integration per-mutation", iterations: 20, max_growth_kb: 20_480) do
-  mutation = mutations.sample
+integration = Evilution::Integration::RSpec.new(test_files: [COMPLEX_FIXTURE_SPEC])
+
+all_passed &= run_check("RSpec integration per-mutation (Config)", iterations: 20, max_growth_kb: 20_480) do
+  mutation = complex_mutations.sample
   result = integration.call(mutation)
   raise "RSpec integration memory check failed: #{result[:error]}" if result[:error]
 
