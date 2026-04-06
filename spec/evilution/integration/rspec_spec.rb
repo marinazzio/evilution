@@ -479,13 +479,31 @@ RSpec.describe Evilution::Integration::RSpec do
       auto_integration.call(mutation)
     end
 
+    it "warns once per file when falling back to full spec suite" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      expect { 2.times { auto_integration.call(mutation) } }
+        .to output(/no matching spec.*#{Regexp.escape(mutation.file_path)}.*--spec/i).to_stderr
+    end
+
+    it "does not warn when spec is resolved successfully" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      expect { auto_integration.call(mutation) }.not_to output.to_stderr
+    end
+
     it "does not use resolver when explicit test_files are provided" do
+      allow(resolver).to receive(:call)
       explicit_integration = described_class.new(test_files: ["spec/explicit_spec.rb"])
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       explicit_integration.call(mutation)
 
-      expect(Evilution::SpecResolver).not_to have_received(:new)
+      expect(resolver).not_to have_received(:call)
     end
 
     it "includes resolved spec in test_command" do
