@@ -93,9 +93,10 @@ class Evilution::Baseline
   private
 
   def resolve_unique_spec_files(subjects)
+    warned = Set.new
     subjects.map do |s|
       resolved = @spec_resolver.call(s.file_path)
-      unless resolved
+      if resolved.nil? && warned.add?(s.file_path)
         warn "[evilution] No matching spec found for #{s.file_path}, running full suite. " \
              "Use --spec to specify the spec file."
       end

@@ -484,8 +484,14 @@ RSpec.describe Evilution::Integration::RSpec do
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
-      expect { 2.times { auto_integration.call(mutation) } }
-        .to output(/no matching spec.*#{Regexp.escape(mutation.file_path)}.*--spec/i).to_stderr
+      stderr = StringIO.new
+      $stderr = stderr
+      2.times { auto_integration.call(mutation) }
+      $stderr = STDERR
+
+      lines = stderr.string.lines.select { |l| l.include?("No matching spec") }
+      expect(lines.size).to eq(1)
+      expect(lines.first).to match(/#{Regexp.escape(mutation.file_path)}/)
     end
 
     it "does not warn when spec is resolved successfully" do
