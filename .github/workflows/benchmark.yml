@@ -1,16 +1,16 @@
-name: Lint and Test
+name: Benchmark
 
 on:
   push: {}
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    name: Test on Ruby ${{ matrix.ruby }}
+  memory_check:
+    runs-on: ubuntu-24.04
+    name: Memory leak check
+
     strategy:
       matrix:
         ruby:
-          - '3.3.11'
           - '3.4.9'
           - '4.0.2'
 
@@ -23,9 +23,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run linter
-        run: bundle exec rubocop
-
-      - name: Run tests
-        run: bundle exec rspec spec
+      - name: Run memory check
+        run: bundle exec rake memory:check
         timeout-minutes: 5
+        env:
+          MEMORY_CHECK_ITERATIONS: '50'
+          MEMORY_CHECK_MAX_GROWTH_KB: '10240'
