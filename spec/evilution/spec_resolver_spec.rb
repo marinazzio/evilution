@@ -129,6 +129,51 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    context "Rails controller to request spec mapping" do
+      it "resolves app/controllers/foo_controller.rb to spec/requests/foo_spec.rb" do
+        create_file("spec/requests/foo_spec.rb")
+
+        expect(resolver.call("app/controllers/foo_controller.rb")).to eq("spec/requests/foo_spec.rb")
+      end
+
+      it "resolves namespaced controller to request spec" do
+        create_file("spec/requests/admin/users_spec.rb")
+
+        expect(resolver.call("app/controllers/admin/users_controller.rb")).to eq("spec/requests/admin/users_spec.rb")
+      end
+
+      it "prefers request spec over controller spec when both exist" do
+        create_file("spec/requests/foo_spec.rb")
+        create_file("spec/controllers/foo_controller_spec.rb")
+
+        expect(resolver.call("app/controllers/foo_controller.rb")).to eq("spec/requests/foo_spec.rb")
+      end
+
+      it "falls back to controller spec when request spec does not exist" do
+        create_file("spec/controllers/foo_controller_spec.rb")
+
+        expect(resolver.call("app/controllers/foo_controller.rb")).to eq("spec/controllers/foo_controller_spec.rb")
+      end
+
+      it "resolves deeply namespaced controller to request spec" do
+        create_file("spec/requests/api/v1/users_spec.rb")
+
+        expect(resolver.call("app/controllers/api/v1/users_controller.rb")).to eq("spec/requests/api/v1/users_spec.rb")
+      end
+
+      it "does not apply request spec mapping to non-controller files" do
+        create_file("spec/services/foo_service_spec.rb")
+
+        expect(resolver.call("app/services/foo_service.rb")).to eq("spec/services/foo_service_spec.rb")
+      end
+
+      it "does not apply request spec mapping to controller concerns" do
+        create_file("spec/controllers/concerns/set_locale_spec.rb")
+
+        expect(resolver.call("app/controllers/concerns/set_locale.rb")).to eq("spec/controllers/concerns/set_locale_spec.rb")
+      end
+    end
+
     context "Rails concerns" do
       it "resolves app/models/concerns/trackable.rb to spec/models/concerns/trackable_spec.rb" do
         create_file("spec/models/concerns/trackable_spec.rb")
