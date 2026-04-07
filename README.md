@@ -177,7 +177,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `conditional_branch` | Remove if/else branch | Deletes branch body |
 | `conditional_flip` | Flip `if` to `unless` and vice versa | `if cond` -> `unless cond` |
 | `statement_deletion` | Remove statements from method bodies | Deletes a statement |
-| `method_body_replacement` | Replace entire method body with `nil` | Method body -> `nil` |
+| `method_body_replacement` | Replace entire method body | Method body -> `nil`, `self`, `super` |
 | `negation_insertion` | Negate predicate methods | `x.empty?` -> `!x.empty?` |
 | `return_value_removal` | Strip return values | `return x` -> `return` |
 | `collection_replacement` | Swap collection methods | `map` -> `each`, `select` <-> `reject` |
