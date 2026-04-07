@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.19.0] - 2026-04-07
+
+### Added
+
+- **Smart spec auto-detection** — `SpecResolver` maps source files to the closest matching spec using Rails conventions: controllers to request specs (`app/controllers/foo_controller.rb` → `spec/requests/foo_spec.rb`), models, services, Avo resources, and lib/ paths; falls back through parent directory patterns when exact match doesn't exist; warns when falling back to full suite so users know to use `--spec` (#530, #555)
+- **`--spec-dir DIR` CLI flag** — include all `*_spec.rb` files in a directory recursively; composable with `--spec` for combining explicit files and directories (#513)
+- **RSS tracking per mutation** — JSON output includes per-mutation RSS memory measurements for profiling memory behavior across mutations (#532)
+- **Memory budget CI gate** — dedicated benchmark workflow with memory check step; uses realistic project classes as fixtures (#533, #567)
+- **Worker hang protection** — `WorkQueue` item timeout prevents indefinite worker hangs; timeout handling for worker timing collection (#558, #559)
+
+### Fixed
+
+- **InProcess `suppress_output` closing `/dev/null` handle** — prevent closing the shared `/dev/null` file descriptor which caused subsequent output suppression to fail (#569)
+- **Double `Process.wait` in Fork isolation** — handle empty child processes without raising (#561)
+
+### Changed
+
+- **RSpec integration memory management** — use clear hooks to release AST nodes and source strings between mutations, preventing memory retention across mutation runs (#543)
+
 ## [0.18.0] - 2026-04-03
 
 ### Added

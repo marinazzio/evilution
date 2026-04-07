@@ -51,7 +51,8 @@ evilution [command] [options] [files...]
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
 | `--target EXPR`              | String  | _(none)_     | Only mutate matching methods. Supports method name (`Foo::Bar#calculate`), class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
-| `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to `spec/`. |
+| `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to auto-detection via `SpecResolver`. |
+| `--spec-dir DIR`             | String  | _(none)_     | Include all `*_spec.rb` files in DIR recursively. Composable with `--spec`. |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
