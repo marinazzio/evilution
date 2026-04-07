@@ -70,7 +70,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::StringInterpolation,
       Evilution::Mutator::Operator::RetryRemoval,
       Evilution::Mutator::Operator::CaseWhen,
-      Evilution::Mutator::Operator::PredicateReplacement
+      Evilution::Mutator::Operator::PredicateReplacement,
+      Evilution::Mutator::Operator::EqualityToIdentity
     ].each { |op| registry.register(op) }
     registry
   end
