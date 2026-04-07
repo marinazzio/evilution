@@ -17,11 +17,31 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
   end
 
   describe "#call" do
-    it "generates 1 mutation for a method with a body" do
+    it "generates 3 mutations for a method with a body" do
       muts = mutations_for("with_body")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to match(/def with_body\s+nil\s+end/)
+      expect(muts.length).to eq(3)
+    end
+
+    it "replaces body with nil" do
+      muts = mutations_for("with_body")
+
+      nil_mut = muts.find { |m| m.mutated_source.match?(/def with_body\s+nil\s+end/) }
+      expect(nil_mut).not_to be_nil
+    end
+
+    it "replaces body with self" do
+      muts = mutations_for("with_body")
+
+      self_mut = muts.find { |m| m.mutated_source.match?(/def with_body\s+self\s+end/) }
+      expect(self_mut).not_to be_nil
+    end
+
+    it "replaces body with super" do
+      muts = mutations_for("with_body")
+
+      super_mut = muts.find { |m| m.mutated_source.match?(/def with_body\s+super\s+end/) }
+      expect(super_mut).not_to be_nil
     end
 
     it "generates 0 mutations for an empty method" do
@@ -34,8 +54,9 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
         muts.each do |mutation|
-          expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
-                                                                 "Invalid Ruby produced for #{mutation}"
+          result = Prism.parse(mutation.mutated_source)
+          expect(result.errors).to be_empty,
+                                   "Invalid Ruby produced for #{mutation}: #{result.errors.map(&:message)}"
         end
       end
     end
