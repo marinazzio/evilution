@@ -156,7 +156,7 @@ Use `--format json` for machine-readable output. Schema:
 
 **Key metric**: `summary.score` — the mutation score. Higher is better. 1.0 means all mutations were caught.
 
-## Mutation Operators (61 total)
+## Mutation Operators (62 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -223,6 +223,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `defined_check` | Replace `defined?` with `true` | `defined?(x)` -> `true` |
 | `regex_capture` | Swap or nil-ify capture refs | `$1` -> `$2`, `$1` -> `nil` |
 | `loop_flip` | Swap while/until loops | `while cond` -> `until cond` |
+| `string_interpolation` | Replace interpolation content with nil | `"hello #{name}"` -> `"hello #{nil}"` |
 
 ## MCP Server (AI Agent Integration)
 
@@ -369,7 +370,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 61 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
+4. **Mutate** — 62 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
 5. **Isolate** — Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
 6. **Test** — RSpec executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
