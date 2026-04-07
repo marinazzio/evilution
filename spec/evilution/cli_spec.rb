@@ -205,6 +205,50 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--spec-dir flag" do
+      around do |example|
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            FileUtils.mkdir_p("spec/requests")
+            FileUtils.mkdir_p("spec/controllers")
+            File.write("spec/requests/users_spec.rb", "")
+            File.write("spec/requests/posts_spec.rb", "")
+            File.write("spec/controllers/admin_spec.rb", "")
+            example.run
+          end
+        end
+      end
+
+      it "expands directory to all spec files within it" do
+        cli = described_class.new(["--spec-dir", "spec/requests"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(spec_files: contain_exactly(
+            "spec/requests/users_spec.rb", "spec/requests/posts_spec.rb"
+          ))
+        )
+      end
+
+      it "combines with --spec flag" do
+        cli = described_class.new(["--spec", "spec/controllers/admin_spec.rb", "--spec-dir", "spec/requests"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(spec_files: contain_exactly(
+            "spec/controllers/admin_spec.rb",
+            "spec/requests/users_spec.rb",
+            "spec/requests/posts_spec.rb"
+          ))
+        )
+      end
+
+      it "errors when directory does not exist" do
+        stderr = capture_stderr { described_class.new(["--spec-dir", "spec/nonexistent"]).call }
+        expect(stderr).to include("not a directory")
+      end
+    end
+
     describe "--quiet flag" do
       it "sets quiet to true" do
         cli = described_class.new(["--quiet"])
