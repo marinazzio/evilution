@@ -65,7 +65,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::YieldStatement,
       Evilution::Mutator::Operator::SplatOperator,
       Evilution::Mutator::Operator::DefinedCheck,
-      Evilution::Mutator::Operator::RegexCapture
+      Evilution::Mutator::Operator::RegexCapture,
+      Evilution::Mutator::Operator::LoopFlip
     ].each { |op| registry.register(op) }
     registry
   end
