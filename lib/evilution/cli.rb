@@ -53,6 +53,16 @@ class Evilution::CLI
     0
   end
 
+  def expand_spec_dir(dir)
+    unless File.directory?(dir)
+      warn("Error: #{dir} is not a directory")
+      return
+    end
+
+    specs = Dir.glob(File.join(dir, "**/*_spec.rb"))
+    @options[:spec_files] = Array(@options[:spec_files]) + specs
+  end
+
   def run_subcommand_error(message)
     warn("Error: #{message}")
     2
@@ -224,6 +234,7 @@ class Evilution::CLI
   def add_filter_options(opts)
     opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
     opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
+    opts.on("--spec-dir DIR", "Include all specs in DIR") { |d| expand_spec_dir(d) }
     opts.on("--target EXPR",
             "Filter: method (Foo#bar), type (Foo#/Foo.), namespace (Foo*),",
             "class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
