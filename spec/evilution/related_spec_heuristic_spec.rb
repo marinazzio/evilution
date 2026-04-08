@@ -150,6 +150,44 @@ RSpec.describe Evilution::RelatedSpecHeuristic do
       end
     end
 
+    context "implicit receiver includes" do
+      it "matches includes without dot prefix" do
+        mutation = double("Mutation",
+                          file_path: "app/models/news.rb",
+                          diff: "- scope :recent, -> { includes(:author) }\n+ scope :recent, -> { all }")
+        create_file("spec/requests/news_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to include("spec/requests/news_spec.rb")
+      end
+    end
+
+    context "absolute paths" do
+      it "normalizes absolute paths before extracting domain" do
+        abs_path = "#{Dir.pwd}/app/controllers/news_controller.rb"
+        mutation = double("Mutation",
+                          file_path: abs_path,
+                          diff: "- News.includes(:comments)\n+ News")
+        create_file("spec/requests/news_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to include("spec/requests/news_spec.rb")
+      end
+
+      it "normalizes dot-prefixed paths" do
+        mutation = double("Mutation",
+                          file_path: "./app/models/news.rb",
+                          diff: "- News.includes(:comments)\n+ News")
+        create_file("spec/requests/news_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to include("spec/requests/news_spec.rb")
+      end
+    end
+
     context "edge cases" do
       it "handles nil diff gracefully" do
         mutation = double("Mutation",

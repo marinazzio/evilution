@@ -182,15 +182,13 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     return test_files if test_files
 
     resolved = @spec_resolver.call(mutation.file_path)
-    primary = if resolved
-                [resolved]
-              else
-                warn_unresolved_spec(mutation.file_path)
-                ["spec"]
-              end
+    unless resolved
+      warn_unresolved_spec(mutation.file_path)
+      return ["spec"]
+    end
 
     related = @related_spec_heuristic.call(mutation)
-    (primary + related).uniq
+    ([resolved] + related).uniq
   end
 
   def warn_unresolved_spec(file_path)

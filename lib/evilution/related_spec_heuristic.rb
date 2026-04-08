@@ -8,7 +8,7 @@ class Evilution::RelatedSpecHeuristic
     spec/system
   ].freeze
 
-  INCLUDES_PATTERN = /\.includes\(/
+  INCLUDES_PATTERN = /\bincludes\(/
 
   def call(mutation)
     return [] unless includes_mutation?(mutation)
@@ -29,8 +29,10 @@ class Evilution::RelatedSpecHeuristic
   end
 
   def extract_domain(file_path)
+    normalized = normalize_path(file_path)
+
     # Strip common prefixes and get the relative path under app/ or lib/
-    relative = file_path
+    relative = normalized
                .delete_prefix("app/controllers/")
                .delete_prefix("app/models/")
                .delete_prefix("app/")
@@ -41,6 +43,12 @@ class Evilution::RelatedSpecHeuristic
     basename = basename.sub(/_controller\z/, "")
 
     basename.empty? ? nil : basename
+  end
+
+  def normalize_path(path)
+    path = path.delete_prefix("./")
+    path = path.delete_prefix("#{Dir.pwd}/") if path.start_with?("/")
+    path
   end
 
   def find_related_specs(domain)
