@@ -6,7 +6,6 @@ require "time"
 require "fileutils"
 
 require_relative "../session"
-require_relative "../result/coverage_gap_grouper"
 
 class Evilution::Session::Store
   DEFAULT_DIR = ".evilution/results"

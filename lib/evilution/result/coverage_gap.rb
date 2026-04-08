@@ -9,7 +9,7 @@ class Evilution::Result::CoverageGap
     @file_path = file_path
     @subject_name = subject_name
     @line = line
-    @mutation_results = mutation_results
+    @mutation_results = mutation_results.dup.freeze
     freeze
   end
 

@@ -17,6 +17,6 @@ class Evilution::Result::CoverageGapGrouper
       )
     end
 
-    gaps.sort_by { |gap| [gap.file_path, gap.line] }
+    gaps.sort_by { |gap| [gap.file_path, gap.line, gap.subject_name] }
   end
 end

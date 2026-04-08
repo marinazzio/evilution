@@ -67,7 +67,7 @@ RSpec.describe Evilution::Result::CoverageGapGrouper do
     expect(gaps.first).to be_single
   end
 
-  it "sorts gaps by file path then line" do
+  it "sorts gaps by file path, line, then subject name" do
     r1 = make_survived(operator_name: "comparison_replacement", file_path: "lib/user.rb", line: 20, subj: subject1)
     r2 = make_survived(operator_name: "comparison_replacement", file_path: "lib/account.rb", line: 5, subj: subject1)
     r3 = make_survived(operator_name: "comparison_replacement", file_path: "lib/user.rb", line: 10, subj: subject1)
@@ -76,6 +76,15 @@ RSpec.describe Evilution::Result::CoverageGapGrouper do
 
     expect(gaps.map(&:file_path)).to eq(["lib/account.rb", "lib/user.rb", "lib/user.rb"])
     expect(gaps.map(&:line)).to eq([5, 10, 20])
+  end
+
+  it "sorts deterministically when file and line match but subjects differ" do
+    r1 = make_survived(operator_name: "comparison_replacement", file_path: "lib/user.rb", line: 9, subj: subject2)
+    r2 = make_survived(operator_name: "comparison_replacement", file_path: "lib/user.rb", line: 9, subj: subject1)
+
+    gaps = grouper.call([r1, r2])
+
+    expect(gaps.map(&:subject_name)).to eq(["User#admin?", "User#check"])
   end
 
   it "returns empty array for empty input" do

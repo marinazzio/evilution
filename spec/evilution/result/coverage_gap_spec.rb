@@ -80,6 +80,23 @@ RSpec.describe Evilution::Result::CoverageGap do
     it "is frozen" do
       expect(gap).to be_frozen
     end
+
+    it "has frozen mutation_results" do
+      expect(gap.mutation_results).to be_frozen
+    end
+
+    it "does not share the original array" do
+      original = [result1]
+      gap = described_class.new(
+        file_path: "lib/user.rb",
+        subject_name: "User#check",
+        line: 9,
+        mutation_results: original
+      )
+      original << result2
+
+      expect(gap.mutation_results).to eq([result1])
+    end
   end
 
   describe "multi-mutation gap" do
