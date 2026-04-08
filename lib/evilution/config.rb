@@ -25,14 +25,16 @@ class Evilution::Config
     spec_files: [],
     ignore_patterns: [],
     show_disabled: false,
-    baseline_session: nil
+    baseline_session: nil,
+    skip_heredoc_literals: false
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
-              :ignore_patterns, :show_disabled, :baseline_session
+              :ignore_patterns, :show_disabled, :baseline_session,
+              :skip_heredoc_literals
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -87,6 +89,10 @@ class Evilution::Config
 
   def show_disabled?
     show_disabled
+  end
+
+  def skip_heredoc_literals?
+    skip_heredoc_literals
   end
 
   def self.file_options
@@ -179,6 +185,7 @@ class Evilution::Config
     @ignore_patterns = validate_ignore_patterns(merged[:ignore_patterns])
     @show_disabled = merged[:show_disabled]
     @baseline_session = merged[:baseline_session]
+    @skip_heredoc_literals = merged[:skip_heredoc_literals]
     @hooks = validate_hooks(merged[:hooks])
   end
 

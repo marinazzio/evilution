@@ -7,7 +7,7 @@ require_relative "../mutator"
 class Evilution::Mutator::Base < Prism::Visitor
   attr_reader :mutations
 
-  def initialize
+  def initialize(**_options)
     @mutations = []
     @subject = nil
     @file_source = nil

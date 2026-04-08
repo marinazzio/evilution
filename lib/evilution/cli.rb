@@ -255,6 +255,7 @@ class Evilution::CLI
   end
 
   def add_extra_flag_options(opts)
+    opts.on("--skip-heredoc-literals", "Skip all string literal mutations inside heredocs") { @options[:skip_heredoc_literals] = true }
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
     opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }

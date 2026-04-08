@@ -371,6 +371,26 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--skip-heredoc-literals flag" do
+      it "sets skip_heredoc_literals to true" do
+        cli = described_class.new(["--skip-heredoc-literals"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(skip_heredoc_literals: true)
+        )
+      end
+
+      it "defaults to false when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(skip_heredoc_literals: false)
+        )
+      end
+    end
+
     describe "--baseline-session flag" do
       it "sets baseline_session to the given path" do
         cli = described_class.new(["--baseline-session", "/tmp/session.json"])
