@@ -56,4 +56,39 @@ class EquivalentDetectionFixture
   def using_flat_map
     [1, 2, 3].flat_map { |x| [x] }
   end
+
+  # Void context: .each not in last position, return value unused
+  def each_in_void_context
+    [1, 2, 3].each { |x| puts x }
+    "done"
+  end
+
+  # Non-void: .each is the last expression (return value used)
+  def each_as_return_value
+    [1, 2, 3].each { |x| puts x }
+  end
+
+  # Non-void: .each return value assigned to variable
+  def each_assigned
+    result = [1, 2, 3].each { |x| puts x }
+    result.length
+  end
+
+  # Void context: .map not in last position, return value unused
+  def map_in_void_context
+    [1, 2, 3].map { |x| x * 2 }
+    "done"
+  end
+
+  # Non-void: .map is the last expression
+  def map_as_return_value
+    [1, 2, 3].map { |x| x * 2 }
+  end
+
+  # Void context with multiple statements
+  def each_void_multi_statement
+    setup_something
+    [1, 2, 3].each { |x| puts x }
+    cleanup_something
+  end
 end
