@@ -22,6 +22,12 @@ RSpec.describe BenchmarkDensity do
       path
     end
 
+    def write_raw_config(content)
+      path = File.join(@tmpdir, "config.yml")
+      File.write(path, content)
+      path
+    end
+
     def valid_config_data
       {
         "project_root" => File.join(@tmpdir, "project"),
@@ -49,6 +55,31 @@ RSpec.describe BenchmarkDensity do
       config = described_class.new(path)
 
       expect(config.target_ratio).to eq(1.5)
+    end
+
+    it "preserves explicit target_ratio of 0" do
+      data = valid_config_data.merge("target_ratio" => 0)
+      path = write_config(data)
+
+      config = described_class.new(path)
+
+      expect(config.target_ratio).to eq(0)
+    end
+
+    it "raises when YAML file is empty" do
+      path = write_raw_config("")
+
+      expect { described_class.new(path) }.to raise_error(
+        BenchmarkDensity::ConfigError, /must contain a YAML mapping/
+      )
+    end
+
+    it "raises when YAML is not a mapping" do
+      path = write_raw_config("- item1\n- item2\n")
+
+      expect { described_class.new(path) }.to raise_error(
+        BenchmarkDensity::ConfigError, /must contain a YAML mapping/
+      )
     end
 
     it "raises when project_root is nil" do
@@ -86,6 +117,33 @@ RSpec.describe BenchmarkDensity do
         BenchmarkDensity::ConfigError, /files list is empty/
       )
     end
+
+    it "raises when a file entry is missing path" do
+      data = valid_config_data.merge("files" => [{ "reference_target" => "Foo" }])
+      path = write_config(data)
+
+      expect { described_class.new(path) }.to raise_error(
+        BenchmarkDensity::ConfigError, /files\[0\] is missing required path/
+      )
+    end
+
+    it "raises when a file entry is missing reference_target" do
+      data = valid_config_data.merge("files" => [{ "path" => "foo.rb" }])
+      path = write_config(data)
+
+      expect { described_class.new(path) }.to raise_error(
+        BenchmarkDensity::ConfigError, /files\[0\] is missing required reference_target/
+      )
+    end
+
+    it "raises when a file entry is not a mapping" do
+      data = valid_config_data.merge("files" => ["just_a_string"])
+      path = write_config(data)
+
+      expect { described_class.new(path) }.to raise_error(
+        BenchmarkDensity::ConfigError, /files\[0\] must be a mapping/
+      )
+    end
   end
 
   describe BenchmarkDensity::EvilutionCounter do
@@ -103,12 +161,12 @@ RSpec.describe BenchmarkDensity do
       expect(count).to eq(42)
     end
 
-    it "returns 0 when no mutations line found" do
+    it "returns nil when output is unparseable" do
       counter = described_class.new("/tmp")
 
       count = counter.send(:parse_subject_count, "No subjects found")
 
-      expect(count).to eq(0)
+      expect(count).to be_nil
     end
   end
 
@@ -172,13 +230,57 @@ RSpec.describe BenchmarkDensity do
         expect(runner.send(:passing?, results)).to be false
       end
 
-      it "returns true when evilution total is zero" do
+      it "returns false when ratio exactly equals target" do
+        config = make_config(files: [{ "path" => "a.rb", "reference_target" => "A" }])
+        runner = described_class.new(config: config)
+
+        results = [{ path: "a.rb", evilution: 100, reference: 150 }]
+
+        expect(runner.send(:passing?, results)).to be false
+      end
+
+      it "returns false when evilution total is zero" do
         config = make_config(files: [{ "path" => "a.rb", "reference_target" => "A" }])
         runner = described_class.new(config: config)
 
         results = [{ path: "a.rb", evilution: 0, reference: 50 }]
 
-        expect(runner.send(:passing?, results)).to be true
+        expect(runner.send(:passing?, results)).to be false
+      end
+
+      it "returns false when any result has nil counts" do
+        config = make_config(
+          files: [
+            { "path" => "a.rb", "reference_target" => "A" },
+            { "path" => "b.rb", "reference_target" => "B" }
+          ]
+        )
+        runner = described_class.new(config: config)
+
+        results = [
+          { path: "a.rb", evilution: 100, reference: 140 },
+          { path: "b.rb", evilution: nil, reference: 50 }
+        ]
+
+        expect(runner.send(:passing?, results)).to be false
+      end
+
+      it "returns false when ratio is slightly above target before rounding" do
+        # 150 + 38 = 188 reference, 100 + 25 = 125 evilution => 188/125 = 1.504
+        config = make_config(
+          files: [
+            { "path" => "a.rb", "reference_target" => "A" },
+            { "path" => "b.rb", "reference_target" => "B" }
+          ]
+        )
+        runner = described_class.new(config: config)
+
+        results = [
+          { path: "a.rb", evilution: 100, reference: 150 },
+          { path: "b.rb", evilution: 25, reference: 38 }
+        ]
+
+        expect(runner.send(:passing?, results)).to be false
       end
     end
 
@@ -203,6 +305,39 @@ RSpec.describe BenchmarkDensity do
 
         expect(runner.send(:compute_ratio, nil, 50)).to be_nil
         expect(runner.send(:compute_ratio, 100, nil)).to be_nil
+      end
+    end
+
+    describe "#compute_totals" do
+      it "excludes errored rows from totals" do
+        config = make_config(
+          files: [
+            { "path" => "a.rb", "reference_target" => "A" },
+            { "path" => "b.rb", "reference_target" => "B" }
+          ]
+        )
+        runner = described_class.new(config: config)
+
+        results = [
+          { path: "a.rb", evilution: 100, reference: 140 },
+          { path: "b.rb", evilution: nil, reference: 50 }
+        ]
+        totals = runner.send(:compute_totals, results)
+
+        expect(totals[:ev]).to eq(100)
+        expect(totals[:ref]).to eq(140)
+        expect(totals[:invalid]).to be true
+        expect(totals[:error_count]).to eq(1)
+      end
+
+      it "marks as invalid when evilution total is zero" do
+        config = make_config(files: [{ "path" => "a.rb", "reference_target" => "A" }])
+        runner = described_class.new(config: config)
+
+        results = [{ path: "a.rb", evilution: 0, reference: 50 }]
+        totals = runner.send(:compute_totals, results)
+
+        expect(totals[:invalid]).to be true
       end
     end
   end

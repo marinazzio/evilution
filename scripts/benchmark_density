@@ -25,12 +25,16 @@ module BenchmarkDensity
 
     def initialize(path)
       data = YAML.safe_load_file(path, symbolize_names: true, permitted_classes: [Symbol])
+      raise ConfigError, "config file must contain a YAML mapping" unless data.is_a?(Hash)
+
       @project_root = data[:project_root]
-      @target_ratio = data[:target_ratio] || 1.5
-      @reference_cmd = data[:reference_cmd] || []
-      @files = data[:files] || []
+      @target_ratio = data.key?(:target_ratio) ? data[:target_ratio] : 1.5
+      @reference_cmd = data.key?(:reference_cmd) ? data[:reference_cmd] : []
+      @files = data.key?(:files) ? data[:files] : []
 
       validate!
+    rescue Psych::Exception => e
+      raise ConfigError, "failed to parse config file #{path}: #{e.message}"
     end
 
     private
@@ -40,6 +44,17 @@ module BenchmarkDensity
       raise ConfigError, "project_root does not exist: #{@project_root}" unless Dir.exist?(@project_root)
       raise ConfigError, "reference_cmd is required in config" if @reference_cmd.empty?
       raise ConfigError, "files list is empty — add benchmark files to the config" if @files.empty?
+
+      @files.each_with_index { |entry, index| validate_file_entry!(entry, index) }
+    end
+
+    def validate_file_entry!(entry, index)
+      raise ConfigError, "files[#{index}] must be a mapping" unless entry.is_a?(Hash)
+
+      path = entry[:path]
+      target = entry[:reference_target]
+      raise ConfigError, "files[#{index}] is missing required path" if path.nil? || path.to_s.strip.empty?
+      raise ConfigError, "files[#{index}] is missing required reference_target" if target.nil? || target.to_s.strip.empty?
     end
   end
 
@@ -58,14 +73,19 @@ module BenchmarkDensity
         return nil
       end
 
-      parse_subject_count(stdout)
+      count = parse_subject_count(stdout)
+      if count.nil?
+        warn "  evilution produced unparseable output for #{file_path}: #{stdout.lines.first&.strip}"
+        return nil
+      end
+      count
     end
 
     private
 
     def parse_subject_count(output)
       match = output.match(/(\d+)\s+subjects,\s+(\d+)\s+mutations/)
-      match ? match[2].to_i : 0
+      match ? match[2].to_i : nil
     end
   end
 
@@ -149,35 +169,59 @@ module BenchmarkDensity
 
     def print_summary(results)
       totals = compute_totals(results)
-      puts format(TOTAL_FMT, file: "TOTAL", evilution: totals[:ev], reference: totals[:ref], ratio: totals[:ratio])
+      print_total_line(totals)
       puts ""
-      print_status_line(totals[:ratio])
-      print_error_warning(results)
+      print_status_line(totals)
+      print_error_warning(totals[:error_count])
+    end
+
+    def print_total_line(totals)
+      if totals[:invalid]
+        puts format(ROW_FMT,
+                    file: "TOTAL", evilution: totals[:ev].to_s, reference: totals[:ref].to_s, ratio: "N/A")
+      else
+        puts format(TOTAL_FMT,
+                    file: "TOTAL", evilution: totals[:ev], reference: totals[:ref], ratio: totals[:display_ratio])
+      end
     end
 
     def compute_totals(results)
-      ev_total = results.sum { |r| r[:evilution] || 0 }
-      ref_total = results.sum { |r| r[:reference] || 0 }
-      ratio = ev_total.positive? ? (ref_total.to_f / ev_total).round(2) : 0.0
-      { ev: ev_total, ref: ref_total, ratio: ratio }
+      valid, errored = partition_results(results)
+      ev_total = valid.sum { |r| r[:evilution] }
+      ref_total = valid.sum { |r| r[:reference] }
+      invalid = errored.any? || ev_total.zero?
+      ratio = ev_total.positive? ? ref_total.to_f / ev_total : 0.0
+
+      { ev: ev_total, ref: ref_total, ratio: ratio, display_ratio: ratio.round(2),
+        invalid: invalid, error_count: errored.length }
     end
 
-    def print_status_line(ratio)
+    def partition_results(results)
+      valid = results.select { |r| r[:evilution] && r[:reference] }
+      errored = results - valid
+      [valid, errored]
+    end
+
+    def print_status_line(totals)
       target = @config.target_ratio
-      status = ratio <= target ? "PASS" : "FAIL"
-      puts "Density ratio: #{ratio}x (target: < #{target}x) — #{status}"
+      if totals[:invalid]
+        puts "Density ratio: INVALID (target: < #{target}x) — FAIL"
+        return
+      end
+
+      status = totals[:ratio] < target ? "PASS" : "FAIL"
+      puts "Density ratio: #{totals[:display_ratio]}x (target: < #{target}x) — #{status}"
     end
 
-    def print_error_warning(results)
-      error_count = results.count { |r| r[:evilution].nil? || r[:reference].nil? }
-      puts "WARNING: #{error_count} file(s) had errors — results may be incomplete" if error_count.positive?
+    def print_error_warning(error_count)
+      puts "WARNING: #{error_count} file(s) had errors — benchmark marked invalid" if error_count.positive?
     end
 
     def passing?(results)
       totals = compute_totals(results)
-      return true if totals[:ev].zero?
+      return false if totals[:invalid]
 
-      totals[:ratio] <= @config.target_ratio
+      totals[:ratio] < @config.target_ratio
     end
 
     def compute_ratio(evilution, reference)
