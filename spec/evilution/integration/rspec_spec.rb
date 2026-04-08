@@ -450,6 +450,51 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "crash detection" do
+    it "returns error when all test failures are crashes" do
+      detector = instance_double(Evilution::Integration::CrashDetector,
+                                 only_crashes?: true,
+                                 crash_summary: "NoMethodError (1 crash)")
+      allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
+      allow(detector).to receive(:example_failed)
+      allow(RSpec.configuration).to receive(:add_formatter)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result[:error]).to include("test crashes")
+      expect(result[:error]).to include("NoMethodError")
+    end
+
+    it "returns killed (no error) when failures include assertions" do
+      detector = instance_double(Evilution::Integration::CrashDetector,
+                                 only_crashes?: false)
+      allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
+      allow(detector).to receive(:example_failed)
+      allow(RSpec.configuration).to receive(:add_formatter)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result).not_to have_key(:error)
+    end
+
+    it "returns passed when tests pass regardless of detector" do
+      detector = instance_double(Evilution::Integration::CrashDetector,
+                                 only_crashes?: false)
+      allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
+      allow(detector).to receive(:example_failed)
+      allow(RSpec.configuration).to receive(:add_formatter)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be true
+    end
+  end
+
   describe "related spec heuristic integration" do
     let(:resolver) { instance_double(Evilution::SpecResolver) }
     let(:related_heuristic) { instance_double(Evilution::RelatedSpecHeuristic) }

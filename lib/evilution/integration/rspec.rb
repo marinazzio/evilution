@@ -4,6 +4,7 @@ require "fileutils"
 require "stringio"
 require "tmpdir"
 require_relative "base"
+require_relative "crash_detector"
 require_relative "../spec_resolver"
 require_relative "../related_spec_heuristic"
 
@@ -117,10 +118,11 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     args = build_args(mutation)
     command = "rspec #{args.join(" ")}"
 
+    detector = register_crash_detector
     eg_before = snapshot_example_groups
     status = ::RSpec::Core::Runner.run(args, out, err)
 
-    { passed: status.zero?, test_command: command }
+    build_rspec_result(status, command, detector)
   rescue StandardError => e
     { passed: false, error: e.message, test_command: command }
   ensure
@@ -171,6 +173,22 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     world = ::RSpec.world
     world.instance_variable_get(:@example_groups).clear if world.instance_variable_defined?(:@example_groups)
     world.instance_variable_set(:@sources_by_path, {}) if world.instance_variable_defined?(:@sources_by_path)
+  end
+
+  def register_crash_detector
+    detector = Evilution::Integration::CrashDetector.new(StringIO.new)
+    ::RSpec.configuration.add_formatter(detector)
+    detector
+  end
+
+  def build_rspec_result(status, command, detector)
+    if status.zero?
+      { passed: true, test_command: command }
+    elsif detector.only_crashes?
+      { passed: false, error: "test crashes: #{detector.crash_summary}", test_command: command }
+    else
+      { passed: false, test_command: command }
+    end
   end
 
   def build_args(mutation)

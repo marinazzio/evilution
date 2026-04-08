@@ -1,0 +1,51 @@
+# frozen_string_literal: true
+
+require_relative "../integration"
+
+class Evilution::Integration::CrashDetector
+  ::RSpec::Core::Formatters.register self, :example_failed
+
+  ASSERTION_TYPES = [
+    ::RSpec::Expectations::ExpectationNotMetError
+  ].freeze
+
+  def initialize(_output)
+    @assertion_failures = 0
+    @crashes = []
+  end
+
+  def example_failed(notification)
+    exception = notification.example.exception
+
+    if assertion_exception?(exception)
+      @assertion_failures += 1
+    else
+      @crashes << exception
+    end
+  end
+
+  def has_assertion_failure? # rubocop:disable Naming/PredicatePrefix
+    @assertion_failures.positive?
+  end
+
+  def has_crash? # rubocop:disable Naming/PredicatePrefix
+    @crashes.any?
+  end
+
+  def only_crashes?
+    @crashes.any? && @assertion_failures.zero?
+  end
+
+  def crash_summary
+    return nil if @crashes.empty?
+
+    types = @crashes.map { |e| e.class.name }.uniq
+    "#{types.join(", ")} (#{@crashes.length} crash#{"es" unless @crashes.length == 1})"
+  end
+
+  private
+
+  def assertion_exception?(exception)
+    ASSERTION_TYPES.any? { |type| exception.is_a?(type) }
+  end
+end
