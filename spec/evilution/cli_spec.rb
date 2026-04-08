@@ -963,8 +963,12 @@ RSpec.describe Evilution::CLI do
 
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject1, filter: anything).and_return([double, double, double])
-      allow(registry).to receive(:mutations_for).with(subject2, filter: anything).and_return([double])
+      allow(registry).to receive(:mutations_for)
+        .with(subject1, filter: anything, operator_options: anything)
+        .and_return([double, double, double])
+      allow(registry).to receive(:mutations_for)
+        .with(subject2, filter: anything, operator_options: anything)
+        .and_return([double])
     end
 
     it "returns exit code 0" do

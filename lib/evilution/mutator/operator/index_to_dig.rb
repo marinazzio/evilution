@@ -3,7 +3,7 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
-  def initialize
+  def initialize(**options)
     super
     @consumed = Set.new
   end

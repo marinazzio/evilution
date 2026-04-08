@@ -137,6 +137,9 @@ class Evilution::Config
       # Generate concrete RSpec test code in suggestions (default: false)
       # suggest_tests: false
 
+      # Skip all string literal mutations inside heredocs (default: false)
+      # skip_heredoc_literals: false
+
       # Hooks: Ruby files returning a Proc, keyed by lifecycle event
       # hooks:
       #   worker_process_start: config/evilution_hooks/worker_start.rb
