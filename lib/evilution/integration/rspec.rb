@@ -22,9 +22,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   end
 
   def call(mutation)
-    @original_content = nil
     @temp_dir = nil
-    @lock_file = nil
     ensure_rspec_loaded
     @hooks.fire(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path) if @hooks
     apply_mutation(mutation)
@@ -51,37 +49,30 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   end
 
   def apply_mutation(mutation)
+    @temp_dir = Dir.mktmpdir("evilution")
     subpath = resolve_require_subpath(mutation.file_path)
 
     if subpath
-      @temp_dir = Dir.mktmpdir("evilution")
       dest = File.join(@temp_dir, subpath)
       FileUtils.mkdir_p(File.dirname(dest))
       File.write(dest, mutation.mutated_source)
       $LOAD_PATH.unshift(@temp_dir)
     else
-      # Fallback: direct write when file isn't under any $LOAD_PATH entry.
-      # Acquire an exclusive lock to prevent concurrent workers from corrupting the file.
-      lock_path = File.join(Dir.tmpdir, "evilution-#{File.expand_path(mutation.file_path).hash.abs}.lock")
-      @lock_file = File.open(lock_path, File::CREAT | File::RDWR)
-      @lock_file.flock(File::LOCK_EX)
-      @original_content = File.read(mutation.file_path)
-      File.write(mutation.file_path, mutation.mutated_source)
+      absolute = File.expand_path(mutation.file_path)
+      dest = File.join(@temp_dir, absolute)
+      FileUtils.mkdir_p(File.dirname(dest))
+      File.write(dest, mutation.mutated_source)
+      load(dest)
     end
   end
 
-  def restore_original(mutation)
-    if @temp_dir
-      $LOAD_PATH.delete(@temp_dir)
-      $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
-      FileUtils.rm_rf(@temp_dir)
-      @temp_dir = nil
-    elsif @original_content
-      File.write(mutation.file_path, @original_content)
-      @lock_file&.flock(File::LOCK_UN)
-      @lock_file&.close
-      @lock_file = nil
-    end
+  def restore_original(mutation) # rubocop:disable Lint/UnusedMethodArgument
+    return unless @temp_dir
+
+    $LOAD_PATH.delete(@temp_dir)
+    $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
+    FileUtils.rm_rf(@temp_dir)
+    @temp_dir = nil
   end
 
   def resolve_require_subpath(file_path)

@@ -169,16 +169,13 @@ RSpec.describe Evilution::Integration::RSpec do
       expect { integration_no_rspec.call(mutation) }.to raise_error(Evilution::Error, /rspec-core is required/)
     end
 
-    it "does not write stale content when ensure_rspec_loaded raises" do
+    it "does not modify original file when ensure_rspec_loaded raises" do
       integration_no_rspec = described_class.new(test_files: ["spec/some_spec.rb"])
       integration_no_rspec.instance_variable_set(:@rspec_loaded, false)
       allow(integration_no_rspec).to receive(:require).with("rspec/core").and_raise(LoadError, "nope")
 
-      # Simulate a previous call having set @original_content
-      integration_no_rspec.instance_variable_set(:@original_content, "stale content")
-
       expect { integration_no_rspec.call(mutation) }.to raise_error(Evilution::Error)
-      # File should NOT have been overwritten with stale content
+      # Original file should never be touched
       expect(File.read(source_file.path)).to eq(original_source)
     end
   end
@@ -242,6 +239,75 @@ RSpec.describe Evilution::Integration::RSpec do
       # After restore, temp dir should not be in $LOAD_PATH
       evilution_entries = $LOAD_PATH.select { |p| p.include?("evilution") && p.start_with?(Dir.tmpdir) && p != load_path_dir }
       expect(evilution_entries).to be_empty
+    end
+  end
+
+  describe "temp file isolation for non-LOAD_PATH files" do
+    it "never modifies the original file during mutation" do
+      file_content_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        file_content_during_run = File.read(source_file.path)
+        1
+      end
+
+      integration.call(mutation)
+
+      expect(file_content_during_run).to eq(original_source)
+    end
+
+    it "writes mutated source to a temp file" do
+      temp_file_content = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        temp_dir = integration.instance_variable_get(:@temp_dir)
+        temp_files = Dir.glob(File.join(temp_dir, "**", "*.rb"))
+        temp_file_content = File.read(temp_files.first) if temp_files.any?
+        1
+      end
+
+      integration.call(mutation)
+
+      expect(temp_file_content).to eq(mutated_source)
+    end
+
+    it "cleans up temp directory after the call" do
+      temp_dir_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        temp_dir_during_run = integration.instance_variable_get(:@temp_dir)
+        expect(Dir.exist?(temp_dir_during_run)).to be true
+        1
+      end
+
+      integration.call(mutation)
+
+      expect(temp_dir_during_run).not_to be_nil
+      expect(Dir.exist?(temp_dir_during_run)).to be false
+    end
+
+    it "cleans up temp directory even when runner raises" do
+      temp_dir_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        temp_dir_during_run = integration.instance_variable_get(:@temp_dir)
+        raise "boom"
+      end
+
+      integration.call(mutation)
+
+      expect(temp_dir_during_run).not_to be_nil
+      expect(Dir.exist?(temp_dir_during_run)).to be false
+    end
+
+    it "loads the mutated temp file to redefine the class" do
+      loaded_file = nil
+      allow(integration).to receive(:load).and_wrap_original do |_method, path, *_args|
+        loaded_file = path
+      end
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      integration.call(mutation)
+
+      expect(loaded_file).not_to be_nil
+      expect(loaded_file).to start_with(Dir.tmpdir)
+      expect(loaded_file).to end_with(File.expand_path(source_file.path))
     end
   end
 
