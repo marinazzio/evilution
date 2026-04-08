@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.20.0] - 2026-04-08
+
+### Added
+
+- **New mutation operators (10)** — `loop_flip` swaps `while`↔`until` loops (#581); `string_interpolation` replaces `#{expr}` content with `nil` (#582); `retry_removal` removes `retry` statements from rescue blocks (#583); `case_when` removes `when` branches, replaces bodies with `nil`, removes `else` (#584); `predicate_replacement` replaces predicate method calls (`foo?`) with `true`/`false` (#585); `equality_to_identity` converts `a == b` to `a.equal?(b)` (#586); `lambda_body` replaces lambda/proc bodies with `nil` (#588); `begin_unwrap` removes bare `begin..end` wrappers (#589); `block_param_removal` removes `&block` parameters from method definitions (#590)
+- **Method body replacement expansion** — `method_body_replacement` now generates `self` and `super` replacements alongside `nil` (#587)
+- **SendMutation expansions** — added `downcase`↔`upcase` (#594), `strip`→`lstrip`/`rstrip`, `lstrip`→`strip`, `rstrip`→`strip`, `chomp`↔`chop` (#595) method swap pairs
+- **Coverage gap detection and reporting** — survived mutations are grouped by `(file, subject, line)` into coverage gaps; reported in CLI (`N coverage gaps` header with grouped entries), JSON (`coverage_gaps` key), HTML (grouped gap entries with operator tags), and session data (#592)
+- **VoidContext equivalent heuristic** — detects equivalent mutations where collection methods are swapped in void context (e.g. `each`↔`map`, `each`↔`reverse_each` when return value is unused); uses Prism AST parent-node walking (#593)
+- **AliasSwap heuristic expansion** — added `count`↔`size` and `detect`↔`find` alias pairs for equivalent detection (#591)
+- **Related spec heuristic** — automatically detects mutations involving `.includes()` and finds related request/integration/feature/system specs by domain name, improving test targeting for association mutations (#596)
+- **Crash detection in RSpec integration** — `CrashDetector` formatter distinguishes assertion failures from runtime crashes (e.g. `NoMethodError`, `SystemStackError`); when all test failures are crashes (no assertion failures), the result includes a crash summary in the error field; reuses a single detector instance across mutation runs to avoid formatter accumulation (#597)
+
+### Changed
+
+- **Operator count** — 69 operators (up from 60), with new loop, string, case/when, predicate, identity, lambda, begin/end, and block parameter operators
+- **Equivalent heuristic count** — 7 heuristics (up from 5), with new void context detection and expanded alias pairs
+
 ## [0.19.0] - 2026-04-07
 
 ### Added
