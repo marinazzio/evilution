@@ -49,16 +49,19 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_timeout
     end
 
-    it "restores the original file after a timeout" do
-      test_command = lambda { |m|
-        File.write(m.file_path, "mutated content")
+    it "cleans up tracked temp dirs after a timeout" do
+      dir = Dir.mktmpdir("evilution")
+      Evilution::TempDirTracker.register(dir)
+
+      test_command = lambda { |_m|
         sleep 10
         { passed: true }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
 
-      expect(File.read(tmpfile.path)).to eq(original_content)
+      expect(Dir.exist?(dir)).to be false
+      expect(Evilution::TempDirTracker.tracked_dirs).to be_empty
     end
 
     it "cleans up sandbox temp directory after child timeout" do
