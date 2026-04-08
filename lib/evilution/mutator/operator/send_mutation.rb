@@ -29,7 +29,9 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     to_i: [:to_s],
     to_f: [:to_i],
     to_a: [:to_h],
-    to_h: [:to_a]
+    to_h: [:to_a],
+    downcase: [:upcase],
+    upcase: [:downcase]
   }.freeze
 
   def visit_call_node(node)
