@@ -10,6 +10,7 @@ RSpec.describe "Temp-file mutation integration" do
   let(:project_dir) { Dir.mktmpdir("evilution_integ") }
   let(:lib_dir) { File.join(project_dir, "lib") }
   let(:spec_dir) { File.join(project_dir, "spec") }
+  let(:dummy_spec) { File.join(spec_dir, "dummy_spec.rb") }
 
   let(:original_source) { "class Greeter\n  def greet\n    'hello'\n  end\nend\n" }
   let(:mutated_source) { "class Greeter\n  def greet\n    nil\n  end\nend\n" }
@@ -28,6 +29,7 @@ RSpec.describe "Temp-file mutation integration" do
     FileUtils.mkdir_p(lib_dir)
     FileUtils.mkdir_p(spec_dir)
     File.write(source_path, original_source)
+    File.write(dummy_spec, "RSpec.describe('noop') { it('passes') { expect(true).to be true } }\n")
   end
 
   after do
@@ -37,94 +39,100 @@ RSpec.describe "Temp-file mutation integration" do
   describe "original file protection" do
     it "never modifies the original source file during a forked mutation run" do
       $LOAD_PATH.unshift(lib_dir)
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
-      file_contents_during_run = nil
+      # Write child's observation of the file to a marker for parent to read
+      marker = File.join(project_dir, "file_during_run.txt")
       test_command = lambda { |m|
-        file_contents_during_run = File.read(m.file_path)
         integration.call(m)
+        File.write(marker, File.read(m.file_path))
         { passed: false }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 10)
 
       expect(File.read(source_path)).to eq(original_source)
+      expect(File.read(marker)).to eq(original_source)
     ensure
       $LOAD_PATH.delete(lib_dir)
     end
 
     it "never modifies non-LOAD_PATH files during a forked mutation run" do
-      # Don't add to $LOAD_PATH — exercises the load() fallback path
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
+      marker = File.join(project_dir, "file_during_run.txt")
       test_command = lambda { |m|
         integration.call(m)
+        File.write(marker, File.read(m.file_path))
         { passed: false }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 10)
 
       expect(File.read(source_path)).to eq(original_source)
+      expect(File.read(marker)).to eq(original_source)
     end
   end
 
   describe "temp directory cleanup" do
-    it "cleans up temp dirs on normal completion" do
+    it "cleans up sandbox directory on normal completion" do
       $LOAD_PATH.unshift(lib_dir)
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
+      # Record the sandbox dir from the child
+      marker = File.join(project_dir, "sandbox.txt")
       test_command = lambda { |m|
+        File.write(marker, ENV.fetch("TMPDIR", ""))
         integration.call(m)
         { passed: false }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 10)
 
-      evilution_temps = Dir.glob(File.join(Dir.tmpdir, "evilution*")).select { |d| File.directory?(d) }
-      evilution_temps.reject! { |d| d.include?("evilution_integ") || d.include?("evilution-run") }
-      expect(evilution_temps).to be_empty
+      sandbox = File.read(marker)
+      expect(sandbox).not_to be_empty
+      expect(Dir.exist?(sandbox)).to be false
     ensure
       $LOAD_PATH.delete(lib_dir)
     end
 
-    it "cleans up temp dirs when test command raises" do
+    it "cleans up sandbox directory when test command raises" do
       $LOAD_PATH.unshift(lib_dir)
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
+      marker = File.join(project_dir, "sandbox.txt")
       test_command = lambda { |m|
+        File.write(marker, ENV.fetch("TMPDIR", ""))
         integration.call(m)
         raise "simulated crash"
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 10)
 
-      evilution_temps = Dir.glob(File.join(Dir.tmpdir, "evilution*")).select { |d| File.directory?(d) }
-      evilution_temps.reject! { |d| d.include?("evilution_integ") || d.include?("evilution-run") }
-      expect(evilution_temps).to be_empty
+      sandbox = File.read(marker)
+      expect(Dir.exist?(sandbox)).to be false
     ensure
       $LOAD_PATH.delete(lib_dir)
     end
 
-    it "cleans up temp dirs after child timeout via TempDirTracker" do
-      $LOAD_PATH.unshift(lib_dir)
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+    it "parent TempDirTracker cleans up registered dirs via defense-in-depth" do
+      dir = Dir.mktmpdir("evilution")
+      Evilution::TempDirTracker.register(dir)
       isolator = Evilution::Isolation::Fork.new
 
-      test_command = lambda { |m|
-        integration.call(m)
-        sleep 30
+      test_command = lambda { |_m|
+        sleep 10
         { passed: true }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 0.5)
 
+      expect(Dir.exist?(dir)).to be false
       expect(Evilution::TempDirTracker.tracked_dirs).to be_empty
-    ensure
-      $LOAD_PATH.delete(lib_dir)
     end
   end
 
@@ -132,7 +140,7 @@ RSpec.describe "Temp-file mutation integration" do
     it "does not leak temp dirs into parent $LOAD_PATH after fork" do
       $LOAD_PATH.unshift(lib_dir)
       load_path_before = $LOAD_PATH.dup
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
       test_command = lambda { |m|
@@ -150,7 +158,7 @@ RSpec.describe "Temp-file mutation integration" do
     it "does not leak temp entries into parent $LOADED_FEATURES after fork" do
       $LOAD_PATH.unshift(lib_dir)
       features_before = $LOADED_FEATURES.dup
-      integration = Evilution::Integration::RSpec.new(test_files: [])
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
       test_command = lambda { |m|

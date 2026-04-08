@@ -50,15 +50,17 @@ RSpec.describe Evilution::Isolation::Fork do
     end
 
     it "cleans up tracked temp dirs after a timeout" do
+      dir = Dir.mktmpdir("evilution")
+      Evilution::TempDirTracker.register(dir)
+
       test_command = lambda { |_m|
-        dir = Dir.mktmpdir("evilution")
-        Evilution::TempDirTracker.register(dir)
         sleep 10
         { passed: true }
       }
 
       isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
 
+      expect(Dir.exist?(dir)).to be false
       expect(Evilution::TempDirTracker.tracked_dirs).to be_empty
     end
 
