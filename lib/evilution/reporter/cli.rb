@@ -30,11 +30,12 @@ class Evilution::Reporter::CLI
   private
 
   def append_survived(lines, summary)
-    return unless summary.survived_results.any?
+    gaps = summary.coverage_gaps
+    return unless gaps.any?
 
     lines << ""
-    lines << "Survived mutations:"
-    summary.survived_results.each { |result| lines << format_survived(result) }
+    lines << "Survived mutations (#{gaps.length} coverage gap#{"s" unless gaps.length == 1}):"
+    gaps.each { |gap| lines << format_coverage_gap(gap) }
   end
 
   def append_neutral(lines, summary)
@@ -90,11 +91,16 @@ class Evilution::Reporter::CLI
     "Efficiency: #{pct} killtime, #{rate} mutations/s"
   end
 
-  def format_survived(result)
-    mutation = result.mutation
-    location = "#{mutation.file_path}:#{mutation.line}"
-    diff_lines = mutation.diff.split("\n").map { |l| "    #{l}" }.join("\n")
-    "  #{mutation.operator_name}: #{location} (#{mutation.subject.name})\n#{diff_lines}"
+  def format_coverage_gap(gap)
+    location = "#{gap.file_path}:#{gap.line}"
+    header = if gap.single?
+               "  #{gap.primary_operator}: #{location} (#{gap.subject_name})"
+             else
+               operators = gap.operator_names.join(", ")
+               "  #{location} (#{gap.subject_name}) [#{gap.count} mutations: #{operators}]"
+             end
+    diff_lines = gap.primary_diff.split("\n").map { |l| "    #{l}" }.join("\n")
+    "#{header}\n#{diff_lines}"
   end
 
   def format_neutral(result)

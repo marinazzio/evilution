@@ -130,6 +130,36 @@ RSpec.describe Evilution::Session::Store do
       expect(entry["diff"]).to eq("- a + b\n+ a - b")
     end
 
+    it "includes coverage_gaps with grouped survived mutations" do
+      m1 = build_mutation(operator: "comparison_replacement", file: "lib/bar.rb", line: 10)
+      m2 = build_mutation(operator: "method_call_removal", file: "lib/bar.rb", line: 10)
+      r1 = build_result(m1, status: :survived)
+      r2 = build_result(m2, status: :survived)
+      summary = build_summary(results: [r1, r2])
+
+      store.save(summary)
+
+      data = read_saved_session
+      gaps = data["coverage_gaps"]
+      expect(gaps.length).to eq(1)
+      expect(gaps.first["file"]).to eq("lib/bar.rb")
+      expect(gaps.first["subject"]).to eq("Foo#bar")
+      expect(gaps.first["line"]).to eq(10)
+      expect(gaps.first["operators"]).to contain_exactly("comparison_replacement", "method_call_removal")
+      expect(gaps.first["count"]).to eq(2)
+    end
+
+    it "returns empty coverage_gaps when no survivors" do
+      mutation = build_mutation
+      result = build_result(mutation, status: :killed)
+      summary = build_summary(results: [result])
+
+      store.save(summary)
+
+      data = read_saved_session
+      expect(data["coverage_gaps"]).to eq([])
+    end
+
     it "excludes killed mutations from survived list" do
       mutation = build_mutation
       result = build_result(mutation, status: :killed)

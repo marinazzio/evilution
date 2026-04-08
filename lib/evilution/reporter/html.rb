@@ -4,6 +4,7 @@ require "cgi"
 require_relative "suggestion"
 
 require_relative "../reporter"
+require_relative "../result/coverage_gap_grouper"
 
 class Evilution::Reporter::HTML
   def initialize(baseline: nil)
@@ -156,11 +157,35 @@ class Evilution::Reporter::HTML
   def build_survived_details(survived)
     return "" if survived.empty?
 
-    entries = survived.map { |r| build_survived_entry(r) }.join("\n")
+    gaps = Evilution::Result::CoverageGapGrouper.new.call(survived)
+    entries = gaps.map { |gap| build_gap_entry(gap) }.join("\n")
     <<~HTML
       <div class="survived-details">
-        <h3>Survived Mutations</h3>
+        <h3>Coverage Gaps (#{gaps.length})</h3>
         #{entries}
+      </div>
+    HTML
+  end
+
+  def build_gap_entry(gap)
+    if gap.single?
+      build_survived_entry(gap.mutation_results.first)
+    else
+      build_grouped_gap_entry(gap)
+    end
+  end
+
+  def build_grouped_gap_entry(gap)
+    operator_tags = gap.operator_names.map { |op| %(<span class="operator-tag">#{h(op)}</span>) }.join(" ")
+    entries_html = gap.mutation_results.map { |r| build_survived_entry(r) }.join("\n")
+    <<~HTML
+      <div class="coverage-gap">
+        <div class="gap-header">
+          <span class="location">#{h(gap.file_path)}:#{gap.line} (#{h(gap.subject_name)})</span>
+          <span class="gap-count">#{gap.count} mutations</span>
+          #{operator_tags}
+        </div>
+        #{entries_html}
       </div>
     HTML
   end
@@ -307,6 +332,11 @@ class Evilution::Reporter::HTML
         .diff-removed { color: #f85149; display: block; }
         .diff-added { color: #3fb950; display: block; }
         .suggestion { color: #d29922; font-size: 0.8rem; margin-top: 0.5rem; font-style: italic; }
+        .coverage-gap { border: 1px solid #30363d; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.75rem; background: #161b22; }
+        .gap-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.85rem; padding-bottom: 0.5rem; border-bottom: 1px solid #21262d; }
+        .gap-header .location { color: #58a6ff; font-family: monospace; }
+        .gap-count { background: #4a1a1a; color: #f85149; font-size: 0.7rem; padding: 0.1rem 0.5rem; border-radius: 10px; font-weight: bold; }
+        .operator-tag { background: #21262d; color: #8b949e; font-size: 0.7rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: monospace; }
         .empty { color: #8b949e; text-align: center; padding: 2rem; }
         .baseline-comparison { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: 2rem; }
         .baseline-comparison h2 { font-size: 1rem; color: #f0f6fc; margin-bottom: 0.75rem; }

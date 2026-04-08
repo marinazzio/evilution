@@ -65,6 +65,7 @@ class Evilution::Session::Store
       git: git_context,
       summary: build_summary(summary),
       survived: summary.survived_results.map { |r| build_mutation_detail(r) },
+      coverage_gaps: build_coverage_gaps(summary),
       killed_count: summary.killed,
       timed_out_count: summary.timed_out,
       error_count: summary.errors,
@@ -99,6 +100,18 @@ class Evilution::Session::Store
       subject: mutation.subject.name,
       diff: mutation.diff
     }
+  end
+
+  def build_coverage_gaps(summary)
+    summary.coverage_gaps.map do |gap|
+      {
+        file: gap.file_path,
+        subject: gap.subject_name,
+        line: gap.line,
+        operators: gap.operator_names,
+        count: gap.count
+      }
+    end
   end
 
   def git_context

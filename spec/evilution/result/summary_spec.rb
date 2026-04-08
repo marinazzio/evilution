@@ -278,6 +278,28 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#coverage_gaps" do
+    it "groups survived results into coverage gaps" do
+      subj = double("Subject", name: "User#check")
+      m1 = double("Mutation", operator_name: "op1", file_path: "lib/user.rb", line: 9, diff: "- a\n+ b", subject: subj)
+      m2 = double("Mutation", operator_name: "op2", file_path: "lib/user.rb", line: 9, diff: "- a\n+ c", subject: subj)
+      r1 = Evilution::Result::MutationResult.new(mutation: m1, status: :survived, duration: 0.1)
+      r2 = Evilution::Result::MutationResult.new(mutation: m2, status: :survived, duration: 0.1)
+      s = described_class.new(results: [r1, r2, make_result(:killed)], duration: 1.0)
+
+      gaps = s.coverage_gaps
+
+      expect(gaps.length).to eq(1)
+      expect(gaps.first.mutation_results).to contain_exactly(r1, r2)
+    end
+
+    it "returns empty array when no survivors" do
+      s = described_class.new(results: [make_result(:killed)], duration: 1.0)
+
+      expect(s.coverage_gaps).to eq([])
+    end
+  end
+
   describe "#disabled_mutations" do
     it "returns empty array by default" do
       expect(summary.disabled_mutations).to eq([])

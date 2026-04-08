@@ -115,7 +115,7 @@ RSpec.describe Evilution::Reporter::CLI do
     it "lists survived mutations with operator and location" do
       output = reporter.call(summary)
 
-      expect(output).to include("Survived mutations:")
+      expect(output).to include("Survived mutations (1 coverage gap):")
       expect(output).to include("comparison_replacement: lib/user.rb:9")
     end
 
@@ -155,6 +155,53 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("80.00%")
     end
 
+    context "with multiple survived mutations on the same line" do
+      let(:survived_mutation2) do
+        subj = double("Subject", name: "User#check")
+        double(
+          "Mutation",
+          operator_name: "method_call_removal",
+          file_path: "lib/user.rb",
+          line: 9,
+          diff: "- x >= 10\n+ nil",
+          subject: subj
+        )
+      end
+
+      let(:survived_result2) do
+        Evilution::Result::MutationResult.new(
+          mutation: survived_mutation2,
+          status: :survived,
+          duration: 0.2
+        )
+      end
+
+      let(:grouped_summary) do
+        Evilution::Result::Summary.new(
+          results: [survived_result, survived_result2, killed_result],
+          duration: 1.0
+        )
+      end
+
+      it "groups them into a single coverage gap" do
+        output = reporter.call(grouped_summary)
+
+        expect(output).to include("Survived mutations (1 coverage gap):")
+      end
+
+      it "shows the count and operators for grouped gaps" do
+        output = reporter.call(grouped_summary)
+
+        expect(output).to include("[2 mutations: comparison_replacement, method_call_removal]")
+      end
+
+      it "shows the location and subject for grouped gaps" do
+        output = reporter.call(grouped_summary)
+
+        expect(output).to include("lib/user.rb:9 (User#check)")
+      end
+    end
+
     it "does not show survived mutations section when there are none" do
       passing_summary = Evilution::Result::Summary.new(
         results: [killed_result],
@@ -162,7 +209,7 @@ RSpec.describe Evilution::Reporter::CLI do
       )
       output = reporter.call(passing_summary)
 
-      expect(output).not_to include("Survived mutations:")
+      expect(output).not_to include("Survived mutations")
     end
 
     context "with neutral mutations" do
@@ -225,7 +272,7 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("0 total")
       expect(output).to include("0 killed")
       expect(output).to include("0 survived")
-      expect(output).not_to include("Survived mutations:")
+      expect(output).not_to include("Survived mutations")
     end
 
     it "shows truncation notice when summary is truncated" do
