@@ -1,11 +1,15 @@
-# Benchmark corpus configuration
+# Head-to-head mutation comparison configuration
 #
-# See docs/mutation_density_benchmark.md for selection criteria and methodology.
-# To use: set reference_cmd for your environment.
+# Each file entry specifies a source file and the corresponding reference tool
+# subject pattern. The reference_cmd must produce JSON output with the same
+# schema as `evilution util mutation --format json`:
+#   [{"operator": "...", "line": N, "diff": "..."}, ...]
+#
+# To use: set project_root and reference_cmd for your environment.
 
 project_root: /home/marinad/personal/vanilla-mafia
-target_ratio: 1.5
-reference_cmd: []  # Set to command prefix for the reference tool
+reference_cmd: ["ruby", "scripts/mutant_json_adapter", "--project-root", "/home/marinad/personal/vanilla-mafia"]
+output_dir: comparison_results
 files:
   - path: app/controllers/admin/news_controller.rb
     reference_target: "Admin::NewsController"

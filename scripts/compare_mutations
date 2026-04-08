@@ -1,0 +1,404 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Head-to-Head Mutation Comparison
+#
+# Runs evilution and a reference mutation testing tool on a set of files,
+# catalogs every mutation the reference tool produces that evilution doesn't,
+# and outputs a structured comparison report.
+#
+# Usage:
+#   scripts/compare_mutations CONFIG_FILE [--verbose]
+#
+# See scripts/compare_mutations.yml for config format.
+
+require "yaml"
+require "json"
+require "open3"
+require "optparse"
+require "fileutils"
+
+module CompareMutations
+  class ConfigError < StandardError; end
+  class ToolError < StandardError; end
+
+  class Config
+    attr_reader :project_root, :reference_cmd, :output_dir, :files
+
+    def initialize(path)
+      data = YAML.safe_load_file(path, symbolize_names: true, permitted_classes: [Symbol])
+      raise ConfigError, "config file must contain a YAML mapping" unless data.is_a?(Hash)
+
+      @project_root = data[:project_root]
+      @reference_cmd = data.key?(:reference_cmd) ? data[:reference_cmd] : []
+      @output_dir = data[:output_dir] || "comparison_results"
+      @files = data.key?(:files) ? data[:files] : []
+
+      validate!
+    rescue Psych::Exception => e
+      raise ConfigError, "failed to parse config: #{e.message}"
+    end
+
+    private
+
+    def validate!
+      raise ConfigError, "project_root is required in config" if @project_root.nil?
+      raise ConfigError, "project_root does not exist: #{@project_root}" unless Dir.exist?(@project_root)
+      raise ConfigError, "reference_cmd is required in config" if @reference_cmd.empty?
+      raise ConfigError, "files list is empty — add files to the config" if @files.empty?
+
+      @files.each_with_index { |entry, index| validate_file_entry!(entry, index) }
+    end
+
+    def validate_file_entry!(entry, index)
+      raise ConfigError, "files[#{index}] must be a mapping" unless entry.is_a?(Hash)
+
+      path = entry[:path]
+      target = entry[:reference_target]
+      raise ConfigError, "files[#{index}] is missing required path" if path.nil? || path.to_s.strip.empty?
+      raise ConfigError, "files[#{index}] is missing required reference_target" if target.nil? || target.to_s.strip.empty?
+    end
+  end
+
+  class MutationSet
+    attr_reader :mutations, :fingerprints
+
+    def self.from_json(data)
+      mutations = data.map do |entry|
+        entry = entry.transform_keys(&:to_s)
+        entry["fingerprint"] = compute_fingerprint(entry)
+        entry
+      end
+      new(mutations)
+    end
+
+    def self.compute_fingerprint(entry)
+      normalized_diff = entry["diff"].to_s.gsub(/[[:space:]]/, "")
+      "#{entry["line"]}:#{normalized_diff}"
+    end
+
+    def initialize(mutations)
+      @mutations = mutations
+      @fingerprints = mutations.map { |m| m["fingerprint"] }
+    end
+
+    def size
+      @mutations.size
+    end
+
+    def empty?
+      @mutations.empty?
+    end
+  end
+
+  class Comparison
+    attr_reader :evilution_set, :reference_set
+
+    def initialize(evilution:, reference:)
+      @evilution_set = evilution
+      @reference_set = reference
+    end
+
+    def extra_in_reference
+      ev_fps = Set.new(@evilution_set.fingerprints)
+      @reference_set.mutations.reject { |m| ev_fps.include?(m["fingerprint"]) }
+    end
+
+    def extra_in_evilution
+      ref_fps = Set.new(@reference_set.fingerprints)
+      @evilution_set.mutations.reject { |m| ref_fps.include?(m["fingerprint"]) }
+    end
+
+    def density_ratio
+      return 0.0 if @evilution_set.empty?
+
+      @reference_set.size.to_f / @evilution_set.size
+    end
+  end
+
+  class Catalog
+    def initialize(extras)
+      @extras = extras
+    end
+
+    def by_operator
+      @extras.group_by { |m| m["operator"] }
+    end
+
+    def summary
+      by_operator.map { |op, mutations| { operator: op, count: mutations.size } }
+                 .sort_by { |entry| -entry[:count] }
+    end
+  end
+
+  class EvilutionCollector
+    def initialize(project_root)
+      @project_root = project_root
+    end
+
+    def collect(file_path)
+      full_path = File.join(@project_root, file_path)
+      cmd = ["bundle", "exec", "evilution", "util", "mutation", full_path, "--format", "json"]
+      stdout, stderr, status = Open3.capture3(*cmd, chdir: @project_root)
+
+      raise ToolError, "evilution failed for #{file_path}: #{stderr.strip}" unless status.success?
+
+      JSON.parse(stdout)
+    rescue JSON::ParserError => e
+      raise ToolError, "evilution produced invalid JSON for #{file_path}: #{e.message}"
+    end
+  end
+
+  class ReferenceCollector
+    def initialize(project_root, reference_cmd)
+      @project_root = project_root
+      @reference_cmd = reference_cmd
+    end
+
+    def collect(reference_target)
+      cmd = @reference_cmd + [reference_target]
+      stdout, stderr, status = Open3.capture3(*cmd, chdir: @project_root)
+
+      raise ToolError, "reference tool failed for #{reference_target}: #{stderr.lines.first&.strip}" unless status.success?
+
+      JSON.parse(stdout)
+    rescue JSON::ParserError => e
+      raise ToolError, "reference tool produced invalid JSON for #{reference_target}: #{e.message}"
+    end
+  end
+
+  class Reporter
+    def initialize(output_dir)
+      @output_dir = output_dir
+    end
+
+    def write_file_report(file_path, comparison, catalog)
+      basename = File.basename(file_path, ".rb")
+      write_json_report(basename, file_path, comparison, catalog)
+      write_text_report(basename, file_path, comparison, catalog)
+    end
+
+    def write_summary(file_results)
+      write_summary_json(file_results)
+      write_summary_text(file_results)
+    end
+
+    private
+
+    def write_json_report(basename, file_path, comparison, catalog)
+      data = {
+        file: file_path,
+        evilution_count: comparison.evilution_set.size,
+        reference_count: comparison.reference_set.size,
+        density_ratio: comparison.density_ratio.round(2),
+        extra_in_reference: comparison.extra_in_reference,
+        extra_in_evilution: comparison.extra_in_evilution,
+        operator_summary: catalog.summary
+      }
+      File.write(File.join(@output_dir, "#{basename}.json"), JSON.pretty_generate(data))
+    end
+
+    def write_text_report(basename, file_path, comparison, catalog)
+      lines = build_file_header(file_path, comparison)
+      lines.concat(build_extra_reference_section(comparison, catalog))
+      lines.concat(build_extra_evilution_section(comparison))
+      File.write(File.join(@output_dir, "#{basename}.txt"), lines.join("\n"))
+    end
+
+    def build_file_header(file_path, comparison)
+      [
+        "# Mutation Comparison: #{file_path}",
+        "",
+        "Evilution: #{comparison.evilution_set.size} mutations",
+        "Reference: #{comparison.reference_set.size} mutations",
+        "Ratio: #{comparison.density_ratio.round(2)}x",
+        ""
+      ]
+    end
+
+    def build_extra_reference_section(comparison, catalog)
+      extra = comparison.extra_in_reference
+      lines = ["## Extra in reference (#{extra.size})", ""]
+
+      catalog.summary.each do |entry|
+        lines << "### #{entry[:operator]} (#{entry[:count]})"
+        catalog.by_operator[entry[:operator]].each do |m|
+          lines << "  Line #{m["line"]}:"
+          m["diff"].to_s.each_line { |l| lines << "    #{l.chomp}" }
+          lines << ""
+        end
+      end
+
+      lines
+    end
+
+    def build_extra_evilution_section(comparison)
+      ev_extra = comparison.extra_in_evilution
+      return [] if ev_extra.empty?
+
+      lines = ["## Extra in evilution (#{ev_extra.size})", ""]
+      ev_extra.each do |m|
+        lines << "  #{m["operator"]} line #{m["line"]}: #{m["diff"].to_s.lines.first&.chomp}"
+      end
+      lines
+    end
+
+    def write_summary_json(file_results)
+      data = {
+        timestamp: Time.now.iso8601,
+        files: file_results,
+        totals: compute_summary_totals(file_results)
+      }
+      File.write(File.join(@output_dir, "summary.json"), JSON.pretty_generate(data))
+    end
+
+    def write_summary_text(file_results)
+      totals = compute_summary_totals(file_results)
+      lines = build_summary_header
+      lines.concat(build_summary_rows(file_results))
+      lines.concat(build_summary_totals(totals))
+      lines.concat(build_operator_breakdown(totals))
+      File.write(File.join(@output_dir, "summary.txt"), lines.join("\n"))
+    end
+
+    def build_summary_header
+      header = "File                                            " \
+               "Evilution  Reference    Ratio    Extra"
+      ["# Head-to-Head Mutation Comparison Summary", "", header, ("-" * 83)]
+    end
+
+    def build_summary_rows(file_results)
+      file_results.map do |r|
+        format("%-45<file>s %10<ev>d %10<ref>d %7.2<ratio>fx %8<extra>d",
+               file: r[:file], ev: r[:evilution_count], ref: r[:reference_count],
+               ratio: r[:density_ratio], extra: r[:extra_count])
+      end
+    end
+
+    def build_summary_totals(totals)
+      total_line = format("%-45<file>s %10<ev>d %10<ref>d %7.2<ratio>fx %8<extra>d",
+                          file: "TOTAL", ev: totals[:evilution_total], ref: totals[:reference_total],
+                          ratio: totals[:density_ratio], extra: totals[:extra_total])
+      [("-" * 83), total_line, ""]
+    end
+
+    def build_operator_breakdown(totals)
+      lines = ["## Operator breakdown (reference extras)", ""]
+      totals[:operator_summary].each do |entry|
+        lines << "  #{entry[:operator]}: #{entry[:count]}"
+      end
+      lines
+    end
+
+    def compute_summary_totals(file_results)
+      ev_total = file_results.sum { |r| r[:evilution_count] }
+      ref_total = file_results.sum { |r| r[:reference_count] }
+      extra_total = file_results.sum { |r| r[:extra_count] }
+      ratio = ev_total.positive? ? (ref_total.to_f / ev_total).round(2) : 0.0
+      merged = merge_operator_summaries(file_results)
+
+      { evilution_total: ev_total, reference_total: ref_total,
+        density_ratio: ratio, extra_total: extra_total, operator_summary: merged }
+    end
+
+    def merge_operator_summaries(file_results)
+      all_operators = file_results.flat_map { |r| r[:operator_summary] }
+      all_operators.group_by { |e| e[:operator] }
+                   .map { |op, entries| { operator: op, count: entries.sum { |e| e[:count] } } }
+                   .sort_by { |e| -e[:count] }
+    end
+  end
+
+  class Runner
+    def initialize(config:, verbose: false)
+      @config = config
+      @verbose = verbose
+      @evilution = EvilutionCollector.new(config.project_root)
+      @reference = ReferenceCollector.new(config.project_root, config.reference_cmd)
+    end
+
+    def call
+      FileUtils.mkdir_p(@config.output_dir)
+      reporter = Reporter.new(@config.output_dir)
+      file_results = process_files(reporter)
+      reporter.write_summary(file_results)
+      print_summary(file_results)
+      0
+    rescue ToolError => e
+      warn "Tool error: #{e.message}"
+      1
+    end
+
+    private
+
+    def process_files(reporter)
+      @config.files.map do |entry|
+        path = entry[:path]
+        reference_target = entry[:reference_target]
+
+        warn "  Comparing #{path}..." if @verbose
+        compare_file(path, reference_target, reporter)
+      end
+    end
+
+    def compare_file(path, _reference_target, reporter)
+      full_path = File.join(@config.project_root, path)
+      ev_data = @evilution.collect(path)
+      ref_data = @reference.collect(full_path)
+
+      ev_set = MutationSet.from_json(ev_data)
+      ref_set = MutationSet.from_json(ref_data)
+      comparison = Comparison.new(evilution: ev_set, reference: ref_set)
+      catalog = Catalog.new(comparison.extra_in_reference)
+
+      reporter.write_file_report(path, comparison, catalog)
+
+      { file: path, evilution_count: ev_set.size, reference_count: ref_set.size,
+        density_ratio: comparison.density_ratio.round(2),
+        extra_count: comparison.extra_in_reference.size,
+        operator_summary: catalog.summary }
+    end
+
+    def print_summary(file_results)
+      ev_total = file_results.sum { |r| r[:evilution_count] }
+      ref_total = file_results.sum { |r| r[:reference_count] }
+      extra_total = file_results.sum { |r| r[:extra_count] }
+      ratio = ev_total.positive? ? (ref_total.to_f / ev_total).round(2) : 0.0
+
+      puts "Comparison complete. Results in #{@config.output_dir}/"
+      puts "  Files: #{file_results.size}"
+      puts "  Evilution: #{ev_total} mutations"
+      puts "  Reference: #{ref_total} mutations"
+      puts "  Ratio: #{ratio}x"
+      puts "  Extra in reference: #{extra_total}"
+    end
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  verbose = false
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: #{$PROGRAM_NAME} CONFIG_FILE [--verbose]"
+    opts.on("-v", "--verbose", "Show progress") { verbose = true }
+    opts.on("-h", "--help", "Show help") do
+      puts opts
+      exit 0
+    end
+  end
+  parser.parse!
+
+  config_path = ARGV.first
+  unless config_path
+    warn parser.banner
+    exit 2
+  end
+
+  begin
+    config = CompareMutations::Config.new(config_path)
+    runner = CompareMutations::Runner.new(config: config, verbose: verbose)
+    exit runner.call
+  rescue CompareMutations::ConfigError => e
+    warn "Config error: #{e.message}"
+    exit 2
+  end
+end
