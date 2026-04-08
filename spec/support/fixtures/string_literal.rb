@@ -19,4 +19,10 @@ class StringChecker
       hello #{name} today
     HEREDOC
   end
+
+  def returns_heredoc_with_string_in_interpolation
+    <<~HEREDOC
+      hello #{"literal"} world
+    HEREDOC
+  end
 end

@@ -68,6 +68,18 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       )
     end
 
+    it "mutates string literals inside heredoc interpolations" do
+      muts = mutations_for("returns_heredoc_with_string_in_interpolation")
+
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to all(include("<<~HEREDOC"))
+      expect(mutated_sources).to include(
+        a_string_matching(/hello \#\{""\} world/),
+        a_string_matching(/hello \#\{nil\} world/)
+      )
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_hello")
 
