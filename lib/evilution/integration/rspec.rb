@@ -5,6 +5,7 @@ require "stringio"
 require "tmpdir"
 require_relative "base"
 require_relative "../spec_resolver"
+require_relative "../related_spec_heuristic"
 
 require_relative "../integration"
 
@@ -13,6 +14,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @test_files = test_files
     @rspec_loaded = false
     @spec_resolver = Evilution::SpecResolver.new
+    @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
     @warned_files = Set.new
     super(hooks: hooks)
   end
@@ -180,12 +182,13 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     return test_files if test_files
 
     resolved = @spec_resolver.call(mutation.file_path)
-    if resolved
-      [resolved]
-    else
+    unless resolved
       warn_unresolved_spec(mutation.file_path)
-      ["spec"]
+      return ["spec"]
     end
+
+    related = @related_spec_heuristic.call(mutation)
+    ([resolved] + related).uniq
   end
 
   def warn_unresolved_spec(file_path)
