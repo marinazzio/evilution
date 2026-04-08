@@ -1,0 +1,217 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Mutation Density Benchmark
+#
+# Compares mutation counts between evilution and a reference mutation testing
+# tool on a corpus of files.
+# See docs/mutation_density_benchmark.md for methodology.
+#
+# Usage:
+#   scripts/benchmark_density CONFIG_FILE [--verbose]
+#
+# The config file is a YAML file listing the benchmark corpus.
+# See scripts/benchmark_density.yml for the format.
+
+require "yaml"
+require "open3"
+require "optparse"
+
+module BenchmarkDensity
+  class ConfigError < StandardError; end
+
+  class Config
+    attr_reader :project_root, :target_ratio, :reference_cmd, :files
+
+    def initialize(path)
+      data = YAML.safe_load_file(path, symbolize_names: true, permitted_classes: [Symbol])
+      @project_root = data[:project_root]
+      @target_ratio = data[:target_ratio] || 1.5
+      @reference_cmd = data[:reference_cmd] || []
+      @files = data[:files] || []
+
+      validate!
+    end
+
+    private
+
+    def validate!
+      raise ConfigError, "project_root is required in config" if @project_root.nil?
+      raise ConfigError, "project_root does not exist: #{@project_root}" unless Dir.exist?(@project_root)
+      raise ConfigError, "reference_cmd is required in config" if @reference_cmd.empty?
+      raise ConfigError, "files list is empty — add benchmark files to the config" if @files.empty?
+    end
+  end
+
+  class EvilutionCounter
+    def initialize(project_root)
+      @project_root = project_root
+    end
+
+    def count_mutations(file_path)
+      full_path = File.join(@project_root, file_path)
+      cmd = ["bundle", "exec", "evilution", "subjects", full_path]
+      stdout, stderr, status = Open3.capture3(*cmd, chdir: @project_root)
+
+      unless status.success?
+        warn "  evilution failed for #{file_path}: #{stderr.strip}"
+        return nil
+      end
+
+      parse_subject_count(stdout)
+    end
+
+    private
+
+    def parse_subject_count(output)
+      match = output.match(/(\d+)\s+subjects,\s+(\d+)\s+mutations/)
+      match ? match[2].to_i : 0
+    end
+  end
+
+  class ReferenceCounter
+    def initialize(project_root, reference_cmd)
+      @project_root = project_root
+      @reference_cmd = reference_cmd
+    end
+
+    def count_mutations(reference_target)
+      cmd = @reference_cmd + [reference_target]
+      stdout, stderr, _status = Open3.capture3(*cmd, chdir: @project_root)
+
+      # Reference tool may exit non-zero when mutants survive, which is expected.
+      # Only treat it as failure if there's no parseable output.
+      count = parse_mutation_count(stdout)
+      if count.nil?
+        warn "  reference tool failed for #{reference_target}: #{stderr.lines.first&.strip}"
+        return nil
+      end
+      count
+    end
+
+    private
+
+    def parse_mutation_count(output)
+      match = output.match(/mutations:\s*(\d+)/i)
+      match ? match[1].to_i : nil
+    end
+  end
+
+  class Runner
+    HEADER_FMT = "%-45<file>s %10<evilution>s %10<reference>s %8<ratio>s"
+    ROW_FMT = "%-45<file>s %10<evilution>s %10<reference>s %8<ratio>s"
+    TOTAL_FMT = "%-45<file>s %10<evilution>d %10<reference>d %7.2<ratio>fx"
+
+    def initialize(config:, verbose: false)
+      @config = config
+      @verbose = verbose
+      @evilution = EvilutionCounter.new(config.project_root)
+      @reference = ReferenceCounter.new(config.project_root, config.reference_cmd)
+    end
+
+    def call
+      results = collect_results
+      print_table(results)
+      print_summary(results)
+      passing?(results) ? 0 : 1
+    end
+
+    private
+
+    def collect_results
+      @config.files.map do |entry|
+        path = entry[:path]
+        reference_target = entry[:reference_target]
+
+        warn "  Measuring #{path}..." if @verbose
+        ev_count = @evilution.count_mutations(path)
+        ref_count = @reference.count_mutations(reference_target)
+        warn "  done" if @verbose
+
+        { path: path, evilution: ev_count, reference: ref_count }
+      end
+    end
+
+    def print_table(results)
+      puts format(HEADER_FMT, file: "File", evilution: "Evilution", reference: "Reference", ratio: "Ratio")
+      puts "-" * 75
+
+      results.each do |r|
+        ratio = compute_ratio(r[:evilution], r[:reference])
+        ratio_str = ratio ? format("%.2fx", ratio) : "N/A"
+        ev_str = r[:evilution]&.to_s || "ERR"
+        ref_str = r[:reference]&.to_s || "ERR"
+        puts format(ROW_FMT, file: r[:path], evilution: ev_str, reference: ref_str, ratio: ratio_str)
+      end
+
+      puts "-" * 75
+    end
+
+    def print_summary(results)
+      totals = compute_totals(results)
+      puts format(TOTAL_FMT, file: "TOTAL", evilution: totals[:ev], reference: totals[:ref], ratio: totals[:ratio])
+      puts ""
+      print_status_line(totals[:ratio])
+      print_error_warning(results)
+    end
+
+    def compute_totals(results)
+      ev_total = results.sum { |r| r[:evilution] || 0 }
+      ref_total = results.sum { |r| r[:reference] || 0 }
+      ratio = ev_total.positive? ? (ref_total.to_f / ev_total).round(2) : 0.0
+      { ev: ev_total, ref: ref_total, ratio: ratio }
+    end
+
+    def print_status_line(ratio)
+      target = @config.target_ratio
+      status = ratio <= target ? "PASS" : "FAIL"
+      puts "Density ratio: #{ratio}x (target: < #{target}x) — #{status}"
+    end
+
+    def print_error_warning(results)
+      error_count = results.count { |r| r[:evilution].nil? || r[:reference].nil? }
+      puts "WARNING: #{error_count} file(s) had errors — results may be incomplete" if error_count.positive?
+    end
+
+    def passing?(results)
+      totals = compute_totals(results)
+      return true if totals[:ev].zero?
+
+      totals[:ratio] <= @config.target_ratio
+    end
+
+    def compute_ratio(evilution, reference)
+      return nil if evilution.nil? || reference.nil? || evilution.zero?
+
+      (reference.to_f / evilution).round(2)
+    end
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  verbose = false
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: #{$PROGRAM_NAME} CONFIG_FILE [--verbose]"
+    opts.on("-v", "--verbose", "Show progress") { verbose = true }
+    opts.on("-h", "--help", "Show help") do
+      puts opts
+      exit 0
+    end
+  end
+  parser.parse!
+
+  config_path = ARGV.first
+  unless config_path
+    warn parser.banner
+    exit 2
+  end
+
+  begin
+    config = BenchmarkDensity::Config.new(config_path)
+    runner = BenchmarkDensity::Runner.new(config: config, verbose: verbose)
+    exit runner.call
+  rescue BenchmarkDensity::ConfigError => e
+    warn "Config error: #{e.message}"
+    exit 2
+  end
+end
