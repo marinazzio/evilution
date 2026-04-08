@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.21.0] - 2026-04-08
+
+### Added
+
+- **Heredoc-aware string mutations** — `string_literal` operator now skips literal text in heredocs (all variants: `<<HEREDOC`, `<<-HEREDOC`, `<<~HEREDOC`, `<<~'HEREDOC'`); still mutates string literals inside interpolated expressions (`#{"literal"}`); uses Prism's built-in `heredoc?` detection (#522, #545, #546, #547)
+- **`--skip-heredoc-literals` CLI flag** — completely suppresses all string literal mutations inside heredocs, including strings within interpolated expressions; configurable via CLI flag and `.evilution.yml` (#548)
+- **Temp-file mutation approach** — mutations are applied to temporary file copies instead of overwriting original source files; uses load-path redirection (`$LOAD_PATH.unshift`) so `require` resolves the mutated copy; original files are never modified during mutation runs (#537)
+- **Zeitwerk-compatible load-path redirection** — forked test processes redirect the load path to pick up mutated temp files, compatible with Zeitwerk-like autoloaders (#550, #551)
+- **Temp directory cleanup and tracking** — `TempDirTracker` ensures mutation temp directories are cleaned up after each run, preventing temp file accumulation (#552)
+- **Integration tests for temp-file mutation** — end-to-end tests verifying original file protection, temp file cleanup, and sandbox isolation during forked mutation runs (#554)
+- **Integration tests for heredoc mutation behavior** — full-pipeline tests covering plain, squiggly, non-squiggly, dash, single-quote, interpolated, nested, and mixed heredocs (#549)
+
+### Changed
+
+- **Mutation isolation** — mutation runs no longer modify original source files on disk; all mutations are applied to temporary copies, improving safety for concurrent usage and editor integration
+- **Operator options threading** — `Registry#mutations_for` accepts `operator_options` hash, passed through to operator constructors; enables per-operator configuration like `skip_heredoc_literals`
+- **Dependencies** — bumped `mcp` gem to 0.11.0; bumped `ruby/setup-ruby` CI action to 1.300.0
+
 ## [0.20.0] - 2026-04-08
 
 ### Added
