@@ -35,7 +35,8 @@ RSpec.describe "Heredoc mutation integration" do
     it "produces valid Ruby for all mutations" do
       mutations_for("plain_heredoc").each do |mutation|
         msg = "Invalid Ruby: #{mutation.operator_name} line #{mutation.line}"
-        expect { Prism.parse(mutation.mutated_source) }.not_to raise_error, msg
+        result = Prism.parse(mutation.mutated_source)
+        expect(result.errors).to be_empty, msg
       end
     end
   end
@@ -129,7 +130,8 @@ RSpec.describe "Heredoc mutation integration" do
     it "produces valid Ruby for all mutations" do
       mutations_for("nested_heredoc").each do |mutation|
         msg = "Invalid Ruby: #{mutation.operator_name} line #{mutation.line}"
-        expect { Prism.parse(mutation.mutated_source) }.not_to raise_error, msg
+        result = Prism.parse(mutation.mutated_source)
+        expect(result.errors).to be_empty, msg
       end
     end
   end
