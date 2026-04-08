@@ -1,0 +1,24 @@
+# Benchmark corpus configuration
+#
+# Each entry maps a file path to a reference tool subject pattern.
+# The file path is relative to the target project root.
+# The reference_target is the subject expression passed to the reference tool.
+#
+# Populate this file with 10 files from the target project before running
+# the benchmark. See docs/mutation_density_benchmark.md for selection criteria.
+#
+# Example:
+#
+# project_root: /path/to/rails/app
+# target_ratio: 1.5
+# reference_cmd: ["bundle", "exec", "mutant", "run", "--integration", "rspec", "--fail-fast"]
+# files:
+#   - path: app/models/user.rb
+#     reference_target: "User"
+#   - path: app/services/payment_processor.rb
+#     reference_target: "PaymentProcessor"
+
+project_root: null  # Set to the absolute path of the target project
+target_ratio: 1.5
+reference_cmd: []   # Command prefix for the reference tool (e.g. ["bundle", "exec", "mutant", "run"])
+files: []
