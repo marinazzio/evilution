@@ -63,6 +63,7 @@ evilution [command] [options] [files...]
 | `--incremental`              | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
+| `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
 | `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
@@ -88,6 +89,7 @@ Creates `.evilution.yml`:
 # integration: rspec       # test framework
 # suggest_tests: false     # concrete RSpec test code in suggestions
 # save_session: false      # persist results under .evilution/results/
+# skip_heredoc_literals: false  # skip all string literal mutations inside heredocs
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
 # ignore_patterns: []      # AST patterns to exclude (see docs/ast_pattern_syntax.md)
@@ -387,8 +389,8 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 69 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing)
-5. **Isolate** — Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
+4. **Mutate** — 69 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default
+5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
 6. **Test** — RSpec executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
