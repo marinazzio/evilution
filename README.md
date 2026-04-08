@@ -148,6 +148,16 @@ Use `--format json` for machine-readable output. Schema:
       "suggestion": "string — actionable hint for surviving mutants (survived only)"
     }
   ],
+  "coverage_gaps": [
+    {
+      "file": "string       — relative path to source file",
+      "subject": "string    — method name (e.g. 'Foo#bar')",
+      "line": "integer      — line number",
+      "operators": ["string — operator names involved"],
+      "count": "integer     — number of survived mutations in this gap",
+      "mutations": ["... same shape as survived entries ..."]
+    }
+  ],
   "killed": ["... same shape as survived entries ..."],
   "timed_out": ["... same shape as survived entries ..."],
   "errors": ["... same shape as survived entries ..."]
