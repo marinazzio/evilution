@@ -14,7 +14,8 @@ RSpec.describe Evilution::Integration::RSpec do
       "Mutation",
       file_path: source_file.path,
       original_source: original_source,
-      mutated_source: mutated_source
+      mutated_source: mutated_source,
+      diff: nil
     )
   end
 
@@ -446,6 +447,64 @@ RSpec.describe Evilution::Integration::RSpec do
       result = no_hooks_integration.call(mutation)
 
       expect(result[:passed]).to be true
+    end
+  end
+
+  describe "related spec heuristic integration" do
+    let(:resolver) { instance_double(Evilution::SpecResolver) }
+    let(:related_heuristic) { instance_double(Evilution::RelatedSpecHeuristic) }
+
+    before do
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      allow(Evilution::RelatedSpecHeuristic).to receive(:new).and_return(related_heuristic)
+    end
+
+    it "appends related specs when heuristic returns matches" do
+      allow(resolver).to receive(:call).and_return("spec/controllers/news_controller_spec.rb")
+      allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/controllers/news_controller_spec.rb")
+        expect(args).to include("spec/requests/news_spec.rb")
+        0
+      end
+
+      auto_integration.call(mutation)
+    end
+
+    it "does not duplicate specs when related spec matches primary" do
+      allow(resolver).to receive(:call).and_return("spec/requests/news_spec.rb")
+      allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        spec_args = args.select { |a| a.end_with?("_spec.rb") }
+        expect(spec_args.length).to eq(1)
+        0
+      end
+
+      auto_integration.call(mutation)
+    end
+
+    it "does not call related heuristic when explicit test_files provided" do
+      allow(related_heuristic).to receive(:call)
+      explicit = described_class.new(test_files: ["spec/explicit_spec.rb"])
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      explicit.call(mutation)
+
+      expect(related_heuristic).not_to have_received(:call)
+    end
+
+    it "works when heuristic returns empty array" do
+      allow(resolver).to receive(:call).and_return("spec/news_spec.rb")
+      allow(related_heuristic).to receive(:call).and_return([])
+      auto_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/news_spec.rb")
+        0
+      end
+
+      auto_integration.call(mutation)
     end
   end
 
