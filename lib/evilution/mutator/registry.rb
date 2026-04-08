@@ -88,9 +88,10 @@ class Evilution::Mutator::Registry
     self
   end
 
-  def mutations_for(subject, filter: nil)
+  def mutations_for(subject, filter: nil, operator_options: {})
     @operators.flat_map do |operator_class|
-      operator_class.new.call(subject, filter: filter)
+      operator = build_operator(operator_class, operator_options)
+      operator.call(subject, filter: filter)
     end
   end
 
@@ -100,5 +101,11 @@ class Evilution::Mutator::Registry
 
   def operators
     @operators.dup
+  end
+
+  private
+
+  def build_operator(operator_class, options)
+    operator_class.new(**options)
   end
 end

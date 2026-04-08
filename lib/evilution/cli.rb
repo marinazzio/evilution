@@ -255,6 +255,7 @@ class Evilution::CLI
   end
 
   def add_extra_flag_options(opts)
+    opts.on("--skip-heredoc-literals", "Skip all string literal mutations inside heredocs") { @options[:skip_heredoc_literals] = true }
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
     opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
@@ -298,10 +299,11 @@ class Evilution::CLI
 
     registry = Evilution::Mutator::Registry.default
     filter = build_subject_filter(config)
+    operator_options = build_operator_options(config)
     total_mutations = 0
 
     subjects.each do |subj|
-      count = registry.mutations_for(subj, filter: filter).length
+      count = registry.mutations_for(subj, filter: filter, operator_options: operator_options).length
       total_mutations += count
       label = count == 1 ? "1 mutation" : "#{count} mutations"
       $stdout.puts("  #{subj.name}  #{subj.file_path}:#{subj.line_number}  (#{label})")
@@ -315,6 +317,10 @@ class Evilution::CLI
   rescue Evilution::Error => e
     warn("Error: #{e.message}")
     2
+  end
+
+  def build_operator_options(config)
+    { skip_heredoc_literals: config.skip_heredoc_literals? }
   end
 
   def build_subject_filter(config)
@@ -425,6 +431,7 @@ class Evilution::CLI
       "  suggest_tests: #{config.suggest_tests}",
       "  save_session: #{config.save_session}",
       "  target: #{config.target || "(all files)"}",
+      "  skip_heredoc_literals: #{config.skip_heredoc_literals}",
       "  ignore_patterns: #{config.ignore_patterns.empty? ? "(none)" : config.ignore_patterns.inspect}"
     ]
   end
@@ -481,8 +488,10 @@ class Evilution::CLI
   def run_util_mutation
     source, file_path = resolve_util_mutation_source
     subjects = parse_source_to_subjects(source, file_path)
+    config = Evilution::Config.new(**@options)
     registry = Evilution::Mutator::Registry.default
-    mutations = subjects.flat_map { |s| registry.mutations_for(s) }
+    operator_options = build_operator_options(config)
+    mutations = subjects.flat_map { |s| registry.mutations_for(s, operator_options: operator_options) }
 
     if mutations.empty?
       $stdout.puts("No mutations generated")

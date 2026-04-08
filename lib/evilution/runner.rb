@@ -182,8 +182,9 @@ class Evilution::Runner
 
   def generate_mutations(subjects)
     filter = build_ignore_filter
+    operator_options = build_operator_options
     mutations = subjects.flat_map do |subject|
-      registry.mutations_for(subject, filter: filter)
+      registry.mutations_for(subject, filter: filter, operator_options: operator_options)
     end
     skipped_count = filter ? filter.skipped_count : 0
 
@@ -252,6 +253,10 @@ class Evilution::Runner
     rescue SystemCallError
       []
     end
+  end
+
+  def build_operator_options
+    { skip_heredoc_literals: config.skip_heredoc_literals? }
   end
 
   def build_ignore_filter

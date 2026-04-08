@@ -3,8 +3,14 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
+  def initialize(skip_heredoc_literals: false, **rest)
+    super(**rest)
+    @skip_heredoc_literals = skip_heredoc_literals
+  end
+
   def visit_interpolated_string_node(node)
     return super unless node.heredoc?
+    return if @skip_heredoc_literals
 
     node.parts.each do |part|
       next if part.is_a?(Prism::StringNode)

@@ -355,6 +355,20 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "#skip_heredoc_literals?" do
+    it "returns false by default" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.skip_heredoc_literals?).to be false
+    end
+
+    it "returns true when skip_heredoc_literals is enabled" do
+      config = described_class.new(skip_heredoc_literals: true, skip_config_file: true)
+
+      expect(config.skip_heredoc_literals?).to be true
+    end
+  end
+
   describe "fail_fast validation" do
     it "rejects zero" do
       expect { described_class.new(fail_fast: 0, skip_config_file: true) }

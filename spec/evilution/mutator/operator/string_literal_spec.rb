@@ -11,9 +11,9 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
     finder.subjects
   end
 
-  def mutations_for(method_name)
+  def mutations_for(method_name, **options)
     subject = subjects_from_fixture.find { |s| s.name.end_with?("##{method_name}") }
-    described_class.new.call(subject)
+    described_class.new(**options).call(subject)
   end
 
   describe "#call" do
@@ -78,6 +78,20 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         a_string_matching(/hello \#\{""\} world/),
         a_string_matching(/hello \#\{nil\} world/)
       )
+    end
+
+    context "with skip_heredoc_literals: true" do
+      it "skips string literals inside heredoc interpolations" do
+        muts = mutations_for("returns_heredoc_with_string_in_interpolation", skip_heredoc_literals: true)
+
+        expect(muts).to be_empty
+      end
+
+      it "still mutates regular strings" do
+        muts = mutations_for("returns_hello", skip_heredoc_literals: true)
+
+        expect(muts.length).to eq(2)
+      end
     end
 
     it "sets correct operator_name" do

@@ -371,6 +371,26 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--skip-heredoc-literals flag" do
+      it "sets skip_heredoc_literals to true" do
+        cli = described_class.new(["--skip-heredoc-literals"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(skip_heredoc_literals: true)
+        )
+      end
+
+      it "defaults to false when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(skip_heredoc_literals: false)
+        )
+      end
+    end
+
     describe "--baseline-session flag" do
       it "sets baseline_session to the given path" do
         cli = described_class.new(["--baseline-session", "/tmp/session.json"])
@@ -943,8 +963,12 @@ RSpec.describe Evilution::CLI do
 
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject1, filter: anything).and_return([double, double, double])
-      allow(registry).to receive(:mutations_for).with(subject2, filter: anything).and_return([double])
+      allow(registry).to receive(:mutations_for)
+        .with(subject1, filter: anything, operator_options: anything)
+        .and_return([double, double, double])
+      allow(registry).to receive(:mutations_for)
+        .with(subject2, filter: anything, operator_options: anything)
+        .and_return([double])
     end
 
     it "returns exit code 0" do
