@@ -304,6 +304,91 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "Zeitwerk-like autoloader compatibility" do
+    let(:autoload_dir) { Dir.mktmpdir("evilution_autoload") }
+    let(:source_subpath) { "models/user.rb" }
+    let(:autoload_source_path) { File.join(autoload_dir, source_subpath) }
+
+    let(:autoload_original) { "class User\n  def name\n    'Alice'\n  end\nend\n" }
+    let(:autoload_mutated) { "class User\n  def name\n    nil\n  end\nend\n" }
+
+    let(:autoload_mutation) do
+      double(
+        "Mutation",
+        file_path: autoload_source_path,
+        original_source: autoload_original,
+        mutated_source: autoload_mutated
+      )
+    end
+
+    before do
+      FileUtils.mkdir_p(File.dirname(autoload_source_path))
+      File.write(autoload_source_path, autoload_original)
+      # Simulate Zeitwerk: autoload dir is on $LOAD_PATH, file is in $LOADED_FEATURES
+      $LOAD_PATH.unshift(autoload_dir)
+      $LOADED_FEATURES << File.expand_path(autoload_source_path)
+    end
+
+    after do
+      $LOAD_PATH.delete(autoload_dir)
+      $LOADED_FEATURES.delete(File.expand_path(autoload_source_path))
+      FileUtils.rm_rf(autoload_dir)
+    end
+
+    it "shadows the autoloaded file so require picks up the mutation" do
+      required_path = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        # Simulate what happens when a spec requires the file:
+        # With displaced feature, require should find the shadow
+        feature_before = $LOADED_FEATURES.dup
+        temp_dir = $LOAD_PATH.first
+        shadow = File.join(temp_dir, source_subpath)
+        required_path = shadow if File.exist?(shadow)
+        1
+      end
+
+      integration.call(autoload_mutation)
+
+      expect(required_path).not_to be_nil
+      expect(File.read(autoload_source_path)).to eq(autoload_original)
+    end
+
+    it "does not modify the original autoloaded file" do
+      file_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        file_during_run = File.read(autoload_source_path)
+        1
+      end
+
+      integration.call(autoload_mutation)
+
+      expect(file_during_run).to eq(autoload_original)
+    end
+
+    it "preserves the original $LOADED_FEATURES entry after restore" do
+      original_feature = File.expand_path(autoload_source_path)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      integration.call(autoload_mutation)
+
+      expect($LOADED_FEATURES).to include(original_feature)
+    end
+
+    it "writes mutated content to the shadow path matching the subpath" do
+      shadow_content = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        temp_dir = integration.instance_variable_get(:@temp_dir)
+        shadow = File.join(temp_dir, source_subpath)
+        shadow_content = File.read(shadow) if File.exist?(shadow)
+        1
+      end
+
+      integration.call(autoload_mutation)
+
+      expect(shadow_content).to eq(autoload_mutated)
+    end
+  end
+
   describe "temp file isolation for non-LOAD_PATH files" do
     it "never modifies the original file during mutation" do
       file_content_during_run = nil
