@@ -49,6 +49,37 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       end
     end
 
+    it "skips plain heredoc strings" do
+      muts = mutations_for("returns_heredoc")
+
+      expect(muts).to be_empty
+    end
+
+    it "skips heredoc strings with interpolation but mutates regular strings in same method" do
+      muts = mutations_for("returns_heredoc_with_interpolation")
+
+      # Only the regular string "world" (name = "world") should be mutated, not the heredoc parts
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to all(include("<<~HEREDOC"))
+      expect(mutated_sources).to include(
+        a_string_matching(/name = ""\n/),
+        a_string_matching(/name = nil\n/)
+      )
+    end
+
+    it "mutates string literals inside heredoc interpolations" do
+      muts = mutations_for("returns_heredoc_with_string_in_interpolation")
+
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to all(include("<<~HEREDOC"))
+      expect(mutated_sources).to include(
+        a_string_matching(/hello \#\{""\} world/),
+        a_string_matching(/hello \#\{nil\} world/)
+      )
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_hello")
 
