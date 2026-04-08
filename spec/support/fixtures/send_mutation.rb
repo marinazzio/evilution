@@ -108,4 +108,12 @@ class SendMutationFixture
   def using_to_h
     [[:a, 1]].to_h
   end
+
+  def using_downcase
+    "Hello".downcase
+  end
+
+  def using_upcase
+    "hello".upcase
+  end
 end

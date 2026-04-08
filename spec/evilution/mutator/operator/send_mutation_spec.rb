@@ -192,6 +192,20 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".to_a")
     end
 
+    it "replaces downcase with upcase" do
+      muts = mutations_for("using_downcase")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".upcase")
+    end
+
+    it "replaces upcase with downcase" do
+      muts = mutations_for("using_upcase")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".downcase")
+    end
+
     it "handles nested calls with multiple replaceable methods" do
       muts = mutations_for("using_flat_map_and_map")
 
