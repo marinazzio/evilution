@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "stringio"
 require "evilution/integration/crash_detector"
 
 RSpec.describe Evilution::Integration::CrashDetector do

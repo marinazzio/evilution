@@ -16,6 +16,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @rspec_loaded = false
     @spec_resolver = Evilution::SpecResolver.new
     @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
+    @crash_detector = nil
     @warned_files = Set.new
     super(hooks: hooks)
   end
@@ -119,7 +120,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     args = build_args(mutation)
     command = "rspec #{args.join(" ")}"
 
-    detector = register_crash_detector
+    detector = reset_crash_detector
     eg_before = snapshot_example_groups
     status = ::RSpec::Core::Runner.run(args, out, err)
 
@@ -176,10 +177,14 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     world.instance_variable_set(:@sources_by_path, {}) if world.instance_variable_defined?(:@sources_by_path)
   end
 
-  def register_crash_detector
-    detector = Evilution::Integration::CrashDetector.new(StringIO.new)
-    ::RSpec.configuration.add_formatter(detector)
-    detector
+  def reset_crash_detector
+    if @crash_detector
+      @crash_detector.reset
+    else
+      @crash_detector = Evilution::Integration::CrashDetector.new(StringIO.new)
+      ::RSpec.configuration.add_formatter(@crash_detector)
+    end
+    @crash_detector
   end
 
   def build_rspec_result(status, command, detector)
