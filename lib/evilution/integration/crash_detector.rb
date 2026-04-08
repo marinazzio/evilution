@@ -3,11 +3,11 @@
 require_relative "../integration"
 
 class Evilution::Integration::CrashDetector
-  ::RSpec::Core::Formatters.register self, :example_failed
+  ASSERTION_TYPES = [].freeze
 
-  ASSERTION_TYPES = [
-    ::RSpec::Expectations::ExpectationNotMetError
-  ].freeze
+  def self.register_with_rspec
+    ::RSpec::Core::Formatters.register self, :example_failed
+  end
 
   def initialize(_output)
     @assertion_failures = 0
@@ -46,6 +46,6 @@ class Evilution::Integration::CrashDetector
   private
 
   def assertion_exception?(exception)
-    ASSERTION_TYPES.any? { |type| exception.is_a?(type) }
+    exception.is_a?(::RSpec::Expectations::ExpectationNotMetError)
   end
 end

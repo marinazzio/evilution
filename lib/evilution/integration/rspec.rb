@@ -42,6 +42,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
     @hooks.fire(:setup_integration_pre, integration: :rspec) if @hooks
     require "rspec/core"
+    Evilution::Integration::CrashDetector.register_with_rspec
     @rspec_loaded = true
     @hooks.fire(:setup_integration_post, integration: :rspec) if @hooks
   rescue LoadError => e
