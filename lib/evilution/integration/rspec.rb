@@ -58,7 +58,9 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       File.write(dest, mutation.mutated_source)
       $LOAD_PATH.unshift(@temp_dir)
     else
-      dest = File.join(@temp_dir, File.basename(mutation.file_path))
+      absolute = File.expand_path(mutation.file_path)
+      dest = File.join(@temp_dir, absolute)
+      FileUtils.mkdir_p(File.dirname(dest))
       File.write(dest, mutation.mutated_source)
       load(dest)
     end

@@ -307,7 +307,7 @@ RSpec.describe Evilution::Integration::RSpec do
 
       expect(loaded_file).not_to be_nil
       expect(loaded_file).to start_with(Dir.tmpdir)
-      expect(File.basename(loaded_file)).to eq(File.basename(source_file.path))
+      expect(loaded_file).to end_with(File.expand_path(source_file.path))
     end
   end
 
