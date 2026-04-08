@@ -435,14 +435,21 @@ class Evilution::Runner
   end
 
   def install_signal_handlers
-    %w[INT TERM].each do |sig|
-      prev_handler = Signal.trap(sig) do
-        Evilution::TempDirTracker.cleanup_all
-        if prev_handler.respond_to?(:call)
-          prev_handler.call
-        else
-          exit(1)
-        end
+    %w[INT TERM].each { |sig| install_signal_handler(sig) }
+  end
+
+  def install_signal_handler(sig)
+    prev_handler = Signal.trap(sig) do
+      Evilution::TempDirTracker.cleanup_all
+
+      case prev_handler
+      when Proc, Method
+        prev_handler.call
+      when "IGNORE"
+        # Do nothing — signal is ignored
+      else
+        Signal.trap(sig, "DEFAULT")
+        Process.kill(sig, Process.pid)
       end
     end
   end

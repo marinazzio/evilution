@@ -77,8 +77,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
     $LOADED_FEATURES << @displaced_feature if @displaced_feature && !$LOADED_FEATURES.include?(@displaced_feature)
     @displaced_feature = nil
-    Evilution::TempDirTracker.unregister(@temp_dir)
     FileUtils.rm_rf(@temp_dir)
+    Evilution::TempDirTracker.unregister(@temp_dir)
     @temp_dir = nil
   end
 
