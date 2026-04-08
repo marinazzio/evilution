@@ -7,7 +7,8 @@ class Evilution::Equivalent::Heuristic::AliasSwap
     Set[:detect, :find],
     Set[:length, :size],
     Set[:collect, :map],
-    Set[:count, :length]
+    Set[:count, :length],
+    Set[:count, :size]
   ].freeze
 
   MATCHING_OPERATORS = Set["send_mutation", "collection_replacement"].freeze

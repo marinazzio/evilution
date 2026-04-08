@@ -37,6 +37,10 @@ class EquivalentDetectionFixture
     [1, 2, 3].find { |x| x > 1 }
   end
 
+  def using_count
+    [1, 2, 3].count
+  end
+
   def using_length
     [1, 2, 3].length
   end

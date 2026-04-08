@@ -51,6 +51,22 @@ RSpec.describe Evilution::Equivalent::Heuristic::AliasSwap do
     expect(heuristic.match?(mutation)).to be false
   end
 
+  it "matches count -> size swap" do
+    mutation = double("Mutation",
+                      operator_name: "send_mutation",
+                      diff: "- items.count\n+ items.size")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
+  it "matches size -> count swap" do
+    mutation = double("Mutation",
+                      operator_name: "send_mutation",
+                      diff: "- items.size\n+ items.count")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
   it "does not match non-alias send mutations" do
     mutation = double("Mutation",
                       operator_name: "send_mutation",
