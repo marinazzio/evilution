@@ -50,6 +50,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   def apply_mutation(mutation)
     @temp_dir = Dir.mktmpdir("evilution")
+    @displaced_feature = nil
     subpath = resolve_require_subpath(mutation.file_path)
 
     if subpath
@@ -57,6 +58,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       FileUtils.mkdir_p(File.dirname(dest))
       File.write(dest, mutation.mutated_source)
       $LOAD_PATH.unshift(@temp_dir)
+      displace_loaded_feature(mutation.file_path)
     else
       absolute = File.expand_path(mutation.file_path)
       dest = File.join(@temp_dir, absolute)
@@ -71,22 +73,34 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
     $LOAD_PATH.delete(@temp_dir)
     $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
+    $LOADED_FEATURES << @displaced_feature if @displaced_feature && !$LOADED_FEATURES.include?(@displaced_feature)
+    @displaced_feature = nil
     FileUtils.rm_rf(@temp_dir)
     @temp_dir = nil
   end
 
   def resolve_require_subpath(file_path)
     absolute = File.expand_path(file_path)
+    best_subpath = nil
 
     $LOAD_PATH.each do |entry|
       dir = File.expand_path(entry)
       prefix = dir.end_with?("/") ? dir : "#{dir}/"
       next unless absolute.start_with?(prefix)
 
-      return absolute.delete_prefix(prefix)
+      candidate = absolute.delete_prefix(prefix)
+      best_subpath = candidate if best_subpath.nil? || candidate.length < best_subpath.length
     end
 
-    nil
+    best_subpath
+  end
+
+  def displace_loaded_feature(file_path)
+    absolute = File.expand_path(file_path)
+    return unless $LOADED_FEATURES.include?(absolute)
+
+    @displaced_feature = absolute
+    $LOADED_FEATURES.delete(absolute)
   end
 
   def run_rspec(mutation)

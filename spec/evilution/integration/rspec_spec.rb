@@ -240,6 +240,68 @@ RSpec.describe Evilution::Integration::RSpec do
       evilution_entries = $LOAD_PATH.select { |p| p.include?("evilution") && p.start_with?(Dir.tmpdir) && p != load_path_dir }
       expect(evilution_entries).to be_empty
     end
+
+    it "picks the most specific LOAD_PATH match for nested entries" do
+      nested_dir = File.join(load_path_dir, "core")
+      FileUtils.mkdir_p(nested_dir)
+      nested_source = File.join(nested_dir, "widget.rb")
+      File.write(nested_source, original_source)
+      # Push nested_dir AFTER load_path_dir so the broader match comes first
+      $LOAD_PATH.push(nested_dir)
+
+      nested_mutation = double(
+        "Mutation",
+        file_path: nested_source,
+        original_source: original_source,
+        mutated_source: mutated_source
+      )
+
+      shadow_subpath = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        temp_dir = integration.instance_variable_get(:@temp_dir)
+        temp_files = Dir.glob(File.join(temp_dir, "**", "*.rb"))
+        # Should be just "widget.rb", not "core/widget.rb"
+        shadow_subpath = temp_files.first.delete_prefix("#{temp_dir}/")
+        1
+      end
+
+      integration.call(nested_mutation)
+
+      expect(shadow_subpath).to eq("widget.rb")
+    ensure
+      $LOAD_PATH.delete(nested_dir)
+    end
+
+    it "removes original file from $LOADED_FEATURES during mutation" do
+      # Simulate the file being already loaded (e.g., transitively required)
+      original_feature = File.expand_path(source_path)
+      $LOADED_FEATURES << original_feature
+
+      loaded_features_during_run = nil
+      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
+        loaded_features_during_run = $LOADED_FEATURES.dup
+        1
+      end
+
+      integration.call(lp_mutation)
+
+      expect(loaded_features_during_run).not_to include(original_feature)
+    ensure
+      $LOADED_FEATURES.delete(original_feature)
+    end
+
+    it "restores original file to $LOADED_FEATURES after mutation" do
+      original_feature = File.expand_path(source_path)
+      $LOADED_FEATURES << original_feature
+
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      integration.call(lp_mutation)
+
+      expect($LOADED_FEATURES).to include(original_feature)
+    ensure
+      $LOADED_FEATURES.delete(original_feature)
+    end
   end
 
   describe "temp file isolation for non-LOAD_PATH files" do
