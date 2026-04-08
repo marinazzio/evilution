@@ -206,6 +206,43 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".downcase")
     end
 
+    it "replaces strip with lstrip and rstrip" do
+      muts = mutations_for("using_strip")
+
+      expect(muts.length).to eq(2)
+      replacements = muts.map(&:mutated_source)
+      expect(replacements).to include(a_string_including(".lstrip"))
+      expect(replacements).to include(a_string_including(".rstrip"))
+    end
+
+    it "replaces lstrip with strip" do
+      muts = mutations_for("using_lstrip")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".strip")
+    end
+
+    it "replaces rstrip with strip" do
+      muts = mutations_for("using_rstrip")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".strip")
+    end
+
+    it "replaces chomp with chop" do
+      muts = mutations_for("using_chomp")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".chop")
+    end
+
+    it "replaces chop with chomp" do
+      muts = mutations_for("using_chop")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include(".chomp")
+    end
+
     it "handles nested calls with multiple replaceable methods" do
       muts = mutations_for("using_flat_map_and_map")
 
