@@ -72,7 +72,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::CaseWhen,
       Evilution::Mutator::Operator::PredicateReplacement,
       Evilution::Mutator::Operator::EqualityToIdentity,
-      Evilution::Mutator::Operator::LambdaBody
+      Evilution::Mutator::Operator::LambdaBody,
+      Evilution::Mutator::Operator::BeginUnwrap
     ].each { |op| registry.register(op) }
     registry
   end

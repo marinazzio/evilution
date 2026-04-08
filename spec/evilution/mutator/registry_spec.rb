@@ -8,7 +8,7 @@ RSpec.describe Evilution::Mutator::Registry do
       default_registry = described_class.default
 
       expect(default_registry).to be_a(described_class)
-      expect(default_registry.operator_count).to eq(67)
+      expect(default_registry.operator_count).to eq(68)
     end
 
     it "includes all expected operator classes" do
@@ -82,7 +82,8 @@ RSpec.describe Evilution::Mutator::Registry do
         Evilution::Mutator::Operator::CaseWhen,
         Evilution::Mutator::Operator::PredicateReplacement,
         Evilution::Mutator::Operator::EqualityToIdentity,
-        Evilution::Mutator::Operator::LambdaBody
+        Evilution::Mutator::Operator::LambdaBody,
+        Evilution::Mutator::Operator::BeginUnwrap
       ]
 
       expect(operators).to match_array(expected_operators)
