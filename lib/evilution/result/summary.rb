@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../result"
+require_relative "coverage_gap_grouper"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations
@@ -71,6 +72,10 @@ class Evilution::Result::Summary
 
   def equivalent_results
     results.select(&:equivalent?)
+  end
+
+  def coverage_gaps
+    Evilution::Result::CoverageGapGrouper.new.call(survived_results)
   end
 
   def killtime

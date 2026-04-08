@@ -24,6 +24,7 @@ class Evilution::Reporter::JSON
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),
       survived: summary.survived_results.map { |r| build_mutation_detail(r) },
+      coverage_gaps: build_coverage_gaps(summary),
       killed: summary.killed_results.map { |r| build_mutation_detail(r) },
       neutral: summary.neutral_results.map { |r| build_mutation_detail(r) },
       timed_out: summary.results.select(&:timeout?).map { |r| build_mutation_detail(r) },
@@ -79,6 +80,19 @@ class Evilution::Reporter::JSON
     detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
     detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
     detail
+  end
+
+  def build_coverage_gaps(summary)
+    summary.coverage_gaps.map do |gap|
+      {
+        file: gap.file_path,
+        subject: gap.subject_name,
+        line: gap.line,
+        operators: gap.operator_names,
+        count: gap.count,
+        mutations: gap.mutation_results.map { |r| build_mutation_detail(r) }
+      }
+    end
   end
 
   def build_disabled_detail(mutation)

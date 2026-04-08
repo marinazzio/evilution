@@ -8,13 +8,16 @@ require "evilution/result/summary"
 RSpec.describe Evilution::Reporter::JSON do
   subject(:reporter) { described_class.new }
 
+  let(:survived_subject) { double("Subject", name: "User#check") }
+
   let(:survived_mutation) do
     double(
       "Mutation",
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 9,
-      diff: "- x >= 10\n+ x > 10"
+      diff: "- x >= 10\n+ x > 10",
+      subject: survived_subject
     )
   end
 
@@ -152,6 +155,25 @@ RSpec.describe Evilution::Reporter::JSON do
 
         expect(parsed["summary"]["score"]).to eq(1.0)
       end
+    end
+
+    it "includes coverage_gaps with grouped survived mutations" do
+      parsed = JSON.parse(reporter.call(summary))
+      gaps = parsed["coverage_gaps"]
+
+      expect(gaps.length).to eq(1)
+      expect(gaps.first["file"]).to eq("lib/user.rb")
+      expect(gaps.first["line"]).to eq(9)
+      expect(gaps.first["operators"]).to eq(["comparison_replacement"])
+      expect(gaps.first["count"]).to eq(1)
+      expect(gaps.first["mutations"].length).to eq(1)
+    end
+
+    it "preserves survived array unchanged alongside coverage_gaps" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["survived"].length).to eq(1)
+      expect(parsed).to have_key("coverage_gaps")
     end
 
     it "handles empty results" do

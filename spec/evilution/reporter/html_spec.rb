@@ -100,10 +100,58 @@ RSpec.describe Evilution::Reporter::HTML do
     it "includes survived mutations with diffs" do
       output = reporter.call(summary)
 
+      expect(output).to include("Coverage Gaps (1)")
       expect(output).to include("comparison_replacement")
       expect(output).to include("lib/user.rb")
       expect(output).to include("x &gt;= 10")
       expect(output).to include("x &gt; 10")
+    end
+
+    context "with multiple survived mutations on the same line" do
+      let(:survived_mutation2) do
+        subj = double("Subject", name: "User#check")
+        double(
+          "Mutation",
+          operator_name: "method_call_removal",
+          file_path: "lib/user.rb",
+          line: 9,
+          column: 4,
+          diff: "- x >= 10\n+ nil",
+          subject: subj
+        )
+      end
+
+      let(:survived_result2) do
+        Evilution::Result::MutationResult.new(
+          mutation: survived_mutation2,
+          status: :survived,
+          duration: 0.2
+        )
+      end
+
+      let(:grouped_summary) do
+        Evilution::Result::Summary.new(
+          results: [survived_result, survived_result2, killed_result],
+          duration: 1.0
+        )
+      end
+
+      it "renders a grouped coverage gap" do
+        output = reporter.call(grouped_summary)
+
+        expect(output).to include("Coverage Gaps (1)")
+        expect(output).to include("coverage-gap")
+        expect(output).to include("gap-header")
+        expect(output).to include("2 mutations")
+      end
+
+      it "shows operator tags in grouped gap" do
+        output = reporter.call(grouped_summary)
+
+        expect(output).to include("operator-tag")
+        expect(output).to include("comparison_replacement")
+        expect(output).to include("method_call_removal")
+      end
     end
 
     it "includes suggestion for survived mutations" do
@@ -239,13 +287,15 @@ RSpec.describe Evilution::Reporter::HTML do
     end
 
     it "escapes HTML entities in diffs" do
+      html_subj = double("Subject", name: "User#compare")
       html_mutation = double(
         "Mutation",
         operator_name: "comparison_replacement",
         file_path: "lib/user.rb",
         line: 3,
         column: 0,
-        diff: "- a < b\n+ a > b"
+        diff: "- a < b\n+ a > b",
+        subject: html_subj
       )
       html_result = Evilution::Result::MutationResult.new(
         mutation: html_mutation,
