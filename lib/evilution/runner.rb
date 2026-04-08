@@ -21,6 +21,7 @@ require_relative "cache"
 require_relative "parallel/pool"
 require_relative "session/store"
 require_relative "ast/pattern/filter"
+require_relative "temp_dir_tracker"
 require_relative "disable_comment"
 require_relative "ast/sorbet_sig_detector"
 
@@ -42,6 +43,7 @@ class Evilution::Runner
   end
 
   def call
+    install_signal_handlers
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     subjects = parse_and_filter_subjects
@@ -430,6 +432,19 @@ class Evilution::Runner
 
   def should_truncate?(survived_count)
     config.fail_fast? && survived_count >= config.fail_fast
+  end
+
+  def install_signal_handlers
+    %w[INT TERM].each do |sig|
+      prev_handler = Signal.trap(sig) do
+        Evilution::TempDirTracker.cleanup_all
+        if prev_handler.respond_to?(:call)
+          prev_handler.call
+        else
+          exit(1)
+        end
+      end
+    end
   end
 
   def build_isolator
