@@ -116,4 +116,24 @@ class SendMutationFixture
   def using_upcase
     "hello".upcase
   end
+
+  def using_strip
+    " hello ".strip
+  end
+
+  def using_lstrip
+    " hello ".lstrip
+  end
+
+  def using_rstrip
+    " hello ".rstrip
+  end
+
+  def using_chomp
+    "hello\n".chomp
+  end
+
+  def using_chop
+    "hello".chop
+  end
 end

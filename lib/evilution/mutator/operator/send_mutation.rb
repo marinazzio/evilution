@@ -31,7 +31,12 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     to_a: [:to_h],
     to_h: [:to_a],
     downcase: [:upcase],
-    upcase: [:downcase]
+    upcase: [:downcase],
+    strip: %i[lstrip rstrip],
+    lstrip: [:strip],
+    rstrip: [:strip],
+    chomp: [:chop],
+    chop: [:chomp]
   }.freeze
 
   def visit_call_node(node)
