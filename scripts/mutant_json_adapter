@@ -1,0 +1,224 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Mutant JSON Adapter
+#
+# Extracts method bodies from a Ruby file using Prism, feeds each to
+# `mutant util mutation -e`, parses the diff output, and produces JSON
+# in the same schema as `evilution util mutation --format json`:
+#
+#   [{"operator": "...", "subject": "...", "file": "...", "line": N, "diff": "..."}, ...]
+#
+# This works around mutant's inability to parse Ruby 4.0 files by processing
+# individual method snippets through its eval mode.
+#
+# Usage:
+#   scripts/mutant_json_adapter FILE_PATH [--project-root DIR] [--verbose]
+
+require "json"
+require "open3"
+require "optparse"
+require "prism"
+
+module MutantJsonAdapter
+  class ParseError < StandardError; end
+
+  class MethodExtractor
+    MethodInfo = Struct.new(:name, :line_number, :source)
+
+    def initialize(file_path)
+      @file_path = file_path
+    end
+
+    def extract
+      source = File.read(@file_path)
+      binary = source.b
+      encoding = source.encoding
+      result = Prism.parse(source)
+
+      raise ParseError, "failed to parse #{@file_path}" if result.failure?
+
+      visitor = MethodVisitor.new(binary, encoding)
+      visitor.visit(result.value)
+      visitor.methods
+    end
+
+    class MethodVisitor < Prism::Visitor
+      attr_reader :methods
+
+      def initialize(source_binary, encoding)
+        super()
+        @source_binary = source_binary
+        @encoding = encoding
+        @methods = []
+        @context = []
+      end
+
+      def visit_module_node(node)
+        @context.push(node.constant_path&.full_name || node.name.to_s)
+        super
+        @context.pop
+      end
+
+      def visit_class_node(node)
+        @context.push(node.constant_path&.full_name || node.name.to_s)
+        super
+        @context.pop
+      end
+
+      def visit_def_node(node)
+        loc = node.location
+        text = @source_binary[loc.start_offset...loc.end_offset].force_encoding(@encoding)
+        separator = node.receiver ? "." : "#"
+        name = "#{@context.join("::")}#{separator}#{node.name}"
+
+        @methods << MethodInfo.new(name: name, line_number: loc.start_line, source: text)
+        super
+      end
+    end
+  end
+
+  class MutantRunner
+    def initialize(project_root: nil)
+      @project_root = project_root
+    end
+
+    def mutations_for(source)
+      cmd = ["bundle", "exec", "mutant", "util", "mutation", "-e", source]
+      opts = @project_root ? { chdir: @project_root } : {}
+      stdout, _stderr, _status = Open3.capture3(*cmd, **opts)
+      stdout
+    end
+  end
+
+  class OutputParser
+    def parse(raw_output, subject:, file_path:)
+      return [] if raw_output.strip.empty?
+
+      mutations = []
+      current_diff_lines = []
+
+      raw_output.each_line do |line|
+        if line.start_with?("@@ ")
+          flush_mutation(mutations, current_diff_lines, subject, file_path) if current_diff_lines.any?
+          current_diff_lines = [line]
+        elsif line.start_with?("-", "+", " ") && current_diff_lines.any?
+          current_diff_lines << line
+        end
+      end
+
+      flush_mutation(mutations, current_diff_lines, subject, file_path) if current_diff_lines.any?
+      mutations
+    end
+
+    private
+
+    def flush_mutation(mutations, diff_lines, subject, file_path)
+      diff_text = diff_lines.join
+      operator = infer_operator(diff_lines)
+
+      mutations << {
+        "operator" => operator,
+        "subject" => subject.name,
+        "file" => file_path,
+        "line" => subject.line_number,
+        "diff" => diff_text
+      }
+      diff_lines.clear
+    end
+
+    def infer_operator(diff_lines)
+      removed = diff_lines.select { |l| l.start_with?("-") && !l.start_with?("---") }
+                          .map { |l| l[1..].strip }
+      added = diff_lines.select { |l| l.start_with?("+") && !l.start_with?("+++") }
+                        .map { |l| l[1..].strip }
+
+      categorize_mutation(removed, added)
+    end
+
+    def categorize_mutation(removed, added)
+      return "replacement" if removed.empty?
+
+      body_lines = added.reject { |l| l == "end" || l.start_with?("def ") }
+      return "removal" if body_lines.empty?
+
+      classify_added(body_lines.first)
+    end
+
+    def classify_added(added_body)
+      case added_body
+      when "raise"           then "raise_insertion"
+      when "super"           then "super_replacement"
+      when "nil"             then "nil_replacement"
+      when "true", "false"   then "boolean_swap"
+      when /\.eql\?/         then "equality_change"
+      when /\.equal\?/       then "identity_change"
+      when /-?\d+\b/         then "literal_boundary"
+      else                        "mutation"
+      end
+    end
+  end
+
+  class Runner
+    def initialize(file_path:, project_root: nil, verbose: false)
+      @file_path = File.expand_path(file_path)
+      @project_root = project_root
+      @verbose = verbose
+    end
+
+    def call
+      subjects = MethodExtractor.new(@file_path).extract
+
+      if subjects.empty?
+        warn "No methods found in #{@file_path}" if @verbose
+        puts "[]"
+        return 0
+      end
+
+      all_mutations = process_subjects(subjects)
+      puts JSON.pretty_generate(all_mutations)
+      0
+    rescue ParseError => e
+      warn e.message
+      2
+    end
+
+    private
+
+    def process_subjects(subjects)
+      mutant_runner = MutantRunner.new(project_root: @project_root)
+      parser = OutputParser.new
+
+      subjects.flat_map do |subject|
+        warn "  Processing #{subject.name}..." if @verbose
+        raw = mutant_runner.mutations_for(subject.source)
+        parser.parse(raw, subject: subject, file_path: @file_path)
+      end
+    end
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  verbose = false
+  project_root = nil
+
+  opt_parser = OptionParser.new do |opts|
+    opts.banner = "Usage: #{$PROGRAM_NAME} FILE_PATH [--project-root DIR] [--verbose]"
+    opts.on("-v", "--verbose", "Show progress") { verbose = true }
+    opts.on("-p", "--project-root DIR", "Project root for bundle exec") { |d| project_root = d }
+    opts.on("-h", "--help", "Show help") do
+      puts opts
+      exit 0
+    end
+  end
+  opt_parser.parse!
+
+  file_path = ARGV.first
+  unless file_path
+    warn opt_parser.banner
+    exit 2
+  end
+
+  runner = MutantJsonAdapter::Runner.new(file_path: file_path, project_root: project_root, verbose: verbose)
+  exit runner.call
+end
