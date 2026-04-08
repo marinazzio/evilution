@@ -340,7 +340,6 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
         # Simulate what happens when a spec requires the file:
         # With displaced feature, require should find the shadow
-        feature_before = $LOADED_FEATURES.dup
         temp_dir = $LOAD_PATH.first
         shadow = File.join(temp_dir, source_subpath)
         required_path = shadow if File.exist?(shadow)
