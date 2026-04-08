@@ -7,6 +7,7 @@ require_relative "base"
 require_relative "crash_detector"
 require_relative "../spec_resolver"
 require_relative "../related_spec_heuristic"
+require_relative "../temp_dir_tracker"
 
 require_relative "../integration"
 
@@ -50,6 +51,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   def apply_mutation(mutation)
     @temp_dir = Dir.mktmpdir("evilution")
+    Evilution::TempDirTracker.register(@temp_dir)
     @displaced_feature = nil
     subpath = resolve_require_subpath(mutation.file_path)
 
@@ -76,6 +78,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     $LOADED_FEATURES << @displaced_feature if @displaced_feature && !$LOADED_FEATURES.include?(@displaced_feature)
     @displaced_feature = nil
     FileUtils.rm_rf(@temp_dir)
+    Evilution::TempDirTracker.unregister(@temp_dir)
     @temp_dir = nil
   end
 

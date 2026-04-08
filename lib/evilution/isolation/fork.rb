@@ -3,6 +3,7 @@
 require "fileutils"
 require "tmpdir"
 require_relative "../memory"
+require_relative "../temp_dir_tracker"
 
 require_relative "../isolation"
 
@@ -44,12 +45,8 @@ class Evilution::Isolation::Fork
 
   private
 
-  def restore_original_source(mutation)
-    return if File.read(mutation.file_path) == mutation.original_source
-
-    File.write(mutation.file_path, mutation.original_source)
-  rescue StandardError => e
-    warn("Warning: failed to restore #{mutation.file_path}: #{e.message}")
+  def restore_original_source(mutation) # rubocop:disable Lint/UnusedMethodArgument
+    Evilution::TempDirTracker.cleanup_all
   end
 
   def suppress_child_output
