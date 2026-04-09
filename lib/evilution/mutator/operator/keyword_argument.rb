@@ -26,7 +26,7 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
       add_mutation(
         offset: kw_loc.start_offset,
         length: kw_loc.length,
-        replacement: @file_source[name_loc.start_offset...name_loc.end_offset],
+        replacement: byteslice_source(name_loc.start_offset, name_loc.end_offset - name_loc.start_offset),
         node: kw
       )
     end

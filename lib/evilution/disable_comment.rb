@@ -22,7 +22,8 @@ class Evilution::DisableComment
   def classify_comments(parse_result, source)
     parse_result.comments.filter_map do |comment|
       loc = comment.location
-      text = source[loc.start_offset...loc.end_offset]
+      text = source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
+                   .force_encoding(source.encoding)
 
       if text.match?(DISABLE_MARKER)
         line = source.lines[loc.start_line - 1]

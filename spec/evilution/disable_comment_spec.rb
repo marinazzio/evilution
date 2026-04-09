@@ -257,5 +257,52 @@ RSpec.describe Evilution::DisableComment do
         expect(result).to eq([1..5])
       end
     end
+
+    context "with multi-byte characters before disable comment" do
+      let(:source) do
+        <<~RUBY
+          # Комментарий на русском языке
+          def normal_method
+            42
+          end
+
+          # evilution:disable
+          def disabled_method
+            99
+          end
+          # evilution:enable
+        RUBY
+      end
+
+      it "correctly detects disable comment despite multi-byte characters" do
+        result = detector.call(source)
+
+        expect(result).to eq([6..9])
+      end
+    end
+
+    context "with Thai comments (3-byte UTF-8) before disable comment" do
+      let(:source) do
+        <<~RUBY
+          # คำนวณผลรวมของตัวเลข
+          # ตรวจสอบค่าเริ่มต้น
+          def setup
+            @value = 0
+          end
+
+          # evilution:disable
+          def risky_method
+            system("rm -rf /")
+          end
+          # evilution:enable
+        RUBY
+      end
+
+      it "correctly detects disable comment despite Thai characters" do
+        result = detector.call(source)
+
+        expect(result).to eq([7..10])
+      end
+    end
   end
 end

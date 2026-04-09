@@ -85,7 +85,7 @@ class Evilution::Mutator::Operator::RescueBodyReplacement < Evilution::Mutator::
   def indentation_of(offset)
     pos = offset - 1
     col = 0
-    while pos >= 0 && @file_source[pos] != "\n"
+    while pos >= 0 && @file_source.getbyte(pos) != 0x0A
       col += 1
       pos -= 1
     end
