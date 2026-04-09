@@ -58,6 +58,12 @@ RSpec.describe Evilution::Integration::Base do
         NotImplementedError, /ensure_framework_loaded must be implemented/
       )
     end
+
+    it "raises NotImplementedError for .baseline_runner" do
+      expect { described_class.baseline_runner }.to raise_error(
+        NotImplementedError, /baseline_runner must be implemented/
+      )
+    end
   end
 
   describe "template #call orchestration" do

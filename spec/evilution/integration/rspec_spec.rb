@@ -838,4 +838,10 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:test_command]).to include("spec/some_spec.rb")
     end
   end
+
+  describe ".baseline_runner" do
+    it "returns a callable" do
+      expect(described_class.baseline_runner).to respond_to(:call)
+    end
+  end
 end

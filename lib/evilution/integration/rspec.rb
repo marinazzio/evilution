@@ -9,6 +9,17 @@ require_relative "../related_spec_heuristic"
 require_relative "../integration"
 
 class Evilution::Integration::RSpec < Evilution::Integration::Base
+  def self.baseline_runner
+    lambda { |spec_file|
+      require "rspec/core"
+      ::RSpec.reset
+      status = ::RSpec::Core::Runner.run(
+        ["--format", "progress", "--no-color", "--order", "defined", spec_file]
+      )
+      status.zero?
+    }
+  end
+
   def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @rspec_loaded = false

@@ -223,4 +223,10 @@ RSpec.describe Evilution::Integration::Minitest do
       expect { fresh.call(mutation) }.to raise_error(Evilution::Error, /minitest is required/)
     end
   end
+
+  describe ".baseline_runner" do
+    it "returns a callable" do
+      expect(described_class.baseline_runner).to respond_to(:call)
+    end
+  end
 end

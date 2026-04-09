@@ -14,9 +14,11 @@ class Evilution::Baseline
     end
   end
 
-  def initialize(spec_resolver: Evilution::SpecResolver.new, timeout: 30)
+  def initialize(spec_resolver: Evilution::SpecResolver.new, timeout: 30, runner: nil, fallback_dir: "spec")
     @spec_resolver = spec_resolver
     @timeout = timeout
+    @runner = runner
+    @fallback_dir = fallback_dir
   end
 
   def call(subjects)
@@ -33,10 +35,14 @@ class Evilution::Baseline
   end
 
   def run_spec_file(spec_file)
+    raise Evilution::Error, "no baseline runner configured" unless @runner
+
     read_io, write_io = IO.pipe
     pid = fork_spec_runner(spec_file, read_io, write_io)
     write_io.close
     read_result(read_io, pid)
+  rescue Evilution::Error
+    raise
   rescue StandardError
     false
   ensure
@@ -45,19 +51,16 @@ class Evilution::Baseline
   end
 
   def fork_spec_runner(spec_file, read_io, write_io)
+    runner = @runner
     Process.fork do
       read_io.close
       $stdout.reopen(File::NULL, "w")
       $stderr.reopen(File::NULL, "w")
 
-      require "rspec/core"
-      RSpec.reset
-      status = RSpec::Core::Runner.run(
-        ["--format", "progress", "--no-color", "--order", "defined", spec_file]
-      )
-      Marshal.dump({ passed: status.zero? }, write_io)
+      passed = runner.call(spec_file)
+      Marshal.dump({ passed: passed }, write_io)
       write_io.close
-      exit!(status.zero? ? 0 : 1)
+      exit!(passed ? 0 : 1)
     end
   end
 
@@ -97,10 +100,10 @@ class Evilution::Baseline
     subjects.map do |s|
       resolved = @spec_resolver.call(s.file_path)
       if resolved.nil? && warned.add?(s.file_path)
-        warn "[evilution] No matching spec found for #{s.file_path}, running full suite. " \
-             "Use --spec to specify the spec file."
+        warn "[evilution] No matching test found for #{s.file_path}, running full suite. " \
+             "Use --spec to specify the test file."
       end
-      resolved || "spec"
+      resolved || @fallback_dir
     end.uniq
   end
 end
