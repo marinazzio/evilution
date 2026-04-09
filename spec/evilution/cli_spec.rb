@@ -136,6 +136,26 @@ RSpec.describe Evilution::CLI do
       end
     end
 
+    describe "--integration flag" do
+      it "sets integration to :minitest" do
+        cli = described_class.new(["--integration", "minitest"])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(integration: :minitest)
+        )
+      end
+
+      it "defaults to :rspec when not specified" do
+        cli = described_class.new([])
+        cli.call
+        expect(Evilution::Runner).to have_received(:new).with(
+          hooks: nil,
+          config: have_attributes(integration: :rspec)
+        )
+      end
+    end
+
     describe "--jobs flag" do
       it "sets jobs to the given integer" do
         cli = described_class.new(["--jobs", "4"])

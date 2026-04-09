@@ -125,7 +125,7 @@ class Evilution::Config
       # Minimum mutation score to pass (0.0 to 1.0, default: 0.0)
       # min_score: 0.0
 
-      # Test integration: rspec (default: rspec)
+      # Test integration: rspec, minitest (default: rspec)
       # integration: rspec
 
       # Number of parallel workers (default: 1)
@@ -172,7 +172,7 @@ class Evilution::Config
     @format = merged[:format].to_sym
     @target = merged[:target]
     @min_score = merged[:min_score].to_f
-    @integration = merged[:integration].to_sym
+    @integration = validate_integration(merged[:integration])
     @verbose = merged[:verbose]
     @quiet = merged[:quiet]
     @jobs = validate_jobs(merged[:jobs])
@@ -190,6 +190,18 @@ class Evilution::Config
     @baseline_session = merged[:baseline_session]
     @skip_heredoc_literals = merged[:skip_heredoc_literals]
     @hooks = validate_hooks(merged[:hooks])
+  end
+
+  def validate_integration(value)
+    raise Evilution::ConfigError, "integration must be rspec or minitest, got nil" if value.nil?
+
+    value = value.to_sym
+    unless %i[rspec minitest].include?(value)
+      raise Evilution::ConfigError,
+            "integration must be rspec or minitest, got #{value.inspect}"
+    end
+
+    value
   end
 
   def validate_isolation(value)

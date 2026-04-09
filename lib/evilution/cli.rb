@@ -247,6 +247,7 @@ class Evilution::CLI
                            "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
     opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }
     opts.on("--incremental", "Cache killed/timeout results; skip re-running them on unchanged files") { @options[:incremental] = true }
+    opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
     opts.on("--suggest-tests", "Generate concrete RSpec test code in suggestions") { @options[:suggest_tests] = true }
