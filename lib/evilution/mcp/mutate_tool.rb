@@ -44,7 +44,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       suggest_tests: {
         type: "boolean",
         description: "When true, suggestions for survived mutants include concrete test code " \
-                     "(RSpec or Minitest, based on integration) instead of static description text (default: false)"
+                     "instead of static description text (default: false)"
       },
       verbosity: {
         type: "string",
