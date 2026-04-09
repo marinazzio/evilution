@@ -1,11 +1,12 @@
 ---
 name: Prepare release
 about: Prepare release
-title: Prepare release
+title: ''
 labels: ''
-assignees: @marinazzio
+assignees: marinazzio
 
 ---
 
 - [ ] Bump version
 - [ ] Update CHANGELOG
+- [ ] Update agent's and user's manuals
