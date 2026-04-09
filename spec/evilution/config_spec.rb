@@ -455,6 +455,33 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "integration validation" do
+    it "defaults to :rspec" do
+      config = described_class.new(skip_config_file: true)
+      expect(config.integration).to eq(:rspec)
+    end
+
+    it "accepts :minitest" do
+      config = described_class.new(integration: :minitest, skip_config_file: true)
+      expect(config.integration).to eq(:minitest)
+    end
+
+    it "accepts string values and converts to symbol" do
+      config = described_class.new(integration: "minitest", skip_config_file: true)
+      expect(config.integration).to eq(:minitest)
+    end
+
+    it "rejects invalid values" do
+      expect { described_class.new(integration: :cucumber, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /integration must be/)
+    end
+
+    it "rejects nil values" do
+      expect { described_class.new(integration: nil, skip_config_file: true) }
+        .to raise_error(Evilution::ConfigError, /integration must be/)
+    end
+  end
+
   describe "ignore_patterns" do
     it "defaults to empty array" do
       config = described_class.new(skip_config_file: true)
