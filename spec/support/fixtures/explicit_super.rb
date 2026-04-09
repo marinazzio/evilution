@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# rubocop:disable Lint/UselessMethodDefinition, Style/SuperArguments
+# rubocop:disable Style/SuperArguments
 class ExplicitSuperExample
   def with_args(a, b)
     super(a, b)
@@ -18,4 +18,4 @@ class ExplicitSuperExample
     "plain"
   end
 end
-# rubocop:enable Lint/UselessMethodDefinition, Style/SuperArguments
+# rubocop:enable Style/SuperArguments

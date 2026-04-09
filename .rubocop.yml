@@ -79,6 +79,10 @@ Lint/DuplicateBranch:
   Exclude:
     - "lib/evilution/mutator/operator/float_literal.rb"
 
+Lint/UselessMethodDefinition:
+  Exclude:
+    - "spec/fixtures/**/*"
+
 Naming/PredicateMethod:
   Enabled: false
 

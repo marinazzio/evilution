@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 class ZsuperExample
-  def greet # rubocop:disable Lint/UselessMethodDefinition
+  def greet
     super
   end
 
-  def work(a, b) # rubocop:disable Lint/UselessMethodDefinition
+  def work(a, b)
     super
   end
 
