@@ -1552,6 +1552,28 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "method name sanitization" do
+      it "sanitizes operator method names in def test_ identifiers" do
+        subj = double("Subject", name: "Foo#[]", file_path: "lib/foo.rb")
+        mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b", subject: subj)
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).not_to match(/def test_.*\[\]/)
+      end
+
+      it "sanitizes predicate method names in def test_ identifiers" do
+        subj = double("Subject", name: "Foo#valid?", file_path: "lib/foo.rb")
+        mutation = build_mutation("boolean_literal_replacement", diff: "-   true\n+   false", subject: subj)
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to match(/def test_.*valid/)
+        expect(suggestion).not_to match(/def test_.*\?/)
+      end
+    end
+
     describe "arithmetic_replacement" do
       it "generates a Minitest test method" do
         mutation = build_mutation("arithmetic_replacement", diff: "-   a + b\n+   a - b")
@@ -1598,8 +1620,8 @@ RSpec.describe Evilution::Reporter::Suggestion do
     end
 
     describe "nil_replacement" do
-      it "generates a Minitest test method with refute_nil" do
-        mutation = build_mutation("nil_replacement", diff: "-   value\n+   nil")
+      it "generates a Minitest test method with assert_nil" do
+        mutation = build_mutation("nil_replacement", diff: "-   nil\n+   value")
 
         suggestion = suggestion_reporter.suggestion_for(mutation)
 
