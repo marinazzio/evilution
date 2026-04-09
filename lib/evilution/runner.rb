@@ -8,6 +8,7 @@ require_relative "mutator/registry"
 require_relative "isolation/fork"
 require_relative "isolation/in_process"
 require_relative "integration/rspec"
+require_relative "integration/minitest"
 require_relative "reporter/json"
 require_relative "reporter/cli"
 require_relative "reporter/html"
@@ -26,6 +27,11 @@ require_relative "disable_comment"
 require_relative "ast/sorbet_sig_detector"
 
 class Evilution::Runner
+  INTEGRATIONS = {
+    rspec: Evilution::Integration::RSpec,
+    minitest: Evilution::Integration::Minitest
+  }.freeze
+
   attr_reader :config
 
   def initialize(config: Evilution::Config.new, on_result: nil, hooks: nil)
@@ -286,7 +292,8 @@ class Evilution::Runner
     return nil unless config.baseline? && subjects.any?
 
     log_baseline_start
-    baseline = Evilution::Baseline.new(timeout: config.timeout)
+    integration_class = resolve_integration_class
+    baseline = Evilution::Baseline.new(timeout: config.timeout, **integration_class.baseline_options)
     result = baseline.call(subjects)
     log_baseline_complete(result)
     result
@@ -305,7 +312,7 @@ class Evilution::Runner
 
   def run_mutations_sequential(mutations, baseline_result = nil)
     integration = build_integration
-    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
+    spec_resolver = baseline_result&.failed? ? build_neutralization_resolver : nil
     results = []
     survived_count = 0
     truncated = false
@@ -334,7 +341,7 @@ class Evilution::Runner
     integration = build_integration
     pool = Evilution::Parallel::Pool.new(size: config.jobs, hooks: @hooks, item_timeout: config.timeout ? config.timeout * 2 : nil)
     worker_isolator = Evilution::Isolation::InProcess.new
-    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
+    spec_resolver = baseline_result&.failed? ? build_neutralization_resolver : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
     all_worker_stats = []
@@ -392,7 +399,7 @@ class Evilution::Runner
     if config.spec_files.any?
       neutralize = true
     else
-      spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
+      spec_file = spec_resolver.call(result.mutation.file_path) || neutralization_fallback_dir
       neutralize = baseline_result.failed_spec_files.include?(spec_file)
     end
     return result unless neutralize
@@ -472,14 +479,26 @@ class Evilution::Runner
     :in_process
   end
 
-  def build_integration
-    case config.integration
-    when :rspec
-      test_files = config.spec_files.empty? ? nil : config.spec_files
-      Evilution::Integration::RSpec.new(test_files: test_files, hooks: @hooks)
-    else
+  def resolve_integration_class
+    INTEGRATIONS.fetch(config.integration) do
       raise Evilution::Error, "unknown integration: #{config.integration}"
     end
+  end
+
+  def build_integration
+    klass = resolve_integration_class
+    test_files = config.spec_files.empty? ? nil : config.spec_files
+    klass.new(test_files: test_files, hooks: @hooks)
+  end
+
+  def build_neutralization_resolver
+    options = resolve_integration_class.baseline_options
+    options[:spec_resolver] || Evilution::SpecResolver.new
+  end
+
+  def neutralization_fallback_dir
+    options = resolve_integration_class.baseline_options
+    options[:fallback_dir] || "spec"
   end
 
   def output_report(summary)
