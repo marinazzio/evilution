@@ -46,4 +46,12 @@ class RegexSimplificationExample
   def with_escaped_quantifier(str)
     str.match?(/\d\+/)
   end
+
+  def with_negated_class_leading_dash(str)
+    str.match?(/[^-a]/)
+  end
+
+  def with_class_leading_dash(str)
+    str.match?(/[-a]/)
+  end
 end

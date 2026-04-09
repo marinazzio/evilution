@@ -121,7 +121,8 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
   end
 
   def scan_ranges_in_class(node, content, content_offset, class_start)
-    i = skip_class_prefix(content, class_start)
+    first_item = skip_class_prefix(content, class_start)
+    i = first_item
 
     while i < content.length && content[i] != "]"
       if content[i] == "\\"
@@ -129,7 +130,7 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
         next
       end
 
-      emit_range_removal(node, content, content_offset, class_start, i) if content[i] == "-"
+      emit_range_removal(node, content, content_offset, first_item, i) if content[i] == "-"
       i += 1
     end
   end
@@ -141,8 +142,8 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
     i
   end
 
-  def emit_range_removal(node, content, content_offset, class_start, pos)
-    return unless pos > class_start + 1 && pos + 1 < content.length && content[pos + 1] != "]"
+  def emit_range_removal(node, content, content_offset, first_item, pos)
+    return unless pos > first_item && pos + 1 < content.length && content[pos + 1] != "]"
 
     add_mutation(
       offset: content_offset + pos,

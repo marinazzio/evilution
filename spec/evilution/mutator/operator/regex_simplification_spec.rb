@@ -72,6 +72,18 @@ RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
         expect(muts.any? { |m| m.mutated_source.include?("/[az]/") }).to be true
       end
 
+      it "does not remove leading dash in negated class [^-a]" do
+        muts = mutations_for("with_negated_class_leading_dash")
+
+        expect(muts.none? { |m| m.mutated_source.include?("/[^a]/") }).to be true
+      end
+
+      it "does not remove leading dash in class [-a]" do
+        muts = mutations_for("with_class_leading_dash")
+
+        expect(muts.none? { |m| m.mutated_source.include?("/[a]/") }).to be true
+      end
+
       it "removes each range dash from [a-zA-Z0-9]" do
         muts = mutations_for("with_multiple_ranges")
         sources = muts.map(&:mutated_source)
