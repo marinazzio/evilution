@@ -202,7 +202,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
-| `block_pass_removal` | Remove `&block` pass-through | `items.map(&:to_s)` -> `items.map` |
+| `block_pass_removal` | Remove block arguments passed with `&` | `items.map(&:to_s)` -> `items.map` |
 | `range_replacement` | Swap inclusive/exclusive ranges | `1..10` -> `1...10` |
 | `regexp_mutation` | Replace regexp with always/never matching | `/pat/` -> `/a\A/` |
 | `regex_simplification` | Simplify regex quantifiers, anchors, ranges | `/\d+/` -> `/\d/`, `/[a-z]/` -> `/[az]/` |
