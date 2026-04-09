@@ -8,6 +8,7 @@ require_relative "mutator/registry"
 require_relative "isolation/fork"
 require_relative "isolation/in_process"
 require_relative "integration/rspec"
+require_relative "integration/minitest"
 require_relative "reporter/json"
 require_relative "reporter/cli"
 require_relative "reporter/html"
@@ -26,6 +27,11 @@ require_relative "disable_comment"
 require_relative "ast/sorbet_sig_detector"
 
 class Evilution::Runner
+  INTEGRATIONS = {
+    rspec: Evilution::Integration::RSpec,
+    minitest: Evilution::Integration::Minitest
+  }.freeze
+
   attr_reader :config
 
   def initialize(config: Evilution::Config.new, on_result: nil, hooks: nil)
@@ -286,7 +292,8 @@ class Evilution::Runner
     return nil unless config.baseline? && subjects.any?
 
     log_baseline_start
-    baseline = Evilution::Baseline.new(timeout: config.timeout)
+    integration_class = resolve_integration_class
+    baseline = Evilution::Baseline.new(timeout: config.timeout, **integration_class.baseline_options)
     result = baseline.call(subjects)
     log_baseline_complete(result)
     result
@@ -472,14 +479,16 @@ class Evilution::Runner
     :in_process
   end
 
-  def build_integration
-    case config.integration
-    when :rspec
-      test_files = config.spec_files.empty? ? nil : config.spec_files
-      Evilution::Integration::RSpec.new(test_files: test_files, hooks: @hooks)
-    else
+  def resolve_integration_class
+    INTEGRATIONS.fetch(config.integration) do
       raise Evilution::Error, "unknown integration: #{config.integration}"
     end
+  end
+
+  def build_integration
+    klass = resolve_integration_class
+    test_files = config.spec_files.empty? ? nil : config.spec_files
+    klass.new(test_files: test_files, hooks: @hooks)
   end
 
   def output_report(summary)

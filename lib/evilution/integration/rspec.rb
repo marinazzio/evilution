@@ -20,6 +20,10 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     }
   end
 
+  def self.baseline_options
+    { runner: baseline_runner }
+  end
+
   def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @rspec_loaded = false

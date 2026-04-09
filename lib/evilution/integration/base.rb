@@ -10,6 +10,10 @@ class Evilution::Integration::Base
     raise NotImplementedError, "#{name}.baseline_runner must be implemented"
   end
 
+  def self.baseline_options
+    raise NotImplementedError, "#{name}.baseline_options must be implemented"
+  end
+
   def initialize(hooks: nil)
     @hooks = hooks
   end

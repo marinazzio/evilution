@@ -861,6 +861,121 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with minitest integration" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        integration: :minitest,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "dispatches to Integration::Minitest" do
+      expect(Evilution::Integration::Minitest).to receive(:new)
+        .with(test_files: nil, hooks: nil).and_call_original
+
+      runner.call
+    end
+
+    it "passes spec_files to Integration::Minitest" do
+      minitest_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        spec_files: ["test/example_test.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        integration: :minitest,
+        skip_config_file: true
+      )
+      minitest_runner = described_class.new(config: minitest_config)
+
+      expect(Evilution::Integration::Minitest).to receive(:new)
+        .with(test_files: ["test/example_test.rb"], hooks: nil).and_call_original
+
+      minitest_runner.call
+    end
+  end
+
+  describe "#call with baseline and integration" do
+    let(:config) do
+      Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: true,
+        isolation: :fork,
+        skip_config_file: true
+      )
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "passes integration baseline_runner to Baseline" do
+      expect(Evilution::Baseline).to receive(:new).with(
+        hash_including(runner: an_instance_of(Proc))
+      ).and_call_original
+
+      runner.call
+    end
+
+    it "passes minitest baseline options for minitest integration" do
+      minitest_config = Evilution::Config.new(
+        target_files: ["lib/example.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: true,
+        isolation: :fork,
+        integration: :minitest,
+        skip_config_file: true
+      )
+      minitest_runner = described_class.new(config: minitest_config)
+
+      expect(Evilution::Baseline).to receive(:new).with(
+        hash_including(
+          runner: an_instance_of(Proc),
+          fallback_dir: "test"
+        )
+      ).and_call_original
+
+      minitest_runner.call
+    end
+  end
+
   describe "#call with fail_fast" do
     let(:survived_result) do
       Evilution::Result::MutationResult.new(

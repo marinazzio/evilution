@@ -27,6 +27,14 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     }
   end
 
+  def self.baseline_options
+    {
+      runner: baseline_runner,
+      spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration"),
+      fallback_dir: "test"
+    }
+  end
+
   def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @minitest_loaded = false

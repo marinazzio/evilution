@@ -844,4 +844,16 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(described_class.baseline_runner).to respond_to(:call)
     end
   end
+
+  describe ".baseline_options" do
+    it "includes a runner" do
+      options = described_class.baseline_options
+      expect(options[:runner]).to respond_to(:call)
+    end
+
+    it "uses default spec_resolver" do
+      options = described_class.baseline_options
+      expect(options).not_to have_key(:spec_resolver)
+    end
+  end
 end
