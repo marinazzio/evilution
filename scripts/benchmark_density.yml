@@ -1,29 +1,19 @@
 # Benchmark corpus configuration
 #
 # See docs/mutation_density_benchmark.md for selection criteria and methodology.
-# To use: set reference_cmd for your environment.
+#
+# Example:
+#
+# project_root: /path/to/rails/app
+# target_ratio: 1.5
+# reference_cmd: ["bundle", "exec", "mutant", "run", "--integration", "rspec", "--fail-fast"]
+# files:
+#   - path: app/models/user.rb
+#     reference_target: "User"
+#   - path: app/services/payment_processor.rb
+#     reference_target: "PaymentProcessor"
 
-project_root: /home/marinad/personal/vanilla-mafia
+project_root: null  # Set to the absolute path of the target project
 target_ratio: 1.5
-reference_cmd: []  # Set to command prefix for the reference tool
-files:
-  - path: app/controllers/admin/news_controller.rb
-    reference_target: "Admin::NewsController"
-  - path: app/models/player_claim.rb
-    reference_target: "PlayerClaim"
-  - path: app/services/telegram/news_scorer.rb
-    reference_target: "Telegram::NewsScorer"
-  - path: app/validators/password_strength_validator.rb
-    reference_target: "PasswordStrengthValidator"
-  - path: app/policies/application_policy.rb
-    reference_target: "ApplicationPolicy"
-  - path: app/services/telegram/entities_formatter.rb
-    reference_target: "Telegram::EntitiesFormatter"
-  - path: app/services/autosave_game_protocol_service.rb
-    reference_target: "AutosaveGameProtocolService"
-  - path: lib/scraper/game_scraper.rb
-    reference_target: "Scraper::GameScraper"
-  - path: app/jobs/process_telegram_webhook_job.rb
-    reference_target: "ProcessTelegramWebhookJob"
-  - path: lib/telegram/export_parser.rb
-    reference_target: "Telegram::ExportParser"
+reference_cmd: []  # Command prefix for the reference tool
+files: []
