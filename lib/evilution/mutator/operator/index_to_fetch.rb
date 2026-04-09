@@ -5,8 +5,8 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::IndexToFetch < Evilution::Mutator::Base
   def visit_call_node(node)
     if indexable?(node)
-      receiver_source = @file_source[node.receiver.location.start_offset, node.receiver.location.length]
-      arg_source = @file_source[node.arguments.location.start_offset, node.arguments.location.length]
+      receiver_source = byteslice_source(node.receiver.location.start_offset, node.receiver.location.length)
+      arg_source = byteslice_source(node.arguments.location.start_offset, node.arguments.location.length)
 
       add_mutation(
         offset: node.location.start_offset,

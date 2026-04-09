@@ -11,8 +11,8 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
   def visit_call_node(node)
     if chain_head?(node)
       root, args = collect_chain(node)
-      root_source = @file_source[root.location.start_offset, root.location.length]
-      arg_sources = args.map { |a| @file_source[a.location.start_offset, a.location.length] }
+      root_source = byteslice_source(root.location.start_offset, root.location.length)
+      arg_sources = args.map { |a| byteslice_source(a.location.start_offset, a.location.length) }
 
       add_mutation(
         offset: node.location.start_offset,

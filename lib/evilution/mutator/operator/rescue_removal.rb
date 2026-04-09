@@ -31,7 +31,7 @@ class Evilution::Mutator::Operator::RescueRemoval < Evilution::Mutator::Base
 
   def line_start_before(offset)
     pos = offset - 1
-    pos -= 1 while pos.positive? && @file_source[pos] != "\n"
+    pos -= 1 while pos.positive? && @file_source.getbyte(pos) != 0x0A
     pos
   end
 end

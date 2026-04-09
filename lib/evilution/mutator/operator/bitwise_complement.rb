@@ -9,7 +9,7 @@ class Evilution::Mutator::Operator::BitwiseComplement < Evilution::Mutator::Base
       receiver_loc = node.receiver.location
 
       # Remove ~: replace entire ~expr with just the receiver expression
-      receiver_source = @file_source[receiver_loc.start_offset, receiver_loc.length]
+      receiver_source = byteslice_source(receiver_loc.start_offset, receiver_loc.length)
       add_mutation(
         offset: node.location.start_offset,
         length: node.location.length,

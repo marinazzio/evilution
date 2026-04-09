@@ -45,6 +45,10 @@ class Evilution::Mutator::Base < Prism::Visitor
     )
   end
 
+  def byteslice_source(offset, length)
+    @file_source.byteslice(offset, length).force_encoding(@file_source.encoding)
+  end
+
   def self.operator_name
     class_name = name || "anonymous"
     class_name.split("::").last

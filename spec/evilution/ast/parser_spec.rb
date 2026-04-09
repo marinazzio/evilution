@@ -194,4 +194,79 @@ RSpec.describe Evilution::AST::Parser do
       tmpfile&.unlink
     end
   end
+
+  context "with multi-byte characters" do
+    let(:multibyte_source) do
+      # Cyrillic comment before the method to shift byte vs char offsets
+      <<~RUBY
+        class Greeter
+          # Приветствие пользователя
+          def greet(name)
+            "Hello, \#{name}!"
+          end
+        end
+      RUBY
+    end
+
+    it "extracts correct method source when file contains multi-byte characters" do
+      tmpfile = Tempfile.new(["multibyte", ".rb"])
+      tmpfile.write(multibyte_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      greet = subjects.find { |s| s.name == "Greeter#greet" }
+
+      expect(greet).not_to be_nil
+      expect(greet.source).to start_with("def greet(name)")
+      expect(greet.source).to include("Hello")
+      expect(greet.source).to end_with("end")
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "preserves correct encoding in extracted source" do
+      tmpfile = Tempfile.new(["multibyte", ".rb"])
+      tmpfile.write(multibyte_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      greet = subjects.find { |s| s.name == "Greeter#greet" }
+
+      expect(greet.source.encoding).to eq(Encoding::UTF_8)
+      expect(greet.source).to be_valid_encoding
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "extracts correct method source with Thai comments (3-byte UTF-8)" do
+      thai_source = <<~RUBY
+        class Calculator
+          # คำนวณผลรวมของตัวเลข
+          def sum(a, b)
+            a + b
+          end
+
+          # ตรวจสอบว่าเป็นจำนวนคู่หรือไม่
+          def even?(n)
+            n.even?
+          end
+        end
+      RUBY
+
+      tmpfile = Tempfile.new(["thai", ".rb"])
+      tmpfile.write(thai_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      sum_subject = subjects.find { |s| s.name == "Calculator#sum" }
+      even_subject = subjects.find { |s| s.name == "Calculator#even?" }
+
+      expect(sum_subject.source).to start_with("def sum(a, b)")
+      expect(sum_subject.source).to include("a + b")
+      expect(even_subject.source).to start_with("def even?(n)")
+      expect(even_subject.source).to include("n.even?")
+    ensure
+      tmpfile&.unlink
+    end
+  end
 end

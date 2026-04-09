@@ -70,7 +70,8 @@ module Evilution::AST
              end
 
       loc = node.location
-      method_source = @source[loc.start_offset...loc.end_offset]
+      method_source = @source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
+                             .force_encoding(@source.encoding)
 
       @subjects << Evilution::Subject.new(
         name: name,

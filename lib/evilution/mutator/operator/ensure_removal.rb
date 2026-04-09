@@ -21,7 +21,7 @@ class Evilution::Mutator::Operator::EnsureRemoval < Evilution::Mutator::Base
 
   def line_start_after_newline(offset)
     pos = offset
-    pos -= 1 while pos.positive? && @file_source[pos - 1] != "\n"
+    pos -= 1 while pos.positive? && @file_source.getbyte(pos - 1) != 0x0A
     pos
   end
 end
