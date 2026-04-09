@@ -57,6 +57,21 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
       expect(muts).to be_empty
     end
 
+    it "handles multi-byte source correctly" do
+      mb_path = File.expand_path("../../../support/fixtures/index_access_multibyte.rb", __dir__)
+      mb_source = File.read(mb_path)
+      mb_tree = Prism.parse(mb_source).value
+      finder = Evilution::AST::SubjectFinder.new(mb_source, mb_path)
+      finder.visit(mb_tree)
+      subj = finder.subjects.find { |s| s.name.end_with?("#multibyte_before_access") }
+      muts = described_class.new.call(subj)
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("h.at(:key)")
+      result = Prism.parse(muts.first.mutated_source)
+      expect(result.errors).to be_empty
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
