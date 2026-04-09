@@ -74,5 +74,34 @@ RSpec.describe Evilution::Mutator::Operator::IndexToFetch do
 
       expect(muts).to be_empty
     end
+
+    it "generates valid replacement when multi-byte characters precede the target" do
+      multibyte_source = <<~RUBY
+        class Lookup
+          # ค้นหาข้อมูลจากแฮช
+          def find(h)
+            h[:key]
+          end
+        end
+      RUBY
+
+      tmpfile = Tempfile.new(["multibyte_fetch", ".rb"])
+      tmpfile.write(multibyte_source)
+      tmpfile.close
+
+      src = File.read(tmpfile.path)
+      tree = Prism.parse(src).value
+      finder = Evilution::AST::SubjectFinder.new(src, tmpfile.path)
+      finder.visit(tree)
+      subject = finder.subjects.find { |s| s.name.end_with?("#find") }
+
+      muts = described_class.new.call(subject)
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("h.fetch(:key)")
+      expect(muts.first.mutated_source).to be_valid_encoding
+    ensure
+      tmpfile&.unlink
+    end
   end
 end
