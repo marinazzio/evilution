@@ -9,4 +9,4 @@ assignees: @marinazzio
 
 - [ ] Bump version
 - [ ] Update CHANGELOG
-- [ ] Update agent's and user's manuals
+- [ ] Update agent and user manuals
