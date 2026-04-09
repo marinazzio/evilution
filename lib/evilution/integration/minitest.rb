@@ -8,6 +8,24 @@ require_relative "../spec_resolver"
 require_relative "../integration"
 
 class Evilution::Integration::Minitest < Evilution::Integration::Base
+  def self.baseline_runner
+    lambda { |test_file|
+      require "minitest"
+      require "stringio"
+      ::Minitest::Runnable.runnables.clear
+      load(File.expand_path(test_file))
+      out = StringIO.new
+      options = ::Minitest.process_args(["--seed", "0"])
+      options[:io] = out
+      reporter = ::Minitest::CompositeReporter.new
+      reporter << ::Minitest::SummaryReporter.new(out, options)
+      reporter.start
+      ::Minitest.__run(reporter, options)
+      reporter.report
+      reporter.passed?
+    }
+  end
+
   def initialize(test_files: nil, hooks: nil)
     @test_files = test_files
     @minitest_loaded = false

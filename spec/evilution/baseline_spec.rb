@@ -49,7 +49,7 @@ RSpec.describe Evilution::Baseline do
       expect(result.failed_spec_files).to be_empty
     end
 
-    it "treats unresolvable spec files as fallback 'spec' directory" do
+    it "treats unresolvable spec files as fallback directory" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(baseline).to receive(:run_spec_file).with("spec").and_return(false)
 
@@ -58,12 +58,24 @@ RSpec.describe Evilution::Baseline do
       expect(result.failed_spec_files).to contain_exactly("spec")
     end
 
-    it "warns when falling back to full spec suite" do
+    it "uses custom fallback_dir when configured" do
+      minitest_baseline = described_class.new(
+        spec_resolver: spec_resolver, timeout: 5, fallback_dir: "test"
+      )
+      allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(minitest_baseline).to receive(:run_spec_file).with("test").and_return(false)
+
+      result = minitest_baseline.call([subject1])
+
+      expect(result.failed_spec_files).to contain_exactly("test")
+    end
+
+    it "warns when falling back to full test suite" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
 
       expect { baseline.call([subject1]) }
-        .to output(%r{no matching spec.*lib/user\.rb.*--spec}i).to_stderr
+        .to output(%r{no matching test.*lib/user\.rb.*--spec}i).to_stderr
     end
 
     it "records duration" do
@@ -72,6 +84,27 @@ RSpec.describe Evilution::Baseline do
       result = baseline.call([subject1])
 
       expect(result.duration).to be >= 0
+    end
+  end
+
+  describe "runner callable" do
+    it "delegates to the runner proc in fork_spec_runner" do
+      runner = ->(file) { file == "spec/user_spec.rb" }
+      custom_baseline = described_class.new(
+        spec_resolver: spec_resolver, timeout: 5, runner: runner
+      )
+      allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+
+      result = custom_baseline.call([double("Subject", file_path: "lib/user.rb")])
+
+      expect(result.failed_spec_files).to be_empty
+    end
+
+    it "raises when fork_spec_runner called without runner" do
+      no_runner = described_class.new(spec_resolver: spec_resolver, timeout: 5)
+
+      expect { no_runner.run_spec_file("spec/foo_spec.rb") }
+        .to raise_error(Evilution::Error, /no baseline runner configured/)
     end
   end
 

@@ -6,6 +6,10 @@ require_relative "../integration"
 require_relative "../temp_dir_tracker"
 
 class Evilution::Integration::Base
+  def self.baseline_runner
+    raise NotImplementedError, "#{name}.baseline_runner must be implemented"
+  end
+
   def initialize(hooks: nil)
     @hooks = hooks
   end
