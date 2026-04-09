@@ -312,7 +312,7 @@ class Evilution::Runner
 
   def run_mutations_sequential(mutations, baseline_result = nil)
     integration = build_integration
-    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
+    spec_resolver = baseline_result&.failed? ? build_neutralization_resolver : nil
     results = []
     survived_count = 0
     truncated = false
@@ -341,7 +341,7 @@ class Evilution::Runner
     integration = build_integration
     pool = Evilution::Parallel::Pool.new(size: config.jobs, hooks: @hooks, item_timeout: config.timeout ? config.timeout * 2 : nil)
     worker_isolator = Evilution::Isolation::InProcess.new
-    spec_resolver = baseline_result&.failed? ? Evilution::SpecResolver.new : nil
+    spec_resolver = baseline_result&.failed? ? build_neutralization_resolver : nil
     state = { results: [], survived_count: 0, truncated: false, completed: 0 }
 
     all_worker_stats = []
@@ -399,7 +399,7 @@ class Evilution::Runner
     if config.spec_files.any?
       neutralize = true
     else
-      spec_file = spec_resolver.call(result.mutation.file_path) || "spec"
+      spec_file = spec_resolver.call(result.mutation.file_path) || neutralization_fallback_dir
       neutralize = baseline_result.failed_spec_files.include?(spec_file)
     end
     return result unless neutralize
@@ -489,6 +489,16 @@ class Evilution::Runner
     klass = resolve_integration_class
     test_files = config.spec_files.empty? ? nil : config.spec_files
     klass.new(test_files: test_files, hooks: @hooks)
+  end
+
+  def build_neutralization_resolver
+    options = resolve_integration_class.baseline_options
+    options[:spec_resolver] || Evilution::SpecResolver.new
+  end
+
+  def neutralization_fallback_dir
+    options = resolve_integration_class.baseline_options
+    options[:fallback_dir] || "spec"
   end
 
   def output_report(summary)

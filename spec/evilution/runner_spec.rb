@@ -1323,6 +1323,75 @@ RSpec.describe Evilution::Runner do
       expect(result.results.first.status).to eq(:killed)
     end
 
+    context "with minitest integration" do
+      let(:minitest_config) do
+        Evilution::Config.new(
+          target_files: ["lib/example.rb"],
+          format: :json,
+          timeout: 5,
+          quiet: true,
+          isolation: :fork,
+          integration: :minitest,
+          skip_config_file: true
+        )
+      end
+      let(:minitest_runner) { described_class.new(config: minitest_config) }
+
+      before do
+        parser = instance_double(Evilution::AST::Parser)
+        allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+        allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+        registry = instance_double(Evilution::Mutator::Registry)
+        allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+        allow(registry).to receive(:mutations_for).and_return([mutation])
+
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+        allow(isolator).to receive(:call).and_return(survived_result)
+      end
+
+      it "neutralizes survived mutations using minitest resolver" do
+        baseline_result = Evilution::Baseline::Result.new(
+          failed_spec_files: Set["test/example_test.rb"],
+          duration: 0.5
+        )
+        baseline = instance_double(Evilution::Baseline)
+        allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+        allow(baseline).to receive(:call).and_return(baseline_result)
+
+        neutralize_resolver = instance_double(Evilution::SpecResolver)
+        allow(Evilution::SpecResolver).to receive(:new)
+          .with(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+          .and_return(neutralize_resolver)
+        allow(neutralize_resolver).to receive(:call).with("lib/example.rb").and_return("test/example_test.rb")
+
+        result = minitest_runner.call
+
+        expect(result.results.first.status).to eq(:neutral)
+      end
+
+      it "uses minitest fallback_dir for neutralization when resolver returns nil" do
+        baseline_result = Evilution::Baseline::Result.new(
+          failed_spec_files: Set["test"],
+          duration: 0.5
+        )
+        baseline = instance_double(Evilution::Baseline)
+        allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+        allow(baseline).to receive(:call).and_return(baseline_result)
+
+        neutralize_resolver = instance_double(Evilution::SpecResolver)
+        allow(Evilution::SpecResolver).to receive(:new)
+          .with(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+          .and_return(neutralize_resolver)
+        allow(neutralize_resolver).to receive(:call).with("lib/example.rb").and_return(nil)
+
+        result = minitest_runner.call
+
+        expect(result.results.first.status).to eq(:neutral)
+      end
+    end
+
     it "does not count neutral mutations toward fail_fast" do
       mutation2 = double(
         "Mutation2",
