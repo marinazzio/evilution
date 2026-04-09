@@ -31,6 +31,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ConditionalFlip,
       Evilution::Mutator::Operator::RangeReplacement,
       Evilution::Mutator::Operator::RegexpMutation,
+      Evilution::Mutator::Operator::RegexSimplification,
       Evilution::Mutator::Operator::ReceiverReplacement,
       Evilution::Mutator::Operator::SendMutation,
       Evilution::Mutator::Operator::ArgumentNilSubstitution,
