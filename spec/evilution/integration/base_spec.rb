@@ -68,7 +68,10 @@ RSpec.describe Evilution::Integration::Base do
       ev = events
       Class.new(described_class) do
         define_method(:ensure_framework_loaded) { ev << :ensure_framework_loaded }
-        define_method(:run_tests) { |_mutation| ev << :run_tests; { passed: false, test_command: "test" } }
+        define_method(:run_tests) do |_mutation|
+          ev << :run_tests
+          { passed: false, test_command: "test" }
+        end
         define_method(:build_args) { |_mutation| [] }
         define_method(:reset_state) { nil }
       end
@@ -102,7 +105,6 @@ RSpec.describe Evilution::Integration::Base do
     end
 
     it "restores original state even when run_tests raises" do
-      ev = events
       temp_dir_created = false
       failing_class = Class.new(described_class) do
         define_method(:ensure_framework_loaded) { nil }
@@ -120,7 +122,6 @@ RSpec.describe Evilution::Integration::Base do
 
     it "cleans up temp directory after call" do
       temp_dir_during = nil
-      ev = events
       tracking_class = Class.new(described_class) do
         define_method(:ensure_framework_loaded) { nil }
         define_method(:run_tests) do |_mutation|
