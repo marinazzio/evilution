@@ -105,11 +105,11 @@ RSpec.describe Evilution::Integration::Base do
     end
 
     it "restores original state even when run_tests raises" do
-      temp_dir_created = false
+      temp_dir_during = nil
       failing_class = Class.new(described_class) do
         define_method(:ensure_framework_loaded) { nil }
         define_method(:run_tests) do |_mutation|
-          temp_dir_created = !instance_variable_get(:@temp_dir).nil?
+          temp_dir_during = instance_variable_get(:@temp_dir)
           raise "boom"
         end
         define_method(:build_args) { |_mutation| [] }
@@ -117,7 +117,8 @@ RSpec.describe Evilution::Integration::Base do
       end
 
       expect { failing_class.new.call(mutation) }.to raise_error(RuntimeError, "boom")
-      expect(temp_dir_created).to be true
+      expect(temp_dir_during).not_to be_nil
+      expect(Dir.exist?(temp_dir_during)).to be false
     end
 
     it "cleans up temp directory after call" do
