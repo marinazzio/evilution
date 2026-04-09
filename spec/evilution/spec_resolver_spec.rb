@@ -216,6 +216,50 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    context "Minitest layout (test/ directory, _test.rb suffix)" do
+      subject(:resolver) { described_class.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration") }
+
+      it "resolves lib/foo/bar.rb to test/foo/bar_test.rb" do
+        create_file("test/foo/bar_test.rb")
+
+        expect(resolver.call("lib/foo/bar.rb")).to eq("test/foo/bar_test.rb")
+      end
+
+      it "resolves app/models/user.rb to test/models/user_test.rb" do
+        create_file("test/models/user_test.rb")
+
+        expect(resolver.call("app/models/user.rb")).to eq("test/models/user_test.rb")
+      end
+
+      it "resolves with kept prefix fallback" do
+        create_file("test/lib/foo/bar_test.rb")
+
+        expect(resolver.call("lib/foo/bar.rb")).to eq("test/lib/foo/bar_test.rb")
+      end
+
+      it "resolves controller to integration test" do
+        create_file("test/integration/users_test.rb")
+
+        expect(resolver.call("app/controllers/users_controller.rb")).to eq("test/integration/users_test.rb")
+      end
+
+      it "falls back to parent test when nested test does not exist" do
+        create_file("test/models/game_test.rb")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("test/models/game_test.rb")
+      end
+
+      it "returns nil when no test file exists" do
+        expect(resolver.call("lib/foo/bar.rb")).to be_nil
+      end
+
+      it "resolves other prefixes under test/" do
+        create_file("test/src/foo_test.rb")
+
+        expect(resolver.call("src/foo.rb")).to eq("test/src/foo_test.rb")
+      end
+    end
+
     context "multiple source files" do
       it "resolves each file independently via #resolve_all" do
         create_file("spec/foo/bar_spec.rb")
