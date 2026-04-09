@@ -60,6 +60,14 @@ RSpec.describe Evilution::Mutator::Operator::BlockPassRemoval do
       expect(muts.any? { |m| m.mutated_source.include?("items.select(&:present?).map\n") }).to be true
     end
 
+    it "removes block pass when call has positional arguments" do
+      muts = mutations_for("with_args_and_block_pass")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.inject(0)")
+      expect(muts.first.mutated_source).not_to include("&:+")
+    end
+
     it "removes block pass from call without receiver" do
       muts = mutations_for("block_pass_no_args")
 

@@ -27,6 +27,10 @@ class BlockPassRemovalExample
     each(&:freeze)
   end
 
+  def with_args_and_block_pass(items)
+    items.inject(0, &:+)
+  end
+
   private
 
   def process(item)

@@ -29,7 +29,7 @@ variant.
 | # | Operator | Gap Area | Complexity | Equiv. Rate | Notes |
 |---|----------|----------|-----------|-------------|-------|
 | 2 | Regex simplification (EV-230, #514) | 27 | Medium | Low (~15%) | Quantifier removal, anchor removal, character class simplification. Already scoped. |
-| 3 | Block pass removal (`&:method`) | 5 | Low | Medium (~30%) | Remove `&:symbol` block pass. Marginal count but trivial to add. |
+| 3 | Block pass removal (`&...`) | 5 | Low | Medium (~30%) | Remove `&` block pass arguments (`&:symbol`, `&method(:name)`, etc). Marginal count but trivial to add. |
 
 **Rationale:** EV-230 is already scoped with a GH issue. Block pass removal is
 minimal effort for minimal gain — include only if doing a batch of small operators.

@@ -6,17 +6,21 @@ class Evilution::Mutator::Operator::BlockPassRemoval < Evilution::Mutator::Base
   def visit_call_node(node)
     if node.block.is_a?(Prism::BlockArgumentNode)
       block_node = node.block
-      call_end = block_node.location.start_offset
       call_start = node.location.start_offset
-      call_without_block = @file_source.byteslice(call_start...call_end).rstrip
+      node_end = call_start + node.location.length
+      block_end = block_node.location.start_offset + block_node.location.length
 
-      # Remove trailing opening paren if the only argument was the block pass
-      call_without_block = call_without_block.sub(/\(\s*\z/, "") if node.arguments.nil? || node.arguments.arguments.empty?
+      prefix = @file_source.byteslice(call_start...block_node.location.start_offset).rstrip
+      suffix = @file_source.byteslice(block_end...node_end)
+
+      # Clean up: remove trailing comma from prefix, remove empty parens
+      prefix = prefix.sub(/,\s*\z/, "")
+      replacement = "#{prefix}#{suffix}".sub(/\(\s*\)/, "")
 
       add_mutation(
         offset: call_start,
         length: node.location.length,
-        replacement: call_without_block,
+        replacement: replacement,
         node: node
       )
     end
