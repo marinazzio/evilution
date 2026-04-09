@@ -1,9 +1,9 @@
 ---
 name: Prepare release
 about: Prepare release
-title: Prepare release
+title: ''
 labels: ''
-assignees: @marinazzio
+assignees: marinazzio
 
 ---
 
