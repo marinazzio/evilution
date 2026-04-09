@@ -27,6 +27,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::MethodCallRemoval,
       Evilution::Mutator::Operator::ArgumentRemoval,
       Evilution::Mutator::Operator::BlockRemoval,
+      Evilution::Mutator::Operator::BlockPassRemoval,
       Evilution::Mutator::Operator::ConditionalFlip,
       Evilution::Mutator::Operator::RangeReplacement,
       Evilution::Mutator::Operator::RegexpMutation,
