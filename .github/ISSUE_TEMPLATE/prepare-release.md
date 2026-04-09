@@ -1,7 +1,7 @@
 ---
 name: Prepare release
 about: Prepare release
-title: ''
+title: 'Prepare release'
 labels: ''
 assignees: marinazzio
 

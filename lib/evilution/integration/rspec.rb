@@ -1,13 +1,10 @@
 # frozen_string_literal: true
 
-require "fileutils"
 require "stringio"
-require "tmpdir"
 require_relative "base"
 require_relative "crash_detector"
 require_relative "../spec_resolver"
 require_relative "../related_spec_heuristic"
-require_relative "../temp_dir_tracker"
 
 require_relative "../integration"
 
@@ -22,105 +19,24 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     super(hooks: hooks)
   end
 
-  def call(mutation)
-    @temp_dir = nil
-    ensure_rspec_loaded
-    @hooks.fire(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path) if @hooks
-    apply_mutation(mutation)
-    @hooks.fire(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path) if @hooks
-    run_rspec(mutation)
-  ensure
-    restore_original(mutation)
-  end
-
   private
 
   attr_reader :test_files
 
-  def ensure_rspec_loaded
+  def ensure_framework_loaded
     return if @rspec_loaded
 
-    @hooks.fire(:setup_integration_pre, integration: :rspec) if @hooks
+    fire_hook(:setup_integration_pre, integration: :rspec)
     require "rspec/core"
     Evilution::Integration::CrashDetector.register_with_rspec
     @rspec_loaded = true
-    @hooks.fire(:setup_integration_post, integration: :rspec) if @hooks
+    fire_hook(:setup_integration_post, integration: :rspec)
   rescue LoadError => e
     raise Evilution::Error, "rspec-core is required but not available: #{e.message}"
   end
 
-  def apply_mutation(mutation)
-    @temp_dir = Dir.mktmpdir("evilution")
-    Evilution::TempDirTracker.register(@temp_dir)
-    @displaced_feature = nil
-    subpath = resolve_require_subpath(mutation.file_path)
-
-    if subpath
-      dest = File.join(@temp_dir, subpath)
-      FileUtils.mkdir_p(File.dirname(dest))
-      File.write(dest, mutation.mutated_source)
-      $LOAD_PATH.unshift(@temp_dir)
-      displace_loaded_feature(mutation.file_path)
-    else
-      absolute = File.expand_path(mutation.file_path)
-      dest = File.join(@temp_dir, absolute)
-      FileUtils.mkdir_p(File.dirname(dest))
-      File.write(dest, mutation.mutated_source)
-      load(dest)
-    end
-  end
-
-  def restore_original(mutation) # rubocop:disable Lint/UnusedMethodArgument
-    return unless @temp_dir
-
-    $LOAD_PATH.delete(@temp_dir)
-    $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
-    $LOADED_FEATURES << @displaced_feature if @displaced_feature && !$LOADED_FEATURES.include?(@displaced_feature)
-    @displaced_feature = nil
-    FileUtils.rm_rf(@temp_dir)
-    Evilution::TempDirTracker.unregister(@temp_dir)
-    @temp_dir = nil
-  end
-
-  def resolve_require_subpath(file_path)
-    absolute = File.expand_path(file_path)
-    best_subpath = nil
-
-    $LOAD_PATH.each do |entry|
-      dir = File.expand_path(entry)
-      prefix = dir.end_with?("/") ? dir : "#{dir}/"
-      next unless absolute.start_with?(prefix)
-
-      candidate = absolute.delete_prefix(prefix)
-      best_subpath = candidate if best_subpath.nil? || candidate.length < best_subpath.length
-    end
-
-    best_subpath
-  end
-
-  def displace_loaded_feature(file_path)
-    absolute = File.expand_path(file_path)
-    return unless $LOADED_FEATURES.include?(absolute)
-
-    @displaced_feature = absolute
-    $LOADED_FEATURES.delete(absolute)
-  end
-
-  def run_rspec(mutation)
-    # When used via the Runner with Isolation::Fork, each mutation is executed
-    # in its own forked child process, so RSpec state (loaded example groups,
-    # world, configuration) cannot accumulate across mutation runs — the child
-    # process exits after each run.
-    #
-    # This integration can also be invoked directly (e.g. in specs or alternative
-    # runners) without fork isolation. clear_examples reuses the existing World
-    # and Configuration (avoiding per-run instance growth) while clearing loaded
-    # example groups, constants, and configuration state.
-    if ::RSpec.respond_to?(:clear_examples)
-      ::RSpec.clear_examples
-    else
-      ::RSpec.reset
-    end
+  def run_tests(mutation)
+    reset_state
 
     out = StringIO.new
     err = StringIO.new
@@ -139,6 +55,19 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     release_rspec_state(eg_before)
   end
 
+  def build_args(mutation)
+    files = resolve_test_files(mutation)
+    ["--format", "progress", "--no-color", "--order", "defined", *files]
+  end
+
+  def reset_state
+    if ::RSpec.respond_to?(:clear_examples)
+      ::RSpec.clear_examples
+    else
+      ::RSpec.reset
+    end
+  end
+
   def snapshot_example_groups
     groups = Set.new
     ObjectSpace.each_object(Class) do |klass|
@@ -150,11 +79,6 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   def release_rspec_state(eg_before)
     release_example_groups(eg_before)
-    # Remove ExampleGroups constants so the named reference is dropped.
-    # We avoid a full RSpec.reset here because it creates new World and
-    # Configuration instances each call; the pre-run reset already handles
-    # that. Instead, clear the world's example_groups array (which holds
-    # direct class references) and the source cache.
     ::RSpec::ExampleGroups.remove_all_constants if defined?(::RSpec::ExampleGroups)
     release_world_example_groups
   end
@@ -166,7 +90,6 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       next unless klass < ::RSpec::Core::ExampleGroup
       next if eg_before.include?(klass.object_id)
 
-      # Remove nested module constants (LetDefinitions, NamedSubjectPreventSuper)
       klass.constants(false).each do |const|
         klass.send(:remove_const, const)
       rescue NameError # rubocop:disable Lint/SuppressedException
@@ -203,11 +126,6 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     else
       { passed: false, test_command: command }
     end
-  end
-
-  def build_args(mutation)
-    files = resolve_test_files(mutation)
-    ["--format", "progress", "--no-color", "--order", "defined", *files]
   end
 
   def resolve_test_files(mutation)
