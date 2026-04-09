@@ -169,7 +169,7 @@ Use `--format json` for machine-readable output. Schema:
 
 **Key metric**: `summary.score` — the mutation score. Higher is better. 1.0 means all mutations were caught.
 
-## Mutation Operators (69 total)
+## Mutation Operators (72 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -202,8 +202,10 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
+| `block_pass_removal` | Remove `&block` pass-through | `items.map(&:to_s)` -> `items.map` |
 | `range_replacement` | Swap inclusive/exclusive ranges | `1..10` -> `1...10` |
 | `regexp_mutation` | Replace regexp with always/never matching | `/pat/` -> `/a\A/` |
+| `regex_simplification` | Simplify regex quantifiers, anchors, ranges | `/\d+/` -> `/\d/`, `/[a-z]/` -> `/[az]/` |
 | `receiver_replacement` | Drop explicit `self` receiver | `self.foo` -> `foo` |
 | `send_mutation` | Swap semantically related methods | `detect` -> `find`, `map` -> `flat_map` |
 | `compound_assignment` | Swap compound assignment operators | `+=` -> `-=`, `&&=` -> `\|\|=` |
@@ -225,6 +227,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `bitwise_complement` | Remove or swap `~` | `~x` -> `x`, `~x` -> `-x` |
 | `zsuper_removal` | Replace implicit `super` with `nil` | `super` -> `nil` |
 | `explicit_super_mutation` | Mutate explicit super arguments | `super(a, b)` -> `super` |
+| `index_to_at` | Replace `[]` with `.at()` for arrays | `arr[0]` -> `arr.at(0)` |
 | `index_to_fetch` | Replace `[]` with `.fetch()` | `h[k]` -> `h.fetch(k)` |
 | `index_to_dig` | Replace `[]` chains with `.dig()` | `h[a][b]` -> `h.dig(a, b)` |
 | `index_assignment_removal` | Remove `[]=` assignments | `h[k] = v` -> removed |
@@ -390,7 +393,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 69 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default
+4. **Mutate** — 72 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
 6. **Test** — The configured test framework (RSpec or Minitest) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention

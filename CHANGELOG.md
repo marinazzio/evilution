@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.22.0] - 2026-04-09
+
+### Added
+
+- **Minitest integration** — full Minitest support as an alternative to RSpec; abstract `Integration::Base` framework with template method pattern; `Integration::Minitest` with programmatic `Minitest.__run` execution, `MinitestCrashDetector` reporter for distinguishing assertion failures from crashes; `--integration minitest` CLI flag and `integration: minitest` config option; `SpecResolver` parameterized for Minitest file discovery (`test/`, `_test.rb`); plugin-based runner dispatch via `INTEGRATIONS` registry; baseline runner abstracted from RSpec with injectable runner callable; Minitest concrete suggestion templates using `def test_`/`assert_equal` style (#223, #224, #225, #226, #227, #228, #229, #230)
+- **New mutation operators (3)** — `index_to_at` replaces `arr[0]` with `arr.at(0)` for array index access (#618); `regex_simplification` simplifies regex character classes and quantifiers (#514); `block_pass_removal` removes `&block` pass-through in method calls (#619)
+- **Mutation density benchmarking** — comparison tools and methodology for measuring mutation density against reference tool; baseline results and operator classification documents (#523, #526, #541)
+
+### Fixed
+
+- **Multi-byte character offset bug** — Prism byte offsets were used with character-based `String#[]`, causing garbled source extraction for files with multi-byte characters (UTF-8 Cyrillic, Thai, CJK, etc.); fixed `AST::Parser`, `DisableComment`, and 7 mutation operators to use `byteslice`/`getbyte`; added `byteslice_source` helper to `Mutator::Base` (#615)
+
+### Changed
+
+- **Operator count** — 73 operators (up from 69), with new index-to-at, regex simplification, and block pass removal operators
+- **Test framework support** — RSpec and Minitest both supported; documentation updated throughout CLI help, MCP tool descriptions, and README
+
 ## [0.21.0] - 2026-04-08
 
 ### Added
