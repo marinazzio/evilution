@@ -13,7 +13,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
       require "minitest"
       require "stringio"
       ::Minitest::Runnable.runnables.clear
-      load(File.expand_path(test_file))
+      files = File.directory?(test_file) ? Dir.glob(File.join(test_file, "**/*_test.rb")) : [test_file]
+      files.each { |f| load(File.expand_path(f)) }
       out = StringIO.new
       options = ::Minitest.process_args(["--seed", "0"])
       options[:io] = out
