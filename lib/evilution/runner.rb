@@ -623,11 +623,11 @@ class Evilution::Runner
   def build_reporter
     case config.format
     when :json
-      Evilution::Reporter::JSON.new
+      Evilution::Reporter::JSON.new(integration: config.integration)
     when :text
       Evilution::Reporter::CLI.new
     when :html
-      Evilution::Reporter::HTML.new(baseline: load_baseline_session)
+      Evilution::Reporter::HTML.new(baseline: load_baseline_session, integration: config.integration)
     end
   end
 

@@ -7,8 +7,8 @@ require_relative "../reporter"
 require_relative "../result/coverage_gap_grouper"
 
 class Evilution::Reporter::HTML
-  def initialize(baseline: nil)
-    @suggestion = Evilution::Reporter::Suggestion.new
+  def initialize(baseline: nil, integration: :rspec)
+    @suggestion = Evilution::Reporter::Suggestion.new(integration: integration)
     @baseline = baseline
     @baseline_keys = build_baseline_keys(baseline)
   end

@@ -1527,4 +1527,165 @@ RSpec.describe Evilution::Reporter::Suggestion do
       expect(suggestion).to eq("Add a test for the boundary condition where the comparison operand equals the threshold exactly")
     end
   end
+
+  describe "minitest concrete suggestions (integration: :minitest, suggest_tests: true)" do
+    subject(:suggestion_reporter) { described_class.new(suggest_tests: true, integration: :minitest) }
+
+    describe "comparison_replacement" do
+      it "generates a Minitest test method with assert_equal" do
+        mutation = build_mutation("comparison_replacement", diff: "-   if a > b\n+   if a >= b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_equal")
+        expect(suggestion).to include("bar")
+      end
+
+      it "references the original and mutated operators in a comment" do
+        mutation = build_mutation("comparison_replacement", diff: "-   if a > b\n+   if a >= b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include(">")
+        expect(suggestion).to include(">=")
+      end
+    end
+
+    describe "arithmetic_replacement" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("arithmetic_replacement", diff: "-   a + b\n+   a - b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_equal")
+        expect(suggestion).to include("bar")
+      end
+    end
+
+    describe "boolean_operator_replacement" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("boolean_operator_replacement", diff: "-   a && b\n+   a || b")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_equal")
+      end
+    end
+
+    describe "boolean_literal_replacement" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("boolean_literal_replacement", diff: "-   true\n+   false")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_equal")
+      end
+    end
+
+    describe "negation_insertion" do
+      it "generates a Minitest test method with assert or refute" do
+        mutation = build_mutation("negation_insertion", diff: "-   valid?\n+   !valid?")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert").or include("refute")
+      end
+    end
+
+    describe "nil_replacement" do
+      it "generates a Minitest test method with refute_nil" do
+        mutation = build_mutation("nil_replacement", diff: "-   value\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_nil")
+      end
+    end
+
+    describe "conditional_negation" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("conditional_negation", diff: "-   if condition\n+   if !condition")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert")
+      end
+    end
+
+    describe "statement_deletion" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("statement_deletion", diff: "-   do_something\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert")
+      end
+    end
+
+    describe "method_body_replacement" do
+      it "generates a Minitest test method" do
+        mutation = build_mutation("method_body_replacement", diff: "-   compute(x)\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert")
+      end
+    end
+
+    describe "rescue_removal" do
+      it "generates a Minitest test method with assert_raises or assert" do
+        mutation = build_mutation("rescue_removal", diff: "-   rescue StandardError\n+   ")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert")
+      end
+    end
+
+    it "has concrete templates for all operators that RSpec has" do
+      rspec_operators = described_class::CONCRETE_TEMPLATES.keys
+      minitest_operators = described_class::MINITEST_CONCRETE_TEMPLATES.keys
+
+      expect(minitest_operators).to match_array(rspec_operators)
+    end
+
+    it "falls back to static template for operators without concrete suggestions" do
+      mutation = build_mutation("argument_removal")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("correct arguments")
+    end
+
+    it "returns default suggestion for unknown operators" do
+      mutation = build_mutation("unknown_operator")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to eq(described_class::DEFAULT_SUGGESTION)
+    end
+  end
+
+  describe "integration: :rspec (default) with suggest_tests: true" do
+    subject(:suggestion_reporter) { described_class.new(suggest_tests: true, integration: :rspec) }
+
+    it "returns RSpec-style concrete templates" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("it")
+      expect(suggestion).to include("expect")
+    end
+  end
 end
