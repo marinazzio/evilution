@@ -12,7 +12,7 @@ require_relative "../mcp"
 class Evilution::MCP::MutateTool < MCP::Tool
   tool_name "evilution-mutate"
   description "Run mutation testing on Ruby source files. " \
-              "Use suggest_tests: true to get concrete RSpec test code for surviving mutants."
+              "Use suggest_tests: true to get concrete test code (RSpec or Minitest) for surviving mutants."
   input_schema(
     properties: {
       files: {
@@ -43,8 +43,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
       },
       suggest_tests: {
         type: "boolean",
-        description: "When true, suggestions for survived mutants include concrete RSpec test code " \
-                     "instead of static description text (default: false)"
+        description: "When true, suggestions for survived mutants include concrete test code " \
+                     "(RSpec or Minitest, based on integration) instead of static description text (default: false)"
       },
       verbosity: {
         type: "string",

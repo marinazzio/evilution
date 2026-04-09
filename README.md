@@ -7,7 +7,7 @@
 * **License**: MIT (free, no commercial restrictions)
 * **Language**: Ruby >= 3.3
 * **Parser**: Prism (Ruby's official AST parser, ships with Ruby 3.3+)
-* **Test framework**: RSpec (currently the only supported integration)
+* **Test frameworks**: RSpec and Minitest
 
 ## Installation
 
@@ -57,9 +57,10 @@ evilution [command] [options] [files...]
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
-| `--suggest-tests`            | Boolean | false        | Generate concrete RSpec test code in suggestions instead of static descriptions. |
+| `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`). |
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
+| `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec` or `minitest`.  |
 | `--incremental`              | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
@@ -86,8 +87,8 @@ Creates `.evilution.yml`:
 # timeout: 30              # seconds per mutation
 # format: text             # text | json | html
 # min_score: 0.0           # 0.0–1.0
-# integration: rspec       # test framework
-# suggest_tests: false     # concrete RSpec test code in suggestions
+# integration: rspec       # test framework: rspec, minitest
+# suggest_tests: false     # concrete test code in suggestions (matches integration)
 # save_session: false      # persist results under .evilution/results/
 # skip_heredoc_literals: false  # skip all string literal mutations inside heredocs
 # show_disabled: false     # report mutations skipped by disable comments
@@ -290,7 +291,7 @@ Use `minimal` when context window budget is tight and you only need to see what 
 
 ### Concrete Test Suggestions
 
-The MCP tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete RSpec `it` blocks that an agent can drop into a spec file, instead of static description text.
+The MCP tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete test code that an agent can drop into a test file, instead of static description text. The generated code matches the configured integration: RSpec `it`/`expect` blocks or Minitest `def test_`/`assert_equal` methods.
 
 Pass `suggest_tests: true` in the MCP tool call, or use `--suggest-tests` on the CLI, to activate this mode.
 
@@ -356,7 +357,7 @@ Use when you know which file was modified and want to verify its test coverage.
 For each entry in `survived[]`:
 1. Read `file` at `line` to understand the code context
 2. Read `operator` to understand what was changed
-3. Read `suggestion` for a hint on what test to write (use `--suggest-tests` for concrete RSpec code)
+3. Read `suggestion` for a hint on what test to write (use `--suggest-tests` for concrete test code)
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
@@ -391,7 +392,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
 4. **Mutate** — 69 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process; `--isolation fork` uses forked child processes. Parallel mode (`--jobs N`) always uses in-process isolation inside pool workers to avoid double forking
-6. **Test** — RSpec executes against the mutated source
+6. **Test** — The configured test framework (RSpec or Minitest) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
 

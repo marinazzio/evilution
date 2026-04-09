@@ -134,7 +134,7 @@ class Evilution::Config
       # Stop after N surviving mutants (default: disabled)
       # fail_fast: 1
 
-      # Generate concrete RSpec test code in suggestions (default: false)
+      # Generate concrete test code in suggestions, matching integration (default: false)
       # suggest_tests: false
 
       # Skip all string literal mutations inside heredocs (default: false)
