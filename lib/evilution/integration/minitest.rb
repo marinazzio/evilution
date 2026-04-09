@@ -35,11 +35,11 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   def run_tests(mutation)
     reset_state
     files = resolve_test_files(mutation)
+    command = "ruby -Itest #{files.join(" ")}"
+
     files.each { |f| load(File.expand_path(f)) }
 
-    command = "ruby -Itest #{files.join(" ")}"
     args = build_args(mutation)
-
     detector = reset_crash_detector
     passed = run_minitest(args, detector)
 
@@ -49,7 +49,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   def build_args(_mutation)
-    ["--seed", "0", "--no-plugins"]
+    ["--seed", "0"]
   end
 
   def reset_state
@@ -57,18 +57,19 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   def run_minitest(args, detector)
-    original_stdout = $stdout
-    original_stderr = $stderr
     out = StringIO.new
-    err = StringIO.new
+    options = ::Minitest.process_args(args)
+    options[:io] = out
 
-    $stdout = out
-    $stderr = err
-    install_crash_detector(detector)
-    ::Minitest.run(args)
-  ensure
-    $stdout = original_stdout
-    $stderr = original_stderr
+    reporter = ::Minitest::CompositeReporter.new
+    reporter << ::Minitest::SummaryReporter.new(out, options)
+    reporter << detector
+
+    reporter.start
+    ::Minitest.__run(reporter, options)
+    reporter.report
+
+    reporter.passed?
   end
 
   def reset_crash_detector
@@ -78,20 +79,6 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
       @crash_detector = Evilution::Integration::MinitestCrashDetector.new
     end
     @crash_detector
-  end
-
-  def install_crash_detector(detector)
-    ::Minitest.reporter = nil
-    extensions_backup = ::Minitest.extensions.dup
-    ::Minitest.extensions.clear
-
-    original_init = ::Minitest.method(:init_plugins)
-    ::Minitest.define_singleton_method(:init_plugins) do |options|
-      original_init.call(options)
-      ::Minitest.reporter << detector
-    end
-  rescue StandardError
-    ::Minitest.extensions.replace(extensions_backup) if defined?(extensions_backup)
   end
 
   def build_minitest_result(passed, command, detector)
@@ -110,10 +97,15 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     resolved = @spec_resolver.call(mutation.file_path)
     unless resolved
       warn_unresolved_test(mutation.file_path)
-      return ["test"]
+      return glob_test_files
     end
 
     [resolved]
+  end
+
+  def glob_test_files
+    files = Dir.glob("test/**/*_test.rb")
+    files.empty? ? ["test"] : files
   end
 
   def warn_unresolved_test(file_path)

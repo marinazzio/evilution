@@ -31,36 +31,55 @@ RSpec.describe Evilution::Integration::Minitest do
 
   subject(:integration) { described_class.new(test_files: ["test/some_test.rb"]) }
 
+  def stub_minitest_run(passed: true)
+    allow(Minitest).to receive(:__run) do |reporter, _options|
+      reporter.record(Minitest::Result.new("test_stub")) if passed
+    end
+  end
+
+  def stub_minitest_run_failed
+    allow(Minitest).to receive(:__run) do |reporter, _options|
+      result = Minitest::Result.new("test_stub")
+      result.failures << Minitest::Assertion.new("expected true")
+      reporter.record(result)
+    end
+  end
+
   describe "#call" do
     before do
-      allow(Minitest).to receive(:run).and_return(false)
+      stub_minitest_run_failed
       allow(integration).to receive(:load)
     end
 
-    it "returns passed: false when minitest returns false" do
+    it "returns passed: false when tests fail" do
       result = integration.call(mutation)
 
       expect(result[:passed]).to be false
     end
 
-    it "returns passed: true when minitest returns true" do
-      allow(Minitest).to receive(:run).and_return(true)
+    it "returns passed: true when tests pass" do
+      stub_minitest_run(passed: true)
 
       result = integration.call(mutation)
 
       expect(result[:passed]).to be true
     end
 
-    it "restores the original file even when minitest raises" do
-      allow(Minitest).to receive(:run).and_raise("boom")
+    it "cleans up temp directory even when run raises" do
+      temp_dir_during = nil
+      allow(Minitest).to receive(:__run) do
+        temp_dir_during = integration.instance_variable_get(:@temp_dir)
+        raise "boom"
+      end
 
       integration.call(mutation)
 
-      expect(File.read(source_file.path)).to eq(original_source)
+      expect(temp_dir_during).not_to be_nil
+      expect(Dir.exist?(temp_dir_during)).to be false
     end
 
     it "returns error info when minitest raises" do
-      allow(Minitest).to receive(:run).and_raise("boom")
+      allow(Minitest).to receive(:__run).and_raise("boom")
 
       result = integration.call(mutation)
 
@@ -74,16 +93,18 @@ RSpec.describe Evilution::Integration::Minitest do
       allow(integration).to receive(:load).with(File.expand_path("test/some_test.rb")) do
         test_file_loaded = true
       end
-      allow(Minitest).to receive(:run) do
+      stub_minitest_run(passed: true)
+
+      allow(Minitest).to receive(:__run).and_wrap_original do |method, *args|
         expect(test_file_loaded).to be true
-        true
+        method.call(*args)
       end
 
       integration.call(mutation)
     end
 
     it "includes test_command in the result" do
-      allow(Minitest).to receive(:run).and_return(true)
+      stub_minitest_run(passed: true)
 
       result = integration.call(mutation)
 
@@ -91,9 +112,10 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "clears minitest runnables before each run" do
-      allow(Minitest).to receive(:run) do
+      stub_minitest_run(passed: true)
+      allow(Minitest).to receive(:__run).and_wrap_original do |method, *args|
         expect(Minitest::Runnable.runnables).to be_empty
-        true
+        method.call(*args)
       end
 
       # Simulate a pre-existing runnable
@@ -104,21 +126,11 @@ RSpec.describe Evilution::Integration::Minitest do
     ensure
       Minitest::Runnable.runnables.delete(stub_class)
     end
-
-    it "captures stdout during minitest run" do
-      allow(integration).to receive(:load)
-      allow(Minitest).to receive(:run) do
-        $stdout.print "minitest output"
-        true
-      end
-
-      expect { integration.call(mutation) }.not_to output.to_stdout
-    end
   end
 
   describe "setup_integration hooks" do
     before do
-      allow(Minitest).to receive(:run).and_return(true)
+      stub_minitest_run(passed: true)
       allow(integration).to receive(:load)
     end
 
@@ -150,7 +162,7 @@ RSpec.describe Evilution::Integration::Minitest do
 
   describe "test file selection" do
     before do
-      allow(Minitest).to receive(:run).and_return(true)
+      stub_minitest_run(passed: true)
     end
 
     it "uses provided test_files" do
@@ -163,7 +175,7 @@ RSpec.describe Evilution::Integration::Minitest do
       custom.call(mutation)
     end
 
-    it "falls back to test/ when no test_files provided and resolver finds nothing" do
+    it "falls back to globbed test files when resolver finds nothing" do
       default = described_class.new
       allow(default).to receive(:load)
 
@@ -179,14 +191,11 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "returns error when all failures are crashes" do
-      detector = instance_double(
-        Evilution::Integration::MinitestCrashDetector,
-        only_crashes?: true,
-        crash_summary: "NoMethodError (1 crash)"
-      )
-      allow(detector).to receive(:reset)
-      allow(Evilution::Integration::MinitestCrashDetector).to receive(:new).and_return(detector)
-      allow(Minitest).to receive(:run).and_return(false)
+      allow(Minitest).to receive(:__run) do |reporter, _options|
+        result = Minitest::Result.new("test_crash")
+        result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
+        reporter.record(result)
+      end
 
       result = integration.call(mutation)
 
@@ -196,13 +205,7 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "returns killed (no error) when failures include assertions" do
-      detector = instance_double(
-        Evilution::Integration::MinitestCrashDetector,
-        only_crashes?: false
-      )
-      allow(detector).to receive(:reset)
-      allow(Evilution::Integration::MinitestCrashDetector).to receive(:new).and_return(detector)
-      allow(Minitest).to receive(:run).and_return(false)
+      stub_minitest_run_failed
 
       result = integration.call(mutation)
 

@@ -7,6 +7,18 @@ class Evilution::Integration::MinitestCrashDetector
     reset
   end
 
+  def start
+    # Required by Minitest reporter interface
+  end
+
+  def report
+    # Required by Minitest reporter interface
+  end
+
+  def passed?
+    @crashes.empty?
+  end
+
   def reset
     @assertion_failures = 0
     @crashes = []
