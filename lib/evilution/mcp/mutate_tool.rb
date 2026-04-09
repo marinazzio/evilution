@@ -64,10 +64,10 @@ class Evilution::MCP::MutateTool < MCP::Tool
       config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec,
                                       suggest_tests)
       config = Evilution::Config.new(**config_opts)
-      on_result = build_streaming_callback(server_context, suggest_tests)
+      on_result = build_streaming_callback(server_context, suggest_tests, config.integration)
       runner = Evilution::Runner.new(config: config, on_result: on_result)
       summary = runner.call
-      report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true).call(summary)
+      report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true, integration: config.integration).call(summary)
       compact = trim_report(report, normalize_verbosity(verbosity))
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
@@ -156,10 +156,10 @@ class Evilution::MCP::MutateTool < MCP::Tool
       data[key].each { |entry| entry.delete("diff") }
     end
 
-    def build_streaming_callback(server_context, suggest_tests)
+    def build_streaming_callback(server_context, suggest_tests, integration)
       return nil unless suggest_tests && server_context.respond_to?(:report_progress)
 
-      suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: true)
+      suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: true, integration: integration)
       survivor_index = 0
 
       proc do |result|

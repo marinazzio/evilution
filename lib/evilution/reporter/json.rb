@@ -7,8 +7,8 @@ require_relative "suggestion"
 require_relative "../reporter"
 
 class Evilution::Reporter::JSON
-  def initialize(suggest_tests: false)
-    @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests)
+  def initialize(suggest_tests: false, integration: :rspec)
+    @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
   end
 
   def call(summary)
