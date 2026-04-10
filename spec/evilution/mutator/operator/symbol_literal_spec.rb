@@ -38,6 +38,32 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
       end
     end
 
+    it "does not mutate keyword argument label keys" do
+      muts = mutations_for("calls_with_kwarg")
+
+      expect(muts).to be_empty
+    end
+
+    it "does not mutate hash label keys" do
+      muts = mutations_for("uses_kwarg_label")
+
+      expect(muts).to be_empty
+    end
+
+    it "still mutates standalone symbols in mixed argument lists" do
+      muts = mutations_for("mixes_symbol_and_label")
+
+      expect(muts.length).to eq(2)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to all(include("key: 3"))
+    end
+
+    it "still mutates symbols used with hash rocket syntax" do
+      muts = mutations_for("uses_hash_rocket")
+
+      expect(muts.length).to eq(2)
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_foo")
 
