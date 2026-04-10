@@ -27,7 +27,7 @@ class Evilution::Result::MutationResult
     @parent_rss_kb = parent_rss_kb
     @error_message = error_message
     @error_class = error_class
-    @error_backtrace = error_backtrace
+    @error_backtrace = error_backtrace.nil? ? nil : error_backtrace.dup.freeze
     freeze
   end
 

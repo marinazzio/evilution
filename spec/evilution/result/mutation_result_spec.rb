@@ -131,6 +131,23 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.error_backtrace).to be_nil
   end
 
+  it "freezes error_backtrace to prevent external mutation" do
+    backtrace = ["lib/foo.rb:10:in `bar'"]
+    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+
+    expect(result.error_backtrace).to be_frozen
+    expect { result.error_backtrace << "extra" }.to raise_error(FrozenError)
+  end
+
+  it "does not reflect post-construction mutation of the caller's backtrace array" do
+    backtrace = ["lib/foo.rb:10:in `bar'"]
+    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+
+    backtrace << "lib/foo.rb:20:in `baz'"
+
+    expect(result.error_backtrace).to eq(["lib/foo.rb:10:in `bar'"])
+  end
+
   it "is frozen" do
     result = described_class.new(mutation: mutation, status: :killed)
 
