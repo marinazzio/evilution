@@ -76,11 +76,21 @@ class Evilution::Reporter::JSON
     }
     detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
     detail[:test_command] = result.test_command if result.test_command
+    append_memory_fields(detail, result)
+    append_error_fields(detail, result)
+    detail
+  end
+
+  def append_memory_fields(detail, result)
     detail[:parent_rss_kb] = result.parent_rss_kb if result.parent_rss_kb
     detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
     detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
+  end
+
+  def append_error_fields(detail, result)
     detail[:error_message] = result.error_message if result.error_message
-    detail
+    detail[:error_class] = result.error_class if result.error_class
+    detail[:error_backtrace] = result.error_backtrace if result.error_backtrace
   end
 
   def build_coverage_gaps(summary)

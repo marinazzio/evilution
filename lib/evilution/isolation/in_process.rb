@@ -35,7 +35,13 @@ class Evilution::Isolation::InProcess
   rescue Timeout::Error
     { timeout: true }
   rescue ScriptError, StandardError => e
-    { timeout: false, passed: false, error: e.message }
+    {
+      timeout: false,
+      passed: false,
+      error: e.message,
+      error_class: e.class.name,
+      error_backtrace: Array(e.backtrace).first(5)
+    }
   end
 
   def suppress_output
@@ -75,7 +81,9 @@ class Evilution::Isolation::InProcess
       child_rss_kb: rss_after,
       memory_delta_kb: memory_delta_kb,
       parent_rss_kb: rss_before,
-      error_message: result[:error]
+      error_message: result[:error],
+      error_class: result[:error_class],
+      error_backtrace: result[:error_backtrace]
     )
   end
 end

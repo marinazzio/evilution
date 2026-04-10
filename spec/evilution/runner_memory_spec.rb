@@ -37,7 +37,9 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     registry = instance_double(Evilution::Mutator::Registry)
     allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-    allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything).and_return([mutation])
+    allow(registry).to receive(:mutations_for)
+      .with(subject_obj, filter: anything, operator_options: anything)
+      .and_return([mutation])
 
     isolator = instance_double(Evilution::Isolation::Fork)
     allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -150,6 +152,50 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       output = capture_stderr_with_tty { runner.call }
       expect(output).not_to match(/\[verbose\].*child_rss:/)
       expect(output).not_to match(/\[verbose\].*delta:/)
+    end
+
+    it "logs error class, message, and backtrace for errored mutations" do
+      error_result = Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :error,
+        duration: 0.1,
+        error_message: "syntax error in mutated source: unexpected ')'",
+        error_class: "SyntaxError",
+        error_backtrace: [
+          "lib/foo.rb:10:in `bar'",
+          "lib/foo.rb:20:in `baz'",
+          "lib/foo.rb:30:in `qux'"
+        ]
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(error_result)
+
+      output = capture_stderr_with_tty { runner.call }
+
+      expect(output).to include("SyntaxError")
+      expect(output).to include("syntax error in mutated source: unexpected ')'")
+      expect(output).to include("lib/foo.rb:10:in `bar'")
+      expect(output).to include("lib/foo.rb:20:in `baz'")
+      expect(output).to include("lib/foo.rb:30:in `qux'")
+    end
+
+    it "truncates error backtrace to 5 lines" do
+      long_backtrace = (1..10).map { |i| "lib/foo.rb:#{i}:in `f#{i}'" }
+      error_result = Evilution::Result::MutationResult.new(
+        mutation: mutation,
+        status: :error,
+        duration: 0.1,
+        error_message: "boom",
+        error_class: "RuntimeError",
+        error_backtrace: long_backtrace
+      )
+      isolator = Evilution::Isolation::Fork.new
+      allow(isolator).to receive(:call).and_return(error_result)
+
+      output = capture_stderr_with_tty { runner.call }
+
+      expect(output).to include("lib/foo.rb:5:in `f5'")
+      expect(output).not_to include("lib/foo.rb:6:in `f6'")
     end
   end
 

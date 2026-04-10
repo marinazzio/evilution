@@ -106,6 +106,31 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.error_message).to be_nil
   end
 
+  it "stores error_class" do
+    result = described_class.new(mutation: mutation, status: :error, error_class: "SyntaxError")
+
+    expect(result.error_class).to eq("SyntaxError")
+  end
+
+  it "defaults error_class to nil" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.error_class).to be_nil
+  end
+
+  it "stores error_backtrace" do
+    backtrace = ["lib/foo.rb:10:in `bar'", "lib/foo.rb:20:in `baz'"]
+    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+
+    expect(result.error_backtrace).to eq(backtrace)
+  end
+
+  it "defaults error_backtrace to nil" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.error_backtrace).to be_nil
+  end
+
   it "is frozen" do
     result = described_class.new(mutation: mutation, status: :killed)
 
