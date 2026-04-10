@@ -25,6 +25,8 @@ class Evilution::Integration::Base
     apply_mutation(mutation)
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
+  rescue SyntaxError => e
+    { passed: false, error: "syntax error in mutated source: #{e.message}" }
   ensure
     restore_original(mutation)
   end
