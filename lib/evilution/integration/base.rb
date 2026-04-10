@@ -58,7 +58,6 @@ class Evilution::Integration::Base
     Evilution::TempDirTracker.register(@temp_dir)
     @displaced_feature = nil
     subpath = resolve_require_subpath(mutation.file_path)
-    dest = nil
 
     if subpath
       dest = File.join(@temp_dir, subpath)
@@ -66,14 +65,14 @@ class Evilution::Integration::Base
       File.write(dest, mutation.mutated_source)
       $LOAD_PATH.unshift(@temp_dir)
       displace_loaded_feature(mutation.file_path)
+      require(subpath.delete_suffix(".rb"))
     else
       absolute = File.expand_path(mutation.file_path)
       dest = File.join(@temp_dir, absolute)
       FileUtils.mkdir_p(File.dirname(dest))
       File.write(dest, mutation.mutated_source)
+      load(dest)
     end
-
-    load(dest)
   end
 
   def restore_original(_mutation)
