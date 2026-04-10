@@ -25,6 +25,8 @@ class Evilution::Integration::Base
     apply_mutation(mutation)
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
+  rescue SyntaxError => e
+    { passed: false, error: "syntax error in mutated source: #{e.message}" }
   ensure
     restore_original(mutation)
   end
@@ -63,6 +65,7 @@ class Evilution::Integration::Base
       File.write(dest, mutation.mutated_source)
       $LOAD_PATH.unshift(@temp_dir)
       displace_loaded_feature(mutation.file_path)
+      require(subpath.delete_suffix(".rb"))
     else
       absolute = File.expand_path(mutation.file_path)
       dest = File.join(@temp_dir, absolute)

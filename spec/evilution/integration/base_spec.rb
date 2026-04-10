@@ -248,6 +248,141 @@ RSpec.describe Evilution::Integration::Base do
         new_entries = $LOAD_PATH - load_path_before
         expect(new_entries).to be_empty
       end
+
+      it "loads the mutated source into memory" do
+        original = "module EvilutionTestLpLoad; def self.value; :original; end; end\n"
+        mutated = "module EvilutionTestLpLoad; def self.value; :mutated; end; end\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        value_during_test = nil
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            value_during_test = EvilutionTestLpLoad.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        checking_class.new.call(lp_mut)
+
+        expect(value_during_test).to eq(:mutated)
+      ensure
+        Object.send(:remove_const, :EvilutionTestLpLoad) if defined?(EvilutionTestLpLoad)
+      end
+
+      it "loads the mutated source when class is already defined (autoloader scenario)" do
+        original = "module EvilutionTestAutoload; def self.value; :original; end; end\n"
+        mutated = "module EvilutionTestAutoload; def self.value; :mutated; end; end\n"
+        File.write(source_path, original)
+        load(source_path)
+        # Simulate autoloader: class is defined AND file is in $LOADED_FEATURES
+        $LOADED_FEATURES << source_path unless $LOADED_FEATURES.include?(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        value_during_test = nil
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            value_during_test = EvilutionTestAutoload.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        checking_class.new.call(lp_mut)
+
+        expect(value_during_test).to eq(:mutated)
+      ensure
+        Object.send(:remove_const, :EvilutionTestAutoload) if defined?(EvilutionTestAutoload)
+        $LOADED_FEATURES.delete(source_path)
+      end
+
+      it "returns error result when mutated source has a syntax error" do
+        original = "module EvilutionTestSyntax; def self.value; :original; end; end\n"
+        invalid = "module EvilutionTestSyntax; def self.value; :mutated; end; end; )\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: invalid
+        )
+
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        result = checking_class.new.call(lp_mut)
+
+        expect(result[:passed]).to be false
+        expect(result[:error]).to match(/syntax error/)
+      ensure
+        Object.send(:remove_const, :EvilutionTestSyntax) if defined?(EvilutionTestSyntax)
+      end
+    end
+
+    context "with absolute path file (not under LOAD_PATH)" do
+      let(:isolated_dir) { Dir.mktmpdir("evilution_base_abs") }
+      let(:source_path) { File.join(isolated_dir, "abs_target.rb") }
+
+      after do
+        FileUtils.rm_rf(isolated_dir)
+      end
+
+      it "loads the mutated source into memory" do
+        original = "module EvilutionTestAbsLoad; def self.value; :original; end; end\n"
+        mutated = "module EvilutionTestAbsLoad; def self.value; :mutated; end; end\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        abs_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        value_during_test = nil
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            value_during_test = EvilutionTestAbsLoad.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        checking_class.new.call(abs_mut)
+
+        expect(value_during_test).to eq(:mutated)
+      ensure
+        Object.send(:remove_const, :EvilutionTestAbsLoad) if defined?(EvilutionTestAbsLoad)
+      end
     end
   end
 end
