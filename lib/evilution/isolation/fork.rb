@@ -57,7 +57,7 @@ class Evilution::Isolation::Fork
   def execute_in_child(mutation, test_command)
     result = test_command.call(mutation)
     { child_rss_kb: Evilution::Memory.rss_kb }.merge(result)
-  rescue StandardError => e
+  rescue ScriptError, StandardError => e
     { passed: false, error: e.message }
   end
 

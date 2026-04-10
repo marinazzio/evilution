@@ -34,7 +34,7 @@ class Evilution::Isolation::InProcess
     { timeout: false }.merge(result)
   rescue Timeout::Error
     { timeout: true }
-  rescue StandardError => e
+  rescue ScriptError, StandardError => e
     { timeout: false, passed: false, error: e.message }
   end
 
