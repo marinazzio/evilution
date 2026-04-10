@@ -125,6 +125,24 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to eq("boom")
     end
 
+    it "returns error when test command raises SyntaxError in child" do
+      test_command = ->(_m) { raise SyntaxError, "unexpected ')'" }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.error_message).to include("unexpected ')'")
+    end
+
+    it "returns error when test command raises LoadError in child" do
+      test_command = ->(_m) { raise LoadError, "cannot load such file -- foo" }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.error_message).to include("cannot load such file")
+    end
+
     it "records duration" do
       test_command = ->(_m) { { passed: false } }
 
