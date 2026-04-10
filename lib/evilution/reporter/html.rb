@@ -145,13 +145,22 @@ class Evilution::Reporter::HTML
   def build_map_entry(result)
     mutation = result.mutation
     status = result.status.to_s
+    title_text = normalize_title(result.error_message)
+    title_attr = title_text ? %( title="#{h(title_text)}") : ""
     <<~HTML.chomp
-      <div class="map-line #{status}">
+      <div class="map-line #{status}"#{title_attr}>
         <span class="line-number">line #{mutation.line}</span>
         <span class="operator">#{h(mutation.operator_name)}</span>
         <span class="status-badge #{status}">#{status}</span>
       </div>
     HTML
+  end
+
+  def normalize_title(message)
+    return nil if message.nil?
+
+    normalized = message.gsub(/\s+/, " ").strip
+    normalized.empty? ? nil : normalized
   end
 
   def build_survived_details(survived)

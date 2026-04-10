@@ -113,6 +113,7 @@ RSpec.describe Evilution::Isolation::Fork do
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
 
       expect(result).to be_error
+      expect(result.error_message).to eq("empty result from child")
     end
 
     it "returns error when test command raises" do
@@ -121,6 +122,7 @@ RSpec.describe Evilution::Isolation::Fork do
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
 
       expect(result).to be_error
+      expect(result.error_message).to eq("boom")
     end
 
     it "records duration" do

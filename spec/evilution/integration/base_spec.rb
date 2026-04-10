@@ -343,6 +343,36 @@ RSpec.describe Evilution::Integration::Base do
       ensure
         Object.send(:remove_const, :EvilutionTestSyntax) if defined?(EvilutionTestSyntax)
       end
+
+      it "returns error result when mutated source raises at load time" do
+        original = "module EvilutionTestLoadErr; def self.value; :original; end; end\n"
+        invalid = "module EvilutionTestLoadErr; super; end\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: invalid
+        )
+
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        result = checking_class.new.call(lp_mut)
+
+        expect(result[:passed]).to be false
+        expect(result[:error]).to match(/super called outside of method/)
+      ensure
+        Object.send(:remove_const, :EvilutionTestLoadErr) if defined?(EvilutionTestLoadErr)
+      end
     end
 
     context "with absolute path file (not under LOAD_PATH)" do

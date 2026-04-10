@@ -43,6 +43,7 @@ RSpec.describe Evilution::Isolation::InProcess do
       result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
+      expect(result.error_message).to eq("boom")
     end
 
     it "records duration" do

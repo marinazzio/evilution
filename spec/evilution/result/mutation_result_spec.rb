@@ -94,6 +94,18 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.parent_rss_kb).to be_nil
   end
 
+  it "stores error_message" do
+    result = described_class.new(mutation: mutation, status: :error, error_message: "boom")
+
+    expect(result.error_message).to eq("boom")
+  end
+
+  it "defaults error_message to nil" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.error_message).to be_nil
+  end
+
   it "is frozen" do
     result = described_class.new(mutation: mutation, status: :killed)
 
