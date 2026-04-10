@@ -6,11 +6,11 @@ class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent].freeze
 
   attr_reader :mutation, :status, :duration, :killing_test, :test_command,
-              :child_rss_kb, :memory_delta_kb, :parent_rss_kb
+              :child_rss_kb, :memory_delta_kb, :parent_rss_kb, :error_message
 
-  def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
+  def initialize(mutation:, status:, duration: 0.0, killing_test: nil, # rubocop:disable Metrics/ParameterLists
                  test_command: nil, child_rss_kb: nil, memory_delta_kb: nil,
-                 parent_rss_kb: nil)
+                 parent_rss_kb: nil, error_message: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -21,6 +21,7 @@ class Evilution::Result::MutationResult
     @child_rss_kb = child_rss_kb
     @memory_delta_kb = memory_delta_kb
     @parent_rss_kb = parent_rss_kb
+    @error_message = error_message
     freeze
   end
 

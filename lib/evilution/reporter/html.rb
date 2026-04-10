@@ -145,8 +145,9 @@ class Evilution::Reporter::HTML
   def build_map_entry(result)
     mutation = result.mutation
     status = result.status.to_s
+    title_attr = result.error_message ? %( title="#{h(result.error_message)}") : ""
     <<~HTML.chomp
-      <div class="map-line #{status}">
+      <div class="map-line #{status}"#{title_attr}>
         <span class="line-number">line #{mutation.line}</span>
         <span class="operator">#{h(mutation.operator_name)}</span>
         <span class="status-badge #{status}">#{status}</span>

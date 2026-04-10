@@ -345,5 +345,37 @@ RSpec.describe Evilution::Reporter::CLI do
         expect(output).not_to include("Disabled mutations")
       end
     end
+
+    context "with errored mutations" do
+      let(:error_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: killed_mutation,
+          status: :error,
+          duration: 0.05,
+          error_message: "syntax error in mutated source: unexpected token"
+        )
+      end
+
+      let(:error_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, error_result],
+          duration: 1.0
+        )
+      end
+
+      it "shows errored mutations section with error message" do
+        output = reporter.call(error_summary)
+
+        expect(output).to include("Errored mutations:")
+        expect(output).to include("comparison_replacement: lib/user.rb:5")
+        expect(output).to include("syntax error in mutated source: unexpected token")
+      end
+
+      it "does not show errored section when empty" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("Errored mutations")
+      end
+    end
   end
 end

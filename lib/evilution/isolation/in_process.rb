@@ -74,7 +74,8 @@ class Evilution::Isolation::InProcess
       test_command: result[:test_command],
       child_rss_kb: rss_after,
       memory_delta_kb: memory_delta_kb,
-      parent_rss_kb: rss_before
+      parent_rss_kb: rss_before,
+      error_message: result[:error]
     )
   end
 end

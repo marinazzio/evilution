@@ -79,6 +79,7 @@ class Evilution::Reporter::JSON
     detail[:parent_rss_kb] = result.parent_rss_kb if result.parent_rss_kb
     detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
     detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
+    detail[:error_message] = result.error_message if result.error_message
     detail
   end
 

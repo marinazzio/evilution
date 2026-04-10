@@ -107,7 +107,8 @@ class Evilution::Isolation::Fork
       duration: duration,
       test_command: result[:test_command],
       child_rss_kb: result[:child_rss_kb],
-      parent_rss_kb: parent_rss_kb
+      parent_rss_kb: parent_rss_kb,
+      error_message: result[:error]
     )
   end
 end

@@ -264,6 +264,27 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first).not_to have_key("test_command")
     end
 
+    it "includes error_message when present in error mutation result" do
+      error_result = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :error,
+        duration: 0.1,
+        error_message: "syntax error in mutated source: unexpected token"
+      )
+      error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
+      parsed = JSON.parse(reporter.call(error_summary))
+
+      expect(parsed["errors"].first["error_message"]).to eq(
+        "syntax error in mutated source: unexpected token"
+      )
+    end
+
+    it "omits error_message when not present in mutation result" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("error_message")
+    end
+
     context "with skipped mutations" do
       let(:skipped_summary) do
         Evilution::Result::Summary.new(
