@@ -56,7 +56,7 @@ evilution [command] [options] [files...]
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
-| `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation. |
+| `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
 | `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`). |
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
@@ -163,7 +163,14 @@ Use `--format json` for machine-readable output. Schema:
   ],
   "killed": ["... same shape as survived entries ..."],
   "timed_out": ["... same shape as survived entries ..."],
-  "errors": ["... same shape as survived entries ..."]
+  "errors": [
+    {
+      "... same shape as survived entries, plus: ...": "",
+      "error_message": "string (optional) — error message from the failing mutation",
+      "error_class":   "string (optional) — exception class name (e.g. 'SyntaxError', 'NoMethodError')",
+      "error_backtrace": ["string (optional) — first 5 backtrace lines from the exception"]
+    }
+  ]
 }
 ```
 
@@ -364,7 +371,11 @@ For each entry in `survived[]`:
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
-### 7. CI gate
+### 7. Diagnosing errored mutations
+
+Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
+
+### 8. CI gate
 
 ```bash
 bundle exec evilution run lib/ --format json --min-score 0.8 --quiet

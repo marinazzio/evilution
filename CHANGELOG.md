@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.22.1] - 2026-04-10
+
+### Added
+
+- **Error class and backtrace capture** — `MutationResult` now stores `error_class` and `error_backtrace` alongside `error_message`; the backtrace array is duplicated and frozen to keep results immutable; both fields are threaded through `Isolation::Fork` (Marshal-safe across the IPC pipe), `Isolation::InProcess`, and the runner's `compact_result` / `rebuild_results` path (#648, PR #659)
+- **Verbose error diagnostics** — `--verbose` now logs error class, message, and the first 5 backtrace lines for errored mutations (previously `--verbose` only showed memory/GC stats, leaving errors invisible) (#648, PR #659)
+- **Error details in JSON reports** — JSON reporter output includes `error_class` and `error_backtrace` fields under `errors[]` entries when present, so downstream tools (CI, MCP consumers) can surface failure causes without re-running (#648, PR #659)
+
+### Fixed
+
+- **Silent load-time crashes in `Isolation::Fork`** — mutations that raised non-`SyntaxError` script errors at load time (e.g. `NoMethodError: super called outside of method`) escaped `Integration::Base`'s narrow rescue and either surfaced cryptically or went silent under fork isolation; both isolators now rescue `ScriptError, StandardError` as a safety net and report them as `:error` status with full class and backtrace (#646, PR #656)
+- **`symbol_literal` operator breaking keyword arguments** — mutating symbols in label form (`foo:` inside hash literals or keyword arguments) produced invalid Ruby source; the operator now detects label-form symbols via Prism's `closing_loc` and skips them, only mutating standalone symbol literals (`:foo`) (#647, PR #657)
+- **Syntax errors in mutated source crashing in-process runs** — `Integration::Base#apply_mutation` now captures `SyntaxError` during `require`/`load` and returns a structured error result instead of propagating the exception up through `call`; error results include the error class and backtrace for diagnosis (#644, #645, PR #653, PR #655)
+
+### Changed
+
+- **Integration::Base refactor** — `apply_mutation` split into `apply_via_require` and `apply_via_load` helpers; rescue scope moved from `#call` to `#apply_mutation` so load-time errors return a result hash while abstract-method `NotImplementedError`s still propagate as intended
+
 ## [0.22.0] - 2026-04-09
 
 ### Added
