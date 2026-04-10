@@ -376,6 +376,25 @@ RSpec.describe Evilution::Reporter::CLI do
 
         expect(output).not_to include("Errored mutations")
       end
+
+      it "indents every line of a multi-line error message" do
+        multiline_result = Evilution::Result::MutationResult.new(
+          mutation: killed_mutation,
+          status: :error,
+          duration: 0.05,
+          error_message: "syntax error line 1\nunexpected token line 2\nand line 3"
+        )
+        multiline_summary = Evilution::Result::Summary.new(
+          results: [multiline_result],
+          duration: 1.0
+        )
+
+        output = reporter.call(multiline_summary)
+
+        expect(output).to include("    syntax error line 1")
+        expect(output).to include("    unexpected token line 2")
+        expect(output).to include("    and line 3")
+      end
     end
   end
 end

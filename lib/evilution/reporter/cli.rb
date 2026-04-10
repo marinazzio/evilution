@@ -69,7 +69,8 @@ class Evilution::Reporter::CLI
     header = "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
     return header unless result.error_message
 
-    "#{header}\n    #{result.error_message}"
+    indented = result.error_message.lines.map { |line| "    #{line.chomp}" }.join("\n")
+    "#{header}\n#{indented}"
   end
 
   def append_disabled(lines, summary)

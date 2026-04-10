@@ -435,6 +435,23 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include('title="syntax error in mutated source: unexpected token"')
     end
 
+    it "collapses whitespace in multi-line error messages for the title attribute" do
+      multiline_result = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :error,
+        duration: 0.05,
+        error_message: "syntax error\n  unexpected token\n  at line 5"
+      )
+      multiline_summary = Evilution::Result::Summary.new(
+        results: [multiline_result],
+        duration: 1.0
+      )
+
+      output = reporter.call(multiline_summary)
+
+      expect(output).to include('title="syntax error unexpected token at line 5"')
+    end
+
     it "escapes HTML in error messages" do
       dangerous_result = Evilution::Result::MutationResult.new(
         mutation: killed_mutation,
