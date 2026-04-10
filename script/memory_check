@@ -104,7 +104,10 @@ complex_mutations = complex_subjects.flat_map { |s| complex_registry.mutations_f
 
 integration = Evilution::Integration::RSpec.new(test_files: [COMPLEX_FIXTURE_SPEC])
 
-all_passed &= run_check("RSpec integration per-mutation (Config)", iterations: 20, max_growth_kb: 30_720) do
+# Budget is generous: per-mutation require() adds the file to $LOADED_FEATURES and
+# accumulates constant-redefinition warnings. Local runs land around 20-25 MB; CI
+# varies up to ~30 MB depending on Ruby build and GC pressure, so we leave headroom.
+all_passed &= run_check("RSpec integration per-mutation (Config)", iterations: 20, max_growth_kb: 40_960) do
   mutation = complex_mutations.sample
   integration.call(mutation)
 end
