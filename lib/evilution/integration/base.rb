@@ -56,6 +56,7 @@ class Evilution::Integration::Base
     Evilution::TempDirTracker.register(@temp_dir)
     @displaced_feature = nil
     subpath = resolve_require_subpath(mutation.file_path)
+    dest = nil
 
     if subpath
       dest = File.join(@temp_dir, subpath)
@@ -68,8 +69,9 @@ class Evilution::Integration::Base
       dest = File.join(@temp_dir, absolute)
       FileUtils.mkdir_p(File.dirname(dest))
       File.write(dest, mutation.mutated_source)
-      load(dest)
     end
+
+    load(dest)
   end
 
   def restore_original(_mutation)
