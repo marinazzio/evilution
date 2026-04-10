@@ -58,7 +58,12 @@ class Evilution::Isolation::Fork
     result = test_command.call(mutation)
     { child_rss_kb: Evilution::Memory.rss_kb }.merge(result)
   rescue ScriptError, StandardError => e
-    { passed: false, error: e.message }
+    {
+      passed: false,
+      error: e.message,
+      error_class: e.class.name,
+      error_backtrace: Array(e.backtrace).first(5)
+    }
   end
 
   def wait_for_result(pid, read_io, timeout)
@@ -108,7 +113,9 @@ class Evilution::Isolation::Fork
       test_command: result[:test_command],
       child_rss_kb: result[:child_rss_kb],
       parent_rss_kb: parent_rss_kb,
-      error_message: result[:error]
+      error_message: result[:error],
+      error_class: result[:error_class],
+      error_backtrace: result[:error_backtrace]
     )
   end
 end

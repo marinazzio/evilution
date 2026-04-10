@@ -60,24 +60,42 @@ class Evilution::Integration::Base
     subpath = resolve_require_subpath(mutation.file_path)
 
     if subpath
-      dest = File.join(@temp_dir, subpath)
-      FileUtils.mkdir_p(File.dirname(dest))
-      File.write(dest, mutation.mutated_source)
-      $LOAD_PATH.unshift(@temp_dir)
-      displace_loaded_feature(mutation.file_path)
-      require(subpath.delete_suffix(".rb"))
+      apply_via_require(mutation, subpath)
     else
-      absolute = File.expand_path(mutation.file_path)
-      dest = File.join(@temp_dir, absolute)
-      FileUtils.mkdir_p(File.dirname(dest))
-      File.write(dest, mutation.mutated_source)
-      load(dest)
+      apply_via_load(mutation)
     end
     nil
   rescue SyntaxError => e
-    { passed: false, error: "syntax error in mutated source: #{e.message}" }
+    {
+      passed: false,
+      error: "syntax error in mutated source: #{e.message}",
+      error_class: e.class.name,
+      error_backtrace: Array(e.backtrace).first(5)
+    }
   rescue ScriptError, StandardError => e
-    { passed: false, error: "#{e.class}: #{e.message}" }
+    {
+      passed: false,
+      error: "#{e.class}: #{e.message}",
+      error_class: e.class.name,
+      error_backtrace: Array(e.backtrace).first(5)
+    }
+  end
+
+  def apply_via_require(mutation, subpath)
+    dest = File.join(@temp_dir, subpath)
+    FileUtils.mkdir_p(File.dirname(dest))
+    File.write(dest, mutation.mutated_source)
+    $LOAD_PATH.unshift(@temp_dir)
+    displace_loaded_feature(mutation.file_path)
+    require(subpath.delete_suffix(".rb"))
+  end
+
+  def apply_via_load(mutation)
+    absolute = File.expand_path(mutation.file_path)
+    dest = File.join(@temp_dir, absolute)
+    FileUtils.mkdir_p(File.dirname(dest))
+    File.write(dest, mutation.mutated_source)
+    load(dest)
   end
 
   def restore_original(_mutation)

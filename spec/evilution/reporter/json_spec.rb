@@ -285,6 +285,43 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first).not_to have_key("error_message")
     end
 
+    it "includes error_class when present in error mutation result" do
+      error_result = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :error,
+        duration: 0.1,
+        error_message: "boom",
+        error_class: "SyntaxError"
+      )
+      error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
+      parsed = JSON.parse(reporter.call(error_summary))
+
+      expect(parsed["errors"].first["error_class"]).to eq("SyntaxError")
+    end
+
+    it "includes error_backtrace when present in error mutation result" do
+      backtrace = ["lib/foo.rb:10:in `bar'", "lib/foo.rb:20:in `baz'"]
+      error_result = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :error,
+        duration: 0.1,
+        error_message: "boom",
+        error_class: "RuntimeError",
+        error_backtrace: backtrace
+      )
+      error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
+      parsed = JSON.parse(reporter.call(error_summary))
+
+      expect(parsed["errors"].first["error_backtrace"]).to eq(backtrace)
+    end
+
+    it "omits error_class and error_backtrace when not present" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("error_class")
+      expect(parsed["killed"].first).not_to have_key("error_backtrace")
+    end
+
     context "with skipped mutations" do
       let(:skipped_summary) do
         Evilution::Result::Summary.new(

@@ -46,6 +46,25 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.error_message).to eq("boom")
     end
 
+    it "captures error_class and error_backtrace when test command raises" do
+      test_command = ->(_m) { raise ArgumentError, "bad arg" }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.error_class).to eq("ArgumentError")
+      expect(result.error_backtrace).to be_an(Array)
+      expect(result.error_backtrace).not_to be_empty
+      expect(result.error_backtrace.length).to be <= 5
+    end
+
+    it "captures error_class for SyntaxError" do
+      test_command = ->(_m) { raise SyntaxError, "unexpected token" }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.error_class).to eq("SyntaxError")
+    end
+
     it "returns error when test command raises SyntaxError" do
       test_command = ->(_m) { raise SyntaxError, "unexpected ')'" }
 

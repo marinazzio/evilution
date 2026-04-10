@@ -412,7 +412,9 @@ class Evilution::Runner
       child_rss_kb: result.child_rss_kb,
       memory_delta_kb: result.memory_delta_kb,
       parent_rss_kb: result.parent_rss_kb,
-      error_message: result.error_message
+      error_message: result.error_message,
+      error_class: result.error_class,
+      error_backtrace: result.error_backtrace
     )
   end
 
@@ -425,7 +427,9 @@ class Evilution::Runner
       child_rss_kb: result.child_rss_kb,
       memory_delta_kb: result.memory_delta_kb,
       parent_rss_kb: result.parent_rss_kb,
-      error_message: result.error_message
+      error_message: result.error_message,
+      error_class: result.error_class,
+      error_backtrace: result.error_backtrace
     }
   end
 
@@ -440,7 +444,9 @@ class Evilution::Runner
         child_rss_kb: data[:child_rss_kb],
         memory_delta_kb: data[:memory_delta_kb],
         parent_rss_kb: data[:parent_rss_kb],
-        error_message: data[:error_message]
+        error_message: data[:error_message],
+        error_class: data[:error_class],
+        error_backtrace: data[:error_backtrace]
       )
     end
   end
@@ -565,9 +571,20 @@ class Evilution::Runner
 
     parts << gc_stats_string
 
-    return if parts.empty?
+    $stderr.write("[verbose] #{result.mutation}: #{parts.join(", ")}\n") unless parts.empty?
 
-    $stderr.write("[verbose] #{result.mutation}: #{parts.join(", ")}\n")
+    log_mutation_error(result) if result.error?
+  end
+
+  def log_mutation_error(result)
+    header = "[verbose] #{result.mutation}: error"
+    header += " #{result.error_class}" if result.error_class
+    header += ": #{result.error_message}" if result.error_message
+    $stderr.write("#{header}\n")
+
+    Array(result.error_backtrace).first(5).each do |line|
+      $stderr.write("[verbose]   #{line}\n")
+    end
   end
 
   def gc_stats_string
