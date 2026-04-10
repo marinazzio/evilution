@@ -22,11 +22,11 @@ class Evilution::Integration::Base
     @temp_dir = nil
     ensure_framework_loaded
     fire_hook(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
-    apply_mutation(mutation)
+    load_error = apply_mutation(mutation)
+    return load_error if load_error
+
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
-  rescue SyntaxError => e
-    { passed: false, error: "syntax error in mutated source: #{e.message}" }
   ensure
     restore_original(mutation)
   end
@@ -73,6 +73,11 @@ class Evilution::Integration::Base
       File.write(dest, mutation.mutated_source)
       load(dest)
     end
+    nil
+  rescue SyntaxError => e
+    { passed: false, error: "syntax error in mutated source: #{e.message}" }
+  rescue ScriptError, StandardError => e
+    { passed: false, error: "#{e.class}: #{e.message}" }
   end
 
   def restore_original(_mutation)
