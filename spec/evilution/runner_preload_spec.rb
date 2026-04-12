@@ -153,13 +153,23 @@ RSpec.describe Evilution::Runner, "preload" do
       Object.send(:remove_const, :EvilutionPreloadMain) if defined?(EvilutionPreloadMain)
     end
 
-    it "loads rspec/core before preloading so spec_helper can use RSpec.configure" do
-      write_rails_tree(preload_body: "RSpec.configure { |c| }\nmodule EvilutionPreloadRSpecCfg; LOADED = true; end")
+    it "requires rspec/core before the preload file" do
+      write_rails_tree
       runner = described_class.new(config: build_config)
+
+      load_order = []
+      allow(runner).to receive(:require).and_wrap_original do |original, path|
+        load_order << path
+        original.call(path)
+      end
+
       runner.send(:perform_preload)
-      expect(defined?(EvilutionPreloadRSpecCfg::LOADED)).to eq("constant")
-    ensure
-      Object.send(:remove_const, :EvilutionPreloadRSpecCfg) if defined?(EvilutionPreloadRSpecCfg)
+
+      rspec_idx = load_order.index("rspec/core")
+      preload_idx = load_order.index { |p| p.include?("rails_helper") }
+      expect(rspec_idx).not_to be_nil, "expected require 'rspec/core' to be called"
+      expect(preload_idx).not_to be_nil, "expected preload file to be required"
+      expect(rspec_idx).to be < preload_idx
     end
   end
 end

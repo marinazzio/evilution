@@ -545,8 +545,6 @@ class Evilution::Runner
     spec_dir = File.expand_path(resolve_spec_dir)
     $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
     require "rspec/core" if config.integration == :rspec
-  rescue LoadError
-    # rspec/core not available yet; preload file will fail on its own if needed
   end
 
   def resolve_spec_dir
