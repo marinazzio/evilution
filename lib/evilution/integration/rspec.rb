@@ -12,6 +12,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def self.baseline_runner
     lambda { |spec_file|
       require "rspec/core"
+      spec_dir = File.expand_path("spec")
+      $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
       ::RSpec.reset
       status = ::RSpec::Core::Runner.run(
         ["--format", "progress", "--no-color", "--order", "defined", spec_file]
@@ -43,6 +45,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
     fire_hook(:setup_integration_pre, integration: :rspec)
     require "rspec/core"
+    add_spec_load_path
     Evilution::Integration::CrashDetector.register_with_rspec
     @rspec_loaded = true
     fire_hook(:setup_integration_post, integration: :rspec)
@@ -162,5 +165,13 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @warned_files << file_path
     warn "[evilution] No matching spec found for #{file_path}, running full suite. " \
          "Use --spec to specify the spec file."
+  end
+
+  # RSpec's CLI adds spec/ to $LOAD_PATH so that `--require spec_helper`
+  # (commonly in .rspec) resolves. We call Runner.run directly, bypassing
+  # the CLI, so we must replicate this.
+  def add_spec_load_path
+    spec_dir = File.expand_path("spec")
+    $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
   end
 end

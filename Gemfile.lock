@@ -30,7 +30,7 @@ GEM
       bigdecimal (>= 3.1, < 5)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
-    mcp (0.11.0)
+    mcp (0.12.0)
       json-schema (>= 4.1)
     minitest (5.27.0)
     parallel (2.0.1)
@@ -118,7 +118,7 @@ CHECKSUMS
   json-schema (6.2.0) sha256=e8bff46ed845a22c1ab2bd0d7eccf831c01fe23bb3920caa4c74db4306813666
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
-  mcp (0.11.0) sha256=e9fc96fdc3b46a51cfd6c6ae0d856eaf6d64d09e627c244eb011e1a2bbce4a7e
+  mcp (0.12.0) sha256=9ebbb0e39dda4845db720c7efbafdaca7a6db8f1e42d17bcc6f9df78733d0f2e
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
   parallel (2.0.1) sha256=337782d3e39f4121e67563bf91dd8ece67f48923d90698614773a0ec9a5b2c7d
   parser (3.3.11.1) sha256=d17ace7aabe3e72c3cc94043714be27cc6f852f104d81aa284c2281aecc65d54
