@@ -57,6 +57,15 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
       runner = described_class.new(config: config)
       expect(resolved_isolator_class(runner)).to eq(Evilution::Isolation::InProcess)
     end
+
+    it "detects Rails via resolved files when target_files is empty" do
+      write_rails_target
+      config = build_config(target_files: [])
+      runner = described_class.new(config: config)
+      resolved = [File.join(@tmp, "app", "models", "user.rb")]
+      allow(runner).to receive(:resolve_target_files).and_return(resolved)
+      expect(resolved_isolator_class(runner)).to eq(Evilution::Isolation::Fork)
+    end
   end
 
   describe "with isolation: :fork" do
@@ -87,7 +96,8 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
         target_files: [File.join(@tmp, "app", "models", "user.rb")],
         quiet: false
       )
-      expect { described_class.new(config: config) }.to output(/handle_interrupt|--isolation fork/).to_stderr
+      runner = described_class.new(config: config)
+      expect { resolved_isolator_class(runner) }.to output(/handle_interrupt|--isolation fork/).to_stderr
     end
 
     it "resolves to InProcess on a Rails project when explicitly requested" do
@@ -121,9 +131,9 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
       captured = StringIO.new
       orig = $stderr
       $stderr = captured
-      runner = described_class.new(config: config) # first warn during initialize
+      runner = described_class.new(config: config)
+      runner.send(:build_isolator) # first warn
       runner.send(:build_isolator) # should not warn again
-      runner.send(:build_isolator)
       $stderr = orig
       expect(captured.string.scan("handle_interrupt").length).to eq(1)
     end

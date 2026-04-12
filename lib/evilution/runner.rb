@@ -46,7 +46,6 @@ class Evilution::Runner
     @hooks = hooks
     @parser = Evilution::AST::Parser.new
     @registry = Evilution::Mutator::Registry.default
-    @isolator = build_isolator
     @cache = config.incremental? ? Evilution::Cache.new : nil
     @disable_detector = Evilution::DisableComment.new
     @disabled_ranges_cache = {}
@@ -98,7 +97,11 @@ class Evilution::Runner
 
   private
 
-  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks, :disable_detector, :sig_detector
+  attr_reader :parser, :registry, :cache, :on_result, :hooks, :disable_detector, :sig_detector
+
+  def isolator
+    @isolator ||= build_isolator
+  end
 
   def parse_subjects
     files = resolve_target_files
@@ -106,10 +109,13 @@ class Evilution::Runner
   end
 
   def resolve_target_files
-    return resolve_source_glob if source_glob_target?
-    return config.target_files unless config.target_files.empty?
-
-    Evilution::Git::ChangedFiles.new.call
+    @resolve_target_files ||= if source_glob_target?
+                                resolve_source_glob
+                              elsif !config.target_files.empty?
+                                config.target_files
+                              else
+                                Evilution::Git::ChangedFiles.new.call
+                              end
   end
 
   def source_glob_target?
@@ -512,7 +518,7 @@ class Evilution::Runner
   def detected_rails_root
     return @detected_rails_root if defined?(@detected_rails_root)
 
-    @detected_rails_root = Evilution::RailsDetector.rails_root_for_any(config.target_files)
+    @detected_rails_root = Evilution::RailsDetector.rails_root_for_any(resolve_target_files)
   end
 
   def perform_preload
@@ -523,7 +529,7 @@ class Evilution::Runner
     return unless path
 
     require File.expand_path(path)
-  rescue LoadError, StandardError => e
+  rescue ScriptError, StandardError => e
     raise Evilution::ConfigError.new(
       "failed to preload #{path.inspect}: #{e.class}: #{e.message}",
       file: path

@@ -118,5 +118,11 @@ RSpec.describe Evilution::Runner, "preload" do
       )
       expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
     end
+
+    it "raises ConfigError when the preload file has a SyntaxError" do
+      write_rails_tree(preload_body: "def broken(")
+      runner = described_class.new(config: build_config)
+      expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
+    end
   end
 end
