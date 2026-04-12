@@ -375,6 +375,349 @@ RSpec.describe Evilution::Integration::Base do
       end
     end
 
+    context "with ActiveSupport::Concern modules" do
+      let(:load_path_dir) { Dir.mktmpdir("evilution_base_concern") }
+      let(:source_path) { File.join(load_path_dir, "concern_target.rb") }
+
+      let(:concrete_class) do
+        Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+      end
+
+      before do
+        $LOAD_PATH.unshift(load_path_dir)
+      end
+
+      after do
+        $LOAD_PATH.delete(load_path_dir)
+        FileUtils.rm_rf(load_path_dir)
+      end
+
+      it "clears @_included_block before re-evaluating a Concern module" do
+        # Minimal ActiveSupport::Concern stub that replicates the guard behavior
+        stub_concern = Module.new do
+          def self.extended(base)
+            base.instance_variable_set(:@_not_a_concern, false)
+          end
+
+          def included(base = nil, &block)
+            if base.nil?
+              if instance_variable_defined?(:@_included_block)
+                if @_included_block.source_location != block.source_location
+                  raise "MultipleIncludedBlocks: Cannot define multiple 'included' blocks for a Concern"
+                end
+              else
+                @_included_block = block
+              end
+            else
+              super(base)
+            end
+          end
+        end
+        stub_const("ActiveSupport::Concern", stub_concern)
+
+        original = <<~RUBY
+          module EvilutionTestConcern
+            extend ActiveSupport::Concern
+
+            included do
+              # setup callback
+            end
+
+            def some_method
+              :original
+            end
+          end
+        RUBY
+        mutated = <<~RUBY
+          module EvilutionTestConcern
+            extend ActiveSupport::Concern
+
+            included do
+              # setup callback
+            end
+
+            def some_method
+              nil
+            end
+          end
+        RUBY
+
+        File.write(source_path, original)
+        load(source_path)
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        concern_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        result = concrete_class.new.call(concern_mut)
+
+        expect(result[:passed]).to be true
+        expect(result[:error]).to be_nil
+      ensure
+        Object.send(:remove_const, :EvilutionTestConcern) if defined?(EvilutionTestConcern)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+
+      it "handles consecutive mutations of the same Concern (included block)" do
+        stub_concern = Module.new do
+          def self.extended(base)
+            base.instance_variable_set(:@_not_a_concern, false)
+          end
+
+          def included(base = nil, &block)
+            if base.nil?
+              if instance_variable_defined?(:@_included_block)
+                if @_included_block.source_location != block.source_location
+                  raise "MultipleIncludedBlocks: Cannot define multiple 'included' blocks for a Concern"
+                end
+              else
+                @_included_block = block
+              end
+            else
+              super(base)
+            end
+          end
+        end
+        stub_const("ActiveSupport::Concern", stub_concern)
+
+        original = <<~RUBY
+          module EvilutionTestConcernConsec
+            extend ActiveSupport::Concern
+
+            included do
+              # setup callback
+            end
+
+            def some_method
+              :original
+            end
+          end
+        RUBY
+        mutated = <<~RUBY
+          module EvilutionTestConcernConsec
+            extend ActiveSupport::Concern
+
+            included do
+              # setup callback
+            end
+
+            def some_method
+              nil
+            end
+          end
+        RUBY
+
+        File.write(source_path, original)
+        load(source_path)
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        concern_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        integration = concrete_class.new
+
+        result1 = integration.call(concern_mut)
+        expect(result1[:passed]).to be true
+        expect(result1[:error]).to be_nil
+
+        result2 = integration.call(concern_mut)
+        expect(result2[:passed]).to be true
+        expect(result2[:error]).to be_nil
+      ensure
+        Object.send(:remove_const, :EvilutionTestConcernConsec) if defined?(EvilutionTestConcernConsec)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+
+      it "clears @_prepended_block before re-evaluating a Concern module" do
+        stub_concern = Module.new do
+          def self.extended(base)
+            base.instance_variable_set(:@_not_a_concern, false)
+          end
+
+          def prepended(base = nil, &block)
+            if base.nil?
+              if instance_variable_defined?(:@_prepended_block)
+                if @_prepended_block.source_location != block.source_location
+                  raise "MultiplePrependedBlocks: Cannot define multiple 'prepended' blocks for a Concern"
+                end
+              else
+                @_prepended_block = block
+              end
+            else
+              super(base)
+            end
+          end
+        end
+        stub_const("ActiveSupport::Concern", stub_concern)
+
+        original = <<~RUBY
+          module EvilutionTestPrepended
+            extend ActiveSupport::Concern
+
+            prepended do
+              # setup callback
+            end
+
+            def some_method
+              :original
+            end
+          end
+        RUBY
+        mutated = <<~RUBY
+          module EvilutionTestPrepended
+            extend ActiveSupport::Concern
+
+            prepended do
+              # setup callback
+            end
+
+            def some_method
+              nil
+            end
+          end
+        RUBY
+
+        File.write(source_path, original)
+        load(source_path)
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        concern_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        result = concrete_class.new.call(concern_mut)
+
+        expect(result[:passed]).to be true
+        expect(result[:error]).to be_nil
+      ensure
+        Object.send(:remove_const, :EvilutionTestPrepended) if defined?(EvilutionTestPrepended)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+
+      it "handles consecutive mutations of the same Concern (prepended block)" do
+        stub_concern = Module.new do
+          def self.extended(base)
+            base.instance_variable_set(:@_not_a_concern, false)
+          end
+
+          def prepended(base = nil, &block)
+            if base.nil?
+              if instance_variable_defined?(:@_prepended_block)
+                if @_prepended_block.source_location != block.source_location
+                  raise "MultiplePrependedBlocks: Cannot define multiple 'prepended' blocks for a Concern"
+                end
+              else
+                @_prepended_block = block
+              end
+            else
+              super(base)
+            end
+          end
+        end
+        stub_const("ActiveSupport::Concern", stub_concern)
+
+        original = <<~RUBY
+          module EvilutionTestPrependedConsec
+            extend ActiveSupport::Concern
+
+            prepended do
+              # setup callback
+            end
+
+            def some_method
+              :original
+            end
+          end
+        RUBY
+        mutated = <<~RUBY
+          module EvilutionTestPrependedConsec
+            extend ActiveSupport::Concern
+
+            prepended do
+              # setup callback
+            end
+
+            def some_method
+              nil
+            end
+          end
+        RUBY
+
+        File.write(source_path, original)
+        load(source_path)
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        concern_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        integration = concrete_class.new
+
+        result1 = integration.call(concern_mut)
+        expect(result1[:passed]).to be true
+        expect(result1[:error]).to be_nil
+
+        result2 = integration.call(concern_mut)
+        expect(result2[:passed]).to be true
+        expect(result2[:error]).to be_nil
+      ensure
+        Object.send(:remove_const, :EvilutionTestPrependedConsec) if defined?(EvilutionTestPrependedConsec)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+
+      it "does not affect modules that are not ActiveSupport::Concern" do
+        original = "module EvilutionTestNonConcern; def self.value; :original; end; end\n"
+        mutated = "module EvilutionTestNonConcern; def self.value; :mutated; end; end\n"
+        File.write(source_path, original)
+        load(source_path)
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        non_concern_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        value_during_test = nil
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            value_during_test = EvilutionTestNonConcern.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        checking_class.new.call(non_concern_mut)
+
+        expect(value_during_test).to eq(:mutated)
+      ensure
+        Object.send(:remove_const, :EvilutionTestNonConcern) if defined?(EvilutionTestNonConcern)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+    end
+
     context "with absolute path file (not under LOAD_PATH)" do
       let(:isolated_dir) { Dir.mktmpdir("evilution_base_abs") }
       let(:source_path) { File.join(isolated_dir, "abs_target.rb") }
