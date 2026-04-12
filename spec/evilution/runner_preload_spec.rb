@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "English"
 require "evilution/runner"
 require "evilution/rails_detector"
 require "fileutils"
@@ -9,8 +10,10 @@ RSpec.describe Evilution::Runner, "preload" do
   around do |example|
     Dir.mktmpdir("evilution-runner-preload") do |tmp|
       @tmp = tmp
+      saved_load_path = $LOAD_PATH.dup
       Evilution::RailsDetector.reset_cache!
       example.run
+      $LOAD_PATH.replace(saved_load_path)
     end
   end
 
@@ -123,6 +126,50 @@ RSpec.describe Evilution::Runner, "preload" do
       write_rails_tree(preload_body: "def broken(")
       runner = described_class.new(config: build_config)
       expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
+    end
+
+    it "adds spec/ to $LOAD_PATH so rails_helper can require spec_helper" do
+      write_rails_tree
+      unique = "evilution_preload_lp_#{$PROCESS_ID}"
+      File.write(
+        File.join(@tmp, "spec", "#{unique}.rb"),
+        "module EvilutionPreloadLP; LOADED = true; end\n"
+      )
+      File.write(
+        File.join(@tmp, "spec", "rails_helper.rb"),
+        "require '#{unique}'\nmodule EvilutionPreloadMain; LOADED = true; end\n"
+      )
+
+      original_lp = $LOAD_PATH.dup
+      runner = described_class.new(config: build_config)
+      runner.send(:perform_preload)
+
+      expect(defined?(EvilutionPreloadLP::LOADED)).to eq("constant")
+      expect(defined?(EvilutionPreloadMain::LOADED)).to eq("constant")
+    ensure
+      $LOAD_PATH.replace(original_lp) if original_lp
+      $LOADED_FEATURES.delete_if { |f| f.include?(unique) } if unique
+      Object.send(:remove_const, :EvilutionPreloadLP) if defined?(EvilutionPreloadLP)
+      Object.send(:remove_const, :EvilutionPreloadMain) if defined?(EvilutionPreloadMain)
+    end
+
+    it "requires rspec/core before the preload file" do
+      write_rails_tree
+      runner = described_class.new(config: build_config)
+
+      load_order = []
+      allow(runner).to receive(:require).and_wrap_original do |original, path|
+        load_order << path
+        original.call(path)
+      end
+
+      runner.send(:perform_preload)
+
+      rspec_idx = load_order.index("rspec/core")
+      preload_idx = load_order.index { |p| p.include?("rails_helper") }
+      expect(rspec_idx).not_to be_nil, "expected require 'rspec/core' to be called"
+      expect(preload_idx).not_to be_nil, "expected preload file to be required"
+      expect(rspec_idx).to be < preload_idx
     end
   end
 end
