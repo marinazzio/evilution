@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.3] - 2026-04-12
+
+### Fixed
+
+- **`LoadError: cannot load such file -- spec_helper`** — projects with `--require spec_helper` in `.rspec` failed on every mutation because `spec/` was not on `$LOAD_PATH`; RSpec's CLI normally adds it, but evilution calls `RSpec::Core::Runner.run` directly, bypassing the CLI; now adds `spec/` to `$LOAD_PATH` in both `ensure_framework_loaded` and `baseline_runner` (#669)
+
 ## [0.22.2] - 2026-04-12
 
 ### Added
