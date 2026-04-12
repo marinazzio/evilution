@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.22.2] - 2026-04-12
+
+### Added
+
+- **Rails-aware isolation auto-selection** — `isolation: :auto` (the default) now detects Rails projects by walking up from target files looking for `config/application.rb`; when Rails is detected, isolation resolves to `:fork` instead of `:in_process`, preventing indefinite hangs caused by Rails' `Thread.handle_interrupt(Exception => :never)` masking `Timeout.timeout`'s `Thread#raise` (#662, #663, PR #665)
+- **Parent-process preload for fork isolation** — new `--preload FILE` / `--no-preload` CLI flags and `preload:` config key; when fork isolation is active on a Rails project, evilution auto-detects and preloads `spec/rails_helper.rb` or `test/test_helper.rb` in the parent process so forked children inherit the loaded framework via copy-on-write, eliminating per-mutation Rails boot cost (#662, PR #665)
+- **`Evilution::RailsDetector` module** — lightweight filesystem-only detection of Rails roots with memoized cache and thread-safe mutex; used by both isolation resolution and preload auto-detection (#662, PR #665)
+- **Isolation strategy documentation** — `docs/isolation.md` explains the three strategies, the `handle_interrupt` hazard, and preload configuration (#662, PR #665)
+
+### Fixed
+
+- **`run_mutations_parallel` ignoring `--isolation`** — parallel mode hardcoded `Isolation::InProcess.new` for its worker isolator, silently overriding `config.isolation`; now uses `build_isolator` so `--jobs N --isolation fork` correctly uses fork per-mutation inside workers (#663, PR #665)
+- **Rails detection failing for auto-resolved targets** — `detected_rails_root` used `config.target_files` which is empty in git-changed or source-glob modes; now uses memoized `resolve_target_files` so Rails is detected regardless of how targets were specified (PR #665)
+- **`SyntaxError` in preload file escaping rescue** — `perform_preload` rescued `LoadError, StandardError` but `SyntaxError` is a `ScriptError` (not `StandardError`); now rescues `ScriptError, StandardError` (PR #665)
+- **Isolator built eagerly before targets resolved** — `build_isolator` ran in `initialize` before `resolve_target_files`; now lazy-initialized on first use, ensuring Rails detection has resolved targets available (PR #665)
+
+### Changed
+
+- **Isolation warning for explicit `in_process` under Rails** — when a user explicitly passes `--isolation in_process` on a detected Rails project, evilution emits a one-shot stderr warning about the `handle_interrupt` hang hazard and proceeds; suppressed by `--quiet` (#662, PR #665)
+
 ## [0.22.1] - 2026-04-10
 
 ### Added
