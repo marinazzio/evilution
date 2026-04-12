@@ -1,10 +1,16 @@
 # Changelog
 
+## [0.22.4] - 2026-04-12
+
+### Fixed
+
+- **`LoadError: cannot load such file -- spec_helper` during preload** — `perform_preload` ran before `ensure_framework_loaded`, so `spec/` was not on `$LOAD_PATH` and `rspec/core` was not loaded when `rails_helper.rb` tried to `require 'spec_helper'` and call `RSpec.configure`; now `prepare_load_path_for_preload` adds `spec/` to `$LOAD_PATH` and loads `rspec/core` before the preload file; errors (e.g. missing `rspec-core` gem) propagate as `ConfigError` with clear context (#669, #673)
+
 ## [0.22.3] - 2026-04-12
 
 ### Fixed
 
-- **`LoadError: cannot load such file -- spec_helper`** — projects with `--require spec_helper` in `.rspec` failed on every mutation because `spec/` was not on `$LOAD_PATH`; RSpec's CLI normally adds it, but evilution calls `RSpec::Core::Runner.run` directly, bypassing the CLI; now adds `spec/` to `$LOAD_PATH` in both `ensure_framework_loaded` and `baseline_runner` (#669)
+- **`LoadError: cannot load such file -- spec_helper`** — projects with `--require spec_helper` in `.rspec` failed on every mutation because `spec/` was not on `$LOAD_PATH`; RSpec's CLI normally adds it, but evilution calls `RSpec::Core::Runner.run` directly, bypassing the CLI; now adds `spec/` to `$LOAD_PATH` in `ensure_framework_loaded`, `baseline_runner`, and `perform_preload`; also loads `rspec/core` before preloading so that `spec_helper.rb` can use `RSpec.configure` (#669)
 
 ## [0.22.2] - 2026-04-12
 
