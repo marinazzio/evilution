@@ -87,6 +87,7 @@ class Evilution::Integration::Base
     File.write(dest, mutation.mutated_source)
     $LOAD_PATH.unshift(@temp_dir)
     displace_loaded_feature(mutation.file_path)
+    clear_concern_state(mutation.file_path)
     require(subpath.delete_suffix(".rb"))
   end
 
@@ -95,6 +96,7 @@ class Evilution::Integration::Base
     dest = File.join(@temp_dir, absolute)
     FileUtils.mkdir_p(File.dirname(dest))
     File.write(dest, mutation.mutated_source)
+    clear_concern_state(mutation.file_path)
     load(dest)
   end
 
@@ -108,6 +110,26 @@ class Evilution::Integration::Base
     FileUtils.rm_rf(@temp_dir)
     Evilution::TempDirTracker.unregister(@temp_dir)
     @temp_dir = nil
+  end
+
+  def clear_concern_state(file_path)
+    return unless defined?(ActiveSupport::Concern)
+
+    absolute = File.expand_path(file_path)
+
+    ObjectSpace.each_object(Module) do |mod|
+      next unless mod.singleton_class.ancestors.include?(ActiveSupport::Concern)
+
+      %i[@_included_block @_prepended_block].each do |ivar|
+        next unless mod.instance_variable_defined?(ivar)
+
+        block = mod.instance_variable_get(ivar)
+        block_file = block.source_location&.first
+        next unless block_file
+
+        mod.remove_instance_variable(ivar) if File.expand_path(block_file) == absolute
+      end
+    end
   end
 
   def resolve_require_subpath(file_path)
