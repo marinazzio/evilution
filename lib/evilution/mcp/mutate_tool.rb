@@ -111,7 +111,11 @@ class Evilution::MCP::MutateTool < MCP::Tool
     end
 
     def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec, suggest_tests)
-      opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, skip_config_file: true }
+      # Preload is disabled for MCP invocations: `require`-ing Rails into the
+      # long-lived MCP server would poison subsequent runs against other
+      # projects. MCP users who want the speedup should use the CLI.
+      opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, skip_config_file: true,
+               preload: false }
       opts[:target] = target if target
       opts[:timeout] = timeout if timeout
       opts[:jobs] = jobs if jobs

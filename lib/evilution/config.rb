@@ -26,7 +26,8 @@ class Evilution::Config
     ignore_patterns: [],
     show_disabled: false,
     baseline_session: nil,
-    skip_heredoc_literals: false
+    skip_heredoc_literals: false,
+    preload: nil
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
@@ -34,7 +35,7 @@ class Evilution::Config
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
               :ignore_patterns, :show_disabled, :baseline_session,
-              :skip_heredoc_literals
+              :skip_heredoc_literals, :preload
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -140,6 +141,11 @@ class Evilution::Config
       # Skip all string literal mutations inside heredocs (default: false)
       # skip_heredoc_literals: false
 
+      # Preload file required in the parent process before forking workers.
+      # For Rails projects, spec/rails_helper.rb or test/test_helper.rb is
+      # auto-detected when isolation resolves to :fork. Set to false to disable.
+      # preload: spec/rails_helper.rb # or test/test_helper.rb
+
       # Hooks: Ruby files returning a Proc, keyed by lifecycle event
       # hooks:
       #   worker_process_start: config/evilution_hooks/worker_start.rb
@@ -190,6 +196,15 @@ class Evilution::Config
     @baseline_session = merged[:baseline_session]
     @skip_heredoc_literals = merged[:skip_heredoc_literals]
     @hooks = validate_hooks(merged[:hooks])
+    @preload = validate_preload(merged[:preload])
+  end
+
+  def validate_preload(value)
+    return nil if value.nil?
+    return false if value == false
+    return value if value.is_a?(String)
+
+    raise Evilution::ConfigError, "preload must be nil, false, or a String path, got #{value.inspect}"
   end
 
   def validate_integration(value)

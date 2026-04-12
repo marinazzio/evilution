@@ -49,6 +49,27 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_timeout
     end
 
+    # Regression for EV-86l6 / GH #662:
+    # Rails wraps ActiveRecord transactions in
+    # Thread.handle_interrupt(Exception => :never), which defers Timeout's
+    # Thread#raise indefinitely. InProcess isolation hangs forever on such
+    # mutants. Fork isolation escapes the mask via SIGKILL from the parent.
+    it "kills a child stuck inside Thread.handle_interrupt(Exception => :never)" do
+      test_command = lambda { |_m|
+        Thread.handle_interrupt(Exception => :never) do
+          loop { 1 + 1 }
+        end
+        { passed: true }
+      }
+
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.2)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+
+      expect(result).to be_timeout
+      expect(elapsed).to be < 5 # Fork::GRACE_PERIOD (2s) + margin
+    end
+
     it "cleans up tracked temp dirs after a timeout" do
       dir = Dir.mktmpdir("evilution")
       Evilution::TempDirTracker.register(dir)

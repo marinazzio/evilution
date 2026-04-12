@@ -249,6 +249,9 @@ class Evilution::CLI
     opts.on("--incremental", "Cache killed/timeout results; skip re-running them on unchanged files") { @options[:incremental] = true }
     opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
+    opts.on("--preload FILE", "Preload FILE in the parent process before forking " \
+                              "(default: auto-detect spec/rails_helper.rb for Rails projects)") { |f| @options[:preload] = f }
+    opts.on("--no-preload", "Disable parent-process preload even for Rails projects") { @options[:preload] = false }
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
     opts.on("--suggest-tests", "Generate concrete test code in suggestions (RSpec or Minitest)") { @options[:suggest_tests] = true }
     opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }

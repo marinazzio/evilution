@@ -25,12 +25,18 @@ require_relative "ast/pattern/filter"
 require_relative "temp_dir_tracker"
 require_relative "disable_comment"
 require_relative "ast/sorbet_sig_detector"
+require_relative "rails_detector"
 
 class Evilution::Runner
   INTEGRATIONS = {
     rspec: Evilution::Integration::RSpec,
     minitest: Evilution::Integration::Minitest
   }.freeze
+
+  PRELOAD_CANDIDATES = [
+    File.join("spec", "rails_helper.rb"),
+    File.join("test", "test_helper.rb")
+  ].freeze
 
   attr_reader :config
 
@@ -40,7 +46,6 @@ class Evilution::Runner
     @hooks = hooks
     @parser = Evilution::AST::Parser.new
     @registry = Evilution::Mutator::Registry.default
-    @isolator = build_isolator
     @cache = config.incremental? ? Evilution::Cache.new : nil
     @disable_detector = Evilution::DisableComment.new
     @disabled_ranges_cache = {}
@@ -54,6 +59,9 @@ class Evilution::Runner
 
     subjects = parse_and_filter_subjects
     log_memory("after parse_subjects", "#{subjects.length} subjects")
+
+    perform_preload
+    log_memory("after preload") if rails_root_detected?
 
     baseline_result = run_baseline(subjects)
 
@@ -89,7 +97,11 @@ class Evilution::Runner
 
   private
 
-  attr_reader :parser, :registry, :isolator, :cache, :on_result, :hooks, :disable_detector, :sig_detector
+  attr_reader :parser, :registry, :cache, :on_result, :hooks, :disable_detector, :sig_detector
+
+  def isolator
+    @isolator ||= build_isolator
+  end
 
   def parse_subjects
     files = resolve_target_files
@@ -97,10 +109,13 @@ class Evilution::Runner
   end
 
   def resolve_target_files
-    return resolve_source_glob if source_glob_target?
-    return config.target_files unless config.target_files.empty?
-
-    Evilution::Git::ChangedFiles.new.call
+    @resolve_target_files ||= if source_glob_target?
+                                resolve_source_glob
+                              elsif !config.target_files.empty?
+                                config.target_files
+                              else
+                                Evilution::Git::ChangedFiles.new.call
+                              end
   end
 
   def source_glob_target?
@@ -483,9 +498,80 @@ class Evilution::Runner
   end
 
   def resolve_isolation
-    return :fork if config.isolation == :fork
+    case config.isolation
+    when :fork
+      :fork
+    when :in_process
+      warn_in_process_under_rails if rails_root_detected?
+      :in_process
+    else # :auto
+      rails_root_detected? ? :fork : :in_process
+    end
+  end
 
-    :in_process
+  def rails_root_detected?
+    return @rails_root_detected if defined?(@rails_root_detected)
+
+    @rails_root_detected = !detected_rails_root.nil?
+  end
+
+  def detected_rails_root
+    return @detected_rails_root if defined?(@detected_rails_root)
+
+    @detected_rails_root = Evilution::RailsDetector.rails_root_for_any(resolve_target_files)
+  end
+
+  def perform_preload
+    return if config.preload == false
+    return unless resolve_isolation == :fork
+
+    path = resolve_preload_path
+    return unless path
+
+    require File.expand_path(path)
+  rescue ScriptError, StandardError => e
+    raise Evilution::ConfigError.new(
+      "failed to preload #{path.inspect}: #{e.class}: #{e.message}",
+      file: path
+    )
+  end
+
+  def resolve_preload_path
+    if config.preload.is_a?(String)
+      unless File.file?(config.preload)
+        raise Evilution::ConfigError.new(
+          "preload file not found: #{config.preload.inspect}",
+          file: config.preload
+        )
+      end
+      return config.preload
+    end
+
+    root = detected_rails_root
+    return nil unless root
+
+    PRELOAD_CANDIDATES.each do |rel|
+      abs = File.join(root, rel)
+      return abs if File.file?(abs)
+    end
+    nil
+  end
+
+  # When the user explicitly requests InProcess on a Rails project, warn once
+  # per run. Rails wraps ActiveRecord transactions in
+  # Thread.handle_interrupt(Exception => :never), which defers Timeout's
+  # Thread#raise indefinitely — making InProcess unable to kill runaway mutants.
+  def warn_in_process_under_rails
+    return if config.quiet
+    return if @warned_in_process_under_rails
+
+    @warned_in_process_under_rails = true
+    $stderr.write(
+      "[evilution] warning: --isolation in_process is unsafe on Rails projects. " \
+      "ActiveRecord wraps transactions in Thread.handle_interrupt(Exception => :never), " \
+      "which swallows Timeout.timeout and can cause evilution to hang indefinitely on " \
+      "mutants that introduce infinite loops. Use --isolation fork for reliable interruption.\n"
+    )
   end
 
   def resolve_integration_class
