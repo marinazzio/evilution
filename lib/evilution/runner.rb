@@ -528,12 +528,32 @@ class Evilution::Runner
     path = resolve_preload_path
     return unless path
 
+    prepare_load_path_for_preload
     require File.expand_path(path)
   rescue ScriptError, StandardError => e
     raise Evilution::ConfigError.new(
       "failed to preload #{path.inspect}: #{e.class}: #{e.message}",
       file: path
     )
+  end
+
+  # Preload files (e.g. spec/rails_helper.rb) typically `require 'spec_helper'`
+  # which needs spec/ on $LOAD_PATH, and use `RSpec.configure` which needs
+  # rspec/core loaded. The RSpec CLI normally sets this up, but evilution
+  # calls Runner.run directly.
+  def prepare_load_path_for_preload
+    spec_dir = File.expand_path(resolve_spec_dir)
+    $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
+    require "rspec/core" if config.integration == :rspec
+  rescue LoadError
+    # rspec/core not available yet; preload file will fail on its own if needed
+  end
+
+  def resolve_spec_dir
+    root = detected_rails_root
+    return File.join(root, "spec") if root
+
+    "spec"
   end
 
   def resolve_preload_path

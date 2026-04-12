@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "English"
 require "evilution/runner"
 require "evilution/rails_detector"
 require "fileutils"
@@ -9,8 +10,10 @@ RSpec.describe Evilution::Runner, "preload" do
   around do |example|
     Dir.mktmpdir("evilution-runner-preload") do |tmp|
       @tmp = tmp
+      saved_load_path = $LOAD_PATH.dup
       Evilution::RailsDetector.reset_cache!
       example.run
+      $LOAD_PATH.replace(saved_load_path)
     end
   end
 
@@ -123,6 +126,40 @@ RSpec.describe Evilution::Runner, "preload" do
       write_rails_tree(preload_body: "def broken(")
       runner = described_class.new(config: build_config)
       expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
+    end
+
+    it "adds spec/ to $LOAD_PATH so rails_helper can require spec_helper" do
+      write_rails_tree
+      unique = "evilution_preload_lp_#{$PROCESS_ID}"
+      File.write(
+        File.join(@tmp, "spec", "#{unique}.rb"),
+        "module EvilutionPreloadLP; LOADED = true; end\n"
+      )
+      File.write(
+        File.join(@tmp, "spec", "rails_helper.rb"),
+        "require '#{unique}'\nmodule EvilutionPreloadMain; LOADED = true; end\n"
+      )
+
+      original_lp = $LOAD_PATH.dup
+      runner = described_class.new(config: build_config)
+      runner.send(:perform_preload)
+
+      expect(defined?(EvilutionPreloadLP::LOADED)).to eq("constant")
+      expect(defined?(EvilutionPreloadMain::LOADED)).to eq("constant")
+    ensure
+      $LOAD_PATH.replace(original_lp) if original_lp
+      $LOADED_FEATURES.delete_if { |f| f.include?(unique) } if unique
+      Object.send(:remove_const, :EvilutionPreloadLP) if defined?(EvilutionPreloadLP)
+      Object.send(:remove_const, :EvilutionPreloadMain) if defined?(EvilutionPreloadMain)
+    end
+
+    it "loads rspec/core before preloading so spec_helper can use RSpec.configure" do
+      write_rails_tree(preload_body: "RSpec.configure { |c| }\nmodule EvilutionPreloadRSpecCfg; LOADED = true; end")
+      runner = described_class.new(config: build_config)
+      runner.send(:perform_preload)
+      expect(defined?(EvilutionPreloadRSpecCfg::LOADED)).to eq("constant")
+    ensure
+      Object.send(:remove_const, :EvilutionPreloadRSpecCfg) if defined?(EvilutionPreloadRSpecCfg)
     end
   end
 end
