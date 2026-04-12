@@ -87,6 +87,7 @@ class Evilution::Integration::Base
     File.write(dest, mutation.mutated_source)
     $LOAD_PATH.unshift(@temp_dir)
     displace_loaded_feature(mutation.file_path)
+    pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
     require(subpath.delete_suffix(".rb"))
   end
@@ -96,6 +97,7 @@ class Evilution::Integration::Base
     dest = File.join(@temp_dir, absolute)
     FileUtils.mkdir_p(File.dirname(dest))
     File.write(dest, mutation.mutated_source)
+    pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
     load(dest)
   end
@@ -110,6 +112,30 @@ class Evilution::Integration::Base
     FileUtils.rm_rf(@temp_dir)
     Evilution::TempDirTracker.unregister(@temp_dir)
     @temp_dir = nil
+  end
+
+  def pin_autoloaded_constants(source)
+    names = []
+    nesting = []
+    source.each_line do |line|
+      if (match = line.match(/^\s*(?:module|class)\s+([A-Z]\w*(?:::\w+)*)/))
+        const = match[1]
+        names << qualify_constant(const, nesting)
+        nesting << const unless const.include?("::")
+        Object.const_get(names.last)
+      elsif line.match?(/^\s*end\b/)
+        nesting.pop if nesting.any?
+      end
+    rescue NameError # :nodoc:
+      nil
+    end
+    names.uniq
+  end
+
+  def qualify_constant(const, nesting)
+    return const if nesting.empty? || const.include?("::")
+
+    "#{nesting.join("::")}::#{const}"
   end
 
   def clear_concern_state(file_path)
@@ -135,10 +161,7 @@ class Evilution::Integration::Base
   end
 
   def source_matches?(block_path, absolute, subpath)
-    return true if block_path == absolute
-    return true if subpath && block_path.end_with?("/#{subpath}")
-
-    false
+    block_path == absolute || (subpath && block_path.end_with?("/#{subpath}"))
   end
 
   def resolve_require_subpath(file_path)
