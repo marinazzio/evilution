@@ -839,6 +839,36 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  describe "spec load path" do
+    let(:spec_dir) { File.expand_path("spec") }
+    let(:original_load_path) { $LOAD_PATH.dup }
+
+    after { $LOAD_PATH.replace(original_load_path) }
+
+    it "adds spec/ to $LOAD_PATH during ensure_framework_loaded" do
+      $LOAD_PATH.delete(spec_dir)
+
+      fresh = described_class.new(test_files: ["spec/some_spec.rb"])
+      fresh.instance_variable_set(:@rspec_loaded, false)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      fresh.call(mutation)
+
+      expect($LOAD_PATH).to include(spec_dir)
+    end
+
+    it "adds spec/ to $LOAD_PATH in baseline_runner" do
+      $LOAD_PATH.delete(spec_dir)
+
+      runner = described_class.baseline_runner
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      runner.call("spec/some_spec.rb")
+
+      expect($LOAD_PATH).to include(spec_dir)
+    end
+  end
+
   describe ".baseline_runner" do
     it "returns a callable" do
       expect(described_class.baseline_runner).to respond_to(:call)
