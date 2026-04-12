@@ -116,6 +116,7 @@ class Evilution::Integration::Base
     return unless defined?(ActiveSupport::Concern)
 
     absolute = File.expand_path(file_path)
+    subpath = resolve_require_subpath(file_path)
 
     ObjectSpace.each_object(Module) do |mod|
       next unless mod.singleton_class.ancestors.include?(ActiveSupport::Concern)
@@ -127,9 +128,17 @@ class Evilution::Integration::Base
         block_file = block.source_location&.first
         next unless block_file
 
-        mod.remove_instance_variable(ivar) if File.expand_path(block_file) == absolute
+        expanded = File.expand_path(block_file)
+        mod.remove_instance_variable(ivar) if source_matches?(expanded, absolute, subpath)
       end
     end
+  end
+
+  def source_matches?(block_path, absolute, subpath)
+    return true if block_path == absolute
+    return true if subpath && block_path.end_with?("/#{subpath}")
+
+    false
   end
 
   def resolve_require_subpath(file_path)
