@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.5] - 2026-04-12
+
+### Fixed
+
+- **`ActiveSupport::Concern` modules: all mutations error with `MultipleIncludedBlocks`** — re-evaluating a mutated concern file triggered Rails' guard because `@_included_block` (and `@_prepended_block`) was already set from the original load with a different `source_location`; now `clear_concern_state` removes these instance variables from affected concern modules before `require`/`load`, matching both original file paths and temp-dir copies via subpath suffix so consecutive mutations of the same concern also succeed (#676, PR #678)
+
 ## [0.22.4] - 2026-04-12
 
 ### Fixed
