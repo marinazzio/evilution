@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "prism"
 require "tmpdir"
 require_relative "../integration"
 require_relative "../temp_dir_tracker"
@@ -115,27 +116,27 @@ class Evilution::Integration::Base
   end
 
   def pin_autoloaded_constants(source)
-    names = []
-    nesting = []
-    source.each_line do |line|
-      if (match = line.match(/^\s*(?:module|class)\s+([A-Z]\w*(?:::\w+)*)/))
-        const = match[1]
-        names << qualify_constant(const, nesting)
-        nesting << const unless const.include?("::")
-        Object.const_get(names.last)
-      elsif line.match?(/^\s*end\b/)
-        nesting.pop if nesting.any?
-      end
+    collect_constant_names(Prism.parse(source).value).each do |name|
+      Object.const_get(name) if Object.const_defined?(name, false)
     rescue NameError # :nodoc:
       nil
     end
-    names.uniq
   end
 
-  def qualify_constant(const, nesting)
-    return const if nesting.empty? || const.include?("::")
-
-    "#{nesting.join("::")}::#{const}"
+  def collect_constant_names(node, nesting = [])
+    names = []
+    case node
+    when Prism::ModuleNode, Prism::ClassNode
+      const = node.constant_path.full_name
+      qualified = nesting.any? && !const.include?("::") ? "#{nesting.join("::")}::#{const}" : const
+      names << qualified
+      names.concat(collect_constant_names(node.body, nesting + [const])) if node.body
+    when Prism::ProgramNode
+      names.concat(collect_constant_names(node.statements, nesting)) if node.statements
+    when Prism::StatementsNode
+      node.body.each { |child| names.concat(collect_constant_names(child, nesting)) }
+    end
+    names
   end
 
   def clear_concern_state(file_path)

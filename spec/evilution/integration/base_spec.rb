@@ -684,11 +684,11 @@ RSpec.describe Evilution::Integration::Base do
         $LOADED_FEATURES.delete(File.expand_path(source_path))
       end
 
-      it "pins autoloaded constants before loading to prevent Zeitwerk re-autoload" do
+      it "pins constants before clear_concern_state to prevent Zeitwerk re-autoload" do
         # Zeitwerk's const_added hook can re-autoload the original file when
         # a module is reopened from a temp dir, re-setting @_included_block
         # after clear_concern_state already removed it.
-        # The fix: resolve (pin) constants via const_get before loading,
+        # The fix: pin constants via const_get before clearing and loading,
         # so Zeitwerk considers them already loaded and skips re-autoload.
         stub_concern = Module.new do
           def self.extended(base)
@@ -742,17 +742,21 @@ RSpec.describe Evilution::Integration::Base do
         load(source_path)
         $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
 
-        # Track that pin_autoloaded_constants resolves the right constant
-        # before clear_concern_state and load run
-        pin_calls = []
-        pinning_class = Class.new(described_class) do
+        # Track call ordering: pin must happen before clear_concern_state
+        call_order = []
+        ordering_class = Class.new(described_class) do
           define_method(:ensure_framework_loaded) { nil }
           define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
           define_method(:build_args) { |_mutation| [] }
           define_method(:reset_state) { nil }
 
           define_method(:pin_autoloaded_constants) do |source|
-            super(source).tap { |result| pin_calls << result }
+            super(source).tap { |result| call_order << [:pin, result] }
+          end
+
+          define_method(:clear_concern_state) do |fp|
+            call_order << [:clear]
+            super(fp)
           end
         end
 
@@ -763,12 +767,14 @@ RSpec.describe Evilution::Integration::Base do
           mutated_source: mutated
         )
 
-        result = pinning_class.new.call(concern_mut)
+        result = ordering_class.new.call(concern_mut)
 
         expect(result[:passed]).to be true
         expect(result[:error]).to be_nil
-        expect(pin_calls.length).to eq(1)
-        expect(pin_calls.first).to include("EvilutionTestZeitwerk")
+
+        # Verify pin runs before clear
+        expect(call_order.map(&:first)).to eq(%i[pin clear])
+        expect(call_order.first[1]).to include("EvilutionTestZeitwerk")
       ensure
         Object.send(:remove_const, :EvilutionTestZeitwerk) if defined?(EvilutionTestZeitwerk)
         $LOADED_FEATURES.delete(File.expand_path(source_path))
