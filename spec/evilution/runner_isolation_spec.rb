@@ -138,4 +138,15 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
       expect(captured.string.scan("handle_interrupt").length).to eq(1)
     end
   end
+
+  describe "parallel mode" do
+    it "uses build_isolator for worker isolation, not hardcoded InProcess" do
+      write_plain_target
+      config = build_config(isolation: :fork, jobs: 2)
+      runner = described_class.new(config: config)
+
+      expect(runner).to receive(:build_isolator).at_least(:once).and_call_original
+      runner.send(:run_mutations_parallel, [])
+    end
+  end
 end
