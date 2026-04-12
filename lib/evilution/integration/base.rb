@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "prism"
 require "tmpdir"
 require_relative "../integration"
 require_relative "../temp_dir_tracker"
@@ -87,6 +88,7 @@ class Evilution::Integration::Base
     File.write(dest, mutation.mutated_source)
     $LOAD_PATH.unshift(@temp_dir)
     displace_loaded_feature(mutation.file_path)
+    pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
     require(subpath.delete_suffix(".rb"))
   end
@@ -96,6 +98,7 @@ class Evilution::Integration::Base
     dest = File.join(@temp_dir, absolute)
     FileUtils.mkdir_p(File.dirname(dest))
     File.write(dest, mutation.mutated_source)
+    pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
     load(dest)
   end
@@ -110,6 +113,30 @@ class Evilution::Integration::Base
     FileUtils.rm_rf(@temp_dir)
     Evilution::TempDirTracker.unregister(@temp_dir)
     @temp_dir = nil
+  end
+
+  def pin_autoloaded_constants(source)
+    collect_constant_names(Prism.parse(source).value).each do |name|
+      Object.const_get(name) if Object.const_defined?(name, false)
+    rescue NameError # :nodoc:
+      nil
+    end
+  end
+
+  def collect_constant_names(node, nesting = [])
+    names = []
+    case node
+    when Prism::ModuleNode, Prism::ClassNode
+      const = node.constant_path.full_name
+      qualified = nesting.any? && !const.include?("::") ? "#{nesting.join("::")}::#{const}" : const
+      names << qualified
+      names.concat(collect_constant_names(node.body, nesting + [const])) if node.body
+    when Prism::ProgramNode
+      names.concat(collect_constant_names(node.statements, nesting)) if node.statements
+    when Prism::StatementsNode
+      node.body.each { |child| names.concat(collect_constant_names(child, nesting)) }
+    end
+    names
   end
 
   def clear_concern_state(file_path)
@@ -135,10 +162,7 @@ class Evilution::Integration::Base
   end
 
   def source_matches?(block_path, absolute, subpath)
-    return true if block_path == absolute
-    return true if subpath && block_path.end_with?("/#{subpath}")
-
-    false
+    block_path == absolute || (subpath && block_path.end_with?("/#{subpath}"))
   end
 
   def resolve_require_subpath(file_path)

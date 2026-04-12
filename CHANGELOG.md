@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.6] - 2026-04-12
+
+### Fixed
+
+- **Zeitwerk re-autoloads original file during mutation load** — Zeitwerk's `const_added` hook re-autoloaded the original source when a module constant was reopened from a temp-dir copy, re-setting `@_included_block` after `clear_concern_state` already removed it; now `pin_autoloaded_constants` resolves all module/class constants from the source via `Object.const_get` before loading, preventing the autoloader from re-triggering (#680)
+
 ## [0.22.5] - 2026-04-12
 
 ### Fixed
