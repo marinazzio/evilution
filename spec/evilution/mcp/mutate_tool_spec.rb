@@ -226,6 +226,17 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
       end
 
+      it "lets explicit suggest_tests: false override .evilution.yml setting" do
+        File.write(".evilution.yml", "suggest_tests: true\n")
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: false, server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          on_result: anything,
+          config: have_attributes(suggest_tests: false)
+        )
+      end
+
       it "forces preload to false even when .evilution.yml enables it" do
         File.write(".evilution.yml", "preload: true\n")
 

@@ -313,7 +313,7 @@ Pass `suggest_tests: true` in the `evilution-mutate` call to activate this mode.
 
 `evilution-mutate` and `evilution-info` load `.evilution.yml` (or `config/evilution.yml`) by default, matching `evilution` CLI behavior — so timeout, jobs, integration, target, ignore_patterns, and other project settings carry over without the agent having to re-pass them on every call. Explicit tool parameters still win over file settings.
 
-Pass `skip_config: true` to ignore the project config file and run with defaults.
+Pass `skip_config: true` to ignore the project config file. This skips loading `.evilution.yml` / `config/evilution.yml`, but MCP-specific overrides (JSON output, quiet mode, preload disabled) and explicit tool parameters still apply.
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 

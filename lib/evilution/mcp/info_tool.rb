@@ -52,7 +52,8 @@ class Evilution::MCP::InfoTool < MCP::Tool
       },
       skip_config: {
         type: "boolean",
-        description: "[subjects, tests] When true, ignore .evilution.yml and run with defaults. " \
+        description: "[subjects, tests] When true, ignore .evilution.yml / config/evilution.yml; " \
+                     "explicit tool parameters still apply. " \
                      "Default: false — project config is loaded so the result reflects what `evilution` CLI would see."
       }
     },

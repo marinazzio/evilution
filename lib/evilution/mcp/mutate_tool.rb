@@ -48,8 +48,10 @@ class Evilution::MCP::MutateTool < MCP::Tool
       },
       skip_config: {
         type: "boolean",
-        description: "When true, ignore .evilution.yml and run with defaults. " \
-                     "Default: false — project config is loaded so the MCP run matches `evilution` CLI behavior."
+        description: "When true, ignore .evilution.yml / config/evilution.yml. " \
+                     "MCP-specific overrides (JSON output, quiet mode, preload disabled) and explicit tool " \
+                     "parameters still apply. Default: false — project config is loaded so the MCP run " \
+                     "matches `evilution` CLI behavior."
       },
       verbosity: {
         type: "string",
@@ -127,7 +129,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       opts[:jobs] = jobs if jobs
       opts[:fail_fast] = fail_fast if fail_fast
       opts[:spec_files] = spec if spec
-      opts[:suggest_tests] = true if suggest_tests
+      opts[:suggest_tests] = suggest_tests unless suggest_tests.nil?
       opts
     end
     # rubocop:enable Metrics/ParameterLists
