@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.22.7] - 2026-04-13
+
+### Fixed
+
+- **Rails 8 models with `enum`: every mutation errors with `ArgumentError`** — re-running the class body via `load`/`require` retriggered Rails 8's `detect_enum_conflict!` because the enum's predicate methods already existed from the first load, so mutations scored 0% on any affected file; now `remove_defined_constants` drops constants defined by the mutated source (via `remove_const` on the parent namespace) before re-loading, so the class body runs on a fresh constant and DSLs with conflict detection (enum, and any future DSL with redefinition guards) see a clean slate (#683)
+
 ## [0.22.6] - 2026-04-12
 
 ### Fixed
