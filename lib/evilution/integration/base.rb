@@ -55,6 +55,9 @@ class Evilution::Integration::Base
   end
 
   def apply_mutation(mutation)
+    prism_error = validate_mutated_syntax(mutation.mutated_source)
+    return prism_error if prism_error
+
     @temp_dir = Dir.mktmpdir("evilution")
     Evilution::TempDirTracker.register(@temp_dir)
     @displaced_feature = nil
@@ -79,6 +82,17 @@ class Evilution::Integration::Base
       error: "#{e.class}: #{e.message}",
       error_class: e.class.name,
       error_backtrace: Array(e.backtrace).first(5)
+    }
+  end
+
+  def validate_mutated_syntax(source)
+    return nil if Prism.parse(source).success?
+
+    {
+      passed: false,
+      error: "mutated source has syntax errors",
+      error_class: "SyntaxError",
+      error_backtrace: []
     }
   end
 

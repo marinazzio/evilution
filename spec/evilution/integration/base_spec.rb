@@ -344,6 +344,69 @@ RSpec.describe Evilution::Integration::Base do
         Object.send(:remove_const, :EvilutionTestSyntax) if defined?(EvilutionTestSyntax)
       end
 
+      it "rejects syntactically invalid mutated source via Prism before loading" do
+        original = "module EvilutionTestPrismPre; def self.value; :original; end; end\n"
+        invalid = "module EvilutionTestPrismPre; def self.value; :mutated; end; end; )\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: invalid
+        )
+
+        run_tests_called = false
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            run_tests_called = true
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        result = checking_class.new.call(lp_mut)
+
+        expect(result[:passed]).to be false
+        expect(result[:error]).to eq("mutated source has syntax errors")
+        expect(result[:error_class]).to eq("SyntaxError")
+        expect(run_tests_called).to be false
+      ensure
+        Object.send(:remove_const, :EvilutionTestPrismPre) if defined?(EvilutionTestPrismPre)
+      end
+
+      it "does not create a temp dir when Prism rejects the source" do
+        original = "module EvilutionTestPrismNoWrite; def self.value; :original; end; end\n"
+        invalid = "module EvilutionTestPrismNoWrite; def self.(\n"
+        File.write(source_path, original)
+        load(source_path)
+
+        lp_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: invalid
+        )
+
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        allow(Dir).to receive(:mktmpdir).and_call_original
+
+        checking_class.new.call(lp_mut)
+
+        expect(Dir).not_to have_received(:mktmpdir).with("evilution")
+      ensure
+        Object.send(:remove_const, :EvilutionTestPrismNoWrite) if defined?(EvilutionTestPrismNoWrite)
+      end
+
       it "returns error result when mutated source raises at load time" do
         original = "module EvilutionTestLoadErr; def self.value; :original; end; end\n"
         invalid = "module EvilutionTestLoadErr; super; end\n"
