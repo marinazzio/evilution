@@ -236,6 +236,23 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(data["error"]["message"]).to include("results directory")
     end
 
+    it "rejects a symlink inside results_dir that points outside" do
+      outside = Dir.mktmpdir("evilution-outside")
+      target = File.join(outside, "secret.json")
+      File.write(target, JSON.generate(full_session))
+      link_path = File.join(results_dir, "link.json")
+      File.symlink(target, link_path)
+
+      response = call(action: "show", path: link_path, results_dir: results_dir)
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to include("results directory")
+    ensure
+      FileUtils.rm_rf(outside)
+    end
+
     it "does not touch the filesystem for a path outside the boundary" do
       outside_path = "/etc/shadow"
 

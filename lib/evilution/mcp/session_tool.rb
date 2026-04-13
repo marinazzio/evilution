@@ -25,7 +25,8 @@ class Evilution::MCP::SessionTool < MCP::Tool
       },
       results_dir: {
         type: "string",
-        description: "[list] Session results directory (default: .evilution/results)"
+        description: "[list|show|diff] Session results directory (default: .evilution/results). " \
+                     "For show/diff, acts as the containment root: path/base/head must resolve under this directory."
       },
       limit: {
         type: "integer",
@@ -131,9 +132,15 @@ class Evilution::MCP::SessionTool < MCP::Tool
     end
 
     def within?(path, results_dir)
-      resolved_root = File.expand_path(results_dir) + File::SEPARATOR
-      resolved_path = File.expand_path(path)
-      resolved_path.start_with?(resolved_root)
+      resolved_root = canonical_path(results_dir)
+      resolved_path = canonical_path(path)
+      resolved_path == resolved_root || resolved_path.start_with?(resolved_root + File::SEPARATOR)
+    end
+
+    def canonical_path(path)
+      File.realpath(path)
+    rescue Errno::ENOENT
+      File.expand_path(path)
     end
 
     def success_response(payload)
