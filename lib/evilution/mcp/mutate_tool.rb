@@ -6,6 +6,7 @@ require_relative "../config"
 require_relative "../runner"
 require_relative "../reporter/json"
 require_relative "../reporter/suggestion"
+require_relative "../spec_resolver"
 
 require_relative "../mcp"
 
@@ -22,6 +23,9 @@ class Evilution::MCP::MutateTool < MCP::Tool
               "Supports line-range file targeting (lib/foo.rb:15-30), 'target' method filter, explicit 'spec' overrides, " \
               "'fail_fast' for early exit on N survivors, 'baseline: false' to skip the green-suite precheck, " \
               "and 'verbosity' (full/summary/minimal) to match the agent's context budget. " \
+              "Survived mutants are enriched beyond `evilution --format json`: each entry includes " \
+              "'subject' (Class#method), resolved 'spec_file', and a concrete 'next_step' hint — " \
+              "so the agent can jump straight to writing the missing test. " \
               "Prefer this over shelling out to 'evilution' — the response is machine-readable " \
               "and already trimmed for survived-mutant triage."
   input_schema(
@@ -109,7 +113,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       runner = Evilution::Runner.new(config: config, on_result: on_result)
       summary = runner.call
       report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true, integration: config.integration).call(summary)
-      compact = trim_report(report, normalize_verbosity(verbosity))
+      compact = trim_report(report, normalize_verbosity(verbosity), summary.survived_results, config)
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
     rescue Evilution::Error => e
@@ -179,7 +183,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       raise Evilution::ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
     end
 
-    def trim_report(json_string, verbosity)
+    def trim_report(json_string, verbosity, survived_results, config)
       data = ::JSON.parse(json_string)
       case verbosity
       when "full"
@@ -197,7 +201,50 @@ class Evilution::MCP::MutateTool < MCP::Tool
         data.delete("timed_out")
         data.delete("errors")
       end
+      enrich_survived(data, survived_results, config)
       ::JSON.generate(data)
+    end
+
+    def enrich_survived(data, survived_results, config)
+      entries = data["survived"]
+      return unless entries.is_a?(Array)
+
+      explicit_spec = explicit_spec_override(config)
+      resolver = explicit_spec ? nil : resolver_for_integration(config.integration)
+      cache = {}
+
+      entries.each_with_index do |entry, index|
+        result = survived_results[index]
+        next unless result
+
+        mutation = result.mutation
+        entry["subject"] = mutation.subject.name
+        spec_file = explicit_spec || cache.fetch(mutation.file_path) do
+          cache[mutation.file_path] = resolver.call(mutation.file_path)
+        end
+        entry["spec_file"] = spec_file if spec_file
+        entry["next_step"] = build_next_step(mutation, spec_file)
+      end
+    end
+
+    def explicit_spec_override(config)
+      return nil unless config.respond_to?(:spec_files)
+
+      files = Array(config.spec_files).compact.map(&:to_s).reject(&:empty?)
+      files.first
+    end
+
+    def resolver_for_integration(integration)
+      integration_class = Evilution::Runner::INTEGRATIONS[integration.to_sym]
+      return Evilution::SpecResolver.new unless integration_class
+
+      integration_class.baseline_options[:spec_resolver] || Evilution::SpecResolver.new
+    end
+
+    def build_next_step(mutation, spec_file)
+      target = spec_file || "the covering test file"
+      "Add a test in #{target} that fails against this mutation at #{mutation.file_path}:#{mutation.line} " \
+        "(#{mutation.subject.name}, #{mutation.operator_name})."
     end
 
     def strip_diffs(data, key)
