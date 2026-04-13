@@ -22,6 +22,12 @@ RSpec.describe Evilution::MCP::Server do
       expect(tools.keys).to include("evilution-session")
     end
 
+    it "registers the info tool" do
+      tools = server.instance_variable_get(:@tools)
+
+      expect(tools.keys).to include("evilution-info")
+    end
+
     it "does not register the deprecated session-list/show/diff tools" do
       tools = server.instance_variable_get(:@tools)
 
