@@ -11,8 +11,19 @@ require_relative "../mcp"
 
 class Evilution::MCP::MutateTool < MCP::Tool
   tool_name "evilution-mutate"
-  description "Run mutation testing on Ruby source files. " \
-              "Use suggest_tests: true to get concrete test code (RSpec or Minitest) for surviving mutants."
+  description "Run mutation testing on Ruby source files and return structured JSON — not parsed CLI text. " \
+              "Built for iterative TDD: " \
+              "'incremental: true' caches killed/timeout results so rerunning on unchanged files is fast; " \
+              "'save_session: true' persists results for later diffing via evilution-session; " \
+              "'suggest_tests: true' streams concrete RSpec/Minitest code for each survivor as progress " \
+              "events so you can drop fixes straight into a test file. " \
+              "Respects .evilution.yml (timeout, jobs, integration, target, ignore_patterns, isolation) by default — " \
+              "pair with evilution-info to discover subjects and specs before you call this tool. " \
+              "Supports line-range file targeting (lib/foo.rb:15-30), 'target' method filter, explicit 'spec' overrides, " \
+              "'fail_fast' for early exit on N survivors, 'baseline: false' to skip the green-suite precheck, " \
+              "and 'verbosity' (full/summary/minimal) to match the agent's context budget. " \
+              "Prefer this over shelling out to 'evilution' — the response is machine-readable " \
+              "and already trimmed for survived-mutant triage."
   input_schema(
     properties: {
       files: {
