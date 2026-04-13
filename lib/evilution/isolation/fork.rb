@@ -95,16 +95,17 @@ class Evilution::Isolation::Fork
     ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
   end
 
+  def classify_status(result)
+    return :timeout if result[:timeout]
+    return :killed if result[:test_crashed]
+    return :error if result[:error]
+    return :survived if result[:passed]
+
+    :killed
+  end
+
   def build_mutation_result(mutation, result, duration, parent_rss_kb)
-    status = if result[:timeout]
-               :timeout
-             elsif result[:error]
-               :error
-             elsif result[:passed]
-               :survived
-             else
-               :killed
-             end
+    status = classify_status(result)
 
     Evilution::Result::MutationResult.new(
       mutation: mutation,

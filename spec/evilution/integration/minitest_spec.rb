@@ -190,7 +190,7 @@ RSpec.describe Evilution::Integration::Minitest do
       allow(integration).to receive(:load)
     end
 
-    it "returns error when all failures are crashes" do
+    it "flags test_crashed with error detail when all failures are crashes" do
       allow(Minitest).to receive(:__run) do |reporter, _options|
         result = Minitest::Result.new("test_crash")
         result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
@@ -200,6 +200,7 @@ RSpec.describe Evilution::Integration::Minitest do
       result = integration.call(mutation)
 
       expect(result[:passed]).to be false
+      expect(result[:test_crashed]).to be true
       expect(result[:error]).to include("test crashes")
       expect(result[:error]).to include("NoMethodError")
     end

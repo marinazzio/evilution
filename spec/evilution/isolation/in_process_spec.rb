@@ -83,6 +83,25 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.error_message).to include("cannot load such file")
     end
 
+    it "classifies test_crashed results as killed (mutant process_abort parity)" do
+      test_command = lambda do |_m|
+        {
+          passed: false,
+          test_crashed: true,
+          error: "test crashes: RuntimeError (1 crash)",
+          error_class: "RuntimeError",
+          error_backtrace: ["foo.rb:1"]
+        }
+      end
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_killed
+      expect(result.error_message).to eq("test crashes: RuntimeError (1 crash)")
+      expect(result.error_class).to eq("RuntimeError")
+      expect(result.error_backtrace).to eq(["foo.rb:1"])
+    end
+
     it "records duration" do
       test_command = ->(_m) { { passed: false } }
 

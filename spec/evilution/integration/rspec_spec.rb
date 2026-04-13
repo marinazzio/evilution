@@ -663,7 +663,7 @@ RSpec.describe Evilution::Integration::RSpec do
   end
 
   describe "crash detection" do
-    it "returns error when all test failures are crashes" do
+    it "flags test_crashed with error detail when all failures are crashes" do
       detector = instance_double(Evilution::Integration::CrashDetector,
                                  only_crashes?: true,
                                  crash_summary: "NoMethodError (1 crash)")
@@ -675,6 +675,7 @@ RSpec.describe Evilution::Integration::RSpec do
       result = integration.call(mutation)
 
       expect(result[:passed]).to be false
+      expect(result[:test_crashed]).to be true
       expect(result[:error]).to include("test crashes")
       expect(result[:error]).to include("NoMethodError")
     end
