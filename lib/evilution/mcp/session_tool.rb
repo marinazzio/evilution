@@ -33,15 +33,15 @@ class Evilution::MCP::SessionTool < MCP::Tool
       },
       path: {
         type: "string",
-        description: "[show] Path to a session JSON file (as returned by action=list)"
+        description: "[show] Path to a session JSON file (as returned by action=list); must be under results_dir"
       },
       base: {
         type: "string",
-        description: "[diff] Path to the base (older) session JSON file"
+        description: "[diff] Path to the base (older) session JSON file; must be under results_dir"
       },
       head: {
         type: "string",
-        description: "[diff] Path to the head (newer) session JSON file"
+        description: "[diff] Path to the head (newer) session JSON file; must be under results_dir"
       }
     },
     required: ["action"]
@@ -57,8 +57,8 @@ class Evilution::MCP::SessionTool < MCP::Tool
 
       case action
       when "list" then list_action(results_dir: results_dir, limit: limit)
-      when "show" then show_action(path: path)
-      when "diff" then diff_action(base: base, head: head)
+      when "show" then show_action(path: path, results_dir: results_dir)
+      when "diff" then diff_action(base: base, head: head, results_dir: results_dir)
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument
@@ -90,10 +90,13 @@ class Evilution::MCP::SessionTool < MCP::Tool
       [nil, "limit must be a non-negative integer"]
     end
 
-    def show_action(path:)
+    def show_action(path:, results_dir:)
       return error_response("config_error", "path is required") unless path
 
-      store = Evilution::Session::Store.new
+      dir = results_dir || Evilution::Session::Store::DEFAULT_DIR
+      return error_response("config_error", "path must be under results directory") unless within?(path, dir)
+
+      store = Evilution::Session::Store.new(results_dir: dir)
       data = store.load(path)
       success_response(data)
     rescue Evilution::Error => e
@@ -104,11 +107,15 @@ class Evilution::MCP::SessionTool < MCP::Tool
       error_response("runtime_error", e.message)
     end
 
-    def diff_action(base:, head:)
+    def diff_action(base:, head:, results_dir:)
       return error_response("config_error", "base is required") unless base
       return error_response("config_error", "head is required") unless head
 
-      store = Evilution::Session::Store.new
+      dir = results_dir || Evilution::Session::Store::DEFAULT_DIR
+      return error_response("config_error", "base must be under results directory") unless within?(base, dir)
+      return error_response("config_error", "head must be under results directory") unless within?(head, dir)
+
+      store = Evilution::Session::Store.new(results_dir: dir)
       base_data = store.load(base)
       head_data = store.load(head)
 
@@ -121,6 +128,12 @@ class Evilution::MCP::SessionTool < MCP::Tool
       error_response("parse_error", e.message)
     rescue SystemCallError => e
       error_response("runtime_error", e.message)
+    end
+
+    def within?(path, results_dir)
+      resolved_root = File.expand_path(results_dir) + File::SEPARATOR
+      resolved_path = File.expand_path(path)
+      resolved_path.start_with?(resolved_root)
     end
 
     def success_response(payload)
