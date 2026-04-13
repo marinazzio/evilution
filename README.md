@@ -315,6 +315,18 @@ Pass `suggest_tests: true` in the `evilution-mutate` call to activate this mode.
 
 Pass `skip_config: true` to ignore the project config file. This skips loading `.evilution.yml` / `config/evilution.yml`, but MCP-specific overrides (JSON output, quiet mode, preload disabled) and explicit tool parameters still apply.
 
+### Iterative Workflow Parameters
+
+`evilution-mutate` exposes the full set of CLI knobs agents need for iterative TDD:
+
+| Parameter | Purpose |
+|---|---|
+| `incremental` | Cache killed/timeout results across runs — set `true` when iterating on the same files |
+| `integration` | `rspec` or `minitest` |
+| `isolation` | `auto`, `fork`, or `in_process` |
+| `baseline` | `false` to skip the baseline suite check when you already know it's green |
+| `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
+
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
 ## Recommended Workflows for AI Agents
