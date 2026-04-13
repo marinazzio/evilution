@@ -218,6 +218,30 @@ RSpec.describe Evilution::Config do
 
       expect(config.ignore_patterns).to eq(["call{name=debug}"])
     end
+
+    it "loads skip_heredoc_literals from YAML" do
+      File.write(".evilution.yml", "skip_heredoc_literals: true\n")
+
+      config = described_class.new
+
+      expect(config.skip_heredoc_literals?).to be true
+    end
+
+    it "defaults skip_heredoc_literals to false when not in YAML" do
+      File.write(".evilution.yml", "timeout: 10\n")
+
+      config = described_class.new
+
+      expect(config.skip_heredoc_literals?).to be false
+    end
+
+    it "CLI options override skip_heredoc_literals from file" do
+      File.write(".evilution.yml", "skip_heredoc_literals: true\n")
+
+      config = described_class.new(skip_heredoc_literals: false)
+
+      expect(config.skip_heredoc_literals?).to be false
+    end
   end
 
   describe ".default_template" do

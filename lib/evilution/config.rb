@@ -138,8 +138,10 @@ class Evilution::Config
       # Generate concrete test code in suggestions, matching integration (default: false)
       # suggest_tests: false
 
-      # Skip all string literal mutations inside heredocs (default: false)
-      # skip_heredoc_literals: false
+      # Skip all string literal mutations inside heredocs (default: false).
+      # Useful for Rails apps where heredoc content (SQL, templates, fixtures)
+      # rarely has meaningful test coverage and produces noisy survivors.
+      # skip_heredoc_literals: true
 
       # Preload file required in the parent process before forking workers.
       # For Rails projects, spec/rails_helper.rb or test/test_helper.rb is
