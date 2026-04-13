@@ -16,22 +16,18 @@ RSpec.describe Evilution::MCP::Server do
       expect(tools.keys).to include("evilution-mutate")
     end
 
-    it "registers the session list tool" do
+    it "registers the consolidated session tool" do
       tools = server.instance_variable_get(:@tools)
 
-      expect(tools.keys).to include("evilution-session-list")
+      expect(tools.keys).to include("evilution-session")
     end
 
-    it "registers the session show tool" do
+    it "does not register the deprecated session-list/show/diff tools" do
       tools = server.instance_variable_get(:@tools)
 
-      expect(tools.keys).to include("evilution-session-show")
-    end
-
-    it "registers the session diff tool" do
-      tools = server.instance_variable_get(:@tools)
-
-      expect(tools.keys).to include("evilution-session-diff")
+      expect(tools.keys).not_to include("evilution-session-list")
+      expect(tools.keys).not_to include("evilution-session-show")
+      expect(tools.keys).not_to include("evilution-session-diff")
     end
 
     it "sets server name and version" do

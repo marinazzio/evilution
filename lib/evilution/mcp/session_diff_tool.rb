@@ -7,9 +7,13 @@ require_relative "../session/diff"
 
 require_relative "../mcp"
 
+# @deprecated Superseded by {Evilution::MCP::SessionTool} (action: "diff") as of 0.22.8.
+#   No longer registered with the MCP server; retained only for direct Ruby callers.
+#   Will be removed entirely — tracked by EV-h8pw / GH #686.
 class Evilution::MCP::SessionDiffTool < MCP::Tool
   tool_name "evilution-session-diff"
-  description "Compare two mutation testing sessions and return the diff. " \
+  description "DEPRECATED: use evilution-session with action: 'diff'. " \
+              "Compare two mutation testing sessions and return the diff. " \
               "Shows new regressions, fixed mutations, and persistent survivors."
   input_schema(
     properties: {

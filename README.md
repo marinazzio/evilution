@@ -288,9 +288,7 @@ The server exposes the following tools:
 | Tool | Description |
 |---|---|
 | `evilution-mutate` | Run mutation testing on target files with structured JSON results |
-| `evilution-session-list` | Browse saved session history |
-| `evilution-session-show` | Display detailed session results |
-| `evilution-session-diff` | Compare two sessions (fixed/new/persistent survivors, score delta) |
+| `evilution-session` | Inspect mutation testing history — `action: list` browses saved sessions, `action: show` displays one, `action: diff` compares two (fixed/new/persistent survivors, score delta) |
 
 ### Verbosity Control
 

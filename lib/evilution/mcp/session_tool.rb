@@ -1,0 +1,123 @@
+# frozen_string_literal: true
+
+require "json"
+require "mcp"
+require_relative "../session/store"
+require_relative "../session/diff"
+
+require_relative "../mcp"
+
+class Evilution::MCP::SessionTool < MCP::Tool
+  tool_name "evilution-session"
+  description "Inspect mutation testing history without re-running any tests. " \
+              "One tool, three actions: " \
+              "'list' browses saved sessions (reverse chronological), " \
+              "'show' returns the full report for a session (summary, survived mutations with diffs, git context), " \
+              "'diff' compares two sessions and surfaces new regressions, fixed mutations, persistent survivors, and score delta. " \
+              "Prefer this over the CLI when auditing mutation score trends, triaging survivors, " \
+              "or verifying that a fix killed the right mutant."
+  input_schema(
+    properties: {
+      action: {
+        type: "string",
+        enum: %w[list show diff],
+        description: "Which session operation to perform. 'list' browses history; 'show' displays one session; 'diff' compares two."
+      },
+      results_dir: {
+        type: "string",
+        description: "[list] Session results directory (default: .evilution/results)"
+      },
+      limit: {
+        type: "integer",
+        description: "[list] Return only the N most recent sessions"
+      },
+      path: {
+        type: "string",
+        description: "[show] Path to a session JSON file (as returned by action=list)"
+      },
+      base: {
+        type: "string",
+        description: "[diff] Path to the base (older) session JSON file"
+      },
+      head: {
+        type: "string",
+        description: "[diff] Path to the head (newer) session JSON file"
+      }
+    },
+    required: ["action"]
+  )
+
+  VALID_ACTIONS = %w[list show diff].freeze
+
+  class << self
+    # rubocop:disable Lint/UnusedMethodArgument
+    def call(server_context:, action: nil, results_dir: nil, limit: nil, path: nil, base: nil, head: nil)
+      return error_response("config_error", "action is required") unless action
+      return error_response("config_error", "unknown action: #{action}") unless VALID_ACTIONS.include?(action)
+
+      case action
+      when "list" then list_action(results_dir: results_dir, limit: limit)
+      when "show" then show_action(path: path)
+      when "diff" then diff_action(base: base, head: head)
+      end
+    end
+    # rubocop:enable Lint/UnusedMethodArgument
+
+    private
+
+    def list_action(results_dir:, limit:)
+      store_opts = {}
+      store_opts[:results_dir] = results_dir if results_dir
+      store = Evilution::Session::Store.new(**store_opts)
+      entries = store.list
+      entries = entries.first(limit) if limit
+
+      payload = entries.map { |e| e.transform_keys(&:to_s) }
+      success_response(payload)
+    end
+
+    def show_action(path:)
+      return error_response("config_error", "path is required") unless path
+
+      store = Evilution::Session::Store.new
+      data = store.load(path)
+      success_response(data)
+    rescue Evilution::Error => e
+      error_response("not_found", e.message)
+    rescue ::JSON::ParserError => e
+      error_response("parse_error", e.message)
+    rescue SystemCallError => e
+      error_response("runtime_error", e.message)
+    end
+
+    def diff_action(base:, head:)
+      return error_response("config_error", "base is required") unless base
+      return error_response("config_error", "head is required") unless head
+
+      store = Evilution::Session::Store.new
+      base_data = store.load(base)
+      head_data = store.load(head)
+
+      diff = Evilution::Session::Diff.new
+      result = diff.call(base_data, head_data)
+      success_response(result.to_h)
+    rescue Evilution::Error => e
+      error_response("not_found", e.message)
+    rescue ::JSON::ParserError => e
+      error_response("parse_error", e.message)
+    rescue SystemCallError => e
+      error_response("runtime_error", e.message)
+    end
+
+    def success_response(payload)
+      ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(payload) }])
+    end
+
+    def error_response(type, message)
+      ::MCP::Tool::Response.new(
+        [{ type: "text", text: ::JSON.generate({ error: { type: type, message: message } }) }],
+        error: true
+      )
+    end
+  end
+end
