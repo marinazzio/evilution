@@ -177,6 +177,69 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "passes incremental option to config" do
+      described_class.call(files: ["lib/foo.rb"], incremental: true, server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(incremental: true)
+      )
+    end
+
+    it "passes integration option to config" do
+      described_class.call(files: ["lib/foo.rb"], integration: "minitest", server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(integration: :minitest)
+      )
+    end
+
+    it "passes isolation option to config" do
+      described_class.call(files: ["lib/foo.rb"], isolation: "fork", server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(isolation: :fork)
+      )
+    end
+
+    it "passes save_session option to config" do
+      described_class.call(files: ["lib/foo.rb"], save_session: true, server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(save_session: true)
+      )
+    end
+
+    it "passes baseline_session option to config" do
+      described_class.call(files: ["lib/foo.rb"], baseline_session: "path/to/session.json", server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(baseline_session: "path/to/session.json")
+      )
+    end
+
+    it "lets explicit baseline: false disable the baseline check" do
+      described_class.call(files: ["lib/foo.rb"], baseline: false, server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(baseline: false)
+      )
+    end
+
+    it "defaults baseline to true when not provided" do
+      described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(baseline: true)
+      )
+    end
+
     it "returns parse error for invalid line range" do
       response = described_class.call(files: ["lib/foo.rb:abc"], server_context: nil)
 
