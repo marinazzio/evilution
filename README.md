@@ -288,13 +288,11 @@ The server exposes the following tools:
 | Tool | Description |
 |---|---|
 | `evilution-mutate` | Run mutation testing on target files with structured JSON results |
-| `evilution-session-list` | Browse saved session history |
-| `evilution-session-show` | Display detailed session results |
-| `evilution-session-diff` | Compare two sessions (fixed/new/persistent survivors, score delta) |
+| `evilution-session` | Inspect mutation testing history — `action: list` browses saved sessions, `action: show` displays one, `action: diff` compares two (fixed/new/persistent survivors, score delta) |
 
 ### Verbosity Control
 
-The MCP tool accepts a `verbosity` parameter to control response size:
+The `evilution-mutate` tool accepts a `verbosity` parameter to control response size:
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
@@ -306,9 +304,9 @@ Use `minimal` when context window budget is tight and you only need to see what 
 
 ### Concrete Test Suggestions
 
-The MCP tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete test code that an agent can drop into a test file, instead of static description text. The MCP tool currently generates RSpec-style suggestions (`it`/`expect` blocks).
+The `evilution-mutate` tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete test code that an agent can drop into a test file, instead of static description text. It currently generates RSpec-style suggestions (`it`/`expect` blocks).
 
-Pass `suggest_tests: true` in the MCP tool call to activate this mode. The CLI also supports `--suggest-tests`; when using the CLI, generated suggestions match the `--integration` setting (RSpec `it`/`expect` blocks or Minitest `def test_`/`assert_equal` methods).
+Pass `suggest_tests: true` in the `evilution-mutate` call to activate this mode. The CLI also supports `--suggest-tests`; when using the CLI, generated suggestions match the `--integration` setting (RSpec `it`/`expect` blocks or Minitest `def test_`/`assert_equal` methods).
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
