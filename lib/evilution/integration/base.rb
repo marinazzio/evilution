@@ -90,6 +90,7 @@ class Evilution::Integration::Base
     displace_loaded_feature(mutation.file_path)
     pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
+    remove_defined_constants(mutation.original_source)
     require(subpath.delete_suffix(".rb"))
   end
 
@@ -100,6 +101,7 @@ class Evilution::Integration::Base
     File.write(dest, mutation.mutated_source)
     pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
+    remove_defined_constants(mutation.original_source)
     load(dest)
   end
 
@@ -137,6 +139,16 @@ class Evilution::Integration::Base
       node.body.each { |child| names.concat(collect_constant_names(child, nesting)) }
     end
     names
+  end
+
+  def remove_defined_constants(source)
+    collect_constant_names(Prism.parse(source).value).reverse_each do |name|
+      parent_name, _, local_name = name.rpartition("::")
+      parent = parent_name.empty? ? Object : Object.const_get(parent_name)
+      parent.send(:remove_const, local_name.to_sym) if parent.const_defined?(local_name, false)
+    rescue NameError
+      next
+    end
   end
 
   def clear_concern_state(file_path)
