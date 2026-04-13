@@ -113,7 +113,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       runner = Evilution::Runner.new(config: config, on_result: on_result)
       summary = runner.call
       report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true, integration: config.integration).call(summary)
-      compact = trim_report(report, normalize_verbosity(verbosity), summary.survived_results)
+      compact = trim_report(report, normalize_verbosity(verbosity), summary.survived_results, config)
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
     rescue Evilution::Error => e
@@ -183,7 +183,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       raise Evilution::ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
     end
 
-    def trim_report(json_string, verbosity, survived_results)
+    def trim_report(json_string, verbosity, survived_results, config)
       data = ::JSON.parse(json_string)
       case verbosity
       when "full"
@@ -201,25 +201,44 @@ class Evilution::MCP::MutateTool < MCP::Tool
         data.delete("timed_out")
         data.delete("errors")
       end
-      enrich_survived(data, survived_results)
+      enrich_survived(data, survived_results, config)
       ::JSON.generate(data)
     end
 
-    def enrich_survived(data, survived_results)
+    def enrich_survived(data, survived_results, config)
       entries = data["survived"]
       return unless entries.is_a?(Array)
 
-      resolver = Evilution::SpecResolver.new
+      explicit_spec = explicit_spec_override(config)
+      resolver = explicit_spec ? nil : resolver_for_integration(config.integration)
+      cache = {}
+
       entries.each_with_index do |entry, index|
         result = survived_results[index]
         next unless result
 
         mutation = result.mutation
         entry["subject"] = mutation.subject.name
-        spec_file = resolver.call(mutation.file_path)
+        spec_file = explicit_spec || cache.fetch(mutation.file_path) do
+          cache[mutation.file_path] = resolver.call(mutation.file_path)
+        end
         entry["spec_file"] = spec_file if spec_file
         entry["next_step"] = build_next_step(mutation, spec_file)
       end
+    end
+
+    def explicit_spec_override(config)
+      return nil unless config.respond_to?(:spec_files)
+
+      files = Array(config.spec_files).compact.map(&:to_s).reject(&:empty?)
+      files.first
+    end
+
+    def resolver_for_integration(integration)
+      integration_class = Evilution::Runner::INTEGRATIONS[integration.to_sym]
+      return Evilution::SpecResolver.new unless integration_class
+
+      integration_class.baseline_options[:spec_resolver] || Evilution::SpecResolver.new
     end
 
     def build_next_step(mutation, spec_file)

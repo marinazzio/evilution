@@ -649,6 +649,62 @@ RSpec.describe Evilution::MCP::MutateTool do
           expect(entry["subject"]).to eq("Foo#bar")
           expect(entry["next_step"]).to be_a(String)
         end
+
+        it "uses the minitest spec resolver when integration is minitest" do
+          minitest_resolver = instance_double(Evilution::SpecResolver, call: "test/foo_test.rb")
+          allow(Evilution::Runner::INTEGRATIONS[:minitest])
+            .to receive(:baseline_options).and_return(spec_resolver: minitest_resolver)
+
+          response = described_class.call(files: ["lib/foo.rb"], integration: "minitest", server_context: nil)
+
+          entry = JSON.parse(response.content.first[:text])["survived"].first
+          expect(minitest_resolver).to have_received(:call).with("lib/foo.rb")
+          expect(entry["spec_file"]).to eq("test/foo_test.rb")
+        end
+
+        it "uses the explicit spec override as spec_file instead of auto-resolving" do
+          resolver = instance_double(Evilution::SpecResolver, call: nil)
+          allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+
+          response = described_class.call(
+            files: ["lib/foo.rb"],
+            spec: ["spec/custom_override_spec.rb"],
+            server_context: nil
+          )
+
+          entry = JSON.parse(response.content.first[:text])["survived"].first
+          expect(resolver).not_to have_received(:call)
+          expect(entry["spec_file"]).to eq("spec/custom_override_spec.rb")
+        end
+
+        it "caches resolver lookups for survivors from the same file" do
+          second_result = instance_double(
+            Evilution::Result::MutationResult,
+            mutation: survived_mutation,
+            status: :survived,
+            duration: 0.1,
+            killed?: false,
+            survived?: true,
+            timeout?: false,
+            error?: false,
+            neutral?: false,
+            test_command: nil,
+            child_rss_kb: nil,
+            parent_rss_kb: nil,
+            error_message: nil,
+            error_class: nil,
+            error_backtrace: nil,
+            memory_delta_kb: nil
+          )
+          allow(survived_summary).to receive(:survived_results).and_return([survived_result, second_result])
+
+          resolver = instance_double(Evilution::SpecResolver, call: "spec/foo_spec.rb")
+          allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+
+          described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+          expect(resolver).to have_received(:call).with("lib/foo.rb").once
+        end
       end
 
       it "preserves summary counts" do

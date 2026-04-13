@@ -310,7 +310,7 @@ Unlike `evilution --format json`, every survived entry returned by `evilution-mu
 | Field | What it gives you |
 |---|---|
 | `subject` | `Class#method` for the mutated subject — points at the exact method to test |
-| `spec_file` | Resolved spec path (when one exists) — drop new tests straight into it |
+| `spec_file` | Resolved spec/test path (when one exists) — e.g. an RSpec spec file or Minitest test file, so you can drop new tests straight into it |
 | `next_step` | Concrete natural-language hint — "add a test in X that fails against this mutation at Y:line" |
 
 These fields are added in addition to the existing `operator`, `file`, `line`, `diff`, `suggestion`, and `test_command` so agents can triage survivors in one pass.
