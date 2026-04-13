@@ -27,6 +27,10 @@ RSpec.describe Evilution::MCP::MutateTool do
       neutral?: false,
       test_command: "rspec spec/foo_spec.rb",
       child_rss_kb: nil,
+      parent_rss_kb: nil,
+      error_message: nil,
+      error_class: nil,
+      error_backtrace: nil,
       memory_delta_kb: nil
     )
   end
@@ -54,7 +58,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       equivalent_results: [],
       peak_memory_mb: nil,
       skipped: 0,
-      disabled_mutations: []
+      disabled_mutations: [],
+      coverage_gaps: []
     )
   end
 
@@ -181,6 +186,58 @@ RSpec.describe Evilution::MCP::MutateTool do
       expect(parsed["error"]["message"]).to include("invalid line range")
     end
 
+    context "config file handling" do
+      around do |example|
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) { example.run }
+        end
+      end
+
+      it "loads settings from .evilution.yml by default" do
+        File.write(".evilution.yml", "timeout: 42\njobs: 3\n")
+
+        described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          on_result: anything,
+          config: have_attributes(timeout: 42, jobs: 3)
+        )
+      end
+
+      it "lets explicit params override .evilution.yml settings" do
+        File.write(".evilution.yml", "timeout: 42\njobs: 3\n")
+
+        described_class.call(files: ["lib/foo.rb"], timeout: 5, server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          on_result: anything,
+          config: have_attributes(timeout: 5, jobs: 3)
+        )
+      end
+
+      it "skips .evilution.yml when skip_config is true" do
+        File.write(".evilution.yml", "timeout: 42\n")
+
+        described_class.call(files: ["lib/foo.rb"], skip_config: true, server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          on_result: anything,
+          config: have_attributes(timeout: Evilution::Config::DEFAULTS[:timeout])
+        )
+      end
+
+      it "forces preload to false even when .evilution.yml enables it" do
+        File.write(".evilution.yml", "preload: true\n")
+
+        described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          on_result: anything,
+          config: have_attributes(preload: false)
+        )
+      end
+    end
+
     context "response trimming" do
       it "strips diffs from killed mutations" do
         response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
@@ -206,6 +263,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: false,
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
         timed_out_summary = instance_double(
@@ -230,7 +291,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
 
@@ -253,6 +315,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: false,
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
         error_summary = instance_double(
@@ -277,7 +343,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
         allow(runner).to receive(:call).and_return(error_summary)
 
@@ -300,6 +367,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: true,
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
         neutral_summary = instance_double(
@@ -324,7 +395,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
@@ -356,6 +428,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: false,
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
         survived_summary = instance_double(
@@ -380,7 +456,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
         allow(runner).to receive(:call).and_return(survived_summary)
 
@@ -485,6 +562,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: false,
           test_command: nil,
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
         equivalent_summary = instance_double(
@@ -509,7 +590,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [equivalent_result],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
         allow(runner).to receive(:call).and_return(equivalent_summary)
 
@@ -551,6 +633,10 @@ RSpec.describe Evilution::MCP::MutateTool do
           neutral?: false,
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
+          parent_rss_kb: nil,
+          error_message: nil,
+          error_class: nil,
+          error_backtrace: nil,
           memory_delta_kb: nil
         )
       end
@@ -578,7 +664,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
-          disabled_mutations: []
+          disabled_mutations: [],
+          coverage_gaps: []
         )
       end
 

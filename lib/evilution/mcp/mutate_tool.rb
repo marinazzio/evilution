@@ -46,6 +46,11 @@ class Evilution::MCP::MutateTool < MCP::Tool
         description: "When true, suggestions for survived mutants include concrete test code " \
                      "instead of static description text (default: false)"
       },
+      skip_config: {
+        type: "boolean",
+        description: "When true, ignore .evilution.yml and run with defaults. " \
+                     "Default: false — project config is loaded so the MCP run matches `evilution` CLI behavior."
+      },
       verbosity: {
         type: "string",
         enum: %w[full summary minimal],
@@ -59,10 +64,10 @@ class Evilution::MCP::MutateTool < MCP::Tool
   class << self
     # rubocop:disable Metrics/ParameterLists
     def call(server_context:, files: [], target: nil, timeout: nil, jobs: nil,
-             fail_fast: nil, spec: nil, suggest_tests: nil, verbosity: nil)
+             fail_fast: nil, spec: nil, suggest_tests: nil, skip_config: nil, verbosity: nil)
       parsed_files, line_ranges = parse_files(Array(files))
       config_opts = build_config_opts(parsed_files, line_ranges, target, timeout, jobs, fail_fast, spec,
-                                      suggest_tests)
+                                      suggest_tests, skip_config)
       config = Evilution::Config.new(**config_opts)
       on_result = build_streaming_callback(server_context, suggest_tests, config.integration)
       runner = Evilution::Runner.new(config: config, on_result: on_result)
@@ -110,12 +115,13 @@ class Evilution::MCP::MutateTool < MCP::Tool
       raise Evilution::ParseError, "invalid line range: #{str.inspect}"
     end
 
-    def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec, suggest_tests)
+    # rubocop:disable Metrics/ParameterLists
+    def build_config_opts(files, line_ranges, target, timeout, jobs, fail_fast, spec, suggest_tests, skip_config)
       # Preload is disabled for MCP invocations: `require`-ing Rails into the
       # long-lived MCP server would poison subsequent runs against other
       # projects. MCP users who want the speedup should use the CLI.
-      opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, skip_config_file: true,
-               preload: false }
+      opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, preload: false }
+      opts[:skip_config_file] = true if skip_config
       opts[:target] = target if target
       opts[:timeout] = timeout if timeout
       opts[:jobs] = jobs if jobs
@@ -124,6 +130,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
       opts[:suggest_tests] = true if suggest_tests
       opts
     end
+    # rubocop:enable Metrics/ParameterLists
 
     def normalize_verbosity(value)
       normalized = value.to_s.strip.downcase
