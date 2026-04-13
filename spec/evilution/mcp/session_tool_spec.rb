@@ -117,6 +117,44 @@ RSpec.describe Evilution::MCP::SessionTool do
 
       expect(response).to be_a(MCP::Tool::Response)
     end
+
+    it "returns a structured error for a negative limit" do
+      response = call(action: "list", results_dir: results_dir, limit: -1)
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to include("limit must be a non-negative integer")
+    end
+
+    it "returns a structured error for a non-integer limit" do
+      response = call(action: "list", results_dir: results_dir, limit: "abc")
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to include("limit must be a non-negative integer")
+    end
+
+    it "accepts limit: 0 as a valid (empty) request" do
+      write_session("20260320T100000-aabb0000.json",
+                    session_summary(timestamp: "2026-03-20T10:00:00+00:00"))
+
+      data = parse_response(call(action: "list", results_dir: results_dir, limit: 0))
+
+      expect(data).to eq([])
+    end
+
+    it "coerces integer-like string limit" do
+      write_session("20260320T100000-aabb0000.json",
+                    session_summary(timestamp: "2026-03-20T10:00:00+00:00"))
+      write_session("20260321T100000-ccdd0000.json",
+                    session_summary(timestamp: "2026-03-21T10:00:00+00:00"))
+
+      data = parse_response(call(action: "list", results_dir: results_dir, limit: "1"))
+
+      expect(data.length).to eq(1)
+    end
   end
 
   describe "action: show" do

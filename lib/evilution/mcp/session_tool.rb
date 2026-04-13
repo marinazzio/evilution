@@ -66,14 +66,28 @@ class Evilution::MCP::SessionTool < MCP::Tool
     private
 
     def list_action(results_dir:, limit:)
+      normalized_limit, limit_error = normalize_limit(limit)
+      return error_response("config_error", limit_error) if limit_error
+
       store_opts = {}
       store_opts[:results_dir] = results_dir if results_dir
       store = Evilution::Session::Store.new(**store_opts)
       entries = store.list
-      entries = entries.first(limit) if limit
+      entries = entries.first(normalized_limit) unless normalized_limit.nil?
 
       payload = entries.map { |e| e.transform_keys(&:to_s) }
       success_response(payload)
+    end
+
+    def normalize_limit(limit)
+      return [nil, nil] if limit.nil?
+
+      coerced = Integer(limit)
+      return [nil, "limit must be a non-negative integer"] if coerced.negative?
+
+      [coerced, nil]
+    rescue ArgumentError, TypeError
+      [nil, "limit must be a non-negative integer"]
     end
 
     def show_action(path:)
