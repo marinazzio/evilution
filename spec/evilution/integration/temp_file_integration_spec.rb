@@ -3,6 +3,7 @@
 require "tmpdir"
 require "fileutils"
 require "evilution/isolation/fork"
+require "evilution/isolation/in_process"
 require "evilution/integration/rspec"
 require "evilution/temp_dir_tracker"
 
@@ -73,6 +74,47 @@ RSpec.describe "Temp-file mutation integration" do
 
       expect(File.read(source_path)).to eq(original_source)
       expect(File.read(marker)).to eq(original_source)
+    end
+
+    it "never modifies the original file during an in-process mutation run" do
+      $LOAD_PATH.unshift(lib_dir)
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
+
+      integration.call(mutation)
+
+      expect(File.read(source_path)).to eq(original_source)
+    ensure
+      $LOAD_PATH.delete(lib_dir)
+    end
+
+    it "never modifies the original file when run_tests raises" do
+      $LOAD_PATH.unshift(lib_dir)
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
+      allow(RSpec::Core::Runner).to receive(:run).and_raise("boom")
+
+      integration.call(mutation)
+
+      expect(File.read(source_path)).to eq(original_source)
+    ensure
+      $LOAD_PATH.delete(lib_dir)
+    end
+
+    it "never modifies the original file when forked child is killed mid-run" do
+      $LOAD_PATH.unshift(lib_dir)
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
+      isolator = Evilution::Isolation::Fork.new
+
+      test_command = lambda { |m|
+        integration.call(m)
+        sleep 10
+        { passed: false }
+      }
+
+      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.3)
+
+      expect(File.read(source_path)).to eq(original_source)
+    ensure
+      $LOAD_PATH.delete(lib_dir)
     end
   end
 
