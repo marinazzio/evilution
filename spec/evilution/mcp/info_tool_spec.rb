@@ -118,6 +118,39 @@ RSpec.describe Evilution::MCP::InfoTool do
       expect(data["error"]["type"]).to eq("parse_error")
       expect(data["error"]["message"]).to include("invalid line range")
     end
+
+    context "config file handling" do
+      let(:fixture_contents) { File.read(File.expand_path("../../support/fixtures/arithmetic.rb", __dir__)) }
+
+      around do |example|
+        contents = fixture_contents
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            FileUtils.mkdir_p("lib")
+            File.write("lib/arithmetic.rb", contents)
+            example.run
+          end
+        end
+      end
+
+      it "applies target from .evilution.yml" do
+        File.write(".evilution.yml", "target: Calculator#add\n")
+
+        data = parse_response(call(action: "subjects", files: ["lib/arithmetic.rb"]))
+
+        names = data["subjects"].map { |s| s["name"] }
+        expect(names).to eq(["Calculator#add"])
+      end
+
+      it "ignores .evilution.yml when skip_config is true" do
+        File.write(".evilution.yml", "target: Calculator#add\n")
+
+        data = parse_response(call(action: "subjects", files: ["lib/arithmetic.rb"], skip_config: true))
+
+        names = data["subjects"].map { |s| s["name"] }
+        expect(names).to include("Calculator#add", "Calculator#subtract", "Calculator#multiply")
+      end
+    end
   end
 
   describe "action: tests" do

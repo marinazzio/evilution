@@ -49,6 +49,12 @@ class Evilution::MCP::InfoTool < MCP::Tool
         type: "string",
         description: "[subjects, tests] Test integration (rspec, minitest) — 'tests' selects " \
                      "the matching spec resolver (spec/*_spec.rb for rspec, test/*_test.rb for minitest)"
+      },
+      skip_config: {
+        type: "boolean",
+        description: "[subjects, tests] When true, ignore .evilution.yml / config/evilution.yml; " \
+                     "explicit tool parameters still apply. " \
+                     "Default: false — project config is loaded so the result reflects what `evilution` CLI would see."
       }
     },
     required: ["action"]
@@ -58,7 +64,7 @@ class Evilution::MCP::InfoTool < MCP::Tool
 
   class << self
     # rubocop:disable Lint/UnusedMethodArgument
-    def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil)
+    def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil, skip_config: nil)
       return error_response("config_error", "action is required") unless action
       return error_response("config_error", "unknown action: #{action}") unless VALID_ACTIONS.include?(action)
 
@@ -66,9 +72,10 @@ class Evilution::MCP::InfoTool < MCP::Tool
 
       case action
       when "subjects"
-        subjects_action(files: parsed_files, line_ranges: line_ranges, target: target, integration: integration)
+        subjects_action(files: parsed_files, line_ranges: line_ranges, target: target,
+                        integration: integration, skip_config: skip_config)
       when "tests"
-        tests_action(files: parsed_files, spec: spec, integration: integration)
+        tests_action(files: parsed_files, spec: spec, integration: integration, skip_config: skip_config)
       when "environment"
         environment_action
       end
@@ -106,14 +113,11 @@ class Evilution::MCP::InfoTool < MCP::Tool
       raise Evilution::ParseError, "invalid line range: #{str.inspect}"
     end
 
-    def subjects_action(files:, line_ranges:, target:, integration:)
+    def subjects_action(files:, line_ranges:, target:, integration:, skip_config:)
       return error_response("config_error", "files is required") if files.nil? || files.empty?
 
-      config_opts = { target_files: files, line_ranges: line_ranges || {}, skip_config_file: true }
-      config_opts[:target] = target if target
-      config_opts[:integration] = integration if integration
-      config = Evilution::Config.new(**config_opts)
-
+      config = build_subjects_config(files: files, line_ranges: line_ranges,
+                                     target: target, integration: integration, skip_config: skip_config)
       runner = Evilution::Runner.new(config: config)
       subjects = runner.parse_and_filter_subjects
 
@@ -135,10 +139,10 @@ class Evilution::MCP::InfoTool < MCP::Tool
       )
     end
 
-    def tests_action(files:, spec:, integration:)
+    def tests_action(files:, spec:, integration:, skip_config:)
       return error_response("config_error", "files is required") if files.nil? || files.empty?
 
-      config = build_tests_config(files: files, spec: spec, integration: integration)
+      config = build_tests_config(files: files, spec: spec, integration: integration, skip_config: skip_config)
       return explicit_specs_response(files, config.spec_files) if config.spec_files.any?
 
       resolver = resolver_for_integration(config.integration)
@@ -151,8 +155,17 @@ class Evilution::MCP::InfoTool < MCP::Tool
       )
     end
 
-    def build_tests_config(files:, spec:, integration:)
-      opts = { target_files: files, skip_config_file: true }
+    def build_subjects_config(files:, line_ranges:, target:, integration:, skip_config:)
+      opts = { target_files: files, line_ranges: line_ranges || {} }
+      opts[:skip_config_file] = true if skip_config
+      opts[:target] = target if target
+      opts[:integration] = integration if integration
+      Evilution::Config.new(**opts)
+    end
+
+    def build_tests_config(files:, spec:, integration:, skip_config:)
+      opts = { target_files: files }
+      opts[:skip_config_file] = true if skip_config
       opts[:spec_files] = spec if spec
       opts[:integration] = integration if integration
       Evilution::Config.new(**opts)
