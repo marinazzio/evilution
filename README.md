@@ -95,7 +95,7 @@ Creates `.evilution.yml`:
 # save_session: false      # persist results under .evilution/results/
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails)
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails
-# skip_heredoc_literals: false  # skip all string literal mutations inside heredocs
+# skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
 # ignore_patterns: []      # AST patterns to exclude (see docs/ast_pattern_syntax.md)
