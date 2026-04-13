@@ -121,6 +121,7 @@ class Evilution::Reporter::HTML
     survived_count = results.count(&:survived?)
     total = results.length
     survived = results.select(&:survived?)
+    errored = results.select(&:error?)
     map_html = build_mutation_map(results)
 
     <<~HTML
@@ -131,6 +132,7 @@ class Evilution::Reporter::HTML
         </h2>
         <div class="mutation-map">#{map_html}</div>
         #{build_survived_details(survived)}
+        #{build_error_details(errored)}
       </section>
     HTML
   end
@@ -214,6 +216,38 @@ class Evilution::Reporter::HTML
         </div>
         <pre class="diff">#{diff_html}</pre>
         <div class="suggestion">#{h(suggestion_text)}</div>
+      </div>
+    HTML
+  end
+
+  def build_error_details(errored)
+    return "" if errored.empty?
+
+    entries = errored
+              .sort_by { |r| [r.mutation.operator_name, r.mutation.line] }
+              .map { |r| build_error_entry(r) }
+              .join("\n")
+    <<~HTML
+      <div class="error-details">
+        <h3>Errors (#{errored.length})</h3>
+        #{entries}
+      </div>
+    HTML
+  end
+
+  def build_error_entry(result)
+    mutation = result.mutation
+    message = result.error_message.to_s
+    message_html = message.empty? ? "" : %(<pre class="error-message">#{h(message)}</pre>)
+    diff_html = format_diff(mutation.diff)
+    <<~HTML
+      <div class="error-entry">
+        <div class="error-header">
+          <span class="operator">#{h(mutation.operator_name)}</span>
+          <span class="location">#{h(mutation.file_path)}:#{mutation.line}</span>
+        </div>
+        <pre class="diff">#{diff_html}</pre>
+        #{message_html}
       </div>
     HTML
   end
@@ -353,6 +387,13 @@ class Evilution::Reporter::HTML
         .delta-positive { color: #3fb950; font-weight: bold; }
         .delta-negative { color: #f85149; font-weight: bold; }
         .delta-neutral { color: #8b949e; font-weight: bold; }
+        .error-details { border-top: 1px solid #30363d; padding: 1rem; }
+        .error-details h3 { color: #d29922; font-size: 0.9rem; margin-bottom: 0.75rem; }
+        .error-entry { background: #1c1a10; border: 1px solid #4a3a10; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.75rem; }
+        .error-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.85rem; }
+        .error-header .operator { color: #d29922; font-weight: bold; }
+        .error-header .location { color: #8b949e; font-family: monospace; }
+        .error-message { background: #0d1117; border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #f85149; margin-top: 0.5rem; white-space: pre-wrap; overflow-x: auto; }
         .survived-entry.regression { border-color: #f85149; background: #2a1010; }
         .regression-badge { background: #da3633; color: #fff; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; text-transform: uppercase; font-weight: bold; }
         footer { text-align: center; color: #484f58; font-size: 0.75rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #21262d; }

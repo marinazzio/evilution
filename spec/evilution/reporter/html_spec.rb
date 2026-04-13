@@ -470,4 +470,138 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include("&lt;script&gt;")
     end
   end
+
+  describe "error details section" do
+    let(:error_mutation_a) do
+      double(
+        "Mutation",
+        operator_name: "boolean_literal_replacement",
+        file_path: "lib/user.rb",
+        line: 5,
+        column: 8,
+        diff: "- true\n+ false"
+      )
+    end
+
+    let(:error_mutation_b) do
+      double(
+        "Mutation",
+        operator_name: "integer_literal",
+        file_path: "lib/user.rb",
+        line: 12,
+        column: 4,
+        diff: "- 1\n+ 0"
+      )
+    end
+
+    let(:error_result_a) do
+      Evilution::Result::MutationResult.new(
+        mutation: error_mutation_a,
+        status: :error,
+        duration: 0.05,
+        error_message: "syntax error at line 5"
+      )
+    end
+
+    let(:error_result_b) do
+      Evilution::Result::MutationResult.new(
+        mutation: error_mutation_b,
+        status: :error,
+        duration: 0.05,
+        error_message: "NoMethodError: undefined method `foo'"
+      )
+    end
+
+    let(:error_details_summary) do
+      Evilution::Result::Summary.new(
+        results: [killed_result, error_result_a, error_result_b],
+        duration: 1.0
+      )
+    end
+
+    it "renders an error details section with count" do
+      output = reporter.call(error_details_summary)
+
+      expect(output).to include(%(<div class="error-details">))
+      expect(output).to include("Errors (2)")
+    end
+
+    it "renders an entry per errored result with operator and location" do
+      output = reporter.call(error_details_summary)
+
+      expect(output).to include("error-entry")
+      expect(output).to include("boolean_literal_replacement")
+      expect(output).to include("integer_literal")
+      expect(output).to include("lib/user.rb:5")
+      expect(output).to include("lib/user.rb:12")
+    end
+
+    it "shows the full error message inline in the details section" do
+      output = reporter.call(error_details_summary)
+
+      expect(output).to include("syntax error at line 5")
+      expect(output).to include("NoMethodError: undefined method `foo&#39;")
+    end
+
+    it "shows the diff for each errored mutation" do
+      output = reporter.call(error_details_summary)
+
+      expect(output).to include("true")
+      expect(output).to include("false")
+    end
+
+    it "omits the error details section when there are no errors" do
+      output = reporter.call(summary)
+
+      expect(output).not_to include(%(<div class="error-details">))
+      expect(output).not_to match(/Errors \(\d+\)/)
+    end
+
+    it "escapes HTML in the inline error message" do
+      nasty = Evilution::Result::MutationResult.new(
+        mutation: error_mutation_a,
+        status: :error,
+        duration: 0.05,
+        error_message: "<script>alert(1)</script>"
+      )
+      nasty_summary = Evilution::Result::Summary.new(results: [nasty], duration: 0.1)
+
+      output = reporter.call(nasty_summary)
+
+      expect(output).to include(%(<div class="error-details">))
+      expect(output).not_to include("<script>alert(1)")
+      expect(output).to include("&lt;script&gt;alert(1)&lt;/script&gt;")
+    end
+
+    it "scopes error entries to their file section" do
+      other_file_error_mutation = double(
+        "Mutation",
+        operator_name: "string_literal",
+        file_path: "lib/account.rb",
+        line: 3,
+        column: 0,
+        diff: '- "a"\n+ "b"'
+      )
+      other_file_error = Evilution::Result::MutationResult.new(
+        mutation: other_file_error_mutation,
+        status: :error,
+        duration: 0.05,
+        error_message: "error in account"
+      )
+      multi_summary = Evilution::Result::Summary.new(
+        results: [error_result_a, other_file_error],
+        duration: 0.2
+      )
+
+      output = reporter.call(multi_summary)
+
+      account_section = output[output.index("lib/account.rb")...output.index("lib/user.rb")]
+      user_section = output[output.index("lib/user.rb")..]
+
+      expect(account_section).to include("error in account")
+      expect(account_section).not_to include("syntax error at line 5")
+      expect(user_section).to include("syntax error at line 5")
+      expect(user_section).not_to include("error in account")
+    end
+  end
 end
