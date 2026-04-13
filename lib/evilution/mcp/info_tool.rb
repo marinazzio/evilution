@@ -32,7 +32,9 @@ class Evilution::MCP::InfoTool < MCP::Tool
       files: {
         type: "array",
         items: { type: "string" },
-        description: "[subjects, tests] Target source files (supports line-range syntax like lib/foo.rb:15-30)"
+        description: "[subjects, tests] Target source files. Supports line-range syntax " \
+                     "(lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-); for 'tests' the range is " \
+                     "stripped before spec resolution."
       },
       target: {
         type: "string",
@@ -43,13 +45,10 @@ class Evilution::MCP::InfoTool < MCP::Tool
         items: { type: "string" },
         description: "[tests] Explicit spec files to return instead of auto-resolving from sources"
       },
-      spec_dir: {
-        type: "string",
-        description: "[tests] Include all specs in this directory"
-      },
       integration: {
         type: "string",
-        description: "[subjects, tests] Test integration (rspec, minitest) — affects spec resolution"
+        description: "[subjects, tests] Test integration (rspec, minitest) — 'tests' selects " \
+                     "the matching spec resolver (spec/*_spec.rb for rspec, test/*_test.rb for minitest)"
       }
     },
     required: ["action"]
@@ -59,27 +58,58 @@ class Evilution::MCP::InfoTool < MCP::Tool
 
   class << self
     # rubocop:disable Lint/UnusedMethodArgument
-    def call(server_context:, action: nil, files: nil, target: nil, spec: nil, spec_dir: nil, integration: nil)
+    def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil)
       return error_response("config_error", "action is required") unless action
       return error_response("config_error", "unknown action: #{action}") unless VALID_ACTIONS.include?(action)
 
+      parsed_files, line_ranges = parse_files(Array(files)) if files
+
       case action
       when "subjects"
-        subjects_action(files: files, target: target, integration: integration)
+        subjects_action(files: parsed_files, line_ranges: line_ranges, target: target, integration: integration)
       when "tests"
-        tests_action(files: files, spec: spec, spec_dir: spec_dir, integration: integration)
+        tests_action(files: parsed_files, spec: spec, integration: integration)
       when "environment"
         environment_action
       end
+    rescue Evilution::Error => e
+      error_response_for(e)
     end
     # rubocop:enable Lint/UnusedMethodArgument
 
     private
 
-    def subjects_action(files:, target:, integration:)
+    def parse_files(raw_files)
+      files = []
+      ranges = {}
+
+      raw_files.each do |arg|
+        file, range_str = arg.split(":", 2)
+        files << file
+        ranges[file] = parse_line_range(range_str) if range_str
+      end
+
+      [files, ranges]
+    end
+
+    def parse_line_range(str)
+      if str.include?("-")
+        start_str, end_str = str.split("-", 2)
+        start_line = Integer(start_str)
+        end_line = end_str.empty? ? Float::INFINITY : Integer(end_str)
+        start_line..end_line
+      else
+        line = Integer(str)
+        line..line
+      end
+    rescue ArgumentError, TypeError
+      raise Evilution::ParseError, "invalid line range: #{str.inspect}"
+    end
+
+    def subjects_action(files:, line_ranges:, target:, integration:)
       return error_response("config_error", "files is required") if files.nil? || files.empty?
 
-      config_opts = { target_files: files, skip_config_file: true }
+      config_opts = { target_files: files, line_ranges: line_ranges || {}, skip_config_file: true }
       config_opts[:target] = target if target
       config_opts[:integration] = integration if integration
       config = Evilution::Config.new(**config_opts)
@@ -103,33 +133,36 @@ class Evilution::MCP::InfoTool < MCP::Tool
         "total_subjects" => entries.length,
         "total_mutations" => entries.sum { |e| e["mutations"] }
       )
-    rescue Evilution::Error => e
-      error_response("config_error", e.message)
     end
 
-    def tests_action(files:, spec:, spec_dir:, integration:)
+    def tests_action(files:, spec:, integration:)
       return error_response("config_error", "files is required") if files.nil? || files.empty?
 
-      config = build_tests_config(files: files, spec: spec, spec_dir: spec_dir, integration: integration)
+      config = build_tests_config(files: files, spec: spec, integration: integration)
       return explicit_specs_response(files, config.spec_files) if config.spec_files.any?
 
-      resolved, unresolved = resolve_specs(files)
+      resolver = resolver_for_integration(config.integration)
+      resolved, unresolved = resolve_specs(files, resolver)
       success_response(
         "specs" => resolved,
         "unresolved" => unresolved,
         "total_sources" => files.length,
         "total_specs" => resolved.map { |r| r["spec"] }.uniq.length
       )
-    rescue Evilution::Error => e
-      error_response("config_error", e.message)
     end
 
-    def build_tests_config(files:, spec:, spec_dir:, integration:)
+    def build_tests_config(files:, spec:, integration:)
       opts = { target_files: files, skip_config_file: true }
       opts[:spec_files] = spec if spec
-      opts[:spec_dir] = spec_dir if spec_dir
       opts[:integration] = integration if integration
       Evilution::Config.new(**opts)
+    end
+
+    def resolver_for_integration(integration)
+      integration_class = Evilution::Runner::INTEGRATIONS[integration.to_sym]
+      return Evilution::SpecResolver.new unless integration_class
+
+      integration_class.baseline_options[:spec_resolver] || Evilution::SpecResolver.new
     end
 
     def explicit_specs_response(files, spec_files)
@@ -141,8 +174,7 @@ class Evilution::MCP::InfoTool < MCP::Tool
       )
     end
 
-    def resolve_specs(files)
-      resolver = Evilution::SpecResolver.new
+    def resolve_specs(files, resolver)
       resolved = []
       unresolved = []
       files.each do |source|
@@ -166,8 +198,15 @@ class Evilution::MCP::InfoTool < MCP::Tool
         "config_file" => config_file,
         "settings" => environment_settings(config)
       )
-    rescue Evilution::Error => e
-      error_response("config_error", e.message)
+    end
+
+    def error_response_for(error)
+      type = case error
+             when Evilution::ConfigError then "config_error"
+             when Evilution::ParseError then "parse_error"
+             else "runtime_error"
+             end
+      error_response(type, error.message)
     end
 
     def environment_settings(config)

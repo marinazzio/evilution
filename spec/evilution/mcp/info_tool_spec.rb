@@ -102,6 +102,22 @@ RSpec.describe Evilution::MCP::InfoTool do
       names = data["subjects"].map { |s| s["name"] }
       expect(names).to eq(["Calculator#add"])
     end
+
+    it "parses line-range syntax in files and narrows subjects to that range" do
+      data = parse_response(call(action: "subjects", files: ["#{fixture}:2-4"]))
+
+      names = data["subjects"].map { |s| s["name"] }
+      expect(names).to eq(["Calculator#add"])
+    end
+
+    it "returns a parse_error for an invalid line range" do
+      response = call(action: "subjects", files: ["#{fixture}:notanumber"])
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("parse_error")
+      expect(data["error"]["message"]).to include("invalid line range")
+    end
   end
 
   describe "action: tests" do
@@ -134,6 +150,22 @@ RSpec.describe Evilution::MCP::InfoTool do
                                  spec: ["spec/custom_spec.rb"]))
 
       expect(data["specs"].map { |s| s["spec"] }).to eq(["spec/custom_spec.rb"])
+    end
+
+    it "uses the minitest resolver when integration is minitest" do
+      data = parse_response(call(action: "tests", files: ["lib/evilution/subject.rb"],
+                                 integration: "minitest"))
+
+      expect(data["specs"]).to eq([])
+      expect(data["unresolved"]).to eq(["lib/evilution/subject.rb"])
+    end
+
+    it "strips line-range suffixes from file paths before resolving" do
+      data = parse_response(call(action: "tests", files: ["lib/evilution/subject.rb:10-20"]))
+
+      entry = data["specs"].find { |s| s["source"] == "lib/evilution/subject.rb" }
+      expect(entry).not_to be_nil
+      expect(entry["spec"]).to eq("spec/evilution/subject_spec.rb")
     end
 
     it "returns error when files is missing" do
