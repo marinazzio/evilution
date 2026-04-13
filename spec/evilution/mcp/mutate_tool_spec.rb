@@ -213,13 +213,13 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
-    it "passes baseline_session option to config" do
-      described_class.call(files: ["lib/foo.rb"], baseline_session: "path/to/session.json", server_context: nil)
+    it "returns parse error for unknown keyword parameters" do
+      response = described_class.call(files: ["lib/foo.rb"], totally_bogus: 1, server_context: nil)
 
-      expect(Evilution::Runner).to have_received(:new).with(
-        on_result: anything,
-        config: have_attributes(baseline_session: "path/to/session.json")
-      )
+      expect(response.error?).to be true
+      parsed = JSON.parse(response.content.first[:text])
+      expect(parsed["error"]["type"]).to eq("parse_error")
+      expect(parsed["error"]["message"]).to include("totally_bogus")
     end
 
     it "lets explicit baseline: false disable the baseline check" do

@@ -326,7 +326,6 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 | `isolation` | `auto`, `fork`, or `in_process` |
 | `baseline` | `false` to skip the baseline suite check when you already know it's green |
 | `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
-| `baseline_session` | Path to a prior session file to diff against (fixed vs. new survivors) |
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 

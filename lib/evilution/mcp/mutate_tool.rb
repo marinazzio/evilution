@@ -70,10 +70,6 @@ class Evilution::MCP::MutateTool < MCP::Tool
         type: "boolean",
         description: "Save session results to .evilution/results/ for later inspection via evilution-session"
       },
-      baseline_session: {
-        type: "string",
-        description: "Path to a prior session file to compare against (used for diffing fixed/new survivors)"
-      },
       skip_config: {
         type: "boolean",
         description: "When true, ignore .evilution.yml / config/evilution.yml. " \
@@ -93,6 +89,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
   class << self
     def call(server_context:, files: [], verbosity: nil, **opts)
+      validate_opts!(opts)
       parsed_files, line_ranges = parse_files(Array(files))
       config_opts = build_config_opts(parsed_files, line_ranges, opts)
       config = Evilution::Config.new(**config_opts)
@@ -111,7 +108,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
     VALID_VERBOSITIES = %w[full summary minimal].freeze
     PASSTHROUGH_KEYS = %i[target timeout jobs fail_fast suggest_tests incremental integration
-                          isolation baseline save_session baseline_session].freeze
+                          isolation baseline save_session].freeze
+    ALLOWED_OPT_KEYS = (PASSTHROUGH_KEYS + %i[spec skip_config]).freeze
 
     private
 
@@ -142,6 +140,13 @@ class Evilution::MCP::MutateTool < MCP::Tool
       end
     rescue ArgumentError, TypeError
       raise Evilution::ParseError, "invalid line range: #{str.inspect}"
+    end
+
+    def validate_opts!(opts)
+      unknown = opts.keys - ALLOWED_OPT_KEYS
+      return if unknown.empty?
+
+      raise Evilution::ParseError, "unknown parameters: #{unknown.join(", ")}"
     end
 
     def build_config_opts(files, line_ranges, params)
