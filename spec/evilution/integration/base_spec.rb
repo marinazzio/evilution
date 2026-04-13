@@ -910,15 +910,6 @@ RSpec.describe Evilution::Integration::Base do
       let(:load_path_dir) { Dir.mktmpdir("evilution_base_define_once") }
       let(:source_path) { File.join(load_path_dir, "define_once_target.rb") }
 
-      let(:concrete_class) do
-        Class.new(described_class) do
-          define_method(:ensure_framework_loaded) { nil }
-          define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
-          define_method(:build_args) { |_mutation| [] }
-          define_method(:reset_state) { nil }
-        end
-      end
-
       before do
         $LOAD_PATH.unshift(load_path_dir)
       end
@@ -928,10 +919,10 @@ RSpec.describe Evilution::Integration::Base do
         FileUtils.rm_rf(load_path_dir)
       end
 
-      it "re-evaluates the class body on a fresh constant so conflict checks pass" do
+      it "retries the load on a fresh constant when the class body raises a redefinition conflict" do
         dsl_module = Module.new do
           def define_once(name)
-            raise ArgumentError, "#{name} already defined on #{self}" if method_defined?(name)
+            raise ArgumentError, "#{name} is already defined on #{self}" if method_defined?(name)
 
             define_method(name) { :dsl }
           end
@@ -964,12 +955,62 @@ RSpec.describe Evilution::Integration::Base do
           mutated_source: mutated
         )
 
-        result = concrete_class.new.call(enum_mut)
+        captured = {}
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            instance = EvilutionTestEnumLike.new
+            captured[:payload] = instance.payload
+            captured[:predicate] = instance.predicate
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        result = checking_class.new.call(enum_mut)
 
         expect(result[:error]).to be_nil
-        expect(result[:passed]).to be true
+        expect(captured[:payload]).to eq(:mutated)
+        expect(captured[:predicate]).to eq(:dsl)
       ensure
         Object.send(:remove_const, :EvilutionTestEnumLike) if defined?(EvilutionTestEnumLike)
+        $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+
+      it "preserves constant object identity when the load succeeds without conflict" do
+        original = "module EvilutionTestNoConflict; def self.value; :original; end; end\n"
+        mutated = "module EvilutionTestNoConflict; def self.value; :mutated; end; end\n"
+        File.write(source_path, original)
+        load(source_path)
+        original_object_id = EvilutionTestNoConflict.object_id
+        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
+
+        no_conflict_mut = double(
+          "Mutation",
+          file_path: source_path,
+          original_source: original,
+          mutated_source: mutated
+        )
+
+        captured = {}
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            captured[:object_id] = EvilutionTestNoConflict.object_id
+            captured[:value] = EvilutionTestNoConflict.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        checking_class.new.call(no_conflict_mut)
+
+        expect(captured[:value]).to eq(:mutated)
+        expect(captured[:object_id]).to eq(original_object_id)
+      ensure
+        Object.send(:remove_const, :EvilutionTestNoConflict) if defined?(EvilutionTestNoConflict)
         $LOADED_FEATURES.delete(File.expand_path(source_path))
       end
     end
