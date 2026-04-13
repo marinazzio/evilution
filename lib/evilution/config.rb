@@ -27,6 +27,7 @@ class Evilution::Config
     show_disabled: false,
     baseline_session: nil,
     skip_heredoc_literals: false,
+    related_specs_heuristic: false,
     preload: nil
   }.freeze
 
@@ -35,7 +36,7 @@ class Evilution::Config
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
               :ignore_patterns, :show_disabled, :baseline_session,
-              :skip_heredoc_literals, :preload
+              :skip_heredoc_literals, :related_specs_heuristic, :preload
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -96,6 +97,10 @@ class Evilution::Config
     skip_heredoc_literals
   end
 
+  def related_specs_heuristic?
+    related_specs_heuristic
+  end
+
   def self.file_options
     CONFIG_FILES.each do |path|
       next unless File.exist?(path)
@@ -142,6 +147,13 @@ class Evilution::Config
       # Useful for Rails apps where heredoc content (SQL, templates, fixtures)
       # rarely has meaningful test coverage and produces noisy survivors.
       # skip_heredoc_literals: true
+
+      # Opt into the RelatedSpecHeuristic, which appends request/integration/
+      # feature/system specs for mutations that touch `.includes(...)` calls
+      # (default: false). Off by default because the fan-out can be heavy and
+      # push runs over the per-mutation timeout. Enable if you need coverage
+      # of N+1 regressions that only surface in higher-level specs.
+      # related_specs_heuristic: true
 
       # Preload file required in the parent process before forking workers.
       # For Rails projects, spec/rails_helper.rb or test/test_helper.rb is
@@ -197,6 +209,7 @@ class Evilution::Config
     @show_disabled = merged[:show_disabled]
     @baseline_session = merged[:baseline_session]
     @skip_heredoc_literals = merged[:skip_heredoc_literals]
+    @related_specs_heuristic = merged[:related_specs_heuristic]
     @hooks = validate_hooks(merged[:hooks])
     @preload = validate_preload(merged[:preload])
   end

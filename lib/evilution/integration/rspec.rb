@@ -26,11 +26,12 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     { runner: baseline_runner }
   end
 
-  def initialize(test_files: nil, hooks: nil)
+  def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false)
     @test_files = test_files
     @rspec_loaded = false
     @spec_resolver = Evilution::SpecResolver.new
     @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
+    @related_specs_heuristic_enabled = related_specs_heuristic
     @crash_detector = nil
     @warned_files = Set.new
     super(hooks: hooks)
@@ -159,6 +160,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       warn_unresolved_spec(mutation.file_path)
       return ["spec"]
     end
+
+    return [resolved] unless @related_specs_heuristic_enabled
 
     related = @related_spec_heuristic.call(mutation)
     ([resolved] + related).uniq

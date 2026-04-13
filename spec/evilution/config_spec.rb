@@ -242,6 +242,30 @@ RSpec.describe Evilution::Config do
 
       expect(config.skip_heredoc_literals?).to be false
     end
+
+    it "loads related_specs_heuristic from YAML" do
+      File.write(".evilution.yml", "related_specs_heuristic: true\n")
+
+      config = described_class.new
+
+      expect(config.related_specs_heuristic?).to be true
+    end
+
+    it "defaults related_specs_heuristic to false when not in YAML" do
+      File.write(".evilution.yml", "timeout: 10\n")
+
+      config = described_class.new
+
+      expect(config.related_specs_heuristic?).to be false
+    end
+
+    it "CLI options override related_specs_heuristic from file" do
+      File.write(".evilution.yml", "related_specs_heuristic: true\n")
+
+      config = described_class.new(related_specs_heuristic: false)
+
+      expect(config.related_specs_heuristic?).to be false
+    end
   end
 
   describe ".default_template" do
@@ -390,6 +414,20 @@ RSpec.describe Evilution::Config do
       config = described_class.new(skip_heredoc_literals: true, skip_config_file: true)
 
       expect(config.skip_heredoc_literals?).to be true
+    end
+  end
+
+  describe "#related_specs_heuristic?" do
+    it "returns false by default" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.related_specs_heuristic?).to be false
+    end
+
+    it "returns true when related_specs_heuristic is enabled" do
+      config = described_class.new(related_specs_heuristic: true, skip_config_file: true)
+
+      expect(config.related_specs_heuristic?).to be true
     end
   end
 

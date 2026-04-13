@@ -717,10 +717,10 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::RelatedSpecHeuristic).to receive(:new).and_return(related_heuristic)
     end
 
-    it "appends related specs when heuristic returns matches" do
+    it "appends related specs when heuristic returns matches and flag enabled" do
       allow(resolver).to receive(:call).and_return("spec/controllers/news_controller_spec.rb")
       allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
-      auto_integration = described_class.new
+      auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec/controllers/news_controller_spec.rb")
         expect(args).to include("spec/requests/news_spec.rb")
@@ -733,7 +733,7 @@ RSpec.describe Evilution::Integration::RSpec do
     it "does not duplicate specs when related spec matches primary" do
       allow(resolver).to receive(:call).and_return("spec/requests/news_spec.rb")
       allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
-      auto_integration = described_class.new
+      auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         spec_args = args.select { |a| a.end_with?("_spec.rb") }
         expect(spec_args.length).to eq(1)
@@ -745,7 +745,7 @@ RSpec.describe Evilution::Integration::RSpec do
 
     it "does not call related heuristic when explicit test_files provided" do
       allow(related_heuristic).to receive(:call)
-      explicit = described_class.new(test_files: ["spec/explicit_spec.rb"])
+      explicit = described_class.new(test_files: ["spec/explicit_spec.rb"], related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       explicit.call(mutation)
@@ -756,13 +756,28 @@ RSpec.describe Evilution::Integration::RSpec do
     it "works when heuristic returns empty array" do
       allow(resolver).to receive(:call).and_return("spec/news_spec.rb")
       allow(related_heuristic).to receive(:call).and_return([])
-      auto_integration = described_class.new
+      auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec/news_spec.rb")
         0
       end
 
       auto_integration.call(mutation)
+    end
+
+    it "does not call related heuristic by default" do
+      allow(resolver).to receive(:call).and_return("spec/controllers/news_controller_spec.rb")
+      allow(related_heuristic).to receive(:call)
+      default_integration = described_class.new
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/controllers/news_controller_spec.rb")
+        expect(args).not_to include("spec/requests/news_spec.rb")
+        0
+      end
+
+      default_integration.call(mutation)
+
+      expect(related_heuristic).not_to have_received(:call)
     end
   end
 
