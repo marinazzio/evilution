@@ -35,6 +35,7 @@ Metrics/ClassLength:
     - "lib/evilution/mcp/mutate_tool.rb"
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"
+    - "lib/evilution/integration/base.rb"
 
 # target 20
 Metrics/MethodLength:

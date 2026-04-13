@@ -90,7 +90,9 @@ class Evilution::Integration::Base
     displace_loaded_feature(mutation.file_path)
     pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
-    require(subpath.delete_suffix(".rb"))
+    with_redefinition_recovery(mutation.original_source) do
+      require(subpath.delete_suffix(".rb"))
+    end
   end
 
   def apply_via_load(mutation)
@@ -100,7 +102,22 @@ class Evilution::Integration::Base
     File.write(dest, mutation.mutated_source)
     pin_autoloaded_constants(mutation.original_source)
     clear_concern_state(mutation.file_path)
-    load(dest)
+    with_redefinition_recovery(mutation.original_source) do
+      load(dest)
+    end
+  end
+
+  def with_redefinition_recovery(original_source)
+    yield
+  rescue ArgumentError => e
+    raise unless redefinition_conflict?(e)
+
+    remove_defined_constants(original_source)
+    yield
+  end
+
+  def redefinition_conflict?(error)
+    error.message.include?("already defined")
   end
 
   def restore_original(_mutation)
@@ -137,6 +154,32 @@ class Evilution::Integration::Base
       node.body.each { |child| names.concat(collect_constant_names(child, nesting)) }
     end
     names
+  end
+
+  def remove_defined_constants(source)
+    collect_constant_names(Prism.parse(source).value).reverse_each do |name|
+      parent_name, _, local_name = name.rpartition("::")
+      parent = resolve_loaded_constant_parent(parent_name)
+      next unless parent
+      next unless parent.const_defined?(local_name, false)
+      next if parent.autoload?(local_name)
+
+      parent.send(:remove_const, local_name.to_sym)
+    end
+  end
+
+  def resolve_loaded_constant_parent(parent_name)
+    return Object if parent_name.empty?
+
+    parent_name.split("::").reduce(Object) do |mod, part|
+      return nil unless mod.const_defined?(part, false)
+      return nil if mod.autoload?(part)
+
+      resolved = mod.const_get(part, false)
+      return nil unless resolved.is_a?(Module)
+
+      resolved
+    end
   end
 
   def clear_concern_state(file_path)
