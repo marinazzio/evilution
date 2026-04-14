@@ -36,7 +36,6 @@ Metrics/ClassLength:
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/integration/base.rb"
-    - "lib/evilution/cli/parser.rb"
 
 # target 20
 Metrics/MethodLength:
