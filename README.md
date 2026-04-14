@@ -69,6 +69,7 @@ evilution [command] [options] [files...]
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
+| `--fallback-full-suite`      | Boolean | false        | When no matching spec/test resolves for a mutation, run the whole test suite instead of marking it `:unresolved` and skipping. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
 | `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
 
