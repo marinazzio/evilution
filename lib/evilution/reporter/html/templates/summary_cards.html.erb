@@ -1,0 +1,23 @@
+<section class="summary-cards">
+  <div class="card"><span class="card-value"><%= @summary.total %></span><span class="card-label">Total</span></div>
+  <div class="card card-killed"><span class="card-value"><%= @summary.killed %></span><span class="card-label">Killed</span></div>
+  <div class="card card-survived"><span class="card-value"><%= @summary.survived %></span><span class="card-label">Survived</span></div>
+  <div class="card"><span class="card-value"><%= @summary.timed_out %></span><span class="card-label">Timed Out</span></div>
+  <div class="card"><span class="card-value"><%= @summary.errors %></span><span class="card-label">Errors</span></div>
+  <div class="card"><span class="card-value"><%= @summary.neutral %></span><span class="card-label">Neutral</span></div>
+  <div class="card"><span class="card-value"><%= @summary.equivalent %></span><span class="card-label">Equivalent</span></div>
+  <%- if @summary.unresolved.positive? -%>
+  <div class="card"><span class="card-value"><%= @summary.unresolved %></span><span class="card-label">Unresolved</span></div>
+  <%- end -%>
+  <%- if @summary.skipped.positive? -%>
+  <div class="card"><span class="card-value"><%= @summary.skipped %></span><span class="card-label">Skipped</span></div>
+  <%- end -%>
+  <div class="card"><span class="card-value"><%= format("%.2f", @summary.duration) %>s</span><span class="card-label">Duration</span></div>
+  <%- if @summary.duration.positive? -%>
+  <div class="card"><span class="card-value"><%= format("%.1f%%", @summary.efficiency * 100) %></span><span class="card-label">Efficiency</span></div>
+  <div class="card"><span class="card-value"><%= format("%.2f", @summary.mutations_per_second) %>/s</span><span class="card-label">Rate</span></div>
+  <%- end -%>
+  <%- if @summary.peak_memory_mb -%>
+  <div class="card"><span class="card-value"><%= format("%.1f", @summary.peak_memory_mb) %> MB</span><span class="card-label">Peak Memory</span></div>
+  <%- end -%>
+</section>

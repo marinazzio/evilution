@@ -1,0 +1,21 @@
+<div class="survived-details">
+  <h3>Coverage Gaps (<%= gaps.length %>)</h3>
+  <%- gaps.each do |gap| -%>
+  <%- if gap.single? -%>
+  <%= render_entry(gap.mutation_results.first) %>
+  <%- else -%>
+  <div class="coverage-gap">
+    <div class="gap-header">
+      <span class="location"><%= h(gap.file_path) %>:<%= gap.line %> (<%= h(gap.subject_name) %>)</span>
+      <span class="gap-count"><%= gap.count %> mutations</span>
+      <%- gap.operator_names.each do |op| -%>
+      <span class="operator-tag"><%= h(op) %></span>
+      <%- end -%>
+    </div>
+    <%- gap.mutation_results.each do |r| -%>
+    <%= render_entry(r) %>
+    <%- end -%>
+  </div>
+  <%- end -%>
+  <%- end -%>
+</div>

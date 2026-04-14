@@ -1,0 +1,6 @@
+<div class="error-details">
+  <h3>Errors (<%= errored.length %>)</h3>
+  <%- sorted.each do |r| -%>
+  <%= render_entry(r) %>
+  <%- end -%>
+</div>

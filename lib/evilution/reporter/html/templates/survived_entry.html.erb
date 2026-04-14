@@ -1,0 +1,8 @@
+<div class="<%= entry_class %>">
+  <div class="survived-header">
+    <span class="operator"><%= h(@result.mutation.operator_name) %><%= regression_badge %></span>
+    <span class="location"><%= h(@result.mutation.file_path) %>:<%= @result.mutation.line %></span>
+  </div>
+  <pre class="diff"><%= diff_html %></pre>
+  <div class="suggestion"><%= h(suggestion_text) %></div>
+</div>
