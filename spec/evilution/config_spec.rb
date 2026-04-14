@@ -266,6 +266,28 @@ RSpec.describe Evilution::Config do
 
       expect(config.related_specs_heuristic?).to be false
     end
+
+    it "defaults fallback_to_full_suite to false" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.fallback_to_full_suite?).to be false
+    end
+
+    it "loads fallback_to_full_suite from YAML" do
+      File.write(".evilution.yml", "fallback_to_full_suite: true\n")
+
+      config = described_class.new
+
+      expect(config.fallback_to_full_suite?).to be true
+    end
+
+    it "CLI options override fallback_to_full_suite from file" do
+      File.write(".evilution.yml", "fallback_to_full_suite: true\n")
+
+      config = described_class.new(fallback_to_full_suite: false)
+
+      expect(config.fallback_to_full_suite?).to be false
+    end
   end
 
   describe ".default_template" do

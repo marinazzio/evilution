@@ -175,12 +175,24 @@ RSpec.describe Evilution::Integration::Minitest do
       custom.call(mutation)
     end
 
-    it "falls back to globbed test files when resolver finds nothing" do
+    it "returns an unresolved result when no matching test is found (fail-fast default)" do
       default = described_class.new
       allow(default).to receive(:load)
 
       result = default.call(mutation)
 
+      expect(result[:unresolved]).to be true
+      expect(result[:passed]).to be false
+      expect(result[:error]).to match(/no.*test/i)
+    end
+
+    it "falls back to globbed test files when fallback_to_full_suite is true" do
+      default = described_class.new(fallback_to_full_suite: true)
+      allow(default).to receive(:load)
+
+      result = default.call(mutation)
+
+      expect(result[:unresolved]).to be_falsey
       expect(result[:test_command]).to include("test")
     end
   end

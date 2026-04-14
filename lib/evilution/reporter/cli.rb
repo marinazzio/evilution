@@ -90,12 +90,13 @@ class Evilution::Reporter::CLI
             "#{summary.survived} survived, #{summary.timed_out} timed out"
     parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
     parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
+    parts += ", #{summary.unresolved} unresolved" if summary.unresolved.positive?
     parts += ", #{summary.skipped} skipped" if summary.skipped.positive?
     parts
   end
 
   def score_line(summary)
-    denominator = summary.total - summary.errors - summary.neutral - summary.equivalent
+    denominator = summary.total - summary.errors - summary.neutral - summary.equivalent - summary.unresolved
     score_pct = format_pct(summary.score)
     "Score: #{score_pct} (#{summary.killed}/#{denominator})"
   end

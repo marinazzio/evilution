@@ -601,7 +601,7 @@ class Evilution::Runner
   def build_integration
     klass = resolve_integration_class
     test_files = config.spec_files.empty? ? nil : config.spec_files
-    kwargs = { test_files: test_files, hooks: @hooks }
+    kwargs = { test_files: test_files, hooks: @hooks, fallback_to_full_suite: config.fallback_to_full_suite? }
     kwargs[:related_specs_heuristic] = config.related_specs_heuristic? if klass == Evilution::Integration::RSpec
     klass.new(**kwargs)
   end

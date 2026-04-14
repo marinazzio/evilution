@@ -242,6 +242,37 @@ RSpec.describe Evilution::Reporter::HTML do
       end
     end
 
+    context "with unresolved mutations" do
+      let(:unresolved_mutation) do
+        double(
+          "Mutation",
+          operator_name: "integer_literal",
+          file_path: "lib/user.rb",
+          line: 15,
+          column: 0,
+          diff: "- 0\n+ 1"
+        )
+      end
+
+      let(:unresolved_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: unresolved_mutation,
+          status: :unresolved,
+          duration: 0.0
+        )
+      end
+
+      it "shows unresolved card" do
+        unresolved_summary = Evilution::Result::Summary.new(
+          results: [killed_result, unresolved_result],
+          duration: 0.6
+        )
+        output = reporter.call(unresolved_summary)
+
+        expect(output).to include("Unresolved")
+      end
+    end
+
     context "with timed out mutations" do
       let(:timeout_mutation) do
         double(

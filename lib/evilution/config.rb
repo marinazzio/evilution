@@ -28,6 +28,7 @@ class Evilution::Config
     baseline_session: nil,
     skip_heredoc_literals: false,
     related_specs_heuristic: false,
+    fallback_to_full_suite: false,
     preload: nil
   }.freeze
 
@@ -36,7 +37,8 @@ class Evilution::Config
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
               :ignore_patterns, :show_disabled, :baseline_session,
-              :skip_heredoc_literals, :related_specs_heuristic, :preload
+              :skip_heredoc_literals, :related_specs_heuristic,
+              :fallback_to_full_suite, :preload
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -101,6 +103,10 @@ class Evilution::Config
     related_specs_heuristic
   end
 
+  def fallback_to_full_suite?
+    fallback_to_full_suite
+  end
+
   def self.file_options
     CONFIG_FILES.each do |path|
       next unless File.exist?(path)
@@ -154,6 +160,12 @@ class Evilution::Config
       # push runs over the per-mutation timeout. Enable if you need coverage
       # of N+1 regressions that only surface in higher-level specs.
       # related_specs_heuristic: true
+
+      # When no matching spec resolves for a mutation's source file, the
+      # default is to skip that mutation and mark it :unresolved in the
+      # report (a coverage gap signal). Set to true to fall back to running
+      # the entire test suite for such mutations instead (slow, high memory).
+      # fallback_to_full_suite: false
 
       # Preload file required in the parent process before forking workers.
       # For Rails projects, spec/rails_helper.rb or test/test_helper.rb is
@@ -210,6 +222,7 @@ class Evilution::Config
     @baseline_session = merged[:baseline_session]
     @skip_heredoc_literals = merged[:skip_heredoc_literals]
     @related_specs_heuristic = merged[:related_specs_heuristic]
+    @fallback_to_full_suite = merged[:fallback_to_full_suite]
     @hooks = validate_hooks(merged[:hooks])
     @preload = validate_preload(merged[:preload])
   end

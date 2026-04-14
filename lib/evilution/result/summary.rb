@@ -47,8 +47,12 @@ class Evilution::Result::Summary
     results.count(&:equivalent?)
   end
 
+  def unresolved
+    results.count(&:unresolved?)
+  end
+
   def score
-    denominator = total - errors - neutral - equivalent
+    denominator = total - errors - neutral - equivalent - unresolved
     return 0.0 if denominator.zero?
 
     killed.to_f / denominator
@@ -72,6 +76,10 @@ class Evilution::Result::Summary
 
   def equivalent_results
     results.select(&:equivalent?)
+  end
+
+  def unresolved_results
+    results.select(&:unresolved?)
   end
 
   def coverage_gaps

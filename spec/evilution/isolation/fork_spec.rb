@@ -38,6 +38,16 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_survived
     end
 
+    it "returns unresolved when test command signals unresolved" do
+      test_command = ->(_m) { { passed: false, unresolved: true, error: "no spec found" } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_unresolved
+      expect(result).not_to be_error
+      expect(result.error_message).to eq("no spec found")
+    end
+
     it "returns timeout when child exceeds time limit" do
       test_command = lambda { |_m|
         sleep 10

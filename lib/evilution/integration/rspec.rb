@@ -26,12 +26,13 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     { runner: baseline_runner }
   end
 
-  def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false)
+  def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false, fallback_to_full_suite: false)
     @test_files = test_files
     @rspec_loaded = false
     @spec_resolver = Evilution::SpecResolver.new
     @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
     @related_specs_heuristic_enabled = related_specs_heuristic
+    @fallback_to_full_suite = fallback_to_full_suite
     @crash_detector = nil
     @warned_files = Set.new
     super(hooks: hooks)
@@ -57,10 +58,12 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def run_tests(mutation)
     reset_state
 
+    files = resolve_test_files(mutation)
+    return unresolved_result(mutation) if files.nil?
+
     out = StringIO.new
     err = StringIO.new
-    command = "rspec"
-    args = build_args(mutation)
+    args = build_args(files)
     command = "rspec #{args.join(" ")}"
 
     detector = reset_crash_detector
@@ -74,9 +77,17 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     release_rspec_state(eg_before)
   end
 
-  def build_args(mutation)
-    files = resolve_test_files(mutation)
+  def build_args(files)
     ["--format", "progress", "--no-color", "--order", "defined", *files]
+  end
+
+  def unresolved_result(mutation)
+    {
+      passed: false,
+      unresolved: true,
+      error: "no matching spec resolved for #{mutation.file_path}",
+      test_command: "rspec (skipped: no spec resolved for #{mutation.file_path})"
+    }
   end
 
   def reset_state
@@ -158,7 +169,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     resolved = @spec_resolver.call(mutation.file_path)
     unless resolved
       warn_unresolved_spec(mutation.file_path)
-      return ["spec"]
+      return @fallback_to_full_suite ? ["spec"] : nil
     end
 
     return [resolved] unless @related_specs_heuristic_enabled
@@ -171,7 +182,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     return if @warned_files.include?(file_path)
 
     @warned_files << file_path
-    warn "[evilution] No matching spec found for #{file_path}, running full suite. " \
+    action = @fallback_to_full_suite ? "running full suite" : "marking mutation unresolved"
+    warn "[evilution] No matching spec found for #{file_path}, #{action}. " \
          "Use --spec to specify the spec file."
   end
 

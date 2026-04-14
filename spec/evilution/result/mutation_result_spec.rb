@@ -45,6 +45,15 @@ RSpec.describe Evilution::Result::MutationResult do
       expect(result).not_to be_survived
       expect(result).not_to be_killed
     end
+
+    it "identifies unresolved mutations" do
+      result = described_class.new(mutation: mutation, status: :unresolved)
+
+      expect(result).to be_unresolved
+      expect(result).not_to be_survived
+      expect(result).not_to be_killed
+      expect(result).not_to be_error
+    end
   end
 
   it "rejects invalid statuses" do

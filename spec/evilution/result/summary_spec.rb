@@ -98,6 +98,27 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#unresolved" do
+    it "counts unresolved mutations" do
+      s = described_class.new(results: [make_result(:killed), make_result(:unresolved), make_result(:unresolved)])
+
+      expect(s.unresolved).to eq(2)
+    end
+
+    it "returns zero when no unresolved mutations" do
+      expect(summary.unresolved).to eq(0)
+    end
+  end
+
+  describe "#unresolved_results" do
+    it "returns only unresolved results" do
+      unresolved = make_result(:unresolved)
+      s = described_class.new(results: [make_result(:killed), unresolved])
+
+      expect(s.unresolved_results).to eq([unresolved])
+    end
+  end
+
   describe "#score" do
     it "calculates killed / (total - errors)" do
       expect(summary.score).to eq(3.0 / 5)
@@ -150,6 +171,17 @@ RSpec.describe Evilution::Result::Summary do
         make_result(:equivalent)
       ]
       s = described_class.new(results: results_with_equivalent)
+
+      expect(s.score).to eq(1.0 / 2)
+    end
+
+    it "excludes unresolved from denominator" do
+      results_with_unresolved = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:unresolved)
+      ]
+      s = described_class.new(results: results_with_unresolved)
 
       expect(s.score).to eq(1.0 / 2)
     end
