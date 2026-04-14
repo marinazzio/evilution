@@ -27,7 +27,6 @@ Metrics/BlockLength:
 Metrics/ClassLength:
   Max: 150
   Exclude:
-    - "lib/evilution/cli.rb"
     - "lib/evilution/config.rb"
     - "lib/evilution/runner.rb"
     - "lib/evilution/reporter/html.rb"
@@ -37,6 +36,7 @@ Metrics/ClassLength:
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/integration/base.rb"
+    - "lib/evilution/cli/parser.rb"
 
 # target 20
 Metrics/MethodLength:
