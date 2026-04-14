@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.23.0] - 2026-04-14
+
+### Changed
+
+- **Internal CLI refactoring** — `lib/evilution/cli.rb` was decomposed into smaller, focused units for readability and maintainability; no user-visible behavior change (#485, PR #704)
+
+### Fixed
+
+- **`session show` / `session diff` / `util mutation` diff output double-spaced between lines** — the text printers piped each diff line through `io.puts` even though `String#each_line` already yields a trailing newline, so every diff line was separated by a blank line; now `line.chomp` strips the trailing newline before `puts` re-adds it, rendering diffs with correct spacing (PR #704)
+- **`subjects` summary printed "1 subjects, 1 mutations"** — the summary line always pluralized, producing grammatically incorrect output for single-element results; now pluralizes both nouns independently via a `pluralize` helper so single counts read "1 subject, 1 mutation" (PR #704)
+- **`session show` crashed on permission errors and other `SystemCallError`s** — `Session::Store#load` can raise `Errno::EACCES` or other `SystemCallError`s (e.g. permission denied on `File.read`) which were not rescued, causing a hard crash instead of a clean exit 2; now wraps `SystemCallError` as `Evilution::Error` in `Commands::SessionShow` for parity with `Commands::SessionDiff` (PR #704)
+
 ## [0.22.7] - 2026-04-13
 
 ### Fixed
