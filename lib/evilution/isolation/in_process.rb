@@ -65,6 +65,7 @@ class Evilution::Isolation::InProcess
   def classify_status(result)
     return :timeout if result[:timeout]
     return :killed if result[:test_crashed]
+    return :unresolved if result[:unresolved]
     return :error if result[:error]
     return :survived if result[:passed]
 

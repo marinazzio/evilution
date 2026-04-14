@@ -49,6 +49,11 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:verbose]).to be(true)
   end
 
+  it "parses --fallback-full-suite" do
+    options, = parse(["--fallback-full-suite"])
+    expect(options[:fallback_to_full_suite]).to be(true)
+  end
+
   it "parses --skip-heredoc-literals" do
     options, = parse(["--skip-heredoc-literals"])
     expect(options[:skip_heredoc_literals]).to be(true)

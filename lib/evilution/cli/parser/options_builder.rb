@@ -75,6 +75,10 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--related-specs-heuristic", "Append related request/integration/feature/system specs for includes() mutations") do
       @options[:related_specs_heuristic] = true
     end
+    opts.on("--fallback-full-suite", "Run the whole test suite when no spec resolves for a mutation " \
+                                     "(default: skip unresolved mutations and mark them :unresolved)") do
+      @options[:fallback_to_full_suite] = true
+    end
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
     opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }

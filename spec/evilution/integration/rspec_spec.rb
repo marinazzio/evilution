@@ -476,8 +476,8 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:test_command]).to eq("rspec --format progress --no-color --order defined spec/some_spec.rb")
     end
 
-    it "includes default spec path in test_command when no test_files" do
-      default_integration = described_class.new
+    it "includes default spec path in test_command when no test_files and fallback enabled" do
+      default_integration = described_class.new(fallback_to_full_suite: true)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       result = default_integration.call(mutation)
@@ -485,8 +485,8 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:test_command]).to eq("rspec --format progress --no-color --order defined spec")
     end
 
-    it "defaults to spec/ when no test_files provided" do
-      default_integration = described_class.new
+    it "falls back to spec/ when no test_files and fallback enabled" do
+      default_integration = described_class.new(fallback_to_full_suite: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec")
         expect(args).not_to include(nil)
@@ -800,18 +800,20 @@ RSpec.describe Evilution::Integration::RSpec do
       auto_integration.call(mutation)
     end
 
-    it "falls back to full spec suite when no matching spec found" do
+    it "returns an unresolved result when no matching spec is found (fail-fast default)" do
       allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new
-      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
-        expect(args).to include("spec")
-        0
-      end
+      allow(RSpec::Core::Runner).to receive(:run)
 
-      auto_integration.call(mutation)
+      result = auto_integration.call(mutation)
+
+      expect(result[:unresolved]).to be true
+      expect(result[:passed]).to be false
+      expect(result[:error]).to match(/no.*spec.*#{Regexp.escape(mutation.file_path)}/i)
+      expect(RSpec::Core::Runner).not_to have_received(:run)
     end
 
-    it "warns once per file when falling back to full spec suite" do
+    it "warns once per file when no matching spec is found" do
       allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
@@ -824,6 +826,20 @@ RSpec.describe Evilution::Integration::RSpec do
       lines = stderr.string.lines.select { |l| l.include?("No matching spec") }
       expect(lines.size).to eq(1)
       expect(lines.first).to match(/#{Regexp.escape(mutation.file_path)}/)
+    end
+
+    it "falls back to full spec suite when fallback_to_full_suite: true" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      auto_integration = described_class.new(fallback_to_full_suite: true)
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec")
+        0
+      end
+
+      result = auto_integration.call(mutation)
+
+      expect(result[:unresolved]).to be_falsey
+      expect(RSpec::Core::Runner).to have_received(:run)
     end
 
     it "does not warn when spec is resolved successfully" do

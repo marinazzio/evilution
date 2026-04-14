@@ -35,10 +35,11 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     }
   end
 
-  def initialize(test_files: nil, hooks: nil)
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false)
     @test_files = test_files
     @minitest_loaded = false
     @spec_resolver = Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+    @fallback_to_full_suite = fallback_to_full_suite
     @crash_detector = nil
     @warned_files = Set.new
     super(hooks: hooks)
@@ -62,6 +63,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   def run_tests(mutation)
     reset_state
     files = resolve_test_files(mutation)
+    return unresolved_result(mutation) if files.nil?
+
     command = "ruby -Itest #{files.join(" ")}"
 
     files.each { |f| load(File.expand_path(f)) }
@@ -73,6 +76,15 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     build_minitest_result(passed, command, detector)
   rescue StandardError => e
     { passed: false, error: e.message, test_command: command }
+  end
+
+  def unresolved_result(mutation)
+    {
+      passed: false,
+      unresolved: true,
+      error: "no matching test resolved for #{mutation.file_path}",
+      test_command: "ruby -Itest (skipped: no test resolved for #{mutation.file_path})"
+    }
   end
 
   def build_args(_mutation)
@@ -129,7 +141,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     resolved = @spec_resolver.call(mutation.file_path)
     unless resolved
       warn_unresolved_test(mutation.file_path)
-      return glob_test_files
+      return @fallback_to_full_suite ? glob_test_files : nil
     end
 
     [resolved]
