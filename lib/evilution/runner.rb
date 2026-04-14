@@ -30,11 +30,6 @@ require_relative "runner/mutation_executor"
 require_relative "runner/report_publisher"
 
 class Evilution::Runner
-  INTEGRATIONS = {
-    rspec: Evilution::Integration::RSpec,
-    minitest: Evilution::Integration::Minitest
-  }.freeze
-
   attr_reader :config
 
   def initialize(config: Evilution::Config.new, on_result: nil, hooks: nil)

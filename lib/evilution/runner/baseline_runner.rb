@@ -7,6 +7,13 @@ require_relative "../integration/minitest"
 
 class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
+unless defined?(Evilution::Runner::INTEGRATIONS)
+  Evilution::Runner::INTEGRATIONS = {
+    rspec: Evilution::Integration::RSpec,
+    minitest: Evilution::Integration::Minitest
+  }.freeze
+end
+
 class Evilution::Runner::BaselineRunner
   def initialize(config, hooks: nil)
     @config = config
