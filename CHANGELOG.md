@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.24.0] - 2026-04-14
+
+### Added
+
+- **`--fallback-full-suite` CLI flag** — when a mutation has no matching spec/test (spec resolver finds nothing), run the whole test suite instead of marking the mutation `:unresolved` and skipping; opt-in so the default remains fast (#697, PR #707)
+
+### Fixed
+
+- **`require_relative` in mutated files broken for sibling files** — the previous temp-dir copy strategy wrote the mutated source to a scratch directory where sibling source files did not exist, so any `require_relative "./sibling"` inside a mutated file failed to resolve; `Evilution::Integration::Base` now evaluates mutated source via `eval` with `__FILE__` set to the original path, so `require_relative` and `__dir__` resolve against the real source tree (#700, PR #708)
+
+### Changed
+
+- **Internal `Evilution::Reporter::HTML` refactor** — `lib/evilution/reporter/html.rb` (previously 410 lines) decomposed into section collaborators with one ERB template per section and CSS extracted to `lib/evilution/reporter/html/assets/style.css`; no output changes (#487, PR #712)
+- **Internal `Evilution::Runner` refactor** — extracted `BaselineRunner`, `IsolationResolver`, `MutationPlanner`, `SubjectPipeline`, `Diagnostics`, `MutationExecutor`, and `ReportPublisher` collaborators; no user-visible behavior change (#486, PR #711)
+- **Internal `Evilution::CLI::Parser` refactor** — decomposed into `CommandExtractor`, `FileArgs`, `OptionsBuilder`, and `StdinReader`; no user-visible behavior change (#703, PR #706)
+
 ## [0.23.0] - 2026-04-14
 
 ### Changed
