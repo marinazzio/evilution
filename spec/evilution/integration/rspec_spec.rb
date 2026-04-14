@@ -826,6 +826,21 @@ RSpec.describe Evilution::Integration::RSpec do
       lines = stderr.string.lines.select { |l| l.include?("No matching spec") }
       expect(lines.size).to eq(1)
       expect(lines.first).to match(/#{Regexp.escape(mutation.file_path)}/)
+      expect(lines.first).to include("marking mutation unresolved")
+      expect(lines.first).not_to include("running full suite")
+    end
+
+    it "warns with full-suite wording when fallback_to_full_suite: true" do
+      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      auto_integration = described_class.new(fallback_to_full_suite: true)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+
+      stderr = StringIO.new
+      $stderr = stderr
+      auto_integration.call(mutation)
+      $stderr = STDERR
+
+      expect(stderr.string).to include("running full suite")
     end
 
     it "falls back to full spec suite when fallback_to_full_suite: true" do

@@ -81,6 +81,7 @@ class Evilution::Reporter::HTML
         <div class="card"><span class="card-value">#{summary.errors}</span><span class="card-label">Errors</span></div>
         <div class="card"><span class="card-value">#{summary.neutral}</span><span class="card-label">Neutral</span></div>
         <div class="card"><span class="card-value">#{summary.equivalent}</span><span class="card-label">Equivalent</span></div>
+        #{build_unresolved_card(summary)}
         #{build_skipped_card(summary)}
         <div class="card"><span class="card-value">#{format("%.2f", summary.duration)}s</span><span class="card-label">Duration</span></div>
         #{build_efficiency_cards(summary)}
@@ -102,6 +103,12 @@ class Evilution::Reporter::HTML
     return "" unless summary.skipped.positive?
 
     %(<div class="card"><span class="card-value">#{summary.skipped}</span><span class="card-label">Skipped</span></div>)
+  end
+
+  def build_unresolved_card(summary)
+    return "" unless summary.unresolved.positive?
+
+    %(<div class="card"><span class="card-value">#{summary.unresolved}</span><span class="card-label">Unresolved</span></div>)
   end
 
   def build_truncation_notice(summary)

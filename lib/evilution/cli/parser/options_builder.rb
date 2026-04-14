@@ -75,8 +75,8 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--related-specs-heuristic", "Append related request/integration/feature/system specs for includes() mutations") do
       @options[:related_specs_heuristic] = true
     end
-    opts.on("--fallback-full-suite", "Run the whole test suite when no spec resolves for a mutation " \
-                                     "(default: skip unresolved mutations and mark them :unresolved)") do
+    opts.on("--fallback-full-suite", "Run the whole test suite when no matching spec/test resolves " \
+                                     "for a mutation (default: mark the mutation :unresolved and skip)") do
       @options[:fallback_to_full_suite] = true
     end
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }

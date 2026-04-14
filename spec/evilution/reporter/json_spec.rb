@@ -157,6 +157,52 @@ RSpec.describe Evilution::Reporter::JSON do
       end
     end
 
+    context "with unresolved mutations" do
+      let(:unresolved_mutation) do
+        double(
+          "Mutation",
+          operator_name: "comparison_replacement",
+          file_path: "lib/user.rb",
+          line: 12,
+          diff: "- x <= 5\n+ x < 5"
+        )
+      end
+
+      let(:unresolved_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: unresolved_mutation,
+          status: :unresolved,
+          duration: 0.0
+        )
+      end
+
+      let(:unresolved_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, unresolved_result],
+          duration: 0.6
+        )
+      end
+
+      it "includes unresolved count in summary" do
+        parsed = JSON.parse(reporter.call(unresolved_summary))
+
+        expect(parsed["summary"]["unresolved"]).to eq(1)
+      end
+
+      it "includes unresolved array with mutation details" do
+        parsed = JSON.parse(reporter.call(unresolved_summary))
+
+        expect(parsed["unresolved"].length).to eq(1)
+        expect(parsed["unresolved"].first["status"]).to eq("unresolved")
+      end
+
+      it "excludes unresolved from score calculation" do
+        parsed = JSON.parse(reporter.call(unresolved_summary))
+
+        expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
+
     it "includes coverage_gaps with grouped survived mutations" do
       parsed = JSON.parse(reporter.call(summary))
       gaps = parsed["coverage_gaps"]

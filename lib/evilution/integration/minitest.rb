@@ -156,7 +156,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     return if @warned_files.include?(file_path)
 
     @warned_files << file_path
-    warn "[evilution] No matching test found for #{file_path}, running full suite. " \
+    action = @fallback_to_full_suite ? "running full suite" : "marking mutation unresolved"
+    warn "[evilution] No matching test found for #{file_path}, #{action}. " \
          "Use --spec to specify the test file."
   end
 end

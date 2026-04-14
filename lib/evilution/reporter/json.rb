@@ -17,24 +17,27 @@ class Evilution::Reporter::JSON
 
   private
 
-  # rubocop:disable Metrics/PerceivedComplexity
   def build_report(summary)
     report = {
       version: Evilution::VERSION,
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),
-      survived: summary.survived_results.map { |r| build_mutation_detail(r) },
+      survived: map_details(summary.survived_results),
       coverage_gaps: build_coverage_gaps(summary),
-      killed: summary.killed_results.map { |r| build_mutation_detail(r) },
-      neutral: summary.neutral_results.map { |r| build_mutation_detail(r) },
-      timed_out: summary.results.select(&:timeout?).map { |r| build_mutation_detail(r) },
-      errors: summary.results.select(&:error?).map { |r| build_mutation_detail(r) },
-      equivalent: summary.equivalent_results.map { |r| build_mutation_detail(r) }
+      killed: map_details(summary.killed_results),
+      neutral: map_details(summary.neutral_results),
+      timed_out: map_details(summary.results.select(&:timeout?)),
+      errors: map_details(summary.results.select(&:error?)),
+      equivalent: map_details(summary.equivalent_results),
+      unresolved: map_details(summary.unresolved_results)
     }
     append_disabled_to_report(report, summary)
     report
   end
-  # rubocop:enable Metrics/PerceivedComplexity
+
+  def map_details(results)
+    results.map { |r| build_mutation_detail(r) }
+  end
 
   def append_disabled_to_report(report, summary)
     return unless summary.disabled_mutations.any?
@@ -51,6 +54,7 @@ class Evilution::Reporter::JSON
       errors: summary.errors,
       neutral: summary.neutral,
       equivalent: summary.equivalent,
+      unresolved: summary.unresolved,
       score: summary.score.round(4),
       duration: summary.duration.round(4),
       killtime: summary.killtime.round(4),
