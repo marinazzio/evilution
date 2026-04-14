@@ -64,6 +64,19 @@ RSpec.describe Evilution::CLI::Commands::SessionShow do
     end
   end
 
+  describe "SystemCallError from store.load" do
+    before do
+      allow(store).to receive(:load).and_raise(Errno::EACCES, "missing.json")
+    end
+
+    it "wraps the error as Evilution::Error with exit 2" do
+      result = described_class.new(parsed(files: ["missing.json"]), stdout: out, stderr: err).call
+      expect(result.exit_code).to eq(2)
+      expect(result.error).to be_a(Evilution::Error)
+      expect(result.error.message).to include("missing.json")
+    end
+  end
+
   it "is registered with the dispatcher under :session_show" do
     require "evilution/cli/dispatcher"
     expect(Evilution::CLI::Dispatcher.registered?(:session_show)).to be(true)

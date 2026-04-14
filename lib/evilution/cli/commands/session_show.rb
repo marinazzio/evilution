@@ -19,6 +19,8 @@ class Evilution::CLI::Commands::SessionShow < Evilution::CLI::Command
     0
   rescue ::JSON::ParserError => e
     raise Evilution::Error, "invalid session file: #{e.message}"
+  rescue ::SystemCallError => e
+    raise Evilution::Error, e.message
   end
 end
 

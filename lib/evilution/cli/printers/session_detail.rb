@@ -71,6 +71,6 @@ class Evilution::CLI::Printers::SessionDetail
     return unless mutation["diff"]
 
     io.puts("     Diff:")
-    mutation["diff"].each_line { |line| io.puts("       #{line}") }
+    mutation["diff"].each_line { |line| io.puts("       #{line.chomp}") }
   end
 end

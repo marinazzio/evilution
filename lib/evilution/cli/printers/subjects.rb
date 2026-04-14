@@ -21,10 +21,15 @@ class Evilution::CLI::Printers::Subjects
   end
 
   def mutation_label(count)
-    count == 1 ? "1 mutation" : "#{count} mutations"
+    pluralize(count, "mutation", "mutations")
   end
 
   def summary_line
-    "#{@entries.length} subjects, #{@total_mutations} mutations"
+    "#{pluralize(@entries.length, "subject", "subjects")}, " \
+      "#{pluralize(@total_mutations, "mutation", "mutations")}"
+  end
+
+  def pluralize(count, singular, plural)
+    "#{count} #{count == 1 ? singular : plural}"
   end
 end

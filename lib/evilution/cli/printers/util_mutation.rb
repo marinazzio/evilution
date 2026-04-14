@@ -18,7 +18,7 @@ class Evilution::CLI::Printers::UtilMutation
   def render_text(io)
     @mutations.each_with_index do |m, i|
       io.puts("#{i + 1}. #{m.operator_name} — #{m.subject.name} (line #{m.line})")
-      m.diff.each_line { |line| io.puts("   #{line}") }
+      m.diff.each_line { |line| io.puts("   #{line.chomp}") }
       io.puts("")
     end
     label = @mutations.length == 1 ? "1 mutation" : "#{@mutations.length} mutations"

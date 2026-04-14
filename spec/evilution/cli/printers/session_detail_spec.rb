@@ -52,6 +52,12 @@ RSpec.describe Evilution::CLI::Printers::SessionDetail do
       expect(io.string).to include("+ 2")
     end
 
+    it "does not insert blank lines between diff lines" do
+      described_class.new(data, format: :text).render(io)
+      expect(io.string).not_to match(/       - 1\n\n       \+ 2/)
+      expect(io.string).to match(/       - 1\n       \+ 2/)
+    end
+
     it "prints 'No survived mutations' when list is empty" do
       data["survived"] = []
       described_class.new(data, format: :text).render(io)

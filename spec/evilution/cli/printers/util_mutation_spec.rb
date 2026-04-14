@@ -32,6 +32,12 @@ RSpec.describe Evilution::CLI::Printers::UtilMutation do
       expect(io.string).to include("+ 2")
     end
 
+    it "does not insert blank lines between diff lines" do
+      described_class.new([mutation], format: :text).render(io)
+      expect(io.string).not_to match(/   - 1\n\n   \+ 2/)
+      expect(io.string).to match(/   - 1\n   \+ 2/)
+    end
+
     it "prints singular label for one mutation" do
       described_class.new([mutation], format: :text).render(io)
       expect(io.string).to include("1 mutation")

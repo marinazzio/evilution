@@ -28,12 +28,12 @@ RSpec.describe Evilution::CLI::Printers::Subjects do
     expect(io.string).to include("2 subjects, 4 mutations")
   end
 
-  it "uses singular mutation label but does not pluralize subjects" do
+  it "pluralizes subject and mutation labels for singular counts" do
     described_class.new(
       [{ name: "Foo#bar", file_path: "lib/foo.rb", line_number: 10, mutation_count: 1 }],
       total_mutations: 1
     ).render(io)
     expect(io.string).to include("(1 mutation)")
-    expect(io.string).to include("1 subjects, 1 mutations")
+    expect(io.string).to include("1 subject, 1 mutation")
   end
 end
