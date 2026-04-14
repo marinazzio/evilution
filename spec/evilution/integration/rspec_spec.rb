@@ -212,85 +212,21 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(File.read(source_path)).to eq(original_source)
     end
 
-    it "cleans up the temp directory after restore_original" do
-      temp_dir_during_run = nil
+    it "leaves $LOAD_PATH unchanged across the call" do
+      load_path_before = $LOAD_PATH.dup
+      load_path_during = nil
       allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        # Capture the temp dir that was prepended to $LOAD_PATH
-        temp_dir_during_run = $LOAD_PATH.first
-        expect(Dir.exist?(temp_dir_during_run)).to be true
+        load_path_during = $LOAD_PATH.dup
         1
       end
 
       integration.call(lp_mutation)
 
-      expect(temp_dir_during_run).not_to be_nil
-      expect(Dir.exist?(temp_dir_during_run)).to be false
+      expect(load_path_during).to eq(load_path_before)
+      expect($LOAD_PATH).to eq(load_path_before)
     end
 
-    it "prepends temp dir to $LOAD_PATH during test execution" do
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        # The first $LOAD_PATH entry should be our temp dir
-        expect($LOAD_PATH.first).to start_with(File.join(Dir.tmpdir, "evilution"))
-        0
-      end
-
-      integration.call(lp_mutation)
-
-      # After restore, temp dir should not be in $LOAD_PATH
-      evilution_entries = $LOAD_PATH.select { |p| p.include?("evilution") && p.start_with?(Dir.tmpdir) && p != load_path_dir }
-      expect(evilution_entries).to be_empty
-    end
-
-    it "picks the most specific LOAD_PATH match for nested entries" do
-      nested_dir = File.join(load_path_dir, "core")
-      FileUtils.mkdir_p(nested_dir)
-      nested_source = File.join(nested_dir, "widget.rb")
-      File.write(nested_source, original_source)
-      # Push nested_dir AFTER load_path_dir so the broader match comes first
-      $LOAD_PATH.push(nested_dir)
-
-      nested_mutation = double(
-        "Mutation",
-        file_path: nested_source,
-        original_source: original_source,
-        mutated_source: mutated_source
-      )
-
-      shadow_subpath = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        temp_dir = integration.instance_variable_get(:@temp_dir)
-        temp_files = Dir.glob(File.join(temp_dir, "**", "*.rb"))
-        # Should be just "widget.rb", not "core/widget.rb"
-        shadow_subpath = temp_files.first.delete_prefix("#{temp_dir}/")
-        1
-      end
-
-      integration.call(nested_mutation)
-
-      expect(shadow_subpath).to eq("widget.rb")
-    ensure
-      $LOAD_PATH.delete(nested_dir)
-    end
-
-    it "removes original file from $LOADED_FEATURES during mutation" do
-      # Simulate the file being already loaded (e.g., transitively required)
-      original_feature = File.expand_path(source_path)
-      $LOADED_FEATURES << original_feature
-
-      loaded_features_during_run = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        loaded_features_during_run = $LOADED_FEATURES.dup
-        1
-      end
-
-      integration.call(lp_mutation)
-
-      expect(loaded_features_during_run).not_to include(original_feature)
-    ensure
-      $LOADED_FEATURES.delete(original_feature)
-    end
-
-    it "restores original file to $LOADED_FEATURES after mutation" do
+    it "preserves original file in $LOADED_FEATURES across the call" do
       original_feature = File.expand_path(source_path)
       $LOADED_FEATURES << original_feature
 
@@ -335,21 +271,20 @@ RSpec.describe Evilution::Integration::RSpec do
       FileUtils.rm_rf(autoload_dir)
     end
 
-    it "shadows the autoloaded file so require picks up the mutation" do
-      required_path = nil
+    it "redefines the autoloaded class in memory without touching the original file" do
+      value_during_run = nil
       allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        # Simulate what happens when a spec requires the file:
-        # With displaced feature, require should find the shadow
-        temp_dir = $LOAD_PATH.first
-        shadow = File.join(temp_dir, source_subpath)
-        required_path = shadow if File.exist?(shadow)
+        value_during_run = User.new.name
         1
       end
 
+      load(autoload_source_path)
       integration.call(autoload_mutation)
 
-      expect(required_path).not_to be_nil
+      expect(value_during_run).to be_nil
       expect(File.read(autoload_source_path)).to eq(autoload_original)
+    ensure
+      Object.send(:remove_const, :User) if defined?(User)
     end
 
     it "does not modify the original autoloaded file" do
@@ -372,23 +307,9 @@ RSpec.describe Evilution::Integration::RSpec do
 
       expect($LOADED_FEATURES).to include(original_feature)
     end
-
-    it "writes mutated content to the shadow path matching the subpath" do
-      shadow_content = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        temp_dir = integration.instance_variable_get(:@temp_dir)
-        shadow = File.join(temp_dir, source_subpath)
-        shadow_content = File.read(shadow) if File.exist?(shadow)
-        1
-      end
-
-      integration.call(autoload_mutation)
-
-      expect(shadow_content).to eq(autoload_mutated)
-    end
   end
 
-  describe "temp file isolation for non-LOAD_PATH files" do
+  describe "mutation isolation for non-LOAD_PATH files" do
     it "never modifies the original file during mutation" do
       file_content_during_run = nil
       allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
@@ -399,61 +320,6 @@ RSpec.describe Evilution::Integration::RSpec do
       integration.call(mutation)
 
       expect(file_content_during_run).to eq(original_source)
-    end
-
-    it "writes mutated source to a temp file" do
-      temp_file_content = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        temp_dir = integration.instance_variable_get(:@temp_dir)
-        temp_files = Dir.glob(File.join(temp_dir, "**", "*.rb"))
-        temp_file_content = File.read(temp_files.first) if temp_files.any?
-        1
-      end
-
-      integration.call(mutation)
-
-      expect(temp_file_content).to eq(mutated_source)
-    end
-
-    it "cleans up temp directory after the call" do
-      temp_dir_during_run = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        temp_dir_during_run = integration.instance_variable_get(:@temp_dir)
-        expect(Dir.exist?(temp_dir_during_run)).to be true
-        1
-      end
-
-      integration.call(mutation)
-
-      expect(temp_dir_during_run).not_to be_nil
-      expect(Dir.exist?(temp_dir_during_run)).to be false
-    end
-
-    it "cleans up temp directory even when runner raises" do
-      temp_dir_during_run = nil
-      allow(RSpec::Core::Runner).to receive(:run) do |_args, _out, _err|
-        temp_dir_during_run = integration.instance_variable_get(:@temp_dir)
-        raise "boom"
-      end
-
-      integration.call(mutation)
-
-      expect(temp_dir_during_run).not_to be_nil
-      expect(Dir.exist?(temp_dir_during_run)).to be false
-    end
-
-    it "loads the mutated temp file to redefine the class" do
-      loaded_file = nil
-      allow(integration).to receive(:load).and_wrap_original do |_method, path, *_args|
-        loaded_file = path
-      end
-      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
-
-      integration.call(mutation)
-
-      expect(loaded_file).not_to be_nil
-      expect(loaded_file).to start_with(Dir.tmpdir)
-      expect(loaded_file).to end_with(File.expand_path(source_file.path))
     end
   end
 

@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
-require "fileutils"
 require "prism"
-require "tmpdir"
 require_relative "../integration"
-require_relative "../temp_dir_tracker"
 
 class Evilution::Integration::Base
   def self.baseline_runner
@@ -20,7 +17,6 @@ class Evilution::Integration::Base
   end
 
   def call(mutation)
-    @temp_dir = nil
     ensure_framework_loaded
     fire_hook(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
     load_error = apply_mutation(mutation)
@@ -28,8 +24,6 @@ class Evilution::Integration::Base
 
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
-  ensure
-    restore_original(mutation)
   end
 
   private
@@ -58,15 +52,10 @@ class Evilution::Integration::Base
     prism_error = validate_mutated_syntax(mutation.mutated_source)
     return prism_error if prism_error
 
-    @temp_dir = Dir.mktmpdir("evilution")
-    Evilution::TempDirTracker.register(@temp_dir)
-    @displaced_feature = nil
-    subpath = resolve_require_subpath(mutation.file_path)
-
-    if subpath
-      apply_via_require(mutation, subpath)
-    else
-      apply_via_load(mutation)
+    pin_autoloaded_constants(mutation.original_source)
+    clear_concern_state(mutation.file_path)
+    with_redefinition_recovery(mutation.original_source) do
+      eval_mutated_source(mutation)
     end
     nil
   rescue SyntaxError => e
@@ -96,29 +85,14 @@ class Evilution::Integration::Base
     }
   end
 
-  def apply_via_require(mutation, subpath)
-    dest = File.join(@temp_dir, subpath)
-    FileUtils.mkdir_p(File.dirname(dest))
-    File.write(dest, mutation.mutated_source)
-    $LOAD_PATH.unshift(@temp_dir)
-    displace_loaded_feature(mutation.file_path)
-    pin_autoloaded_constants(mutation.original_source)
-    clear_concern_state(mutation.file_path)
-    with_redefinition_recovery(mutation.original_source) do
-      require(subpath.delete_suffix(".rb"))
-    end
-  end
-
-  def apply_via_load(mutation)
+  # Evaluate the mutated source with __FILE__ set to the original path so
+  # that `require_relative` and `__dir__` resolve against the real source
+  # tree, where sibling files actually exist.
+  def eval_mutated_source(mutation)
     absolute = File.expand_path(mutation.file_path)
-    dest = File.join(@temp_dir, absolute)
-    FileUtils.mkdir_p(File.dirname(dest))
-    File.write(dest, mutation.mutated_source)
-    pin_autoloaded_constants(mutation.original_source)
-    clear_concern_state(mutation.file_path)
-    with_redefinition_recovery(mutation.original_source) do
-      load(dest)
-    end
+    # rubocop:disable Security/Eval
+    eval(mutation.mutated_source, TOPLEVEL_BINDING, absolute, 1)
+    # rubocop:enable Security/Eval
   end
 
   def with_redefinition_recovery(original_source)
@@ -132,18 +106,6 @@ class Evilution::Integration::Base
 
   def redefinition_conflict?(error)
     error.message.include?("already defined")
-  end
-
-  def restore_original(_mutation)
-    return unless @temp_dir
-
-    $LOAD_PATH.delete(@temp_dir)
-    $LOADED_FEATURES.reject! { |f| f.start_with?(@temp_dir) }
-    $LOADED_FEATURES << @displaced_feature if @displaced_feature && !$LOADED_FEATURES.include?(@displaced_feature)
-    @displaced_feature = nil
-    FileUtils.rm_rf(@temp_dir)
-    Evilution::TempDirTracker.unregister(@temp_dir)
-    @temp_dir = nil
   end
 
   def pin_autoloaded_constants(source)
@@ -236,13 +198,5 @@ class Evilution::Integration::Base
     end
 
     best_subpath
-  end
-
-  def displace_loaded_feature(file_path)
-    absolute = File.expand_path(file_path)
-    return unless $LOADED_FEATURES.include?(absolute)
-
-    @displaced_feature = absolute
-    $LOADED_FEATURES.delete(absolute)
   end
 end
