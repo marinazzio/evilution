@@ -1,0 +1,8 @@
+<section class="baseline-comparison">
+  <h2>Baseline Comparison</h2>
+  <div class="comparison-scores">
+    <span>Baseline: <%= format("%.2f%%", base_score * 100) %></span>
+    <span>Current: <%= format("%.2f%%", head_score * 100) %></span>
+    <span class="<%= delta_class %>">Delta: <%= delta_str %></span>
+  </div>
+</section>

@@ -1,0 +1,6 @@
+<%- entries.each_with_index do |entry, i| -%>
+<div class="map-line <%= entry.status %>"<%= entry.title_attr %>>
+  <span class="line-number">line <%= entry.line %></span>
+  <span class="operator"><%= h(entry.operator_name) %></span>
+  <span class="status-badge <%= entry.status %>"><%= entry.status %></span>
+</div><%= "\n" if i < entries.length - 1 %><%- end -%>
