@@ -65,17 +65,13 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(result[:passed]).to be true
     end
 
-    it "cleans up temp directory even when run raises" do
-      temp_dir_during = nil
-      allow(Minitest).to receive(:__run) do
-        temp_dir_during = integration.instance_variable_get(:@temp_dir)
-        raise "boom"
-      end
+    it "returns error result when run raises" do
+      allow(Minitest).to receive(:__run).and_raise("boom")
 
-      integration.call(mutation)
+      result = integration.call(mutation)
 
-      expect(temp_dir_during).not_to be_nil
-      expect(Dir.exist?(temp_dir_during)).to be false
+      expect(result[:passed]).to be false
+      expect(result[:error]).to eq("boom")
     end
 
     it "returns error info when minitest raises" do

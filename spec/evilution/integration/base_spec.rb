@@ -97,58 +97,46 @@ RSpec.describe Evilution::Integration::Base do
       expect(events).to eq(%i[ensure_framework_loaded run_tests])
     end
 
-    it "applies mutation before running tests" do
-      temp_dir_existed = false
-      ev = events
+    it "applies mutation so redefined constants are visible in run_tests" do
+      original = "module EvilutionTestApplyOrder; def self.value; :original; end; end\n"
+      mutated = "module EvilutionTestApplyOrder; def self.value; :mutated; end; end\n"
+      File.write(source_file.path, original)
+      load(source_file.path)
+      apply_mutation = double(
+        "Mutation",
+        file_path: source_file.path,
+        original_source: original,
+        mutated_source: mutated
+      )
+
+      value_during_test = nil
       concrete_with_check = Class.new(described_class) do
         define_method(:ensure_framework_loaded) { nil }
         define_method(:run_tests) do |_mutation|
-          temp_dir_existed = !instance_variable_get(:@temp_dir).nil?
-          ev << :run_tests
+          value_during_test = EvilutionTestApplyOrder.value
           { passed: false, test_command: "test" }
         end
         define_method(:build_args) { |_mutation| [] }
         define_method(:reset_state) { nil }
       end
 
-      concrete_with_check.new.call(mutation)
+      concrete_with_check.new.call(apply_mutation)
 
-      expect(temp_dir_existed).to be true
+      expect(value_during_test).to eq(:mutated)
+    ensure
+      Object.send(:remove_const, :EvilutionTestApplyOrder) if defined?(EvilutionTestApplyOrder)
     end
 
-    it "restores original state even when run_tests raises" do
-      temp_dir_during = nil
+    it "propagates run_tests exceptions without leaving the original file on disk modified" do
       failing_class = Class.new(described_class) do
         define_method(:ensure_framework_loaded) { nil }
-        define_method(:run_tests) do |_mutation|
-          temp_dir_during = instance_variable_get(:@temp_dir)
-          raise "boom"
-        end
+        define_method(:run_tests) { |_mutation| raise "boom" }
         define_method(:build_args) { |_mutation| [] }
         define_method(:reset_state) { nil }
       end
 
       expect { failing_class.new.call(mutation) }.to raise_error(RuntimeError, "boom")
-      expect(temp_dir_during).not_to be_nil
-      expect(Dir.exist?(temp_dir_during)).to be false
-    end
-
-    it "cleans up temp directory after call" do
-      temp_dir_during = nil
-      tracking_class = Class.new(described_class) do
-        define_method(:ensure_framework_loaded) { nil }
-        define_method(:run_tests) do |_mutation|
-          temp_dir_during = instance_variable_get(:@temp_dir)
-          { passed: true, test_command: "test" }
-        end
-        define_method(:build_args) { |_mutation| [] }
-        define_method(:reset_state) { nil }
-      end
-
-      tracking_class.new.call(mutation)
-
-      expect(temp_dir_during).not_to be_nil
-      expect(Dir.exist?(temp_dir_during)).to be false
+      expect(File.read(source_file.path)).to eq(original_source)
     end
 
     it "returns the result from run_tests" do
@@ -222,13 +210,13 @@ RSpec.describe Evilution::Integration::Base do
         FileUtils.rm_rf(load_path_dir)
       end
 
-      it "shadows the file via LOAD_PATH prepend" do
-        load_path_shadowed = false
+      it "does not alter $LOAD_PATH during or after the call" do
+        load_path_before = $LOAD_PATH.dup
+        load_path_during = nil
         checking_class = Class.new(described_class) do
           define_method(:ensure_framework_loaded) { nil }
           define_method(:run_tests) do |_mutation|
-            temp_dir = instance_variable_get(:@temp_dir)
-            load_path_shadowed = $LOAD_PATH.first == temp_dir
+            load_path_during = $LOAD_PATH.dup
             { passed: true, test_command: "test" }
           end
           define_method(:build_args) { |_mutation| [] }
@@ -237,16 +225,8 @@ RSpec.describe Evilution::Integration::Base do
 
         checking_class.new.call(lp_mutation)
 
-        expect(load_path_shadowed).to be true
-      end
-
-      it "removes temp dir from LOAD_PATH after call" do
-        load_path_before = $LOAD_PATH.dup
-
-        integration.call(lp_mutation)
-
-        new_entries = $LOAD_PATH - load_path_before
-        expect(new_entries).to be_empty
+        expect(load_path_during).to eq(load_path_before)
+        expect($LOAD_PATH).to eq(load_path_before)
       end
 
       it "loads the mutated source into memory" do
@@ -378,9 +358,9 @@ RSpec.describe Evilution::Integration::Base do
         Object.send(:remove_const, :EvilutionTestPrismPre) if defined?(EvilutionTestPrismPre)
       end
 
-      it "does not create a temp dir when Prism rejects the source" do
-        original = "module EvilutionTestPrismNoWrite; def self.value; :original; end; end\n"
-        invalid = "module EvilutionTestPrismNoWrite; def self.(\n"
+      it "does not evaluate source when Prism rejects it" do
+        original = "module EvilutionTestPrismNoEval; def self.value; :original; end; end\n"
+        invalid = "module EvilutionTestPrismNoEval; def self.(\n"
         File.write(source_path, original)
         load(source_path)
 
@@ -391,20 +371,21 @@ RSpec.describe Evilution::Integration::Base do
           mutated_source: invalid
         )
 
-        checking_class = Class.new(described_class) do
+        instance = Class.new(described_class) do
           define_method(:ensure_framework_loaded) { nil }
           define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
           define_method(:build_args) { |_mutation| [] }
           define_method(:reset_state) { nil }
-        end
+        end.new
 
-        allow(Dir).to receive(:mktmpdir).and_call_original
+        expect(instance).not_to receive(:eval_mutated_source)
 
-        checking_class.new.call(lp_mut)
+        result = instance.call(lp_mut)
 
-        expect(Dir).not_to have_received(:mktmpdir).with("evilution")
+        expect(result[:passed]).to be false
+        expect(result[:error]).to eq("mutated source has syntax errors")
       ensure
-        Object.send(:remove_const, :EvilutionTestPrismNoWrite) if defined?(EvilutionTestPrismNoWrite)
+        Object.send(:remove_const, :EvilutionTestPrismNoEval) if defined?(EvilutionTestPrismNoEval)
       end
 
       it "returns error result when mutated source raises at load time" do
@@ -926,6 +907,92 @@ RSpec.describe Evilution::Integration::Base do
       ensure
         Object.send(:remove_const, :EvilutionTestNonConcern) if defined?(EvilutionTestNonConcern)
         $LOADED_FEATURES.delete(File.expand_path(source_path))
+      end
+    end
+
+    context "with require_relative to a sibling file" do
+      let(:lib_dir) { Dir.mktmpdir("evilution_base_reqrel") }
+      let(:sibling_path) { File.join(lib_dir, "sibling.rb") }
+      let(:target_path) { File.join(lib_dir, "target.rb") }
+
+      let(:sibling_source) do
+        <<~RUBY
+          module EvilutionReqRelSibling
+            def self.value
+              :sibling_value
+            end
+          end
+        RUBY
+      end
+
+      let(:target_original) do
+        <<~RUBY
+          require_relative "sibling"
+
+          module EvilutionReqRelTarget
+            def self.value
+              EvilutionReqRelSibling.value
+            end
+          end
+        RUBY
+      end
+
+      let(:target_mutated) do
+        <<~RUBY
+          require_relative "sibling"
+
+          module EvilutionReqRelTarget
+            def self.value
+              nil
+            end
+          end
+        RUBY
+      end
+
+      let(:reqrel_mutation) do
+        double(
+          "Mutation",
+          file_path: target_path,
+          original_source: target_original,
+          mutated_source: target_mutated
+        )
+      end
+
+      before do
+        File.write(sibling_path, sibling_source)
+        File.write(target_path, target_original)
+        $LOAD_PATH.unshift(lib_dir)
+        load(target_path)
+        $LOADED_FEATURES << File.expand_path(target_path) unless $LOADED_FEATURES.include?(File.expand_path(target_path))
+      end
+
+      after do
+        $LOAD_PATH.delete(lib_dir)
+        $LOADED_FEATURES.delete(File.expand_path(target_path))
+        $LOADED_FEATURES.delete(File.expand_path(sibling_path))
+        Object.send(:remove_const, :EvilutionReqRelTarget) if defined?(EvilutionReqRelTarget)
+        Object.send(:remove_const, :EvilutionReqRelSibling) if defined?(EvilutionReqRelSibling)
+        FileUtils.rm_rf(lib_dir)
+      end
+
+      it "resolves require_relative against the real source directory so siblings load" do
+        value_during_test = nil
+        nil
+        checking_class = Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            value_during_test = EvilutionReqRelTarget.value
+            { passed: true, test_command: "test" }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+
+        result = checking_class.new.call(reqrel_mutation)
+        error_during_test = result[:error]
+
+        expect(error_during_test).to be_nil
+        expect(value_during_test).to be_nil
       end
     end
 
