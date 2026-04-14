@@ -977,7 +977,6 @@ RSpec.describe Evilution::Integration::Base do
 
       it "resolves require_relative against the real source directory so siblings load" do
         value_during_test = nil
-        nil
         checking_class = Class.new(described_class) do
           define_method(:ensure_framework_loaded) { nil }
           define_method(:run_tests) do |_mutation|
