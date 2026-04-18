@@ -14,6 +14,10 @@ RSpec.describe "executables" do
   end
 
   it "evil has identical contents to evilution" do
-    expect(File.read(evil_path)).to eq(File.read(evilution_path))
+    aggregate_failures do
+      expect(File.exist?(evil_path)).to be true
+      expect(File.exist?(evilution_path)).to be true
+      expect(File.binread(evil_path)).to eq(File.binread(evilution_path))
+    end
   end
 end
