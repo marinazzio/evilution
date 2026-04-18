@@ -59,7 +59,9 @@ RSpec.describe Evilution::MCP::MutateTool do
       peak_memory_mb: nil,
       skipped: 0,
       disabled_mutations: [],
-      coverage_gaps: []
+      coverage_gaps: [],
+      unresolved: 0,
+      unresolved_results: []
     )
   end
 
@@ -366,7 +368,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
 
@@ -418,7 +422,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
         allow(runner).to receive(:call).and_return(error_summary)
 
@@ -470,7 +476,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
@@ -533,7 +541,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
         allow(runner).to receive(:call).and_return(survived_summary)
 
@@ -600,7 +610,9 @@ RSpec.describe Evilution::MCP::MutateTool do
             peak_memory_mb: nil,
             skipped: 0,
             disabled_mutations: [],
-            coverage_gaps: []
+            coverage_gaps: [],
+            unresolved: 0,
+            unresolved_results: []
           )
         end
 
@@ -830,7 +842,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
         allow(runner).to receive(:call).and_return(equivalent_summary)
 
@@ -904,7 +918,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           peak_memory_mb: nil,
           skipped: 0,
           disabled_mutations: [],
-          coverage_gaps: []
+          coverage_gaps: [],
+          unresolved: 0,
+          unresolved_results: []
         )
       end
 
