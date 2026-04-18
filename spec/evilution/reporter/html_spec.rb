@@ -271,6 +271,25 @@ RSpec.describe Evilution::Reporter::HTML do
 
         expect(output).to include("Unresolved")
       end
+
+      it "renders an unresolved details section listing operator and location" do
+        unresolved_summary = Evilution::Result::Summary.new(
+          results: [killed_result, unresolved_result],
+          duration: 0.6
+        )
+        output = reporter.call(unresolved_summary)
+
+        expect(output).to include('class="unresolved-details"')
+        expect(output).to include("integer_literal")
+        expect(output).to include("lib/user.rb")
+        expect(output).to include("15")
+      end
+
+      it "omits the unresolved section when no unresolved results exist" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include('class="unresolved-details"')
+      end
     end
 
     context "with timed out mutations" do

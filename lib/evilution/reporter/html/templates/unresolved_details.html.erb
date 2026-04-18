@@ -1,0 +1,11 @@
+<div class="unresolved-details">
+  <h3>Unresolved (<%= unresolved.length %>) — no test file resolved</h3>
+  <ul>
+    <%- sorted.each do |r| -%>
+    <li>
+      <span class="operator"><%= h(r.mutation.operator_name) %></span>
+      <span class="location"><%= h(r.mutation.file_path) %>:<%= r.mutation.line %></span>
+    </li>
+    <%- end -%>
+  </ul>
+</div>
