@@ -66,6 +66,12 @@ h1 { font-size: 1.5rem; color: #f0f6fc; }
 .error-header .operator { color: #d29922; font-weight: bold; }
 .error-header .location { color: #8b949e; font-family: monospace; }
 .error-message { background: #0d1117; border-radius: 4px; padding: 0.5rem 0.75rem; font-size: 0.8rem; color: #f85149; margin-top: 0.5rem; white-space: pre-wrap; overflow-x: auto; }
+.unresolved-details { border-top: 1px solid #30363d; padding: 1rem; }
+.unresolved-details h3 { color: #8b949e; font-size: 0.9rem; margin-bottom: 0.75rem; }
+.unresolved-details ul { list-style: none; }
+.unresolved-details li { font-size: 0.85rem; padding: 0.2rem 0; color: #8b949e; }
+.unresolved-details .operator { color: #c9d1d9; font-family: monospace; margin-right: 0.75rem; }
+.unresolved-details .location { font-family: monospace; }
 .survived-entry.regression { border-color: #f85149; background: #2a1010; }
 .regression-badge { background: #da3633; color: #fff; font-size: 0.65rem; padding: 0.1rem 0.4rem; border-radius: 4px; margin-left: 0.5rem; text-transform: uppercase; font-weight: bold; }
 footer { text-align: center; color: #484f58; font-size: 0.75rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #21262d; }

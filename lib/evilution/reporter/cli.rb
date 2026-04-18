@@ -19,6 +19,7 @@ class Evilution::Reporter::CLI
     append_survived(lines, summary)
     append_neutral(lines, summary)
     append_equivalent(lines, summary)
+    append_unresolved(lines, summary)
     append_errors(lines, summary)
     append_disabled(lines, summary)
     lines << ""
@@ -53,6 +54,14 @@ class Evilution::Reporter::CLI
     lines << ""
     lines << "Equivalent mutations (provably identical behavior):"
     summary.equivalent_results.each { |result| lines << format_neutral(result) }
+  end
+
+  def append_unresolved(lines, summary)
+    return unless summary.unresolved_results.any?
+
+    lines << ""
+    lines << "Unresolved mutations (no spec resolved):"
+    summary.unresolved_results.each { |result| lines << format_neutral(result) }
   end
 
   def append_errors(lines, summary)

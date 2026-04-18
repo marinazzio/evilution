@@ -265,6 +265,46 @@ RSpec.describe Evilution::Reporter::CLI do
       end
     end
 
+    context "with unresolved mutations" do
+      let(:unresolved_mutation) do
+        double(
+          "Mutation",
+          operator_name: "integer_literal",
+          file_path: "lib/isolated.rb",
+          line: 42,
+          diff: "- 1\n+ 2"
+        )
+      end
+
+      let(:unresolved_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: unresolved_mutation,
+          status: :unresolved,
+          duration: 0.0
+        )
+      end
+
+      let(:unresolved_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, unresolved_result],
+          duration: 1.0
+        )
+      end
+
+      it "shows unresolved mutations section" do
+        output = reporter.call(unresolved_summary)
+
+        expect(output).to include("Unresolved mutations (no spec resolved):")
+        expect(output).to include("integer_literal: lib/isolated.rb:42")
+      end
+
+      it "does not show unresolved section when there are none" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("Unresolved mutations")
+      end
+    end
+
     it "handles empty results gracefully" do
       empty_summary = Evilution::Result::Summary.new(results: [], duration: 0.0)
       output = reporter.call(empty_summary)
