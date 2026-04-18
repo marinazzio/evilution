@@ -34,15 +34,43 @@ class Evilution::Mutator::Base < Prism::Visitor
       replacement: replacement
     )
 
+    original_slice, mutated_slice = slice_affected_lines(
+      mutated_source: mutated_source,
+      offset: offset,
+      length: length,
+      replacement_bytesize: replacement.bytesize
+    )
+
     @mutations << Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
       original_source: @file_source,
       mutated_source: mutated_source,
+      original_slice: original_slice,
+      mutated_slice: mutated_slice,
       file_path: @subject.file_path,
       line: node.location.start_line,
       column: node.location.start_column
     )
+  end
+
+  def slice_affected_lines(mutated_source:, offset:, length:, replacement_bytesize:)
+    original_binary = @file_source.b
+    line_start = offset.zero? ? 0 : (original_binary.rindex("\n", offset - 1) || -1) + 1
+    orig_end_search = [offset + length - 1, line_start].max
+    orig_line_end = original_binary.index("\n", orig_end_search)
+    orig_line_end = orig_line_end ? orig_line_end + 1 : original_binary.bytesize
+
+    mutated_binary = mutated_source.b
+    mut_end_search = [offset + replacement_bytesize - 1, line_start].max
+    mut_line_end = mutated_binary.index("\n", mut_end_search)
+    mut_line_end = mut_line_end ? mut_line_end + 1 : mutated_binary.bytesize
+
+    original_slice = original_binary.byteslice(line_start, orig_line_end - line_start)
+                                    .force_encoding(@file_source.encoding)
+    mutated_slice = mutated_binary.byteslice(line_start, mut_line_end - line_start)
+                                  .force_encoding(mutated_source.encoding)
+    [original_slice, mutated_slice]
   end
 
   def byteslice_source(offset, length)

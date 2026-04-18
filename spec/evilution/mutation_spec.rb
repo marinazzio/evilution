@@ -9,6 +9,8 @@ RSpec.describe Evilution::Mutation do
       operator_name: "comparison_replacement",
       original_source: "def adult?\n  @age >= 18\nend",
       mutated_source: "def adult?\n  @age > 18\nend",
+      original_slice: "  @age >= 18\n",
+      mutated_slice: "  @age > 18\n",
       file_path: "lib/user.rb",
       line: 9,
       column: 7
@@ -29,6 +31,28 @@ RSpec.describe Evilution::Mutation do
 
   it "exposes mutated_source" do
     expect(mutation.mutated_source).to include("@age > 18")
+  end
+
+  it "exposes original_slice covering affected lines" do
+    expect(mutation.original_slice).to eq("  @age >= 18\n")
+  end
+
+  it "exposes mutated_slice covering affected lines" do
+    expect(mutation.mutated_slice).to eq("  @age > 18\n")
+  end
+
+  it "defaults slices to nil when not provided" do
+    m = described_class.new(
+      subject: subject_double,
+      operator_name: "test",
+      original_source: "a",
+      mutated_source: "b",
+      file_path: "x.rb",
+      line: 1
+    )
+
+    expect(m.original_slice).to be_nil
+    expect(m.mutated_slice).to be_nil
   end
 
   it "exposes file_path" do

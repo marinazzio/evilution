@@ -61,6 +61,8 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Max: 8
+  Exclude:
+    - "lib/evilution/mutation.rb"
 
 Layout/LineLength:
   Max: 140
