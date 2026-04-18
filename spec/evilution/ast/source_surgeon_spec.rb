@@ -6,35 +6,35 @@ RSpec.describe Evilution::AST::SourceSurgeon do
       source = "age >= 18"
       result = described_class.apply(source, offset: 4, length: 2, replacement: ">")
 
-      expect(result).to eq("age > 18")
+      expect(result.source).to eq("age > 18")
     end
 
     it "handles replacement shorter than original" do
       source = "x == y"
       result = described_class.apply(source, offset: 2, length: 2, replacement: ">")
 
-      expect(result).to eq("x > y")
+      expect(result.source).to eq("x > y")
     end
 
     it "handles replacement longer than original" do
       source = "x > y"
       result = described_class.apply(source, offset: 2, length: 1, replacement: ">=")
 
-      expect(result).to eq("x >= y")
+      expect(result.source).to eq("x >= y")
     end
 
     it "handles replacement at start of string" do
       source = "true && false"
       result = described_class.apply(source, offset: 0, length: 4, replacement: "false")
 
-      expect(result).to eq("false && false")
+      expect(result.source).to eq("false && false")
     end
 
     it "handles replacement at end of string" do
       source = "x + 42"
       result = described_class.apply(source, offset: 4, length: 2, replacement: "0")
 
-      expect(result).to eq("x + 0")
+      expect(result.source).to eq("x + 0")
     end
 
     it "does not mutate the original string" do
@@ -48,14 +48,38 @@ RSpec.describe Evilution::AST::SourceSurgeon do
       source = "def foo\n  x >= 10\nend"
       result = described_class.apply(source, offset: 12, length: 2, replacement: ">")
 
-      expect(result).to eq("def foo\n  x > 10\nend")
+      expect(result.source).to eq("def foo\n  x > 10\nend")
     end
 
     it "handles replacing with empty string" do
       source = "return 42"
       result = described_class.apply(source, offset: 6, length: 3, replacement: "")
 
-      expect(result).to eq("return")
+      expect(result.source).to eq("return")
+    end
+
+    describe "parse status" do
+      it "returns :ok when mutated source parses successfully" do
+        source = "age >= 18"
+        result = described_class.apply(source, offset: 4, length: 2, replacement: ">")
+
+        expect(result.status).to eq(:ok)
+      end
+
+      it "returns :unparseable when mutated source has syntax error" do
+        source = "config[:font_size]"
+        result = described_class.apply(source, offset: 17, length: 1, replacement: "")
+
+        expect(result.status).to eq(:unparseable)
+        expect(result.source).to eq("config[:font_size")
+      end
+
+      it "returns :unparseable when mutation introduces unbalanced braces" do
+        source = "{ a: 1 }"
+        result = described_class.apply(source, offset: 7, length: 1, replacement: "")
+
+        expect(result.status).to eq(:unparseable)
+      end
     end
 
     context "with multi-byte UTF-8 characters" do
@@ -66,7 +90,7 @@ RSpec.describe Evilution::AST::SourceSurgeon do
         # Replace the whole string literal including quotes (byte offset 7, length 16)
         result = described_class.apply(source, offset: 7, length: 16, replacement: '"replaced"')
 
-        expect(result).to eq('name = "replaced"')
+        expect(result.source).to eq('name = "replaced"')
       end
 
       it "replaces operator after Cyrillic string literal" do
@@ -75,7 +99,7 @@ RSpec.describe Evilution::AST::SourceSurgeon do
         # Line 2: y = 1 + 2 → the + is at byte offset 25
         result = described_class.apply(source, offset: 25, length: 1, replacement: "-")
 
-        expect(result).to eq("x = \"Привет\"\ny = 1 - 2")
+        expect(result.source).to eq("x = \"Привет\"\ny = 1 - 2")
       end
 
       it "handles emoji characters in source" do
@@ -84,7 +108,7 @@ RSpec.describe Evilution::AST::SourceSurgeon do
         # count = 42 → "42" starts at byte offset 27
         result = described_class.apply(source, offset: 27, length: 2, replacement: "0")
 
-        expect(result).to eq("label = \"🎉🎊\"\ncount = 0")
+        expect(result.source).to eq("label = \"🎉🎊\"\ncount = 0")
       end
 
       it "handles CJK characters in source" do
@@ -94,14 +118,14 @@ RSpec.describe Evilution::AST::SourceSurgeon do
         # x >= 10 → >= starts at byte offset 20
         result = described_class.apply(source, offset: 20, length: 2, replacement: ">")
 
-        expect(result).to eq("msg = \"日本語\"\nx > 10")
+        expect(result.source).to eq("msg = \"日本語\"\nx > 10")
       end
 
       it "preserves original encoding" do
         source = "x = \"Тест\"\ny = 1 + 2"
         result = described_class.apply(source, offset: 0, length: 1, replacement: "z")
 
-        expect(result.encoding).to eq(source.encoding)
+        expect(result.source.encoding).to eq(source.encoding)
       end
 
       it "works with Prism byte offsets end-to-end" do
@@ -122,9 +146,9 @@ RSpec.describe Evilution::AST::SourceSurgeon do
         loc = plus_node.message_loc
         result = described_class.apply(source, offset: loc.start_offset, length: loc.length, replacement: "-")
 
-        expect(result).to include("x = 1 - 2")
-        expect(result).to include("Подкаст клуба")
-        expect(Prism.parse(result).errors).to be_empty
+        expect(result.source).to include("x = 1 - 2")
+        expect(result.source).to include("Подкаст клуба")
+        expect(Prism.parse(result.source).errors).to be_empty
       end
     end
   end
