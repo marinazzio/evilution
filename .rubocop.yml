@@ -28,7 +28,6 @@ Metrics/ClassLength:
   Max: 150
   Exclude:
     - "lib/evilution/config.rb"
-    - "lib/evilution/mcp/mutate_tool.rb"
     - "lib/evilution/mcp/info_tool.rb"
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"

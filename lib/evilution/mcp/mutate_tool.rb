@@ -5,7 +5,6 @@ require "mcp"
 require_relative "../config"
 require_relative "../runner"
 require_relative "../reporter/json"
-require_relative "../reporter/suggestion"
 require_relative "../spec_resolver"
 
 require_relative "../mcp"
@@ -104,194 +103,43 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
   class << self
     def call(server_context:, files: [], verbosity: nil, **opts)
-      validate_opts!(opts)
-      parsed_files, line_ranges = parse_files(Array(files))
-      config_opts = build_config_opts(parsed_files, line_ranges, opts)
-      config = Evilution::Config.new(**config_opts)
-      suggest_tests = opts[:suggest_tests]
-      on_result = build_streaming_callback(server_context, suggest_tests, config.integration)
-      runner = Evilution::Runner.new(config: config, on_result: on_result)
-      summary = runner.call
-      report = Evilution::Reporter::JSON.new(suggest_tests: suggest_tests == true, integration: config.integration).call(summary)
-      compact = trim_report(report, normalize_verbosity(verbosity), summary.survived_results, config)
+      Evilution::MCP::MutateTool::OptionParser.validate!(opts)
+      parsed_files, line_ranges = Evilution::MCP::MutateTool::OptionParser.parse_files(Array(files))
+      config = Evilution::MCP::MutateTool::ConfigBuilder.build(
+        files: parsed_files,
+        line_ranges: line_ranges,
+        params: opts
+      )
+      on_result = Evilution::MCP::MutateTool::ProgressStreamer.build(
+        server_context: server_context,
+        suggest_tests: opts[:suggest_tests],
+        integration: config.integration
+      )
+      summary = Evilution::Runner.new(config: config, on_result: on_result).call
+      report = Evilution::Reporter::JSON.new(
+        suggest_tests: opts[:suggest_tests] == true,
+        integration: config.integration
+      ).call(summary)
+      normalized_verbosity = Evilution::MCP::MutateTool::OptionParser.normalize_verbosity(verbosity)
+      compact = Evilution::MCP::MutateTool::ReportTrimmer.call(
+        report,
+        verbosity: normalized_verbosity,
+        survived_results: summary.survived_results,
+        config: config,
+        enricher: Evilution::MCP::MutateTool::SurvivedEnricher
+      )
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
     rescue Evilution::Error => e
-      error_payload = build_error_payload(e)
-      ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(error_payload) }], error: true)
-    end
-
-    VALID_VERBOSITIES = %w[full summary minimal].freeze
-    PASSTHROUGH_KEYS = %i[target timeout jobs fail_fast suggest_tests incremental integration
-                          isolation baseline save_session].freeze
-    ALLOWED_OPT_KEYS = (PASSTHROUGH_KEYS + %i[spec skip_config]).freeze
-
-    private
-
-    def parse_files(raw_files)
-      files = []
-      ranges = {}
-
-      raw_files.each do |arg|
-        file, range_str = arg.split(":", 2)
-        files << file
-        next unless range_str
-
-        ranges[file] = parse_line_range(range_str)
-      end
-
-      [files, ranges]
-    end
-
-    def parse_line_range(str)
-      if str.include?("-")
-        start_str, end_str = str.split("-", 2)
-        start_line = Integer(start_str)
-        end_line = end_str.empty? ? Float::INFINITY : Integer(end_str)
-        start_line..end_line
-      else
-        line = Integer(str)
-        line..line
-      end
-    rescue ArgumentError, TypeError
-      raise Evilution::ParseError, "invalid line range: #{str.inspect}"
-    end
-
-    def validate_opts!(opts)
-      unknown = opts.keys - ALLOWED_OPT_KEYS
-      return if unknown.empty?
-
-      raise Evilution::ParseError, "unknown parameters: #{unknown.join(", ")}"
-    end
-
-    def build_config_opts(files, line_ranges, params)
-      # Preload is disabled for MCP invocations: `require`-ing Rails into the
-      # long-lived MCP server would poison subsequent runs against other
-      # projects. MCP users who want the speedup should use the CLI.
-      opts = { target_files: files, line_ranges: line_ranges, format: :json, quiet: true, preload: false }
-      opts[:skip_config_file] = true if params[:skip_config]
-      opts[:spec_files] = params[:spec] if params[:spec]
-      PASSTHROUGH_KEYS.each { |key| opts[key] = params[key] unless params[key].nil? }
-      opts
-    end
-
-    def normalize_verbosity(value)
-      normalized = value.to_s.strip.downcase
-      normalized = "summary" if normalized.empty?
-      return normalized if VALID_VERBOSITIES.include?(normalized)
-
-      raise Evilution::ParseError, "invalid verbosity: #{value.inspect} (must be full, summary, or minimal)"
-    end
-
-    def trim_report(json_string, verbosity, survived_results, config)
-      data = ::JSON.parse(json_string)
-      case verbosity
-      when "full"
-        strip_diffs(data, "killed")
-        strip_diffs(data, "neutral")
-        strip_diffs(data, "equivalent")
-      when "summary"
-        data.delete("killed")
-        data.delete("neutral")
-        data.delete("equivalent")
-      when "minimal"
-        data.delete("killed")
-        data.delete("neutral")
-        data.delete("equivalent")
-        data.delete("timed_out")
-        data.delete("errors")
-      end
-      enrich_survived(data, survived_results, config)
-      ::JSON.generate(data)
-    end
-
-    def enrich_survived(data, survived_results, config)
-      entries = data["survived"]
-      return unless entries.is_a?(Array)
-
-      explicit_spec = explicit_spec_override(config)
-      resolver = explicit_spec ? nil : resolver_for_integration(config.integration)
-      cache = {}
-
-      entries.each_with_index do |entry, index|
-        result = survived_results[index]
-        next unless result
-
-        mutation = result.mutation
-        entry["subject"] = mutation.subject.name
-        spec_file = explicit_spec || cache.fetch(mutation.file_path) do
-          cache[mutation.file_path] = resolver.call(mutation.file_path)
-        end
-        entry["spec_file"] = spec_file if spec_file
-        entry["next_step"] = build_next_step(mutation, spec_file)
-      end
-    end
-
-    def explicit_spec_override(config)
-      return nil unless config.respond_to?(:spec_files)
-
-      files = Array(config.spec_files).compact.map(&:to_s).reject(&:empty?)
-      files.first
-    end
-
-    def resolver_for_integration(integration)
-      integration_class = Evilution::Runner::INTEGRATIONS[integration.to_sym]
-      return Evilution::SpecResolver.new unless integration_class
-
-      integration_class.baseline_options[:spec_resolver] || Evilution::SpecResolver.new
-    end
-
-    def build_next_step(mutation, spec_file)
-      target = spec_file || "the covering test file"
-      "Add a test in #{target} that fails against this mutation at #{mutation.file_path}:#{mutation.line} " \
-        "(#{mutation.subject.name}, #{mutation.operator_name})."
-    end
-
-    def strip_diffs(data, key)
-      return unless data[key]
-
-      data[key].each { |entry| entry.delete("diff") }
-    end
-
-    def build_streaming_callback(server_context, suggest_tests, integration)
-      return nil unless suggest_tests && server_context.respond_to?(:report_progress)
-
-      suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: true, integration: integration)
-      survivor_index = 0
-
-      proc do |result|
-        next unless result.survived?
-
-        begin
-          survivor_index += 1
-          detail = build_suggestion_detail(result.mutation, suggestion)
-          server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
-        rescue StandardError # rubocop:disable Lint/SuppressedException
-        end
-      end
-    end
-
-    def build_suggestion_detail(mutation, suggestion)
-      {
-        operator: mutation.operator_name,
-        file: mutation.file_path,
-        line: mutation.line,
-        subject: mutation.subject.name,
-        diff: mutation.diff,
-        suggestion: suggestion.suggestion_for(mutation)
-      }
-    end
-
-    def build_error_payload(error)
-      error_type = case error
-                   when Evilution::ConfigError then "config_error"
-                   when Evilution::ParseError then "parse_error"
-                   else "runtime_error"
-                   end
-
-      payload = { type: error_type, message: error.message }
-      payload[:file] = error.file if error.file
-      { error: payload }
+      payload = Evilution::MCP::MutateTool::ErrorPayload.build(e)
+      ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(payload) }], error: true)
     end
   end
 end
+
+require_relative "mutate_tool/error_payload"
+require_relative "mutate_tool/option_parser"
+require_relative "mutate_tool/config_builder"
+require_relative "mutate_tool/report_trimmer"
+require_relative "mutate_tool/survived_enricher"
+require_relative "mutate_tool/progress_streamer"
