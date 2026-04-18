@@ -27,6 +27,8 @@ Or standalone: `gem install evilution`
 evilution [command] [options] [files...]
 ```
 
+The shorter alias `evil` ships alongside `evilution` and accepts identical arguments (handy with `alias be='bundle exec'` → `be evil run ...`).
+
 ### Commands
 
 | Command              | Description                                        | Default |
