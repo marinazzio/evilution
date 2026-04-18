@@ -27,12 +27,13 @@ class Evilution::Mutator::Base < Prism::Visitor
   def add_mutation(offset:, length:, replacement:, node:)
     return if @filter && @filter.skip?(node)
 
-    mutated_source = Evilution::AST::SourceSurgeon.apply(
+    surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source,
       offset: offset,
       length: length,
       replacement: replacement
     )
+    mutated_source = surgery.source
 
     original_slice, mutated_slice = slice_affected_lines(
       mutated_source: mutated_source,
@@ -48,6 +49,7 @@ class Evilution::Mutator::Base < Prism::Visitor
       mutated_source: mutated_source,
       original_slice: original_slice,
       mutated_slice: mutated_slice,
+      parse_status: surgery.status,
       file_path: @subject.file_path,
       line: node.location.start_line,
       column: node.location.start_column

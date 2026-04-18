@@ -6,11 +6,12 @@ require "diff/lcs/hunk"
 class Evilution::Mutation
   attr_reader :subject, :operator_name, :original_source,
               :mutated_source, :original_slice, :mutated_slice,
-              :file_path, :line, :column
+              :file_path, :line, :column, :parse_status
 
   # rubocop:disable Metrics/ParameterLists
   def initialize(subject:, operator_name:, original_source:, mutated_source:,
-                 file_path:, line:, column: 0, original_slice: nil, mutated_slice: nil)
+                 file_path:, line:, column: 0, original_slice: nil, mutated_slice: nil,
+                 parse_status: :ok)
     # rubocop:enable Metrics/ParameterLists
     @subject = subject
     @operator_name = operator_name
@@ -21,7 +22,12 @@ class Evilution::Mutation
     @file_path = file_path
     @line = line
     @column = column
+    @parse_status = parse_status
     @diff = nil
+  end
+
+  def unparseable?
+    @parse_status == :unparseable
   end
 
   def diff
