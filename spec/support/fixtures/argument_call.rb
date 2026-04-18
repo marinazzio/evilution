@@ -26,4 +26,16 @@ class ArgumentCallExample
   def mixed_regular(a, b)
     send_data(a, b)
   end
+
+  def index_assign(h, k, v)
+    h[k] = v
+  end
+
+  def multi_index_assign(h, k, l, v)
+    h[k, l] = v
+  end
+
+  def array_index_assign(arr, i, x)
+    arr[i] = x
+  end
 end

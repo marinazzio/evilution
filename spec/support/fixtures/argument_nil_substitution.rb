@@ -40,4 +40,16 @@ class ArgumentNilSubstitutionFixture
   def nested_calls(a, b)
     foo(bar(a), b)
   end
+
+  def index_assign(h, k, v)
+    h[k] = v
+  end
+
+  def multi_index_assign(h, k, l, v)
+    h[k, l] = v
+  end
+
+  def array_index_assign(arr, i, x)
+    arr[i] = x
+  end
 end

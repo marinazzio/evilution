@@ -13,7 +13,7 @@ class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator
   def visit_call_node(node)
     args = node.arguments&.arguments
 
-    if args && args.length >= 1 && positional_only?(args)
+    if mutable?(node, args)
       args.each_index do |i|
         parts = args.each_with_index.map { |a, j| j == i ? "nil" : a.slice }
         replacement = parts.join(", ")
@@ -31,6 +31,10 @@ class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator
   end
 
   private
+
+  def mutable?(node, args)
+    args && args.length >= 1 && positional_only?(args) && node.name != :[]=
+  end
 
   def positional_only?(args)
     args.none? { |arg| SKIP_TYPES.any? { |type| arg.is_a?(type) } }
