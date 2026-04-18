@@ -60,7 +60,7 @@ class Evilution::Reporter::CLI
     return unless summary.unresolved_results.any?
 
     lines << ""
-    lines << "Unresolved mutations (no spec resolved):"
+    lines << "Unresolved mutations (no test file resolved):"
     summary.unresolved_results.each { |result| lines << format_neutral(result) }
   end
 

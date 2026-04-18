@@ -202,7 +202,7 @@ Use `--format json` for machine-readable output. Schema:
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 
-Unresolved mutations indicate a missing spec mapping — the file has no `_spec.rb` counterpart that the resolver could find. They are reported separately so you can act on them (add a spec, adjust spec naming, or opt in to the full-suite fallback) without inflating the error count.
+Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). They are reported separately so you can act on them (add a test, adjust test naming, or opt in to the full-suite fallback) without inflating the error count.
 
 ## Mutation Operators (72 total)
 
