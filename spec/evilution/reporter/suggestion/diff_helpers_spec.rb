@@ -18,7 +18,7 @@ RSpec.describe Evilution::Reporter::Suggestion::DiffHelpers do
   end
 
   describe ".sanitize_method_name" do
-    it "replaces non-identifier characters with underscores" do
+    it "removes invalid trailing characters from the sanitized name" do
       expect(described_class.sanitize_method_name("foo?")).to eq("foo")
     end
 

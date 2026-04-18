@@ -1675,6 +1675,7 @@ RSpec.describe Evilution::Reporter::Suggestion do
     end
 
     it "has concrete templates for all operators that RSpec has" do
+      Evilution::Reporter::Suggestion::Registry.default
       rspec_operators = Evilution::Reporter::Suggestion::Templates::Rspec::RSPEC_ENTRIES.keys
       minitest_operators = Evilution::Reporter::Suggestion::Templates::Minitest::MINITEST_ENTRIES.keys
 
