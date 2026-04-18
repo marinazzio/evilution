@@ -49,6 +49,7 @@ class Evilution::Mutator::Base < Prism::Visitor
       mutated_source: mutated_source,
       original_slice: original_slice,
       mutated_slice: mutated_slice,
+      parse_status: surgery.status,
       file_path: @subject.file_path,
       line: node.location.start_line,
       column: node.location.start_column

@@ -55,6 +55,49 @@ RSpec.describe Evilution::Mutation do
     expect(m.mutated_slice).to be_nil
   end
 
+  describe "#parse_status" do
+    it "defaults to :ok" do
+      m = described_class.new(
+        subject: subject_double,
+        operator_name: "test",
+        original_source: "a",
+        mutated_source: "b",
+        file_path: "x.rb",
+        line: 1
+      )
+
+      expect(m.parse_status).to eq(:ok)
+    end
+
+    it "accepts :unparseable" do
+      m = described_class.new(
+        subject: subject_double,
+        operator_name: "test",
+        original_source: "a",
+        mutated_source: "b",
+        file_path: "x.rb",
+        line: 1,
+        parse_status: :unparseable
+      )
+
+      expect(m.parse_status).to eq(:unparseable)
+      expect(m).to be_unparseable
+    end
+
+    it "reports #unparseable? false when :ok" do
+      m = described_class.new(
+        subject: subject_double,
+        operator_name: "test",
+        original_source: "a",
+        mutated_source: "b",
+        file_path: "x.rb",
+        line: 1
+      )
+
+      expect(m).not_to be_unparseable
+    end
+  end
+
   it "exposes file_path" do
     expect(mutation.file_path).to eq("lib/user.rb")
   end
