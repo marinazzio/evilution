@@ -54,23 +54,31 @@ class Evilution::Mutator::Base < Prism::Visitor
     )
   end
 
+  NEWLINE_BYTE = 10
+  private_constant :NEWLINE_BYTE
+
   def slice_affected_lines(mutated_source:, offset:, length:, replacement_bytesize:)
-    original_binary = @file_source.b
-    line_start = offset.zero? ? 0 : (original_binary.rindex("\n", offset - 1) || -1) + 1
-    orig_end_search = [offset + length - 1, line_start].max
-    orig_line_end = original_binary.index("\n", orig_end_search)
-    orig_line_end = orig_line_end ? orig_line_end + 1 : original_binary.bytesize
+    line_start = line_start_byte(@file_source, offset)
+    orig_line_end = line_end_byte(@file_source, [offset + length - 1, line_start].max)
+    mut_line_end = line_end_byte(mutated_source, [offset + replacement_bytesize - 1, line_start].max)
 
-    mutated_binary = mutated_source.b
-    mut_end_search = [offset + replacement_bytesize - 1, line_start].max
-    mut_line_end = mutated_binary.index("\n", mut_end_search)
-    mut_line_end = mut_line_end ? mut_line_end + 1 : mutated_binary.bytesize
+    [
+      @file_source.byteslice(line_start, orig_line_end - line_start),
+      mutated_source.byteslice(line_start, mut_line_end - line_start)
+    ]
+  end
 
-    original_slice = original_binary.byteslice(line_start, orig_line_end - line_start)
-                                    .force_encoding(@file_source.encoding)
-    mutated_slice = mutated_binary.byteslice(line_start, mut_line_end - line_start)
-                                  .force_encoding(mutated_source.encoding)
-    [original_slice, mutated_slice]
+  def line_start_byte(source, offset)
+    i = offset - 1
+    i -= 1 while i >= 0 && source.getbyte(i) != NEWLINE_BYTE
+    i + 1
+  end
+
+  def line_end_byte(source, from)
+    limit = source.bytesize
+    i = from
+    i += 1 while i < limit && source.getbyte(i) != NEWLINE_BYTE
+    i < limit ? i + 1 : limit
   end
 
   def byteslice_source(offset, length)

@@ -8,8 +8,10 @@ class Evilution::Mutation
               :mutated_source, :original_slice, :mutated_slice,
               :file_path, :line, :column
 
+  # rubocop:disable Metrics/ParameterLists
   def initialize(subject:, operator_name:, original_source:, mutated_source:,
                  file_path:, line:, column: 0, original_slice: nil, mutated_slice: nil)
+    # rubocop:enable Metrics/ParameterLists
     @subject = subject
     @operator_name = operator_name
     @original_source = original_source
