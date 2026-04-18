@@ -51,8 +51,8 @@ RSpec.describe Evilution::Reporter::Suggestion do
       expect(result).to be_empty
     end
 
-    it "generates suggestions for all #{Evilution::Reporter::Suggestion::TEMPLATES.size} operator types" do
-      Evilution::Reporter::Suggestion::TEMPLATES.each_key do |operator_name|
+    it "generates suggestions for all registered operator types" do
+      Evilution::Reporter::Suggestion::Registry.default.each_generic_operator do |operator_name|
         mutation = build_mutation(operator_name)
         suggestion = suggestion_reporter.suggestion_for(mutation)
 
@@ -1675,8 +1675,9 @@ RSpec.describe Evilution::Reporter::Suggestion do
     end
 
     it "has concrete templates for all operators that RSpec has" do
-      rspec_operators = described_class::CONCRETE_TEMPLATES.keys
-      minitest_operators = described_class::MINITEST_CONCRETE_TEMPLATES.keys
+      Evilution::Reporter::Suggestion::Registry.default
+      rspec_operators = Evilution::Reporter::Suggestion::Templates::Rspec::RSPEC_ENTRIES.keys
+      minitest_operators = Evilution::Reporter::Suggestion::Templates::Minitest::MINITEST_ENTRIES.keys
 
       expect(minitest_operators).to match_array(rspec_operators)
     end

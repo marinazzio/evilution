@@ -170,3 +170,7 @@
 {"id":"int-c477087f","kind":"field_change","created_at":"2026-04-16T02:21:16.124223109Z","actor":"Denis Kiselev","issue_id":"EV-279","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"GH #619 closed — BlockPassRemoval operator shipped"}}
 {"id":"int-83f6ef33","kind":"field_change","created_at":"2026-04-18T02:28:55.484568434Z","actor":"Denis Kiselev","issue_id":"EV-269","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged"}}
 {"id":"int-921ad06a","kind":"field_change","created_at":"2026-04-18T02:32:34.711348814Z","actor":"Denis Kiselev","issue_id":"EV-2t6w","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged"}}
+{"id":"int-3a5d743d","kind":"field_change","created_at":"2026-04-18T04:15:40.927791612Z","actor":"Denis Kiselev","issue_id":"EV-butc","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-dc9eb87b","kind":"field_change","created_at":"2026-04-18T04:26:07.228880915Z","actor":"Denis Kiselev","issue_id":"EV-5kvc","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-68aa4ad7","kind":"field_change","created_at":"2026-04-18T04:35:03.842661968Z","actor":"Denis Kiselev","issue_id":"EV-volu","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-c1f560e9","kind":"field_change","created_at":"2026-04-18T04:35:10.815746246Z","actor":"Denis Kiselev","issue_id":"EV-zzhb","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}

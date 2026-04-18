@@ -17,6 +17,7 @@
 .mcp.json
 
 .claude/projects/
+.claude/scheduled_tasks.lock
 
 # Evilution session results and reports
 .evilution/
