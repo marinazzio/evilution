@@ -28,13 +28,17 @@ Metrics/ClassLength:
   Max: 150
   Exclude:
     - "lib/evilution/config.rb"
-    - "lib/evilution/reporter/suggestion.rb"
     - "lib/evilution/mcp/mutate_tool.rb"
     - "lib/evilution/mcp/info_tool.rb"
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/integration/base.rb"
     - "lib/evilution/runner/mutation_executor.rb"
+
+Metrics/ModuleLength:
+  Exclude:
+    - "lib/evilution/reporter/suggestion/templates/rspec.rb"
+    - "lib/evilution/reporter/suggestion/templates/minitest.rb"
 
 # target 20
 Metrics/MethodLength:
