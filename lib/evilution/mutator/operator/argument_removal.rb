@@ -13,7 +13,7 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   def visit_call_node(node)
     args = node.arguments&.arguments
 
-    if args && args.length >= 2 && positional_only?(args)
+    if mutable?(node, args)
       args.each_index do |i|
         remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
         replacement = remaining.join(", ")
@@ -31,6 +31,10 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   end
 
   private
+
+  def mutable?(node, args)
+    args && args.length >= 2 && positional_only?(args) && node.name != :[]=
+  end
 
   def positional_only?(args)
     args.none? { |arg| SKIP_TYPES.any? { |type| arg.is_a?(type) } }

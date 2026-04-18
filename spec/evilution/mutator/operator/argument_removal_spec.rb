@@ -58,6 +58,12 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
       expect(muts).to be_empty
     end
 
+    it "skips index-assignment calls (hash/array []=)" do
+      expect(mutations_for("index_assign")).to be_empty
+      expect(mutations_for("multi_index_assign")).to be_empty
+      expect(mutations_for("array_index_assign")).to be_empty
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

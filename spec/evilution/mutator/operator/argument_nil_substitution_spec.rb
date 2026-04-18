@@ -72,6 +72,12 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentNilSubstitution do
       expect(muts).to be_empty
     end
 
+    it "skips index-assignment calls (hash/array []=)" do
+      expect(mutations_for("index_assign")).to be_empty
+      expect(mutations_for("multi_index_assign")).to be_empty
+      expect(mutations_for("array_index_assign")).to be_empty
+    end
+
     it "replaces string literal arguments with nil" do
       muts = mutations_for("string_arg")
 
