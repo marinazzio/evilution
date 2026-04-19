@@ -369,7 +369,7 @@ RSpec.describe Evilution::Config do
           skip_config_file: true,
           spec_mappings: { "lib/foo.rb" => "spec/missing_spec.rb" }
         )
-      end.to output(/spec_mappings.*spec\/missing_spec\.rb.*not found/).to_stderr
+      end.to output(%r(/spec_mappings.*spec\/missing_spec\.rb.*not found/)).to_stderr
     end
 
     it "does not warn when all spec_mappings entries exist" do
