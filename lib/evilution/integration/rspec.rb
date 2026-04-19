@@ -70,6 +70,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
     detector = reset_crash_detector
     eg_before = snapshot_example_groups
+    fe_before = snapshot_filtered_examples_keys
+    rep_before = snapshot_reporter_lengths
     status = ::RSpec::Core::Runner.run(args, out, err)
 
     build_rspec_result(status, command, detector)
@@ -77,6 +79,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     { passed: false, error: e.message, test_command: command }
   ensure
     release_rspec_state(eg_before)
+    release_filtered_examples(fe_before)
+    release_reporter_state(rep_before)
   end
 
   def build_args(files)
@@ -140,6 +144,54 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     world.instance_variable_set(:@sources_by_path, {}) if world.instance_variable_defined?(:@sources_by_path)
   end
 
+  def snapshot_filtered_examples_keys
+    fe = rspec_world_ivar(:@filtered_examples)
+    fe ? Set.new(fe.keys.map(&:object_id)) : nil
+  end
+
+  def snapshot_reporter_lengths
+    reporter = rspec_config_ivar(:@reporter)
+    return nil unless reporter
+
+    %i[@examples @failed_examples @pending_examples].each_with_object({}) do |ivar, acc|
+      next unless reporter.instance_variable_defined?(ivar)
+
+      arr = reporter.instance_variable_get(ivar)
+      acc[ivar] = arr.length if arr.is_a?(Array)
+    end
+  end
+
+  def release_filtered_examples(snapshot_keys)
+    fe = rspec_world_ivar(:@filtered_examples)
+    return unless fe && snapshot_keys
+
+    fe.each_key.to_a.each do |k|
+      fe.delete(k) unless snapshot_keys.include?(k.object_id)
+    end
+  end
+
+  def release_reporter_state(lengths)
+    return unless lengths
+
+    reporter = rspec_config_ivar(:@reporter)
+    return unless reporter
+
+    lengths.each do |ivar, length|
+      arr = reporter.instance_variable_get(ivar)
+      arr.slice!(length..) if arr.is_a?(Array) && arr.length > length
+    end
+  end
+
+  def rspec_world_ivar(ivar)
+    world = ::RSpec.world
+    world.instance_variable_defined?(ivar) ? world.instance_variable_get(ivar) : nil
+  end
+
+  def rspec_config_ivar(ivar)
+    config = ::RSpec.configuration
+    config.instance_variable_defined?(ivar) ? config.instance_variable_get(ivar) : nil
+  end
+
   def reset_crash_detector
     if @crash_detector
       @crash_detector.reset
@@ -168,8 +220,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = @spec_selector.call(mutation.file_path)
-    if resolved.nil? || resolved.empty?
+    resolved = Array(@spec_selector.call(mutation.file_path))
+    if resolved.empty?
       warn_unresolved_spec(mutation.file_path)
       return @fallback_to_full_suite ? ["spec"] : nil
     end

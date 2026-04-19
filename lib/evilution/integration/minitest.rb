@@ -4,6 +4,7 @@ require "stringio"
 require_relative "base"
 require_relative "minitest_crash_detector"
 require_relative "../spec_resolver"
+require_relative "../spec_selector"
 
 require_relative "../integration"
 
@@ -35,10 +36,12 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     }
   end
 
-  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false)
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil)
     @test_files = test_files
     @minitest_loaded = false
-    @spec_resolver = Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+    @spec_selector = spec_selector || Evilution::SpecSelector.new(
+      spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+    )
     @fallback_to_full_suite = fallback_to_full_suite
     @crash_detector = nil
     @warned_files = Set.new
@@ -138,13 +141,13 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = @spec_resolver.call(mutation.file_path)
-    unless resolved
+    resolved = Array(@spec_selector.call(mutation.file_path))
+    if resolved.empty?
       warn_unresolved_test(mutation.file_path)
       return @fallback_to_full_suite ? glob_test_files : nil
     end
 
-    [resolved]
+    resolved
   end
 
   def glob_test_files
