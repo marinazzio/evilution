@@ -7,8 +7,8 @@ require_relative "../lib/evilution/integration/rspec"
 
 FIXTURE = File.expand_path("../spec/support/fixtures/simple_class.rb", __dir__)
 FIXTURE_SPEC = File.expand_path("../spec/support/fixtures/simple_class_spec.rb", __dir__)
-COMPLEX_FIXTURE = File.expand_path("../lib/evilution/config.rb", __dir__)
-COMPLEX_FIXTURE_SPEC = File.expand_path("../spec/evilution/config_spec.rb", __dir__)
+COMPLEX_FIXTURE = File.expand_path("../spec/support/fixtures/memory_check/target.rb", __dir__)
+COMPLEX_FIXTURE_SPEC = File.expand_path("../spec/support/fixtures/memory_check/target_examples.rb", __dir__)
 ITERATIONS = Integer(ENV.fetch("MEMORY_CHECK_ITERATIONS", 50))
 MAX_GROWTH_KB = Integer(ENV.fetch("MEMORY_CHECK_MAX_GROWTH_KB", 10_240))
 
@@ -95,8 +95,10 @@ if mutations.size >= 2
 end
 
 # 5. RSpec integration per-mutation with complex fixture
-#    Uses Config (227 LOC, 73 specs, 564 mutations) for realistic per-mutation load:
-#    more ExampleGroup subclasses, deeper spec nesting, heavier metadata.
+#    Uses a frozen snapshot under spec/support/fixtures/memory_check/ for
+#    realistic per-mutation load: deep spec nesting, heavy metadata. Snapshot
+#    is intentional - decoupling the budget from project file growth so this
+#    check measures integration plumbing memory, not project size.
 complex_parser = Evilution::AST::Parser.new
 complex_registry = Evilution::Mutator::Registry.default
 complex_subjects = complex_parser.call(COMPLEX_FIXTURE)
@@ -105,7 +107,7 @@ complex_mutations = complex_subjects.flat_map { |s| complex_registry.mutations_f
 integration = Evilution::Integration::RSpec.new(test_files: [COMPLEX_FIXTURE_SPEC])
 
 # Budget is generous: per-mutation require() adds the file to $LOADED_FEATURES and
-# accumulates constant-redefinition warnings. Local runs land around 20-25 MB; CI
+# accumulates constant-redefinition warnings. Local runs land around 20 MB; CI
 # varies up to ~30 MB depending on Ruby build and GC pressure, so we leave headroom.
 all_passed &= run_check("RSpec integration per-mutation (Config)", iterations: 20, max_growth_kb: 40_960) do
   mutation = complex_mutations.sample
