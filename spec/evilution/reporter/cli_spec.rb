@@ -15,8 +15,7 @@ RSpec.describe Evilution::Reporter::CLI do
       file_path: "lib/user.rb",
       line: 9,
       diff: "- x >= 10\n+ x > 10",
-      original_slice: "x >= 10\n",
-      mutated_slice: "x > 10\n",
+      unified_diff: "--- a/lib/user.rb\n+++ b/lib/user.rb\n@@ -9,1 +9,1 @@\n-x >= 10\n+x > 10",
       subject: subj
     )
   end
@@ -27,9 +26,7 @@ RSpec.describe Evilution::Reporter::CLI do
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 5,
-      diff: "- x == 10\n+ x != 10",
-      original_slice: "x == 10\n",
-      mutated_slice: "x != 10\n"
+      diff: "- x == 10\n+ x != 10"
     )
   end
 
@@ -160,8 +157,7 @@ RSpec.describe Evilution::Reporter::CLI do
           file_path: "lib/user.rb",
           line: 12,
           diff: "ignored",
-          original_slice: "if cond\n  do_a\nend\n",
-          mutated_slice: "if cond\n  do_b\nend\n",
+          unified_diff: "--- a/lib/user.rb\n+++ b/lib/user.rb\n@@ -12,3 +12,3 @@\n if cond\n-  do_a\n+  do_b\n end",
           subject: subj
         )
       end
@@ -191,8 +187,7 @@ RSpec.describe Evilution::Reporter::CLI do
           file_path: "lib/user.rb",
           line: 9,
           diff: "- x >= 10\n+ x > 10",
-          original_slice: nil,
-          mutated_slice: nil,
+          unified_diff: nil,
           subject: subj
         )
       end

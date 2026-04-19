@@ -12,7 +12,8 @@ RSpec.describe "Reporter memory stats" do
            operator_name: "comparison_replacement",
            file_path: "lib/user.rb",
            line: 9,
-           diff: "- x >= 10\n+ x > 10")
+           diff: "- x >= 10\n+ x > 10",
+           unified_diff: nil)
   end
 
   let(:result_with_rss) do

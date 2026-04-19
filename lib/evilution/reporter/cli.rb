@@ -128,39 +128,9 @@ class Evilution::Reporter::CLI
                operators = gap.operator_names.join(", ")
                "  #{location} (#{gap.subject_name}) [#{gap.count} mutations: #{operators}]"
              end
-    body = format_unified_diff(gap.mutation_results.first.mutation) || gap.primary_diff
+    body = gap.mutation_results.first.mutation.unified_diff || gap.primary_diff
     indented = body.split("\n").map { |l| "    #{l}" }.join("\n")
     "#{header}\n#{indented}"
-  end
-
-  def format_unified_diff(mutation)
-    original = mutation.original_slice
-    mutated = mutation.mutated_slice
-    return nil if original.nil? || mutated.nil?
-
-    original_lines = original.lines
-    mutated_lines = mutated.lines
-    body = unified_hunk_body(original_lines, mutated_lines)
-    [
-      "--- a/#{mutation.file_path}",
-      "+++ b/#{mutation.file_path}",
-      "@@ -#{mutation.line},#{original_lines.length} +#{mutation.line},#{mutated_lines.length} @@",
-      body
-    ].reject(&:empty?).join("\n")
-  end
-
-  def unified_hunk_body(original_lines, mutated_lines)
-    sdiff = ::Diff::LCS.sdiff(original_lines, mutated_lines)
-    sdiff.map { |change| format_sdiff_change(change) }.join("\n")
-  end
-
-  def format_sdiff_change(change)
-    case change.action
-    when "=" then " #{change.old_element.chomp}"
-    when "-" then "-#{change.old_element.chomp}"
-    when "+" then "+#{change.new_element.chomp}"
-    when "!" then "-#{change.old_element.chomp}\n+#{change.new_element.chomp}"
-    end
   end
 
   def format_neutral(result)
