@@ -4,15 +4,11 @@ require_relative "../reporter"
 
 class Evilution::Reporter::CLI
   SEPARATOR = "=" * 44
-  SECTION_APPENDERS = %i[
-    append_survived append_neutral append_equivalent
-    append_unresolved append_unparseable append_errors append_disabled
-  ].freeze
 
   def call(summary)
     lines = []
     append_metrics(lines, summary)
-    SECTION_APPENDERS.each { |m| send(m, lines, summary) }
+    append_sections(lines, summary)
     lines << ""
     lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
     lines << result_line(summary)
@@ -31,6 +27,16 @@ class Evilution::Reporter::CLI
     lines << efficiency_line(summary) if summary.duration.positive?
     peak = summary.peak_memory_mb
     lines << peak_memory_line(peak) if peak
+  end
+
+  def append_sections(lines, summary)
+    append_survived(lines, summary)
+    append_neutral(lines, summary)
+    append_equivalent(lines, summary)
+    append_unresolved(lines, summary)
+    append_unparseable(lines, summary)
+    append_errors(lines, summary)
+    append_disabled(lines, summary)
   end
 
   def append_survived(lines, summary)
