@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "tempfile"
+require "tmpdir"
+require "fileutils"
 
 RSpec.describe Evilution::Config do
   describe "defaults" do
@@ -287,6 +289,152 @@ RSpec.describe Evilution::Config do
       config = described_class.new(fallback_to_full_suite: false)
 
       expect(config.fallback_to_full_suite?).to be false
+    end
+
+    it "defaults spec_mappings to empty hash" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.spec_mappings).to eq({})
+    end
+
+    it "defaults spec_pattern to nil" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.spec_pattern).to be_nil
+    end
+
+    it "loads spec_mappings from YAML and normalizes string values to arrays" do
+      File.write(".evilution.yml", <<~YAML)
+        spec_mappings:
+          app/controllers/games_controller.rb:
+            - spec/requests/games_overlay_spec.rb
+            - spec/requests/games_spec.rb
+          lib/shared/util.rb: spec/lib/shared/util_spec.rb
+      YAML
+
+      config = described_class.new
+
+      expect(config.spec_mappings).to eq(
+        "app/controllers/games_controller.rb" => [
+          "spec/requests/games_overlay_spec.rb",
+          "spec/requests/games_spec.rb"
+        ],
+        "lib/shared/util.rb" => ["spec/lib/shared/util_spec.rb"]
+      )
+    end
+
+    it "loads spec_pattern from YAML" do
+      File.write(".evilution.yml", "spec_pattern: \"spec/requests/**/*_spec.rb\"\n")
+
+      config = described_class.new
+
+      expect(config.spec_pattern).to eq("spec/requests/**/*_spec.rb")
+    end
+
+    it "CLI options override spec_pattern from file" do
+      File.write(".evilution.yml", "spec_pattern: \"spec/requests/**/*_spec.rb\"\n")
+
+      config = described_class.new(spec_pattern: "spec/helpers/**/*_spec.rb")
+
+      expect(config.spec_pattern).to eq("spec/helpers/**/*_spec.rb")
+    end
+
+    it "raises ConfigError when spec_mappings is not a hash" do
+      File.write(".evilution.yml", "spec_mappings: nope\n")
+
+      expect { described_class.new }.to raise_error(Evilution::ConfigError, /spec_mappings.*Hash/)
+    end
+
+    it "raises ConfigError when spec_mappings value is not a string or array" do
+      expect do
+        described_class.new(skip_config_file: true, spec_mappings: { "lib/foo.rb" => 42 })
+      end.to raise_error(Evilution::ConfigError, /spec_mappings.*string or array/)
+    end
+
+    it "raises ConfigError when spec_mappings array contains non-strings" do
+      expect do
+        described_class.new(skip_config_file: true, spec_mappings: { "lib/foo.rb" => [42] })
+      end.to raise_error(Evilution::ConfigError, /spec_mappings.*string/)
+    end
+
+    it "raises ConfigError when spec_pattern is not a string" do
+      expect do
+        described_class.new(skip_config_file: true, spec_pattern: 42)
+      end.to raise_error(Evilution::ConfigError, /spec_pattern.*String/)
+    end
+
+    it "warns when spec_mappings entry references a missing file" do
+      expect do
+        described_class.new(
+          skip_config_file: true,
+          spec_mappings: { "lib/foo.rb" => "spec/missing_spec.rb" }
+        )
+      end.to output(/spec_mappings.*spec\/missing_spec\.rb.*not found/).to_stderr
+    end
+
+    it "does not warn when all spec_mappings entries exist" do
+      File.write("existing_spec.rb", "")
+
+      expect do
+        described_class.new(
+          skip_config_file: true,
+          spec_mappings: { "lib/foo.rb" => "existing_spec.rb" }
+        )
+      end.not_to output.to_stderr
+    end
+  end
+
+  describe "#spec_selector" do
+    it "returns an Evilution::SpecSelector instance" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.spec_selector).to be_a(Evilution::SpecSelector)
+    end
+
+    it "returns the same memoized instance on repeated calls" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.spec_selector).to be(config.spec_selector)
+    end
+
+    it "uses configured spec_files" do
+      config = described_class.new(skip_config_file: true, spec_files: ["spec/explicit_spec.rb"])
+
+      expect(config.spec_selector.call("app/anything.rb")).to eq(["spec/explicit_spec.rb"])
+    end
+
+    it "uses configured spec_mappings" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p("spec/requests")
+          File.write("spec/requests/games_overlay_spec.rb", "")
+          config = described_class.new(
+            skip_config_file: true,
+            spec_mappings: { "app/controllers/games_controller.rb" => ["spec/requests/games_overlay_spec.rb"] }
+          )
+
+          expect(config.spec_selector.call("app/controllers/games_controller.rb"))
+            .to eq(["spec/requests/games_overlay_spec.rb"])
+        end
+      end
+    end
+
+    it "uses configured spec_pattern" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p("spec/controllers")
+          FileUtils.mkdir_p("spec/requests")
+          File.write("spec/controllers/foo_controller_spec.rb", "")
+          File.write("spec/requests/foo_spec.rb", "")
+          config = described_class.new(
+            skip_config_file: true,
+            spec_pattern: "spec/controllers/**/*_spec.rb"
+          )
+
+          expect(config.spec_selector.call("app/controllers/foo_controller.rb"))
+            .to eq(["spec/controllers/foo_controller_spec.rb"])
+        end
+      end
     end
   end
 

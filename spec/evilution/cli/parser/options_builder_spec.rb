@@ -74,6 +74,11 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(remaining).to eq(%w[lib/a.rb lib/b.rb])
   end
 
+  it "parses --spec-pattern as a string glob" do
+    options, = parse(["--spec-pattern", "spec/requests/**/*_spec.rb"])
+    expect(options[:spec_pattern]).to eq("spec/requests/**/*_spec.rb")
+  end
+
   it "expands --spec-dir into spec_files via FileArgs" do
     Dir.mktmpdir do |dir|
       File.write(File.join(dir, "a_spec.rb"), "")

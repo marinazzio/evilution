@@ -4,6 +4,7 @@ require "stringio"
 require_relative "base"
 require_relative "crash_detector"
 require_relative "../spec_resolver"
+require_relative "../spec_selector"
 require_relative "../related_spec_heuristic"
 
 require_relative "../integration"
@@ -26,10 +27,11 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     { runner: baseline_runner }
   end
 
-  def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false, fallback_to_full_suite: false)
+  def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false, fallback_to_full_suite: false,
+                 spec_selector: nil)
     @test_files = test_files
     @rspec_loaded = false
-    @spec_resolver = Evilution::SpecResolver.new
+    @spec_selector = spec_selector || Evilution::SpecSelector.new
     @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
     @related_specs_heuristic_enabled = related_specs_heuristic
     @fallback_to_full_suite = fallback_to_full_suite
@@ -166,16 +168,16 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = @spec_resolver.call(mutation.file_path)
-    unless resolved
+    resolved = @spec_selector.call(mutation.file_path)
+    if resolved.nil? || resolved.empty?
       warn_unresolved_spec(mutation.file_path)
       return @fallback_to_full_suite ? ["spec"] : nil
     end
 
-    return [resolved] unless @related_specs_heuristic_enabled
+    return resolved unless @related_specs_heuristic_enabled
 
     related = @related_spec_heuristic.call(mutation)
-    ([resolved] + related).uniq
+    (resolved + related).uniq
   end
 
   def warn_unresolved_spec(file_path)

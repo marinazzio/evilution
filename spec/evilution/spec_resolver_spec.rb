@@ -260,6 +260,32 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    context "with spec_pattern filter" do
+      it "filters candidates by glob before existence check" do
+        create_file("spec/requests/foo_spec.rb")
+        create_file("spec/controllers/foo_controller_spec.rb")
+
+        result = resolver.call("app/controllers/foo_controller.rb",
+                               spec_pattern: "spec/controllers/**/*_spec.rb")
+
+        expect(result).to eq("spec/controllers/foo_controller_spec.rb")
+      end
+
+      it "returns nil when glob excludes all candidates" do
+        create_file("spec/foo_spec.rb")
+
+        result = resolver.call("lib/foo.rb", spec_pattern: "spec/requests/**/*_spec.rb")
+
+        expect(result).to be_nil
+      end
+
+      it "behaves as default when spec_pattern is nil" do
+        create_file("spec/foo_spec.rb")
+
+        expect(resolver.call("lib/foo.rb", spec_pattern: nil)).to eq("spec/foo_spec.rb")
+      end
+    end
+
     context "multiple source files" do
       it "resolves each file independently via #resolve_all" do
         create_file("spec/foo/bar_spec.rb")

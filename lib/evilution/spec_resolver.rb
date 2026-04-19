@@ -10,11 +10,12 @@ class Evilution::SpecResolver
     @request_dir = request_dir
   end
 
-  def call(source_path)
+  def call(source_path, spec_pattern: nil)
     return nil if source_path.nil? || source_path.empty?
 
     normalized = normalize_path(source_path)
     candidates = candidate_test_paths(normalized)
+    candidates = filter_by_pattern(candidates, spec_pattern) if spec_pattern
     candidates.find { |path| File.exist?(path) }
   end
 
@@ -23,6 +24,10 @@ class Evilution::SpecResolver
   end
 
   private
+
+  def filter_by_pattern(candidates, pattern)
+    candidates.select { |path| File.fnmatch?(pattern, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
+  end
 
   def normalize_path(path)
     path = path.delete_prefix("./")
