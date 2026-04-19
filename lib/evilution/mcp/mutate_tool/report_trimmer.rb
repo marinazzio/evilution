@@ -5,8 +5,8 @@ require_relative "../mutate_tool"
 
 module Evilution::MCP::MutateTool::ReportTrimmer
   MINIMAL_KEYS = %w[summary survived].freeze
-  FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved].freeze
-  SUMMARY_DROP_KEYS = %w[killed neutral equivalent].freeze
+  FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved unparseable].freeze
+  SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable].freeze
 
   def self.call(json_string, verbosity:, survived_results:, config:, enricher:)
     data = ::JSON.parse(json_string)

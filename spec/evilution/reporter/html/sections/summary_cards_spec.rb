@@ -6,7 +6,7 @@ RSpec.describe Evilution::Reporter::HTML::Sections::SummaryCards do
   def summary(overrides = {})
     defaults = {
       total: 10, killed: 5, survived: 3, timed_out: 1, errors: 0,
-      neutral: 0, equivalent: 1, unresolved: 0, skipped: 0,
+      neutral: 0, equivalent: 1, unresolved: 0, unparseable: 0, skipped: 0,
       duration: 2.5, efficiency: 0.82, mutations_per_second: 4.0,
       peak_memory_mb: nil
     }
@@ -27,6 +27,15 @@ RSpec.describe Evilution::Reporter::HTML::Sections::SummaryCards do
   it "includes unresolved card when positive" do
     html = described_class.new(summary(unresolved: 2)).render
     expect(html).to include(">2</span><span class=\"card-label\">Unresolved</span>")
+  end
+
+  it "omits unparseable card when zero" do
+    expect(described_class.new(summary).render).not_to include("Unparseable")
+  end
+
+  it "includes unparseable card when positive" do
+    html = described_class.new(summary(unparseable: 4)).render
+    expect(html).to include(">4</span><span class=\"card-label\">Unparseable</span>")
   end
 
   it "omits skipped card when zero" do

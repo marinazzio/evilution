@@ -247,6 +247,67 @@ RSpec.describe Evilution::Reporter::JSON do
       end
     end
 
+    context "with unparseable mutations" do
+      let(:unparseable_mutation) do
+        double(
+          "Mutation",
+          operator_name: "method_body_replacement",
+          file_path: "lib/broken.rb",
+          line: 4,
+          diff: "- def foo; end\n+ def foo; raise; end"
+        )
+      end
+
+      let(:unparseable_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: unparseable_mutation,
+          status: :unparseable,
+          duration: 0.0
+        )
+      end
+
+      let(:unparseable_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, unparseable_result],
+          duration: 0.6
+        )
+      end
+
+      it "includes unparseable count in summary" do
+        parsed = JSON.parse(reporter.call(unparseable_summary))
+
+        expect(parsed["summary"]["unparseable"]).to eq(1)
+      end
+
+      it "includes unparseable array with mutation details" do
+        parsed = JSON.parse(reporter.call(unparseable_summary))
+
+        expect(parsed["unparseable"].length).to eq(1)
+        expect(parsed["unparseable"].first["status"]).to eq("unparseable")
+        expect(parsed["unparseable"].first["operator"]).to eq("method_body_replacement")
+        expect(parsed["unparseable"].first["file"]).to eq("lib/broken.rb")
+        expect(parsed["unparseable"].first["line"]).to eq(4)
+      end
+
+      it "excludes unparseable from score calculation" do
+        parsed = JSON.parse(reporter.call(unparseable_summary))
+
+        expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+
+      it "always reports unparseable count in summary (zero when none)" do
+        parsed = JSON.parse(reporter.call(summary))
+
+        expect(parsed["summary"]["unparseable"]).to eq(0)
+      end
+
+      it "returns empty unparseable array when none present" do
+        parsed = JSON.parse(reporter.call(summary))
+
+        expect(parsed["unparseable"]).to eq([])
+      end
+    end
+
     it "includes coverage_gaps with grouped survived mutations" do
       parsed = JSON.parse(reporter.call(summary))
       gaps = parsed["coverage_gaps"]

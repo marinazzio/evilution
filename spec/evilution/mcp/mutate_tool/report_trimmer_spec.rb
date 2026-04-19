@@ -17,11 +17,12 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
       "timed_out" => [{ "id" => 5 }],
       "errors" => [{ "id" => 6 }],
       "unresolved" => [{ "id" => 7, "diff" => "diff" }],
+      "unparseable" => [{ "id" => 9, "diff" => "diff" }],
       "disabled" => [{ "id" => 8 }]
     }.to_json
   end
 
-  it "strips diffs from killed/neutral/equivalent/unresolved in full mode" do
+  it "strips diffs from killed/neutral/equivalent/unresolved/unparseable in full mode" do
     out = JSON.parse(described_class.call(
                        json_input, verbosity: "full", survived_results: [], config: nil, enricher: noop_enricher
                      ))
@@ -29,13 +30,14 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out["neutral"].first).not_to have_key("diff")
     expect(out["equivalent"].first).not_to have_key("diff")
     expect(out["unresolved"].first).not_to have_key("diff")
+    expect(out["unparseable"].first).not_to have_key("diff")
   end
 
-  it "removes killed/neutral/equivalent in summary mode" do
+  it "removes killed/neutral/equivalent/unparseable in summary mode" do
     out = JSON.parse(described_class.call(
                        json_input, verbosity: "summary", survived_results: [], config: nil, enricher: noop_enricher
                      ))
-    %w[killed neutral equivalent].each { |key| expect(out).not_to have_key(key) }
+    %w[killed neutral equivalent unparseable].each { |key| expect(out).not_to have_key(key) }
     expect(out).to have_key("timed_out")
   end
 
