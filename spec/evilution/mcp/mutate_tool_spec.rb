@@ -10,7 +10,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       operator_name: "arithmetic_replacement",
       file_path: "lib/foo.rb",
       line: 10,
-      diff: "- a + b\n+ a - b"
+      diff: "- a + b\n+ a - b",
+      unified_diff: nil
     )
   end
 
@@ -498,6 +499,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           file_path: "lib/foo.rb",
           line: 5,
           diff: "- x = 1\n+ ",
+          unified_diff: "--- a/lib/foo.rb\n+++ b/lib/foo.rb\n@@ -5,1 +5,0 @@\n-x = 1",
           subject: survived_subject
         )
         survived_result = instance_double(
@@ -563,6 +565,7 @@ RSpec.describe Evilution::MCP::MutateTool do
             file_path: "lib/foo.rb",
             line: 5,
             diff: "- x = 1\n+ ",
+            unified_diff: nil,
             subject: survived_subject
           )
         end
@@ -869,6 +872,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           file_path: "lib/foo.rb",
           line: 10,
           diff: "- a + b\n+ a - b",
+          unified_diff: nil,
           subject: subject_obj
         )
       end

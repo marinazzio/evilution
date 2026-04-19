@@ -10,6 +10,10 @@ RSpec.describe Evilution::Reporter::JSON do
 
   let(:survived_subject) { double("Subject", name: "User#check") }
 
+  let(:survived_unified_diff) do
+    "--- a/lib/user.rb\n+++ b/lib/user.rb\n@@ -9,1 +9,1 @@\n-x >= 10\n+x > 10"
+  end
+
   let(:survived_mutation) do
     double(
       "Mutation",
@@ -17,6 +21,7 @@ RSpec.describe Evilution::Reporter::JSON do
       file_path: "lib/user.rb",
       line: 9,
       diff: "- x >= 10\n+ x > 10",
+      unified_diff: survived_unified_diff,
       subject: survived_subject
     )
   end
@@ -27,7 +32,8 @@ RSpec.describe Evilution::Reporter::JSON do
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 5,
-      diff: "- x == 10\n+ x != 10"
+      diff: "- x == 10\n+ x != 10",
+      unified_diff: nil
     )
   end
 
@@ -89,6 +95,44 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(survived.first["suggestion"]).to eq(
         "Add a test for the boundary condition where the comparison operand equals the threshold exactly"
       )
+    end
+
+    it "includes unified_diff field for survived mutations" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["survived"].first["unified_diff"]).to eq(survived_unified_diff)
+    end
+
+    it "omits unified_diff for survived when slices are unavailable" do
+      legacy_mutation = double(
+        "Mutation",
+        operator_name: "comparison_replacement",
+        file_path: "lib/legacy.rb",
+        line: 1,
+        diff: "- a\n+ b",
+        unified_diff: nil,
+        subject: survived_subject
+      )
+      legacy_result = Evilution::Result::MutationResult.new(
+        mutation: legacy_mutation, status: :survived, duration: 0.1
+      )
+      legacy_summary = Evilution::Result::Summary.new(results: [legacy_result], duration: 0.2)
+
+      parsed = JSON.parse(reporter.call(legacy_summary))
+
+      expect(parsed["survived"].first).not_to have_key("unified_diff")
+    end
+
+    it "exposes unified_diff inside coverage_gaps mutations" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["coverage_gaps"].first["mutations"].first["unified_diff"]).to eq(survived_unified_diff)
+    end
+
+    it "does not include unified_diff for killed mutations" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("unified_diff")
     end
 
     it "includes killed mutations" do

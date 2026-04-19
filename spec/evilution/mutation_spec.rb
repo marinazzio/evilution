@@ -145,6 +145,51 @@ RSpec.describe Evilution::Mutation do
     end
   end
 
+  describe "#unified_diff" do
+    it "returns a git-style unified diff with file header and hunk header" do
+      result = mutation.unified_diff
+
+      expect(result).to include("--- a/lib/user.rb")
+      expect(result).to include("+++ b/lib/user.rb")
+      expect(result).to include("@@ -9,1 +9,1 @@")
+      expect(result).to include("-  @age >= 18")
+      expect(result).to include("+  @age > 18")
+    end
+
+    it "returns nil when slices are missing" do
+      m = described_class.new(
+        subject: subject_double,
+        operator_name: "test",
+        original_source: "a",
+        mutated_source: "b",
+        file_path: "x.rb",
+        line: 1
+      )
+
+      expect(m.unified_diff).to be_nil
+    end
+
+    it "renders multi-line slices with correct line counts" do
+      m = described_class.new(
+        subject: subject_double,
+        operator_name: "test",
+        original_source: "a",
+        mutated_source: "b",
+        original_slice: "  a\n  b\n",
+        mutated_slice: "  a\n  c\n",
+        file_path: "x.rb",
+        line: 3
+      )
+
+      result = m.unified_diff
+
+      expect(result).to include("@@ -3,2 +3,2 @@")
+      expect(result).to include("   a")
+      expect(result).to include("-  b")
+      expect(result).to include("+  c")
+    end
+  end
+
   describe "#to_s" do
     it "returns operator name with file and line" do
       expect(mutation.to_s).to eq("comparison_replacement: lib/user.rb:9")

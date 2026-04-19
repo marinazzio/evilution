@@ -78,7 +78,11 @@ class Evilution::Reporter::JSON
       duration: result.duration.round(4),
       diff: mutation.diff
     }
-    detail[:suggestion] = @suggestion.suggestion_for(mutation) if result.status == :survived
+    if result.status == :survived
+      detail[:suggestion] = @suggestion.suggestion_for(mutation)
+      unified = mutation.unified_diff
+      detail[:unified_diff] = unified if unified
+    end
     detail[:test_command] = result.test_command if result.test_command
     append_memory_fields(detail, result)
     append_error_fields(detail, result)

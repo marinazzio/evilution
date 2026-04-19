@@ -158,7 +158,8 @@ Use `--format json` for machine-readable output. Schema:
       "line": "integer   — line number of the mutation",
       "status": "string  — result status: 'survived', 'killed', 'timeout', 'error', 'neutral', 'equivalent', or 'unresolved'",
       "duration": "float — seconds this mutation took, rounded to 4 decimals",
-      "diff": "string    — unified diff snippet",
+      "diff": "string    — legacy +/- diff snippet",
+      "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)"
     }
   ],
@@ -336,7 +337,7 @@ Unlike `evilution --format json`, every survived entry returned by `evilution-mu
 | `spec_file` | Resolved spec/test path (when one exists) — e.g. an RSpec spec file or Minitest test file, so you can drop new tests straight into it |
 | `next_step` | Concrete natural-language hint — "add a test in X that fails against this mutation at Y:line" |
 
-These fields are added in addition to the existing `operator`, `file`, `line`, `diff`, `suggestion`, and `test_command` so agents can triage survivors in one pass.
+These fields are added in addition to the existing `operator`, `file`, `line`, `diff`, `unified_diff`, `suggestion`, and `test_command` so agents can triage survivors in one pass.
 
 ### Concrete Test Suggestions
 

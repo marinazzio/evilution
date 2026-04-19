@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "diff/lcs"
-require "diff/lcs/hunk"
 
 class Evilution::Mutation
   attr_reader :subject, :operator_name, :original_source,
@@ -34,6 +33,12 @@ class Evilution::Mutation
     @diff ||= compute_diff
   end
 
+  def unified_diff
+    return @unified_diff if defined?(@unified_diff)
+
+    @unified_diff = compute_unified_diff
+  end
+
   def strip_sources!
     diff # ensure diff is cached before clearing sources
     @original_source = nil
@@ -59,6 +64,29 @@ class Evilution::Mutation
       end
     end
     result.join("\n")
+  end
+
+  def compute_unified_diff
+    return nil if @original_slice.nil? || @mutated_slice.nil?
+
+    original_lines = @original_slice.lines
+    mutated_lines = @mutated_slice.lines
+    body = ::Diff::LCS.sdiff(original_lines, mutated_lines).map { |c| format_sdiff_change(c) }.join("\n")
+    [
+      "--- a/#{file_path}",
+      "+++ b/#{file_path}",
+      "@@ -#{line},#{original_lines.length} +#{line},#{mutated_lines.length} @@",
+      body
+    ].reject(&:empty?).join("\n")
+  end
+
+  def format_sdiff_change(change)
+    case change.action
+    when "=" then " #{change.old_element.chomp}"
+    when "-" then "-#{change.old_element.chomp}"
+    when "+" then "+#{change.new_element.chomp}"
+    when "!" then "-#{change.old_element.chomp}\n+#{change.new_element.chomp}"
+    end
   end
 
   public
