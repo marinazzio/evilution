@@ -33,6 +33,7 @@ Metrics/ClassLength:
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/integration/base.rb"
     - "lib/evilution/runner/mutation_executor.rb"
+    - "lib/evilution/reporter/cli.rb"
 
 Metrics/ModuleLength:
   Exclude:

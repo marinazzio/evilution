@@ -15,6 +15,8 @@ RSpec.describe Evilution::Reporter::CLI do
       file_path: "lib/user.rb",
       line: 9,
       diff: "- x >= 10\n+ x > 10",
+      original_slice: "x >= 10\n",
+      mutated_slice: "x > 10\n",
       subject: subj
     )
   end
@@ -25,7 +27,9 @@ RSpec.describe Evilution::Reporter::CLI do
       operator_name: "comparison_replacement",
       file_path: "lib/user.rb",
       line: 5,
-      diff: "- x == 10\n+ x != 10"
+      diff: "- x == 10\n+ x != 10",
+      original_slice: "x == 10\n",
+      mutated_slice: "x != 10\n"
     )
   end
 
@@ -125,11 +129,81 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("User#check")
     end
 
-    it "shows the diff for survived mutations" do
+    it "shows a git-style unified diff header for survived mutations" do
       output = reporter.call(summary)
 
-      expect(output).to include("- x >= 10")
-      expect(output).to include("+ x > 10")
+      expect(output).to include("--- a/lib/user.rb")
+      expect(output).to include("+++ b/lib/user.rb")
+      expect(output).to include("@@ -9,1 +9,1 @@")
+    end
+
+    it "shows the diff body for survived mutations in unified format" do
+      output = reporter.call(summary)
+
+      expect(output).to include("-x >= 10")
+      expect(output).to include("+x > 10")
+    end
+
+    it "indents the unified diff under the gap header" do
+      output = reporter.call(summary)
+
+      expect(output).to match(%r{^ {4}--- a/lib/user\.rb$})
+      expect(output).to match(/^ {4}@@ -9,1 \+9,1 @@$/)
+    end
+
+    context "with multi-line slices" do
+      let(:survived_mutation) do
+        subj = double("Subject", name: "User#check")
+        double(
+          "Mutation",
+          operator_name: "block_removal",
+          file_path: "lib/user.rb",
+          line: 12,
+          diff: "ignored",
+          original_slice: "if cond\n  do_a\nend\n",
+          mutated_slice: "if cond\n  do_b\nend\n",
+          subject: subj
+        )
+      end
+
+      it "emits hunk lengths matching slice line counts" do
+        output = reporter.call(summary)
+
+        expect(output).to include("@@ -12,3 +12,3 @@")
+      end
+
+      it "renders unchanged lines as context with leading space" do
+        output = reporter.call(summary)
+
+        expect(output).to include(" if cond")
+        expect(output).to include("-  do_a")
+        expect(output).to include("+  do_b")
+        expect(output).to include(" end")
+      end
+    end
+
+    context "when slices are nil (legacy mutation)" do
+      let(:survived_mutation) do
+        subj = double("Subject", name: "User#check")
+        double(
+          "Mutation",
+          operator_name: "comparison_replacement",
+          file_path: "lib/user.rb",
+          line: 9,
+          diff: "- x >= 10\n+ x > 10",
+          original_slice: nil,
+          mutated_slice: nil,
+          subject: subj
+        )
+      end
+
+      it "falls back to legacy diff format" do
+        output = reporter.call(summary)
+
+        expect(output).to include("- x >= 10")
+        expect(output).to include("+ x > 10")
+        expect(output).not_to include("@@")
+      end
     end
 
     it "shows FAIL when score is below threshold" do
