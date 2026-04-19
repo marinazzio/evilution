@@ -105,9 +105,8 @@ class Evilution::Reporter::CLI
   end
 
   def score_line(summary)
-    denominator = summary.total - summary.errors - summary.neutral - summary.equivalent - summary.unresolved
     score_pct = format_pct(summary.score)
-    "Score: #{score_pct} (#{summary.killed}/#{denominator})"
+    "Score: #{score_pct} (#{summary.killed}/#{summary.score_denominator})"
   end
 
   def duration_line(summary)

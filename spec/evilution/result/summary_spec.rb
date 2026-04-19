@@ -140,6 +140,29 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#score_denominator" do
+    it "excludes errors, neutrals, equivalents, unresolved, and unparseable" do
+      mixed = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:error),
+        make_result(:neutral),
+        make_result(:equivalent),
+        make_result(:unresolved),
+        make_result(:unparseable)
+      ]
+      s = described_class.new(results: mixed)
+
+      expect(s.score_denominator).to eq(2)
+    end
+
+    it "returns total when all mutations are scorable" do
+      s = described_class.new(results: [make_result(:killed), make_result(:survived)])
+
+      expect(s.score_denominator).to eq(2)
+    end
+  end
+
   describe "#score" do
     it "calculates killed / (total - errors)" do
       expect(summary.score).to eq(3.0 / 5)
