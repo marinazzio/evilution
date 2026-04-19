@@ -575,16 +575,16 @@ RSpec.describe Evilution::Integration::RSpec do
   end
 
   describe "related spec heuristic integration" do
-    let(:resolver) { instance_double(Evilution::SpecResolver) }
+    let(:selector) { instance_double(Evilution::SpecSelector) }
     let(:related_heuristic) { instance_double(Evilution::RelatedSpecHeuristic) }
 
     before do
-      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      allow(Evilution::SpecSelector).to receive(:new).and_return(selector)
       allow(Evilution::RelatedSpecHeuristic).to receive(:new).and_return(related_heuristic)
     end
 
     it "appends related specs when heuristic returns matches and flag enabled" do
-      allow(resolver).to receive(:call).and_return("spec/controllers/news_controller_spec.rb")
+      allow(selector).to receive(:call).and_return(["spec/controllers/news_controller_spec.rb"])
       allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
       auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
@@ -597,7 +597,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "does not duplicate specs when related spec matches primary" do
-      allow(resolver).to receive(:call).and_return("spec/requests/news_spec.rb")
+      allow(selector).to receive(:call).and_return(["spec/requests/news_spec.rb"])
       allow(related_heuristic).to receive(:call).and_return(["spec/requests/news_spec.rb"])
       auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
@@ -620,7 +620,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "works when heuristic returns empty array" do
-      allow(resolver).to receive(:call).and_return("spec/news_spec.rb")
+      allow(selector).to receive(:call).and_return(["spec/news_spec.rb"])
       allow(related_heuristic).to receive(:call).and_return([])
       auto_integration = described_class.new(related_specs_heuristic: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
@@ -632,7 +632,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "does not call related heuristic by default" do
-      allow(resolver).to receive(:call).and_return("spec/controllers/news_controller_spec.rb")
+      allow(selector).to receive(:call).and_return(["spec/controllers/news_controller_spec.rb"])
       allow(related_heuristic).to receive(:call)
       default_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
@@ -648,14 +648,14 @@ RSpec.describe Evilution::Integration::RSpec do
   end
 
   describe "per-mutation spec targeting" do
-    let(:resolver) { instance_double(Evilution::SpecResolver) }
+    let(:selector) { instance_double(Evilution::SpecSelector) }
 
     before do
-      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      allow(Evilution::SpecSelector).to receive(:new).and_return(selector)
     end
 
     it "uses resolved spec file for the mutation's source file" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(["spec/some_spec.rb"])
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec/some_spec.rb")
@@ -667,7 +667,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "returns an unresolved result when no matching spec is found (fail-fast default)" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run)
 
@@ -680,7 +680,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "warns once per file when no matching spec is found" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
@@ -697,7 +697,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "warns with full-suite wording when fallback_to_full_suite: true" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new(fallback_to_full_suite: true)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
@@ -710,7 +710,7 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "falls back to full spec suite when fallback_to_full_suite: true" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return(nil)
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(nil)
       auto_integration = described_class.new(fallback_to_full_suite: true)
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
         expect(args).to include("spec")
@@ -724,31 +724,43 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "does not warn when spec is resolved successfully" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(["spec/some_spec.rb"])
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       expect { auto_integration.call(mutation) }.not_to output.to_stderr
     end
 
-    it "does not use resolver when explicit test_files are provided" do
-      allow(resolver).to receive(:call)
+    it "does not use selector when explicit test_files are provided" do
+      allow(selector).to receive(:call)
       explicit_integration = described_class.new(test_files: ["spec/explicit_spec.rb"])
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       explicit_integration.call(mutation)
 
-      expect(resolver).not_to have_received(:call)
+      expect(selector).not_to have_received(:call)
     end
 
     it "includes resolved spec in test_command" do
-      allow(resolver).to receive(:call).with(mutation.file_path).and_return("spec/some_spec.rb")
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(["spec/some_spec.rb"])
       auto_integration = described_class.new
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       result = auto_integration.call(mutation)
 
       expect(result[:test_command]).to include("spec/some_spec.rb")
+    end
+
+    it "uses injected spec_selector when provided" do
+      injected = instance_double(Evilution::SpecSelector)
+      allow(injected).to receive(:call).with(mutation.file_path).and_return(["spec/injected_spec.rb"])
+      integration = described_class.new(spec_selector: injected)
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/injected_spec.rb")
+        0
+      end
+
+      integration.call(mutation)
     end
   end
 

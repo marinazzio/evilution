@@ -48,6 +48,8 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
     opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
     opts.on("--spec-dir DIR", "Include all specs in DIR") { |d| expand_spec_dir(d) }
+    opts.on("--spec-pattern GLOB",
+            "Restrict resolved spec candidates to files matching GLOB") { |p| @options[:spec_pattern] = p }
     opts.on("--target EXPR",
             "Filter: method (Foo#bar), type (Foo#/Foo.), namespace (Foo*),",
             "class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|

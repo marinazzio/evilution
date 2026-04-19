@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require_relative "spec_selector"
 
 class Evilution::Config
   CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
@@ -29,7 +30,9 @@ class Evilution::Config
     skip_heredoc_literals: false,
     related_specs_heuristic: false,
     fallback_to_full_suite: false,
-    preload: nil
+    preload: nil,
+    spec_mappings: {},
+    spec_pattern: nil
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
@@ -38,7 +41,8 @@ class Evilution::Config
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
               :ignore_patterns, :show_disabled, :baseline_session,
               :skip_heredoc_literals, :related_specs_heuristic,
-              :fallback_to_full_suite, :preload
+              :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
+              :spec_selector
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
@@ -225,6 +229,71 @@ class Evilution::Config
     @fallback_to_full_suite = merged[:fallback_to_full_suite]
     @hooks = validate_hooks(merged[:hooks])
     @preload = validate_preload(merged[:preload])
+    @spec_mappings = validate_spec_mappings(merged[:spec_mappings])
+    @spec_pattern = validate_spec_pattern(merged[:spec_pattern])
+    @spec_selector = build_spec_selector
+  end
+
+  def build_spec_selector
+    Evilution::SpecSelector.new(
+      spec_files: @spec_files,
+      spec_mappings: @spec_mappings,
+      spec_pattern: @spec_pattern
+    )
+  end
+
+  def validate_spec_mappings(value)
+    return {} if value.nil?
+
+    raise Evilution::ConfigError, "spec_mappings must be a Hash, got #{value.class}" unless value.is_a?(Hash)
+
+    normalized = value.each_with_object({}) do |(source, specs), acc|
+      key = normalize_spec_mappings_key(source)
+      acc[key] = normalize_spec_mappings_value(key, specs)
+    end
+
+    warn_missing_spec_mappings(normalized)
+    normalized
+  end
+
+  def normalize_spec_mappings_key(source)
+    key = source.to_s
+    key = key.delete_prefix("#{Dir.pwd}/") if key.start_with?("/")
+    key.delete_prefix("./")
+  end
+
+  def normalize_spec_mappings_value(source, specs)
+    case specs
+    when String then [specs]
+    when Array
+      specs.each do |entry|
+        unless entry.is_a?(String)
+          raise Evilution::ConfigError,
+                "spec_mappings[#{source.inspect}] entries must be string paths, got #{entry.class}"
+        end
+      end
+      specs
+    else
+      raise Evilution::ConfigError,
+            "spec_mappings[#{source.inspect}] must be a string or array of strings, got #{specs.class}"
+    end
+  end
+
+  def warn_missing_spec_mappings(mappings)
+    mappings.each do |source, specs|
+      specs.each do |spec_path|
+        next if File.exist?(spec_path)
+
+        warn "[evilution] spec_mappings[#{source.inspect}]: #{spec_path} not found, skipping"
+      end
+    end
+  end
+
+  def validate_spec_pattern(value)
+    return nil if value.nil?
+    return value if value.is_a?(String)
+
+    raise Evilution::ConfigError, "spec_pattern must be nil or a String glob, got #{value.class}"
   end
 
   def validate_preload(value)
