@@ -1674,6 +1674,18 @@ RSpec.describe Evilution::Reporter::Suggestion do
       end
     end
 
+    describe "index_assignment_removal" do
+      it "asserts via indexed lookup, not assert_includes (which would check Hash keys, not values)" do
+        mutation = build_mutation("index_assignment_removal", diff: "-   h[:key] = val\n+   nil")
+
+        suggestion = suggestion_reporter.suggestion_for(mutation)
+
+        expect(suggestion).to include("def test_")
+        expect(suggestion).to include("assert_equal expected_value, result[expected_key]")
+        expect(suggestion).not_to include("assert_includes result, expected_value")
+      end
+    end
+
     it "has concrete templates for all operators that RSpec has" do
       Evilution::Reporter::Suggestion::Registry.default
       rspec_operators = Evilution::Reporter::Suggestion::Templates::Rspec::RSPEC_ENTRIES.keys
