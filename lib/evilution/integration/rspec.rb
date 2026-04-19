@@ -168,8 +168,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def resolve_test_files(mutation)
     return test_files if test_files
 
-    resolved = @spec_selector.call(mutation.file_path)
-    if resolved.nil? || resolved.empty?
+    resolved = Array(@spec_selector.call(mutation.file_path))
+    if resolved.empty?
       warn_unresolved_spec(mutation.file_path)
       return @fallback_to_full_suite ? ["spec"] : nil
     end
