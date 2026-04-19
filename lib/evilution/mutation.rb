@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "diff/lcs"
-require "diff/lcs/hunk"
 
 class Evilution::Mutation
   attr_reader :subject, :operator_name, :original_source,
@@ -35,7 +34,9 @@ class Evilution::Mutation
   end
 
   def unified_diff
-    @unified_diff ||= compute_unified_diff
+    return @unified_diff if defined?(@unified_diff)
+
+    @unified_diff = compute_unified_diff
   end
 
   def strip_sources!

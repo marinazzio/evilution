@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "diff/lcs"
 require_relative "../reporter"
 
 class Evilution::Reporter::CLI
