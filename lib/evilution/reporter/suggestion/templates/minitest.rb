@@ -576,9 +576,9 @@ module Evilution::Reporter::Suggestion::Templates::Minitest
         # Mutation: changed `#{original_line}` to `#{mutated_line}` in #{mutation.subject.name}
         # #{mutation.file_path}:#{mutation.line}
         def test_verifies_bracket_assignment_modifies_collection_in_#{safe_name}
-          # Assert the collection contains the assigned value after the method runs
+          # Assert the collection contains the assigned value at the expected key after the method runs
           result = subject.#{method_name}(collection)
-          assert_includes result, expected_value
+          assert_equal expected_value, result[expected_key]
         end
       MINITEST
     },
