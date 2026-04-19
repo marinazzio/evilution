@@ -457,6 +457,30 @@ RSpec.describe Evilution::Config do
         end
       end
     end
+
+    it "resolves test/ paths when integration is :minitest" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p("test/foo")
+          File.write("test/foo/bar_test.rb", "")
+          config = described_class.new(skip_config_file: true, integration: :minitest)
+
+          expect(config.spec_selector.call("lib/foo/bar.rb")).to eq(["test/foo/bar_test.rb"])
+        end
+      end
+    end
+
+    it "resolves spec/ paths when integration is :rspec" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          FileUtils.mkdir_p("spec/foo")
+          File.write("spec/foo/bar_spec.rb", "")
+          config = described_class.new(skip_config_file: true, integration: :rspec)
+
+          expect(config.spec_selector.call("lib/foo/bar.rb")).to eq(["spec/foo/bar_spec.rb"])
+        end
+      end
+    end
   end
 
   describe ".default_template" do

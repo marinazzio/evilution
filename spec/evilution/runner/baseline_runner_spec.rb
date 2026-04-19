@@ -62,6 +62,26 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       end
       runner.build_integration
     end
+
+    it "passes spec_selector for RSpec integration" do
+      cfg = config(integration: :rspec)
+      runner = described_class.new(cfg)
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:spec_selector]).to be(cfg.spec_selector)
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
+    it "passes spec_selector for Minitest integration" do
+      cfg = config(integration: :minitest)
+      runner = described_class.new(cfg)
+      expect(Evilution::Integration::Minitest).to receive(:new) do |**kwargs|
+        expect(kwargs[:spec_selector]).to be(cfg.spec_selector)
+        Evilution::Integration::Minitest.allocate
+      end
+      runner.build_integration
+    end
   end
 
   describe "#call" do

@@ -191,6 +191,27 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(result[:unresolved]).to be_falsey
       expect(result[:test_command]).to include("test")
     end
+
+    it "uses injected spec_selector when provided" do
+      injected = instance_double(Evilution::SpecSelector)
+      allow(injected).to receive(:call).with(mutation.file_path).and_return(["test/injected_test.rb"])
+      custom = described_class.new(spec_selector: injected)
+      allow(custom).to receive(:load)
+
+      expect(custom).to receive(:load).with(File.expand_path("test/injected_test.rb"))
+
+      custom.call(mutation)
+    end
+
+    it "returns unresolved when injected spec_selector returns nil" do
+      injected = instance_double(Evilution::SpecSelector)
+      allow(injected).to receive(:call).with(mutation.file_path).and_return(nil)
+      custom = described_class.new(spec_selector: injected)
+
+      result = custom.call(mutation)
+
+      expect(result[:unresolved]).to be true
+    end
   end
 
   describe "crash detection" do

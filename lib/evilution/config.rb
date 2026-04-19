@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require_relative "spec_resolver"
 require_relative "spec_selector"
 
 class Evilution::Config
@@ -238,8 +239,18 @@ class Evilution::Config
     Evilution::SpecSelector.new(
       spec_files: @spec_files,
       spec_mappings: @spec_mappings,
-      spec_pattern: @spec_pattern
+      spec_pattern: @spec_pattern,
+      spec_resolver: build_spec_resolver
     )
+  end
+
+  def build_spec_resolver
+    case @integration
+    when :minitest
+      Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+    else
+      Evilution::SpecResolver.new
+    end
   end
 
   def validate_spec_mappings(value)
