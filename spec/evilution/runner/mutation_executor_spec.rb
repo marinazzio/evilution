@@ -27,13 +27,13 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     )
   end
 
-  def mutation(file: "lib/foo.rb", identifier: nil)
+  def mutation(file: "lib/foo.rb", identifier: nil, unparseable: false)
     @mut_id ||= 0
     @mut_id += 1
     id = identifier || "Foo#bar:#{@mut_id}"
     instance_double(
       Evilution::Mutation, file_path: file, to_s: id,
-                           strip_sources!: nil
+                           strip_sources!: nil, unparseable?: unparseable
     )
   end
 
@@ -94,6 +94,31 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(m).to receive(:strip_sources!)
 
       build(cfg, isolator: isolator).call([m], nil)
+    end
+
+    it "short-circuits unparseable mutations in sequential path without invoking isolator" do
+      cfg = config(jobs: 1)
+      parseable = mutation
+      unparseable = mutation(unparseable: true)
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+      executor = build(cfg, isolator: isolator)
+      results, = executor.call([parseable, unparseable], nil)
+
+      expect(isolator).to have_received(:call).once
+      expect(results.map(&:status)).to eq(%i[killed unparseable])
+    end
+
+    it "short-circuits unparseable mutations in parallel path without dispatching to pool" do
+      cfg = config(jobs: 2)
+      mutations = [mutation(unparseable: true), mutation(unparseable: true)]
+      isolator = instance_double(Evilution::Isolation::Fork)
+
+      executor = build(cfg, isolator: isolator)
+      results, = executor.call(mutations, nil)
+
+      expect(results.map(&:status)).to eq(%i[unparseable unparseable])
     end
 
     it "neutralizes survivors when baseline is failed for the spec file" do

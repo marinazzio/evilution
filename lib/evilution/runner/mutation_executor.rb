@@ -40,10 +40,7 @@ class Evilution::Runner::MutationExecutor
     truncated = false
 
     mutations.each_with_index do |mutation, index|
-      result = execute_or_fetch(mutation) do
-        test_command = ->(m) { integration.call(m) }
-        isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
-      end
+      result = execute_one(mutation, integration)
       mutation.strip_sources!
       result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
       results << result
@@ -187,6 +184,11 @@ class Evilution::Runner::MutationExecutor
     cached_results = {}
 
     batch.each_with_index do |mutation, i|
+      if mutation.unparseable?
+        cached_results[i] = compact_result(build_unparseable_result(mutation))
+        next
+      end
+
       cached = fetch_cached_result(mutation)
       if cached
         cached_results[i] = compact_result(cached)
@@ -196,6 +198,19 @@ class Evilution::Runner::MutationExecutor
     end
 
     [uncached_indices, cached_results]
+  end
+
+  def execute_one(mutation, integration)
+    return build_unparseable_result(mutation) if mutation.unparseable?
+
+    execute_or_fetch(mutation) do
+      test_command = ->(m) { integration.call(m) }
+      isolator.call(mutation: mutation, test_command: test_command, timeout: config.timeout)
+    end
+  end
+
+  def build_unparseable_result(mutation)
+    Evilution::Result::MutationResult.new(mutation: mutation, status: :unparseable)
   end
 
   def merge_parallel_results(batch, uncached_indices, cached_results, worker_results)
