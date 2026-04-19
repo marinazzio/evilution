@@ -32,6 +32,8 @@ class Evilution::SpecSelector
   def normalize(path)
     return path if path.nil?
 
-    path.to_s.delete_prefix("./")
+    normalized = path.to_s
+    normalized = normalized.delete_prefix("#{Dir.pwd}/") if normalized.start_with?("/")
+    normalized.delete_prefix("./")
   end
 end

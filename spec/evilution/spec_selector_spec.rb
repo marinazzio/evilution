@@ -117,5 +117,15 @@ RSpec.describe Evilution::SpecSelector do
 
       expect(selector.call("./app/controllers/games_controller.rb")).to eq(["spec/requests/games_overlay_spec.rb"])
     end
+
+    it "normalizes absolute source path (under pwd) when looking up mappings" do
+      create_file("spec/requests/games_overlay_spec.rb")
+      selector = build(spec_mappings: {
+                         "app/controllers/games_controller.rb" => ["spec/requests/games_overlay_spec.rb"]
+                       })
+
+      absolute = "#{Dir.pwd}/app/controllers/games_controller.rb"
+      expect(selector.call(absolute)).to eq(["spec/requests/games_overlay_spec.rb"])
+    end
   end
 end

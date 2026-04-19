@@ -248,12 +248,18 @@ class Evilution::Config
     raise Evilution::ConfigError, "spec_mappings must be a Hash, got #{value.class}" unless value.is_a?(Hash)
 
     normalized = value.each_with_object({}) do |(source, specs), acc|
-      key = source.to_s
+      key = normalize_spec_mappings_key(source)
       acc[key] = normalize_spec_mappings_value(key, specs)
     end
 
     warn_missing_spec_mappings(normalized)
     normalized
+  end
+
+  def normalize_spec_mappings_key(source)
+    key = source.to_s
+    key = key.delete_prefix("#{Dir.pwd}/") if key.start_with?("/")
+    key.delete_prefix("./")
   end
 
   def normalize_spec_mappings_value(source, specs)

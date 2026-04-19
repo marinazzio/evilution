@@ -369,7 +369,7 @@ RSpec.describe Evilution::Config do
           skip_config_file: true,
           spec_mappings: { "lib/foo.rb" => "spec/missing_spec.rb" }
         )
-      end.to output(%r{/spec_mappings.*spec/missing_spec\.rb.*not found/}).to_stderr
+      end.to output(%r{spec_mappings.*spec/missing_spec\.rb.*not found}).to_stderr
     end
 
     it "does not warn when all spec_mappings entries exist" do
@@ -381,6 +381,27 @@ RSpec.describe Evilution::Config do
           spec_mappings: { "lib/foo.rb" => "existing_spec.rb" }
         )
       end.not_to output.to_stderr
+    end
+
+    it "normalizes leading ./ in spec_mappings keys" do
+      File.write("existing_spec.rb", "")
+      config = described_class.new(
+        skip_config_file: true,
+        spec_mappings: { "./lib/foo.rb" => "existing_spec.rb" }
+      )
+
+      expect(config.spec_mappings).to have_key("lib/foo.rb")
+      expect(config.spec_mappings).not_to have_key("./lib/foo.rb")
+    end
+
+    it "normalizes absolute (pwd-prefixed) spec_mappings keys" do
+      File.write("existing_spec.rb", "")
+      config = described_class.new(
+        skip_config_file: true,
+        spec_mappings: { "#{Dir.pwd}/lib/foo.rb" => "existing_spec.rb" }
+      )
+
+      expect(config.spec_mappings).to have_key("lib/foo.rb")
     end
   end
 
