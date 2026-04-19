@@ -3,7 +3,7 @@
 require_relative "../result"
 
 class Evilution::Result::MutationResult
-  STATUSES = %i[killed survived timeout error neutral equivalent unresolved].freeze
+  STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
 
   attr_reader :mutation, :status, :duration, :killing_test, :test_command,
               :child_rss_kb, :memory_delta_kb, :parent_rss_kb,
@@ -57,5 +57,9 @@ class Evilution::Result::MutationResult
 
   def unresolved?
     status == :unresolved
+  end
+
+  def unparseable?
+    status == :unparseable
   end
 end

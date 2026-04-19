@@ -54,6 +54,15 @@ RSpec.describe Evilution::Result::MutationResult do
       expect(result).not_to be_killed
       expect(result).not_to be_error
     end
+
+    it "identifies unparseable mutations" do
+      result = described_class.new(mutation: mutation, status: :unparseable)
+
+      expect(result).to be_unparseable
+      expect(result).not_to be_error
+      expect(result).not_to be_killed
+      expect(result).not_to be_survived
+    end
   end
 
   it "rejects invalid statuses" do
