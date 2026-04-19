@@ -98,6 +98,27 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#unparseable" do
+    it "counts unparseable mutations" do
+      s = described_class.new(results: [make_result(:killed), make_result(:unparseable), make_result(:unparseable)])
+
+      expect(s.unparseable).to eq(2)
+    end
+
+    it "returns zero when no unparseable mutations" do
+      expect(summary.unparseable).to eq(0)
+    end
+  end
+
+  describe "#unparseable_results" do
+    it "returns only unparseable results" do
+      unp = make_result(:unparseable)
+      s = described_class.new(results: [make_result(:killed), unp])
+
+      expect(s.unparseable_results).to eq([unp])
+    end
+  end
+
   describe "#unresolved" do
     it "counts unresolved mutations" do
       s = described_class.new(results: [make_result(:killed), make_result(:unresolved), make_result(:unresolved)])
@@ -116,6 +137,29 @@ RSpec.describe Evilution::Result::Summary do
       s = described_class.new(results: [make_result(:killed), unresolved])
 
       expect(s.unresolved_results).to eq([unresolved])
+    end
+  end
+
+  describe "#score_denominator" do
+    it "excludes errors, neutrals, equivalents, unresolved, and unparseable" do
+      mixed = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:error),
+        make_result(:neutral),
+        make_result(:equivalent),
+        make_result(:unresolved),
+        make_result(:unparseable)
+      ]
+      s = described_class.new(results: mixed)
+
+      expect(s.score_denominator).to eq(2)
+    end
+
+    it "returns total when all mutations are scorable" do
+      s = described_class.new(results: [make_result(:killed), make_result(:survived)])
+
+      expect(s.score_denominator).to eq(2)
     end
   end
 
@@ -182,6 +226,17 @@ RSpec.describe Evilution::Result::Summary do
         make_result(:unresolved)
       ]
       s = described_class.new(results: results_with_unresolved)
+
+      expect(s.score).to eq(1.0 / 2)
+    end
+
+    it "excludes unparseable from denominator" do
+      results_with_unparseable = [
+        make_result(:killed),
+        make_result(:survived),
+        make_result(:unparseable)
+      ]
+      s = described_class.new(results: results_with_unparseable)
 
       expect(s.score).to eq(1.0 / 2)
     end

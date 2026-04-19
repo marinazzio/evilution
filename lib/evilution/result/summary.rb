@@ -51,8 +51,16 @@ class Evilution::Result::Summary
     results.count(&:unresolved?)
   end
 
+  def unparseable
+    results.count(&:unparseable?)
+  end
+
+  def score_denominator
+    total - errors - neutral - equivalent - unresolved - unparseable
+  end
+
   def score
-    denominator = total - errors - neutral - equivalent - unresolved
+    denominator = score_denominator
     return 0.0 if denominator.zero?
 
     killed.to_f / denominator
@@ -80,6 +88,10 @@ class Evilution::Result::Summary
 
   def unresolved_results
     results.select(&:unresolved?)
+  end
+
+  def unparseable_results
+    results.select(&:unparseable?)
   end
 
   def coverage_gaps
