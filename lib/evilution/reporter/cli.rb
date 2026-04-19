@@ -7,6 +7,17 @@ class Evilution::Reporter::CLI
 
   def call(summary)
     lines = []
+    append_metrics(lines, summary)
+    append_sections(lines, summary)
+    lines << ""
+    lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
+    lines << result_line(summary)
+    lines.join("\n")
+  end
+
+  private
+
+  def append_metrics(lines, summary)
     lines << header
     lines << SEPARATOR
     lines << ""
@@ -16,20 +27,17 @@ class Evilution::Reporter::CLI
     lines << efficiency_line(summary) if summary.duration.positive?
     peak = summary.peak_memory_mb
     lines << peak_memory_line(peak) if peak
+  end
+
+  def append_sections(lines, summary)
     append_survived(lines, summary)
     append_neutral(lines, summary)
     append_equivalent(lines, summary)
     append_unresolved(lines, summary)
+    append_unparseable(lines, summary)
     append_errors(lines, summary)
     append_disabled(lines, summary)
-    lines << ""
-    lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
-    lines << result_line(summary)
-
-    lines.join("\n")
   end
-
-  private
 
   def append_survived(lines, summary)
     gaps = summary.coverage_gaps
@@ -62,6 +70,14 @@ class Evilution::Reporter::CLI
     lines << ""
     lines << "Unresolved mutations (no test file resolved):"
     summary.unresolved_results.each { |result| lines << format_neutral(result) }
+  end
+
+  def append_unparseable(lines, summary)
+    return unless summary.unparseable_results.any?
+
+    lines << ""
+    lines << "Unparseable mutations (mutated source did not parse):"
+    summary.unparseable_results.each { |result| lines << format_neutral(result) }
   end
 
   def append_errors(lines, summary)
@@ -100,6 +116,7 @@ class Evilution::Reporter::CLI
     parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
     parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
     parts += ", #{summary.unresolved} unresolved" if summary.unresolved.positive?
+    parts += ", #{summary.unparseable} unparseable" if summary.unparseable.positive?
     parts += ", #{summary.skipped} skipped" if summary.skipped.positive?
     parts
   end

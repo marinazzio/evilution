@@ -5,6 +5,7 @@ require_relative "mutation_map"
 require_relative "survived_details"
 require_relative "error_details"
 require_relative "unresolved_details"
+require_relative "unparseable_details"
 
 class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HTML::Section
   template "file_section"
@@ -48,5 +49,9 @@ class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HT
 
   def unresolved_html
     Evilution::Reporter::HTML::Sections::UnresolvedDetails.render_if(@results.select(&:unresolved?))
+  end
+
+  def unparseable_html
+    Evilution::Reporter::HTML::Sections::UnparseableDetails.render_if(@results.select(&:unparseable?))
   end
 end

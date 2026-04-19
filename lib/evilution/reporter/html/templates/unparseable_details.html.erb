@@ -1,0 +1,11 @@
+<div class="unparseable-details">
+  <h3>Unparseable (<%= unparseable.length %>) — mutated source did not parse</h3>
+  <ul>
+    <%- sorted.each do |r| -%>
+    <li>
+      <span class="operator"><%= h(r.mutation.operator_name) %></span>
+      <span class="location"><%= h(r.mutation.file_path) %>:<%= r.mutation.line %></span>
+    </li>
+    <%- end -%>
+  </ul>
+</div>

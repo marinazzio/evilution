@@ -147,7 +147,8 @@ Use `--format json` for machine-readable output. Schema:
     "neutral": "integer  — mutations whose tests already failed before mutation (baseline failure)",
     "equivalent": "integer — mutations proven to have identical behavior to the original",
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
-    "score": "float      — killed / (total - errors - neutral - equivalent - unresolved), range 0.0-1.0, rounded to 4 decimals",
+    "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
+    "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
     "duration": "float   — total wall-clock seconds, rounded to 4 decimals",
     "peak_memory_mb": "float (optional) — peak RSS across all mutation child processes, in MB"
   },
@@ -156,7 +157,7 @@ Use `--format json` for machine-readable output. Schema:
       "operator": "string — mutation operator name (see Operators table)",
       "file": "string    — relative path to mutated file",
       "line": "integer   — line number of the mutation",
-      "status": "string  — result status: 'survived', 'killed', 'timeout', 'error', 'neutral', 'equivalent', or 'unresolved'",
+      "status": "string  — result status: 'survived', 'killed', 'timeout', 'error', 'neutral', 'equivalent', 'unresolved', or 'unparseable'",
       "duration": "float — seconds this mutation took, rounded to 4 decimals",
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
@@ -177,6 +178,7 @@ Use `--format json` for machine-readable output. Schema:
   "neutral": ["... same shape as survived entries ..."],
   "equivalent": ["... same shape as survived entries ..."],
   "unresolved": ["... same shape as survived entries — coverage gap: no spec file resolved for these mutations"],
+  "unparseable": ["... same shape as survived entries — mutated source failed to parse and was never executed"],
   "timed_out": ["... same shape as survived entries ..."],
   "errors": [
     {
@@ -202,6 +204,7 @@ Use `--format json` for machine-readable output. Schema:
 | `neutral`    | Baseline tests already failed before mutation — not a meaningful signal | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
+| `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
 
 Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). They are reported separately so you can act on them (add a test, adjust test naming, or opt in to the full-suite fallback) without inflating the error count.
 

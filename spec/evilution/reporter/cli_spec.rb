@@ -374,6 +374,59 @@ RSpec.describe Evilution::Reporter::CLI do
       end
     end
 
+    context "with unparseable mutations" do
+      let(:unparseable_mutation) do
+        double(
+          "Mutation",
+          operator_name: "method_body_replacement",
+          file_path: "lib/broken.rb",
+          line: 7,
+          diff: "- def foo; end\n+ def foo; raise; end"
+        )
+      end
+
+      let(:unparseable_result) do
+        Evilution::Result::MutationResult.new(
+          mutation: unparseable_mutation,
+          status: :unparseable,
+          duration: 0.0
+        )
+      end
+
+      let(:unparseable_summary) do
+        Evilution::Result::Summary.new(
+          results: [killed_result, unparseable_result],
+          duration: 1.0
+        )
+      end
+
+      it "includes unparseable count in mutations line" do
+        output = reporter.call(unparseable_summary)
+
+        expect(output).to include("1 unparseable")
+      end
+
+      it "shows unparseable mutations section" do
+        output = reporter.call(unparseable_summary)
+
+        expect(output).to include("Unparseable mutations (mutated source did not parse):")
+        expect(output).to include("method_body_replacement: lib/broken.rb:7")
+      end
+
+      it "does not show unparseable section when there are none" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include("Unparseable mutations")
+        expect(output).not_to include("unparseable")
+      end
+
+      it "excludes unparseable from score denominator" do
+        output = reporter.call(unparseable_summary)
+
+        expect(output).to include("(1/1)")
+      end
+    end
+
     it "handles empty results gracefully" do
       empty_summary = Evilution::Result::Summary.new(results: [], duration: 0.0)
       output = reporter.call(empty_summary)

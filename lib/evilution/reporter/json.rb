@@ -29,7 +29,8 @@ class Evilution::Reporter::JSON
       timed_out: map_details(summary.results.select(&:timeout?)),
       errors: map_details(summary.results.select(&:error?)),
       equivalent: map_details(summary.equivalent_results),
-      unresolved: map_details(summary.unresolved_results)
+      unresolved: map_details(summary.unresolved_results),
+      unparseable: map_details(summary.unparseable_results)
     }
     append_disabled_to_report(report, summary)
     report
@@ -55,6 +56,7 @@ class Evilution::Reporter::JSON
       neutral: summary.neutral,
       equivalent: summary.equivalent,
       unresolved: summary.unresolved,
+      unparseable: summary.unparseable,
       score: summary.score.round(4),
       duration: summary.duration.round(4),
       killtime: summary.killtime.round(4),

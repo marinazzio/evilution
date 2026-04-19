@@ -9,6 +9,9 @@
   <%- if @summary.unresolved.positive? -%>
   <div class="card"><span class="card-value"><%= @summary.unresolved %></span><span class="card-label">Unresolved</span></div>
   <%- end -%>
+  <%- if @summary.unparseable.positive? -%>
+  <div class="card"><span class="card-value"><%= @summary.unparseable %></span><span class="card-label">Unparseable</span></div>
+  <%- end -%>
   <%- if @summary.skipped.positive? -%>
   <div class="card"><span class="card-value"><%= @summary.skipped %></span><span class="card-label">Skipped</span></div>
   <%- end -%>
