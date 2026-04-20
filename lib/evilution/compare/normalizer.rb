@@ -93,16 +93,14 @@ class Evilution::Compare::Normalizer
     raise Evilution::Compare::InvalidInput.new("non-integer line in #{ident.inspect}", index: index)
   end
 
-  # rubocop:disable Metrics/PerceivedComplexity
   def derive_mutant_status(mr, cr, index)
     type = mr["mutation_type"]
     return :neutral if %w[neutral noop].include?(type)
     return :timeout if cr["timeout"]
     return :error   if cr["process_abort"]
     return :killed  if cr["test_result"]
-    return :survived if type == "evil" && !cr["process_abort"] && !cr["timeout"] && !cr["test_result"]
+    return :survived if type == "evil"
 
     raise Evilution::Compare::InvalidInput.new("unknown mutant result shape: type=#{type.inspect} cr=#{cr.inspect}", index: index)
   end
-  # rubocop:enable Metrics/PerceivedComplexity
 end
