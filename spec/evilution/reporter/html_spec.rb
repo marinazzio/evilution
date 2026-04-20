@@ -231,6 +231,17 @@ RSpec.describe Evilution::Reporter::HTML do
         )
       end
 
+      let(:neutral_result_with_error) do
+        Evilution::Result::MutationResult.new(
+          mutation: neutral_mutation,
+          status: :neutral,
+          duration: 0.1,
+          error_class: "NameError",
+          error_message: "undefined method `let_it_be'",
+          error_backtrace: ["spec/support/fixture_helpers.rb:42:in `let_it_be'"]
+        )
+      end
+
       it "shows neutral mutations" do
         neutral_summary = Evilution::Result::Summary.new(
           results: [killed_result, neutral_result],
@@ -239,6 +250,35 @@ RSpec.describe Evilution::Reporter::HTML do
         output = reporter.call(neutral_summary)
 
         expect(output).to include("neutral")
+      end
+
+      it "renders a neutral details section listing operator and location" do
+        neutral_summary = Evilution::Result::Summary.new(
+          results: [killed_result, neutral_result_with_error],
+          duration: 0.6
+        )
+        output = reporter.call(neutral_summary)
+
+        expect(output).to include('class="neutral-details"')
+        expect(output).to include("integer_literal")
+        expect(output).to include("lib/user.rb")
+        expect(output).to include("15")
+      end
+
+      it "surfaces the error_class for neutral results so infra cause is visible" do
+        neutral_summary = Evilution::Result::Summary.new(
+          results: [killed_result, neutral_result_with_error],
+          duration: 0.6
+        )
+        output = reporter.call(neutral_summary)
+
+        expect(output).to include("NameError")
+      end
+
+      it "omits the neutral section when no neutral results exist" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include('class="neutral-details"')
       end
     end
 
