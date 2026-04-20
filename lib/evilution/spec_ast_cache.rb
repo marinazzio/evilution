@@ -71,7 +71,9 @@ class Evilution::SpecAstCache
       )
     end
 
-    comment_ranges = result.comments.map { |c| c.location.start_offset..c.location.end_offset }
+    comment_ranges = result.comments
+                           .map { |c| c.location.start_offset...c.location.end_offset }
+                           .sort_by(&:begin)
     collector = BlockCollector.new(source, comment_ranges)
     collector.visit(result.value)
     collector.blocks
@@ -145,7 +147,19 @@ class Evilution::SpecAstCache
     end
 
     def comment_ranges_within(start_off, end_off)
-      @comment_ranges.select { |r| r.begin >= start_off && r.end <= end_off }
+      lower = @comment_ranges.bsearch_index { |r| r.begin >= start_off }
+      return [] unless lower
+
+      result = []
+      idx = lower
+      while idx < @comment_ranges.length
+        range = @comment_ranges[idx]
+        break if range.begin >= end_off
+
+        result << range if range.end <= end_off
+        idx += 1
+      end
+      result
     end
   end
   private_constant :BlockCollector

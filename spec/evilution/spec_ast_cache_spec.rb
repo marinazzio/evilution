@@ -4,10 +4,15 @@ require "tempfile"
 require "evilution/spec_ast_cache"
 
 RSpec.describe Evilution::SpecAstCache do
+  before { @tempfiles = [] }
+
+  after { @tempfiles.each(&:unlink) }
+
   def write_spec(contents)
     file = Tempfile.new(["spec_ast_cache", ".rb"])
     file.write(contents)
     file.close
+    @tempfiles << file
     file.path
   end
 
@@ -146,10 +151,10 @@ RSpec.describe Evilution::SpecAstCache do
       RUBY
 
       first = cache.fetch(path)
-      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with(path).and_call_original
       second = cache.fetch(path)
 
-      expect(File).not_to have_received(:read)
+      expect(File).not_to have_received(:read).with(path)
       expect(second).to eq(first)
     end
 
