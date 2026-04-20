@@ -58,24 +58,45 @@ RSpec.describe Evilution::TempDirTracker do
     end
 
     it "is safe to invoke from a Signal.trap handler (no ThreadError)" do
+      require "timeout"
+
       dir = Dir.mktmpdir("evilution_test")
       described_class.register(dir)
-      errors = []
+      queue = Queue.new
       previous = Signal.trap("USR1") do
         described_class.cleanup_all
+        queue << :done
       rescue StandardError => e
-        errors << e
+        queue << e
       end
 
-      begin
+      result = begin
         Process.kill("USR1", Process.pid)
-        sleep 0.1
+        Timeout.timeout(2) { queue.pop }
       ensure
         Signal.trap("USR1", previous || "DEFAULT")
       end
 
-      expect(errors).to be_empty
+      expect(result).to eq(:done)
       expect(Dir.exist?(dir)).to be false
+    end
+
+    it "keeps a directory tracked when FileUtils.rm_rf raises" do
+      dir = Dir.mktmpdir("evilution_test")
+      described_class.register(dir)
+      call_count = 0
+      allow(FileUtils).to receive(:rm_rf).with(dir).and_wrap_original do |orig, arg|
+        call_count += 1
+        raise StandardError, "boom" if call_count == 1
+
+        orig.call(arg)
+      end
+
+      described_class.cleanup_all
+
+      expect(described_class.tracked_dirs).to include(dir)
+    ensure
+      described_class.cleanup_all if dir
     end
   end
 end
