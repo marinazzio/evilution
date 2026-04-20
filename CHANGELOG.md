@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.25.0] - 2026-04-21
+
+### Added
+
+- **`compare` command** — compare two saved mutation runs (JSON files, e.g. `.evilution/results/*.json`) and categorize each mutation into fixed / new / persistent / flaky / reintroduced buckets; supports `--against PATH --current PATH` flag binding or positional paths, emits `--format json` or `text`. Useful for CI gates that track regressions between runs (#746, #749, #750, #810, #811, #812, #813)
+- **Per-mutation example targeting** — when a mutation is scoped to a specific method, the RSpec integration filters the resolved spec file to only the examples whose body text references symbols from the mutated method; typical workloads run a fraction of the file per mutation. New flags: `--no-example-targeting` disables the optimization, `--example-targeting-fallback MODE` picks between `full_file` (default) and `unresolved` when no example matches. Also adds `--spec-pattern GLOB` to restrict resolved spec candidates (#732, #800, #801, #802, #803, PR #816)
+- **`:unparseable` mutation status** — mutations whose generated source fails to parse (e.g. dangling heredoc openers after `method_body_replacement`) are short-circuited before test execution and reported as a separate status, excluded from the score like `:unresolved`. Includes HTML, JSON, and text reporter support, MCP `info statuses` action, and a dedicated HTML "Unparseable" details section (#724, #725, #726, #728, #731)
+- **`:neutral` details in HTML report** — surfaces mutations that were reclassified as neutral (infra errors, baseline-failed specs) in a dedicated HTML section so users can distinguish them from real kills (#758, #759)
+- **Per-worker SQLite DB isolation** — `Parallel::WorkQueue` sets `ENV["TEST_ENV_NUMBER"]` per forked worker (`""` for worker 1, `"2"` for worker 2, …) following the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention; Rails apps whose `config/database.yml` interpolates `TEST_ENV_NUMBER` now get one SQLite file per worker. When a parallel run is detected against a SQLite-backed `test:` section, evilution prints a one-time startup notice pointing to the README (#817, #819)
+- **Infrastructure error neutralization** — results are reclassified as `:neutral` when the failure came from test infrastructure rather than the mutation itself. Two independent paths: (1) `:error` from `LoadError` / `NameError` whose first backtrace frame is `spec_helper.rb`, `rails_helper.rb`, or `spec/support/`; (2) `:killed` from a CrashDetector `test_crashed` whose sole crash class is in `INFRA_CRASH_CLASSES` (`ActiveRecord::StatementTimeout`, `ActiveRecord::Deadlocked`, `ActiveRecord::ConnectionTimeoutError`, `ActiveRecord::LockWaitTimeout`, `Timeout::Error`, `SQLite3::BusyException`). Keeps mutation scores clean under parallel DB contention and broken spec setup (#757, #814, #818)
+- **Worker recycling** — `Parallel::WorkQueue` accepts `worker_max_items: N` to spawn a fresh worker after every N mutations; prevents unbounded RSS growth on long parallel runs. Defaults to no recycling. Works alongside `prefetch > 1` with bounded overshoot (#785)
+- **`evil` executable** — short alias for `evilution` (handy with `alias be='bundle exec'` → `be evil run ...`) (#720)
+- **`:unresolved` mutation status** — mutations whose source file has no resolvable spec/test are reported as `:unresolved` (coverage gap, not a failure) instead of erroring out; `--fallback-full-suite` still opts into running the whole suite (#718, #719)
+- **MCP `info statuses` action** — returns a glossary of mutation result statuses (survived / killed / timeout / error / neutral / equivalent / unresolved / unparseable) with descriptions (#756)
+- **RSpec evilution templates** — scaffold files helping users stand up evilution config and CI workflows faster (#488)
+- **Peak-RSS regression spec** — benchmark fixture that asserts a 250-mutation workload stays under the documented peak-RSS budget; guards against memory regressions in isolation and pool code paths (#748)
+- **Source AST caching** — caches parsed ASTs keyed by path + mtime, reducing re-parse cost when the same source file is referenced by multiple mutation plans in one run (#772, #803)
+- **Survived-mutant unified diff output** — CLI and JSON surfacing of unified diffs alongside each survived entry (and in `util mutation`), matching the inline-patch format used by reviewers (#733, #735, #737, #741)
+
+### Changed
+
+- **Argument mutators refactored** — shared collaborators for position-style argument mutators (array/hash/call args); no user-visible behavior change (#734)
+- **`MCP::Mutate` refactored** — split into focused collaborators; no user-visible behavior change (#489)
+- **`ReportTrimmer` enhancements** — supports new statuses (`:unresolved`, `:unparseable`, `:neutral`) and keeps JSON/HTML output compact on big runs (#763)
+- **Minitest assertion lookup refactored** — assertion values use indexed lookup instead of linear scans when matching integration mutators (perf win on large test suites) (#780)
+- **`SourceSurgeon` parse status exposed** — carries a `parse_status` field through to `MutationResult` so the runner can short-circuit unparseable mutations cleanly (#724)
+- **Original and mutated slices tracked on every mutation** — `Mutation` now carries both `original_slice` and `mutated_slice`, enabling accurate diff rendering without re-reading source files (#730)
+
+### Fixed
+
+- **`ThreadError: can't be called from trap context` in `TempDirTracker.cleanup_all`** — the signal handler installed by `Runner` called `FileUtils.rm_rf` under `Signal.trap`, which raises `ThreadError` for mutex operations executed from a trap context; now the cleanup path avoids the mutex when invoked from trap and falls back to direct enumeration with graceful `Errno::ENOENT` rescue (#793)
+- **`Encoding::UndefinedConversionError` under Rails with `Encoding.default_internal = UTF-8`** — `Parallel::WorkQueue` pipes default to text mode and transcoded ASCII-8BIT Marshal payloads to UTF-8, failing on any high byte with no UTF-8 mapping; all pipe ends are now forced into `binmode` (#786, #788)
+- **Zombie worker processes on mid-run errors** — when a worker exited unexpectedly or the map raised, `Parallel::WorkQueue` left children in a zombie state until the main process exited; now reaps child PIDs on every error path (#747)
+- **Preload / spec_helper load errors** (continued from 0.22.x) — consolidated fallback logic so missing `rspec-core` surfaces a clear `ConfigError` rather than a bare `LoadError` in parallel runs (#742, #743, #745)
+
 ## [0.24.0] - 2026-04-14
 
 ### Added
