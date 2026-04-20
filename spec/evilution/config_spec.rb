@@ -783,6 +783,199 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "example_targeting" do
+    around do |example|
+      original = ENV.fetch("EV_DISABLE_EXAMPLE_TARGETING", :__unset__)
+      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      example.run
+    ensure
+      if original == :__unset__
+        ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      else
+        ENV["EV_DISABLE_EXAMPLE_TARGETING"] = original
+      end
+    end
+
+    it "defaults to true" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.example_targeting?).to be true
+    end
+
+    it "accepts false" do
+      config = described_class.new(example_targeting: false, skip_config_file: true)
+
+      expect(config.example_targeting?).to be false
+    end
+
+    it "loads example_targeting from YAML" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "example_targeting: false\n")
+
+          expect(described_class.new.example_targeting?).to be false
+        end
+      end
+    end
+
+    it "CLI options override example_targeting from file" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "example_targeting: false\n")
+
+          expect(described_class.new(example_targeting: true).example_targeting?).to be true
+        end
+      end
+    end
+
+    it "is disabled when EV_DISABLE_EXAMPLE_TARGETING=1 in env" do
+      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
+
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be false
+    end
+
+    it "env overrides file config" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "example_targeting: true\n")
+          ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
+
+          expect(described_class.new.example_targeting?).to be false
+        end
+      end
+    end
+
+    it "CLI options override env var" do
+      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
+
+      expect(described_class.new(example_targeting: true, skip_config_file: true).example_targeting?).to be true
+    end
+
+    it "ignores empty env var" do
+      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = ""
+
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
+    end
+
+    it "ignores env var set to 0" do
+      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "0"
+
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
+    end
+  end
+
+  describe "example_targeting_fallback" do
+    it "defaults to :full_file" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.example_targeting_fallback).to eq(:full_file)
+    end
+
+    it "accepts :unresolved" do
+      config = described_class.new(example_targeting_fallback: :unresolved, skip_config_file: true)
+
+      expect(config.example_targeting_fallback).to eq(:unresolved)
+    end
+
+    it "accepts string and converts to symbol" do
+      config = described_class.new(example_targeting_fallback: "unresolved", skip_config_file: true)
+
+      expect(config.example_targeting_fallback).to eq(:unresolved)
+    end
+
+    it "loads from YAML" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "example_targeting_fallback: unresolved\n")
+
+          expect(described_class.new.example_targeting_fallback).to eq(:unresolved)
+        end
+      end
+    end
+
+    it "rejects invalid values" do
+      expect do
+        described_class.new(example_targeting_fallback: :invalid, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
+    end
+
+    it "rejects nil" do
+      expect do
+        described_class.new(example_targeting_fallback: nil, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
+    end
+
+    it "rejects integer with ConfigError (not NoMethodError)" do
+      expect do
+        described_class.new(example_targeting_fallback: 42, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
+    end
+  end
+
+  describe "example_targeting_cache" do
+    it "defaults to { max_files: 50, max_blocks: 10000 }" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.example_targeting_cache).to eq(max_files: 50, max_blocks: 10_000)
+    end
+
+    it "accepts overrides" do
+      config = described_class.new(
+        example_targeting_cache: { max_files: 100, max_blocks: 50_000 },
+        skip_config_file: true
+      )
+
+      expect(config.example_targeting_cache).to eq(max_files: 100, max_blocks: 50_000)
+    end
+
+    it "merges partial overrides with defaults" do
+      config = described_class.new(
+        example_targeting_cache: { max_files: 100 },
+        skip_config_file: true
+      )
+
+      expect(config.example_targeting_cache).to eq(max_files: 100, max_blocks: 10_000)
+    end
+
+    it "loads from YAML" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", <<~YAML)
+            example_targeting_cache:
+              max_files: 25
+              max_blocks: 5000
+          YAML
+
+          expect(described_class.new.example_targeting_cache).to eq(max_files: 25, max_blocks: 5_000)
+        end
+      end
+    end
+
+    it "rejects non-hash values" do
+      expect do
+        described_class.new(example_targeting_cache: "nope", skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_cache must be a Hash/)
+    end
+
+    it "rejects non-positive max_files" do
+      expect do
+        described_class.new(example_targeting_cache: { max_files: 0 }, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /max_files must be a positive integer/)
+    end
+
+    it "rejects non-positive max_blocks" do
+      expect do
+        described_class.new(example_targeting_cache: { max_blocks: -1 }, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /max_blocks must be a positive integer/)
+    end
+
+    it "rejects non-string/symbol keys with ConfigError (not NoMethodError)" do
+      expect do
+        described_class.new(example_targeting_cache: { 42 => 1 }, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_cache keys must be/)
+    end
+  end
+
   describe "immutability" do
     it "is frozen after initialization" do
       config = described_class.new(skip_config_file: true)

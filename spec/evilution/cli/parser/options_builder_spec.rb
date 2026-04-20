@@ -86,4 +86,14 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
       expect(options[:spec_files]).to eq([File.join(dir, "a_spec.rb")])
     end
   end
+
+  it "parses --no-example-targeting to false" do
+    options, = parse(["--no-example-targeting"])
+    expect(options[:example_targeting]).to be(false)
+  end
+
+  it "parses --example-targeting-fallback as a string" do
+    options, = parse(["--example-targeting-fallback", "unresolved"])
+    expect(options[:example_targeting_fallback]).to eq("unresolved")
+  end
 end

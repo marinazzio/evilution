@@ -33,8 +33,14 @@ class Evilution::Config
     fallback_to_full_suite: false,
     preload: nil,
     spec_mappings: {},
-    spec_pattern: nil
+    spec_pattern: nil,
+    example_targeting: true,
+    example_targeting_fallback: :full_file,
+    example_targeting_cache: { max_files: 50, max_blocks: 10_000 }
   }.freeze
+
+  EXAMPLE_TARGETING_FALLBACKS = %i[full_file unresolved].freeze
+  private_constant :EXAMPLE_TARGETING_FALLBACKS
 
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
@@ -43,11 +49,13 @@ class Evilution::Config
               :ignore_patterns, :show_disabled, :baseline_session,
               :skip_heredoc_literals, :related_specs_heuristic,
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
+              :example_targeting, :example_targeting_fallback, :example_targeting_cache,
               :spec_selector
 
   def initialize(**options)
     file_options = options.delete(:skip_config_file) ? {} : load_config_file
-    merged = DEFAULTS.merge(file_options).merge(options)
+    env_options = load_env_options
+    merged = DEFAULTS.merge(file_options).merge(env_options).merge(options)
     assign_attributes(merged)
     freeze
   end
@@ -106,6 +114,10 @@ class Evilution::Config
 
   def related_specs_heuristic?
     related_specs_heuristic
+  end
+
+  def example_targeting?
+    example_targeting
   end
 
   def fallback_to_full_suite?
@@ -182,6 +194,23 @@ class Evilution::Config
       #   worker_process_start: config/evilution_hooks/worker_start.rb
       #   mutation_insert_pre: config/evilution_hooks/mutation_pre.rb
 
+      # Per-mutation example targeting (default: true). When enabled, Evilution
+      # parses resolved spec files and restricts each mutation run to examples
+      # whose bodies reference the mutated method/class token. Set to false
+      # to run every example in the resolved spec files. You can also disable
+      # without editing the file by exporting EV_DISABLE_EXAMPLE_TARGETING=1.
+      # example_targeting: true
+
+      # Behavior when targeting finds no matching example (default: full_file).
+      # full_file  - run every example in the resolved spec files
+      # unresolved - mark the mutation :unresolved and skip
+      # example_targeting_fallback: full_file
+
+      # LRU cache bounds for the spec AST parser that powers example targeting.
+      # example_targeting_cache:
+      #   max_files: 50
+      #   max_blocks: 10000
+
       # AST patterns to skip during mutation generation (default: [])
       # See docs/ast_pattern_syntax.md for pattern syntax
       # ignore_patterns:
@@ -232,7 +261,14 @@ class Evilution::Config
     @preload = validate_preload(merged[:preload])
     @spec_mappings = validate_spec_mappings(merged[:spec_mappings])
     @spec_pattern = validate_spec_pattern(merged[:spec_pattern])
+    assign_example_targeting(merged)
     @spec_selector = build_spec_selector
+  end
+
+  def assign_example_targeting(merged)
+    @example_targeting = merged[:example_targeting] ? true : false
+    @example_targeting_fallback = validate_example_targeting_fallback(merged[:example_targeting_fallback])
+    @example_targeting_cache = validate_example_targeting_cache(merged[:example_targeting_cache])
   end
 
   def build_spec_selector
@@ -357,6 +393,52 @@ class Evilution::Config
       end
     end
     patterns
+  end
+
+  def validate_example_targeting_fallback(value)
+    unless value.is_a?(String) || value.is_a?(Symbol)
+      raise Evilution::ConfigError,
+            "example_targeting_fallback must be full_file or unresolved, got #{value.inspect}"
+    end
+
+    sym = value.to_sym
+    unless EXAMPLE_TARGETING_FALLBACKS.include?(sym)
+      raise Evilution::ConfigError,
+            "example_targeting_fallback must be full_file or unresolved, got #{sym.inspect}"
+    end
+
+    sym
+  end
+
+  def validate_example_targeting_cache(value)
+    raise Evilution::ConfigError, "example_targeting_cache must be a Hash, got #{value.class}" unless value.is_a?(Hash)
+
+    normalized = value.each_with_object({}) do |(k, v), acc|
+      unless k.is_a?(String) || k.is_a?(Symbol)
+        raise Evilution::ConfigError,
+              "example_targeting_cache keys must be Strings or Symbols, got #{k.inspect}"
+      end
+      acc[k.to_sym] = v
+    end
+    merged = DEFAULTS[:example_targeting_cache].merge(normalized)
+    validate_positive_int!(merged, :max_files)
+    validate_positive_int!(merged, :max_blocks)
+    merged
+  end
+
+  def validate_positive_int!(cache, key)
+    v = cache[key]
+    return if v.is_a?(Integer) && v >= 1
+
+    raise Evilution::ConfigError,
+          "example_targeting_cache.#{key} must be a positive integer, got #{v.inspect}"
+  end
+
+  def load_env_options
+    opts = {}
+    val = ENV.fetch("EV_DISABLE_EXAMPLE_TARGETING", nil)
+    opts[:example_targeting] = false if val && !val.empty? && val != "0"
+    opts
   end
 
   def validate_hooks(value)
