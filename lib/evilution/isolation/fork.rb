@@ -86,17 +86,17 @@ class Evilution::Isolation::Fork
 
   # Defensive reap: if normal control flow raised before wait_for_result
   # reaped the child (e.g. Marshal.load on corrupt payload), the child becomes
-  # a zombie. SIGTERM + blocking wait drains it; ECHILD/ESRCH mean it was
-  # already reaped.
+  # a zombie. Reuse terminate_child for the bounded TERM + GRACE_PERIOD + KILL
+  # ladder so this never hangs the ensure path; swallow SystemCallError so
+  # cleanup can't mask the primary failure.
   def ensure_reaped(pid)
     return unless pid
 
     reaped = ::Process.waitpid(pid, ::Process::WNOHANG)
     return if reaped
 
-    ::Process.kill("TERM", pid)
-    ::Process.waitpid(pid)
-  rescue Errno::ECHILD, Errno::ESRCH
+    terminate_child(pid)
+  rescue SystemCallError
     nil
   end
 
