@@ -533,7 +533,8 @@ RSpec.describe Evilution::Integration::RSpec do
     it "flags test_crashed with error detail when all failures are crashes" do
       detector = instance_double(Evilution::Integration::CrashDetector,
                                  only_crashes?: true,
-                                 crash_summary: "NoMethodError (1 crash)")
+                                 crash_summary: "NoMethodError (1 crash)",
+                                 unique_crash_classes: ["NoMethodError"])
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(RSpec.configuration).to receive(:add_formatter)
@@ -545,6 +546,44 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:test_crashed]).to be true
       expect(result[:error]).to include("test crashes")
       expect(result[:error]).to include("NoMethodError")
+    end
+
+    # Regression for EV-toid / GH #814: crashes that all share one class surface
+    # that class via error_class so MutationExecutor can neutralize infra-only
+    # crashes (ActiveRecord::StatementTimeout, Timeout::Error, etc.).
+    it "sets error_class when all crashes share one class" do
+      detector = instance_double(Evilution::Integration::CrashDetector,
+                                 only_crashes?: true,
+                                 crash_summary: "ActiveRecord::StatementTimeout (10 crashes)",
+                                 unique_crash_classes: ["ActiveRecord::StatementTimeout"])
+      allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
+      allow(detector).to receive(:example_failed)
+      allow(RSpec.configuration).to receive(:add_formatter)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      result = integration.call(mutation)
+
+      expect(result[:test_crashed]).to be true
+      expect(result[:error_class]).to eq("ActiveRecord::StatementTimeout")
+    end
+
+    # When crashes are a mix of classes, we cannot attribute to a single class.
+    # Leaving error_class nil keeps the result :killed (conservative — do not
+    # false-neutralize when genuine mutation-caused crashes are present).
+    it "omits error_class when crashes span multiple classes" do
+      detector = instance_double(Evilution::Integration::CrashDetector,
+                                 only_crashes?: true,
+                                 crash_summary: "ActiveRecord::StatementTimeout, NoMethodError (2 crashes)",
+                                 unique_crash_classes: %w[ActiveRecord::StatementTimeout NoMethodError])
+      allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
+      allow(detector).to receive(:example_failed)
+      allow(RSpec.configuration).to receive(:add_formatter)
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      result = integration.call(mutation)
+
+      expect(result[:test_crashed]).to be true
+      expect(result[:error_class]).to be_nil
     end
 
     it "returns killed (no error) when failures include assertions" do

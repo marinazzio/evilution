@@ -52,6 +52,13 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     )
   end
 
+  def killed_crash_result(mutation, error_class:, error_message: "test crashes", error_backtrace: [])
+    Evilution::Result::MutationResult.new(
+      mutation: mutation, status: :killed, duration: 0.01,
+      error_class: error_class, error_message: error_message, error_backtrace: error_backtrace
+    )
+  end
+
   describe "#call" do
     it "runs mutations sequentially when config.jobs is 1 and returns results + truncated flag" do
       cfg = config(jobs: 1)
@@ -274,6 +281,118 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       end
 
       it "does not affect non-error statuses" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(killed_result(m))
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:killed)
+      end
+    end
+
+    # Regression for EV-toid / GH #814:
+    # parallel workers sharing a sqlite3 file produce ActiveRecord::StatementTimeout
+    # (and similar infra-flavored exceptions). CrashDetector reports them as crashes,
+    # fork isolator classifies as :killed. These are infra noise, not real kills, and
+    # must be demoted to :neutral so score reflects real mutation detection only.
+    describe "infra-crash neutralization" do
+      it "demotes :killed ActiveRecord::StatementTimeout to :neutral (no backtrace requirement)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "ActiveRecord::StatementTimeout",
+                                 error_message: "test crashes: ActiveRecord::StatementTimeout (10 crashes)",
+                                 error_backtrace: ["/gems/activerecord/lib/active_record/connection_adapters/sqlite3.rb:123"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "demotes :killed Timeout::Error to :neutral" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "Timeout::Error",
+                                 error_backtrace: ["/gems/foo.rb:1"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "demotes :killed ActiveRecord::Deadlocked to :neutral" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "ActiveRecord::Deadlocked")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "demotes :killed ActiveRecord::ConnectionTimeoutError to :neutral" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "ActiveRecord::ConnectionTimeoutError")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "demotes :killed SQLite3::BusyException to :neutral" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "SQLite3::BusyException")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "keeps :killed with NoMethodError (genuine mutation-caused crash)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "NoMethodError")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:killed)
+      end
+
+      it "keeps :killed with RuntimeError (not in infra allowlist)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "RuntimeError")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:killed)
+      end
+
+      it "keeps :killed with nil error_class (non-crash kill: assertion failure)" do
         cfg = config(jobs: 1)
         m = mutation
         isolator = instance_double(Evilution::Isolation::Fork)

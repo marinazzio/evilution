@@ -127,10 +127,12 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     if passed
       { passed: true, test_command: command }
     elsif detector.only_crashes?
+      classes = detector.unique_crash_classes
       {
         passed: false,
         test_crashed: true,
         error: "test crashes: #{detector.crash_summary}",
+        error_class: (classes.first if classes.length == 1),
         test_command: command
       }
     else

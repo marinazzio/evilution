@@ -131,14 +131,32 @@ class Evilution::Runner::MutationExecutor
   # misclassify real mutation NameError/LoadError as :neutral.
   INFRA_ERROR_CLASSES = %w[LoadError NameError].freeze
   INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
-  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
+  # Exception classes that indicate infra contention rather than mutation-caused
+  # failure. ActiveRecord::StatementTimeout and friends surface under parallel
+  # workers sharing a DB file; Timeout::Error on slow CI. These are promoted
+  # from CrashDetector as :killed by fork.rb; without this neutralization the
+  # kill count inflates with infra noise. See EV-toid / GH #814.
+  INFRA_CRASH_CLASSES = %w[
+    Timeout::Error
+    ActiveRecord::StatementTimeout
+    ActiveRecord::Deadlocked
+    ActiveRecord::ConnectionTimeoutError
+    ActiveRecord::LockWaitTimeout
+    SQLite3::BusyException
+  ].freeze
+  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS, :INFRA_CRASH_CLASSES
 
   def neutralize_if_infra_error(result)
+    return neutralize(result) if infra_crash?(result)
     return result unless result.error?
     return result unless INFRA_ERROR_CLASSES.include?(result.error_class)
     return result unless infra_origin?(result.error_backtrace)
 
     neutralize(result)
+  end
+
+  def infra_crash?(result)
+    result.killed? && INFRA_CRASH_CLASSES.include?(result.error_class)
   end
 
   def infra_origin?(backtrace)
