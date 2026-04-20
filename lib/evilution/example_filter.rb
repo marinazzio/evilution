@@ -8,11 +8,12 @@ class Evilution::ExampleFilter
   VALID_FALLBACKS = %i[full_file unresolved].freeze
   private_constant :VALID_FALLBACKS
 
-  def initialize(cache:, fallback: :full_file)
+  def initialize(cache:, fallback: :full_file, source_cache: nil)
     raise ArgumentError, "invalid fallback: #{fallback.inspect}" unless VALID_FALLBACKS.include?(fallback)
 
     @cache = cache
     @fallback = fallback
+    @source_cache = source_cache
   end
 
   def call(mutation, spec_paths)
@@ -37,7 +38,11 @@ class Evilution::ExampleFilter
   end
 
   def extract_token(mutation)
-    result = Prism.parse(mutation.original_source)
+    result = if @source_cache.nil?
+               Prism.parse(mutation.original_source)
+             else
+               @source_cache.fetch(mutation.original_source)
+             end
     return nil if result.failure?
 
     finder = EnclosingNodeFinder.new(mutation.line)

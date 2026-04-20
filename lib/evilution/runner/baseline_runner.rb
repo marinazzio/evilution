@@ -6,6 +6,7 @@ require_relative "../integration/rspec"
 require_relative "../integration/minitest"
 require_relative "../example_filter"
 require_relative "../spec_ast_cache"
+require_relative "../source_ast_cache"
 
 class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
@@ -71,7 +72,8 @@ class Evilution::Runner::BaselineRunner
 
     Evilution::ExampleFilter.new(
       cache: Evilution::SpecAstCache.new(**config.example_targeting_cache),
-      fallback: config.example_targeting_fallback
+      fallback: config.example_targeting_fallback,
+      source_cache: Evilution::SourceAstCache.new
     )
   end
 
