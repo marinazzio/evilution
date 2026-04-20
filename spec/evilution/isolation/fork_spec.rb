@@ -212,6 +212,23 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_backtrace).to eq(["foo.rb:1"])
     end
 
+    # Regression for EV-r77x / GH #788: Rails sets Encoding.default_internal to
+    # UTF-8, which forces text-mode IO#write to transcode ASCII-8BIT payloads
+    # (Marshal output) into UTF-8. High bytes fail. Pipes must be in binmode.
+    it "round-trips binary Marshal payloads with Encoding.default_internal=UTF-8" do
+      original = Encoding.default_internal
+      Encoding.default_internal = Encoding::UTF_8
+      test_command = lambda do |_m|
+        { passed: true, blob: String.new("\xDB", encoding: Encoding::ASCII_8BIT) }
+      end
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result).to be_survived
+    ensure
+      Encoding.default_internal = original
+    end
+
     it "records duration" do
       test_command = ->(_m) { { passed: false } }
 
