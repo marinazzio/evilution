@@ -220,6 +220,18 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.duration).to be > 0
     end
 
+    it "reaps the child even when wait_for_result raises (zombie-on-raise hardening)" do
+      test_command = ->(_m) { { passed: true } }
+      allow(isolator).to receive(:wait_for_result).and_raise(TypeError, "corrupt payload")
+      allow(Process).to receive(:waitpid).and_call_original
+
+      expect do
+        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      end.to raise_error(TypeError)
+
+      expect(Process).to have_received(:waitpid).at_least(:once)
+    end
+
     it "passes test_command from result to MutationResult" do
       test_command = ->(_m) { { passed: false, test_command: "rspec --format progress spec" } }
 

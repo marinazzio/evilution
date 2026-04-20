@@ -15,6 +15,7 @@ class Evilution::Isolation::Fork
   end
 
   def call(mutation:, test_command:, timeout:)
+    pid = nil
     sandbox_dir = Dir.mktmpdir("evilution-run")
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     parent_rss = Evilution::Memory.rss_kb
@@ -39,6 +40,7 @@ class Evilution::Isolation::Fork
   ensure
     read_io&.close
     write_io&.close
+    ensure_reaped(pid)
     restore_original_source(mutation)
     FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
@@ -80,6 +82,22 @@ class Evilution::Isolation::Fork
       terminate_child(pid)
       { timeout: true }
     end
+  end
+
+  # Defensive reap: if normal control flow raised before wait_for_result
+  # reaped the child (e.g. Marshal.load on corrupt payload), the child becomes
+  # a zombie. Reuse terminate_child for the bounded TERM + GRACE_PERIOD + KILL
+  # ladder so this never hangs the ensure path; swallow SystemCallError so
+  # cleanup can't mask the primary failure.
+  def ensure_reaped(pid)
+    return unless pid
+
+    reaped = ::Process.waitpid(pid, ::Process::WNOHANG)
+    return if reaped
+
+    terminate_child(pid)
+  rescue SystemCallError
+    nil
   end
 
   def terminate_child(pid)
