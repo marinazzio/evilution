@@ -81,10 +81,18 @@ class Evilution::Parallel::WorkQueue
   end
 
   def spawn_workers(count, &block)
-    count.times.map { spawn_one_worker(&block) }
+    count.times.map { |slot| spawn_one_worker(worker_index: slot, &block) }
   end
 
-  def spawn_one_worker(&block)
+  # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
+  # TEST_ENV_NUMBER convention ("" for slot 0, "2" for slot 1, ...). Rails
+  # apps interpolating TEST_ENV_NUMBER into database.yml get per-worker
+  # SQLite files, avoiding lock contention under jobs > 1.
+  def test_env_number_for(worker_index)
+    worker_index.zero? ? "" : (worker_index + 1).to_s
+  end
+
+  def spawn_one_worker(worker_index:, &block)
     cmd_read, cmd_write = IO.pipe
     res_read, res_write = IO.pipe
     # Marshal payloads are ASCII-8BIT; pipes default to text mode and may
@@ -97,13 +105,14 @@ class Evilution::Parallel::WorkQueue
     pid = Process.fork do
       cmd_write.close
       res_read.close
+      ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
       worker_loop(cmd_read, res_write, &block)
     end
 
     cmd_read.close
     res_write.close
 
-    { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0, pending: 0 }
+    { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0, pending: 0, worker_index: worker_index }
   end
 
   def worker_loop(cmd_read, res_write, &block)
@@ -231,7 +240,7 @@ class Evilution::Parallel::WorkQueue
     result_ios.delete(old_worker[:res_read])
     retire_worker(old_worker)
 
-    new_worker = spawn_one_worker(&@block)
+    new_worker = spawn_one_worker(worker_index: old_worker[:worker_index], &@block)
     workers[workers.index(old_worker)] = new_worker
     io_to_worker[new_worker[:res_read]] = new_worker
     result_ios << new_worker[:res_read]

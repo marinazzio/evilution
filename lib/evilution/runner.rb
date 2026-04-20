@@ -21,6 +21,7 @@ require_relative "parallel/pool"
 require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"
+require_relative "parallel_db_warning"
 require_relative "runner/subject_pipeline"
 require_relative "runner/mutation_planner"
 require_relative "runner/isolation_resolver"
@@ -43,6 +44,7 @@ class Evilution::Runner
 
   def call
     install_signal_handlers
+    emit_parallel_db_warning
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     subjects = subject_pipeline.call
@@ -148,6 +150,10 @@ class Evilution::Runner
 
   def run_mutations(mutations, baseline_result = nil)
     mutation_executor.call(mutations, baseline_result)
+  end
+
+  def emit_parallel_db_warning
+    Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
   end
 
   def install_signal_handlers

@@ -445,6 +445,24 @@ bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
 
 Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only when you care about the exit code and do not need JSON output.
 
+## Parallel Runs with SQLite
+
+Running with `-j N` forks worker processes. If your Rails app uses SQLite, every worker opens the same `db/test.sqlite3` file, and concurrent writers collide on the database-level lock. Symptoms: `ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, and slow runs. Evilution classifies these crashes as `:neutral` (see [EV-toid / #814](https://github.com/taxdome/evilution/issues/814)) so the mutation score is not polluted, but the wall-clock penalty remains.
+
+Evilution follows the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention: each worker receives a `TEST_ENV_NUMBER` environment variable (`""` for worker 1, `"2"` for worker 2, `"3"` for worker 3, …). Interpolate it into `config/database.yml` so each worker gets its own SQLite file:
+
+```yaml
+test:
+  adapter: sqlite3
+  database: db/test<%= ENV['TEST_ENV_NUMBER'] %>.sqlite3
+  pool: 5
+  timeout: 5000
+```
+
+After the first `jobs > 1` run, each worker creates its own file (`db/test.sqlite3`, `db/test2.sqlite3`, …). Seed each with `rake db:test:prepare` before running Evilution, or ensure your preload sets up schema on connect.
+
+When Evilution detects a parallel run against a SQLite-backed `config/database.yml`, it prints a one-time startup warning pointing to this section.
+
 ## Development
 
 ### Memory leak check
