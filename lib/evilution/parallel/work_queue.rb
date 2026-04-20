@@ -21,31 +21,31 @@ class Evilution::Parallel::WorkQueue
     end
   end
 
-  def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil)
-    raise ArgumentError, "pool size must be a positive integer, got #{size.inspect}" unless size.is_a?(Integer) && size >= 1
-    raise ArgumentError, "prefetch must be a positive integer, got #{prefetch.inspect}" unless prefetch.is_a?(Integer) && prefetch >= 1
-    unless item_timeout.nil? || (item_timeout.is_a?(Numeric) && item_timeout.positive?)
-      raise ArgumentError, "item_timeout must be nil or a positive number, got #{item_timeout.inspect}"
-    end
-
+  def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
+    validate_init_args(size, prefetch, item_timeout, worker_max_items)
     @size = size
     @hooks = hooks
     @prefetch = prefetch
     @item_timeout = item_timeout
+    @worker_max_items = worker_max_items
     @worker_stats = []
   end
 
-  def map(items, &)
+  def map(items, &block)
     return [] if items.empty?
 
+    @block = block
+    @retired_workers = []
     worker_count = [@size, items.length].min
-    workers = spawn_workers(worker_count, &)
+    workers = spawn_workers(worker_count, &block)
 
     begin
       distribute_and_collect(items, workers)
     ensure
       shutdown_workers(workers)
-      @worker_stats = build_worker_stats(workers)
+      @worker_stats = @retired_workers + build_worker_stats(workers)
+      @block = nil
+      @retired_workers = nil
     end
   end
 
@@ -55,28 +55,55 @@ class Evilution::Parallel::WorkQueue
 
   private
 
-  def spawn_workers(count, &)
-    count.times.map do
-      cmd_read, cmd_write = IO.pipe
-      res_read, res_write = IO.pipe
-      # Marshal payloads are ASCII-8BIT; pipes default to text mode and may
-      # transcode according to their external/internal encodings (influenced by
-      # Encoding.default_external and/or Encoding.default_internal — Rails sets
-      # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
-      # all four ends.
-      [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
+  def validate_init_args(size, prefetch, item_timeout, worker_max_items)
+    validate_positive_int!(:size, size)
+    validate_positive_int!(:prefetch, prefetch)
+    validate_optional_positive_number!(:item_timeout, item_timeout)
+    validate_optional_positive_int!(:worker_max_items, worker_max_items)
+  end
 
-      pid = Process.fork do
-        cmd_write.close
-        res_read.close
-        worker_loop(cmd_read, res_write, &)
-      end
+  def validate_positive_int!(name, value)
+    return if value.is_a?(Integer) && value >= 1
 
-      cmd_read.close
-      res_write.close
+    raise ArgumentError, "#{name} must be a positive integer, got #{value.inspect}"
+  end
 
-      { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0, pending: 0 }
+  def validate_optional_positive_int!(name, value)
+    return if value.nil? || (value.is_a?(Integer) && value.positive?)
+
+    raise ArgumentError, "#{name} must be nil or a positive integer, got #{value.inspect}"
+  end
+
+  def validate_optional_positive_number!(name, value)
+    return if value.nil? || (value.is_a?(Numeric) && value.positive?)
+
+    raise ArgumentError, "#{name} must be nil or a positive number, got #{value.inspect}"
+  end
+
+  def spawn_workers(count, &block)
+    count.times.map { spawn_one_worker(&block) }
+  end
+
+  def spawn_one_worker(&block)
+    cmd_read, cmd_write = IO.pipe
+    res_read, res_write = IO.pipe
+    # Marshal payloads are ASCII-8BIT; pipes default to text mode and may
+    # transcode according to their external/internal encodings (influenced by
+    # Encoding.default_external and/or Encoding.default_internal — Rails sets
+    # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
+    # all four ends.
+    [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
+
+    pid = Process.fork do
+      cmd_write.close
+      res_read.close
+      worker_loop(cmd_read, res_write, &block)
     end
+
+    cmd_read.close
+    res_write.close
+
+    { pid: pid, cmd_write: cmd_write, res_read: res_read, items_completed: 0, pending: 0 }
   end
 
   def worker_loop(cmd_read, res_write, &block)
@@ -141,31 +168,107 @@ class Evilution::Parallel::WorkQueue
       end
 
       readable.each do |io|
-        alive = handle_result(io, io_to_worker[io], items, state)
+        alive = handle_result(io, io_to_worker[io], items, state, workers, io_to_worker, result_ios)
         result_ios.delete(io) unless alive
       end
     end
   end
 
-  def handle_result(io, worker, items, state)
+  def handle_result(io, worker, items, state, workers, io_to_worker, result_ios)
     message = read_result(io)
+    return handle_dead_worker(worker, state) if message.nil?
 
-    if message.nil?
-      state.first_error = Evilution::Error.new("worker process exited unexpectedly") if state.first_error.nil?
-      state.in_flight -= worker[:pending]
-      worker[:pending] = 0
-      return false
-    end
+    record_result(message, worker, state)
+    return false if recycle_and_dispatch(worker, items, state, workers, io_to_worker, result_ios)
+    return true if draining_for_recycle?(worker)
 
+    send_item(worker, items, state) if state.next_index < items.length && state.first_error.nil?
+    true
+  end
+
+  # Once worker hits K, stop dispatching so pending drains to 0; recycle fires
+  # on the next result. Prevents prefetch > 1 from refilling pending forever.
+  def draining_for_recycle?(worker)
+    @worker_max_items && worker[:items_completed] >= @worker_max_items && worker[:pending].positive?
+  end
+
+  def handle_dead_worker(worker, state)
+    state.first_error = Evilution::Error.new("worker process exited unexpectedly") if state.first_error.nil?
+    state.in_flight -= worker[:pending]
+    worker[:pending] = 0
+    false
+  end
+
+  def record_result(message, worker, state)
     index, status, value = message
     state.first_error = value if status == :error && state.first_error.nil?
     state.results[index] = value if status == :ok
     state.in_flight -= 1
     worker[:pending] -= 1
     worker[:items_completed] += 1
+  end
 
-    send_item(worker, items, state) if state.next_index < items.length && state.first_error.nil?
+  def recycle_and_dispatch(worker, items, state, workers, io_to_worker, result_ios)
+    return false unless should_recycle?(worker, state, items)
+
+    new_worker = recycle_worker(worker, workers, io_to_worker, result_ios)
+    send_item(new_worker, items, state) if state.next_index < items.length && state.first_error.nil?
     true
+  end
+
+  def should_recycle?(worker, state, items)
+    return false unless @worker_max_items
+    return false if worker[:items_completed] < @worker_max_items
+    return false unless worker[:pending].zero?
+    return false unless state.next_index < items.length
+    return false unless state.first_error.nil?
+
+    true
+  end
+
+  def recycle_worker(old_worker, workers, io_to_worker, result_ios)
+    io_to_worker.delete(old_worker[:res_read])
+    result_ios.delete(old_worker[:res_read])
+    retire_worker(old_worker)
+
+    new_worker = spawn_one_worker(&@block)
+    workers[workers.index(old_worker)] = new_worker
+    io_to_worker[new_worker[:res_read]] = new_worker
+    result_ios << new_worker[:res_read]
+
+    new_worker
+  end
+
+  def retire_worker(worker)
+    begin
+      write_message(worker[:cmd_write], SHUTDOWN)
+    rescue Errno::EPIPE
+      nil
+    end
+
+    busy, wall = drain_worker_stats(worker)
+
+    worker[:cmd_write].close unless worker[:cmd_write].closed?
+    worker[:res_read].close unless worker[:res_read].closed?
+    begin
+      Process.wait(worker[:pid])
+    rescue Errno::ECHILD
+      nil
+    end
+
+    @retired_workers << WorkerStat.new(worker[:pid], worker[:items_completed], busy, wall)
+  end
+
+  def drain_worker_stats(worker)
+    return [0.0, 0.0] unless worker[:res_read].wait_readable(TIMING_GRACE_PERIOD)
+
+    message = read_result(worker[:res_read])
+    return [0.0, 0.0] if message.nil?
+
+    tag, busy_time, wall_time = message
+    return [0.0, 0.0] unless tag == STATS
+
+    [busy_time, wall_time]
   end
 
   def send_item(worker, items, state)
