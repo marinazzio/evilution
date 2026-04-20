@@ -45,6 +45,7 @@ class Evilution::Parallel::WorkQueue
       shutdown_workers(workers)
       @worker_stats = @retired_workers + build_worker_stats(workers)
       @block = nil
+      @retired_workers = nil
     end
   end
 
@@ -179,9 +180,16 @@ class Evilution::Parallel::WorkQueue
 
     record_result(message, worker, state)
     return false if recycle_and_dispatch(worker, items, state, workers, io_to_worker, result_ios)
+    return true if draining_for_recycle?(worker)
 
     send_item(worker, items, state) if state.next_index < items.length && state.first_error.nil?
     true
+  end
+
+  # Once worker hits K, stop dispatching so pending drains to 0; recycle fires
+  # on the next result. Prevents prefetch > 1 from refilling pending forever.
+  def draining_for_recycle?(worker)
+    @worker_max_items && worker[:items_completed] >= @worker_max_items && worker[:pending].positive?
   end
 
   def handle_dead_worker(worker, state)

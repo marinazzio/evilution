@@ -359,6 +359,26 @@ RSpec.describe Evilution::Parallel::WorkQueue do
 
         expect(results).to eq([10, 20, 30, 40, 50, 60])
       end
+
+      # Regression for Copilot #792: prefetch > 1 replenished pending on every
+      # result, so `pending == 0` never held and recycling silently skipped.
+      # Fix drains dispatch once items_completed >= K; overshoot bounded by prefetch.
+      it "still recycles when prefetch keeps pending refilled" do
+        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 2)
+        queue.map([1, 2, 3, 4, 5, 6]) { |_n| Process.pid }
+
+        stats = queue.worker_stats
+        expect(stats.length).to be >= 2
+        expect(stats.map(&:items_completed).max).to be <= 2 + 2 - 1
+      end
+
+      it "bounds per-worker overshoot by prefetch when prefetch > worker_max_items" do
+        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 4)
+        queue.map([1, 2, 3, 4, 5, 6, 7, 8]) { |n| n }
+
+        stats = queue.worker_stats
+        expect(stats.map(&:items_completed).max).to be <= 2 + 4 - 1
+      end
     end
 
     context "with worker stats" do
