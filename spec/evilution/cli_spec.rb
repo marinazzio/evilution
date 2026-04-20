@@ -1237,14 +1237,17 @@ RSpec.describe Evilution::CLI do
     let(:mutant_path) { "#{fixture_dir}/mutant.json" }
     let(:evilution_path) { "#{fixture_dir}/evilution.json" }
 
-    it "returns exit code 0 and emits JSON with both tool payloads (positional)" do
+    it "returns exit code 0 and emits bucketed JSON (positional)" do
       cli = described_class.new(["compare", mutant_path, evilution_path])
       output = capture_stdout { expect(cli.call).to eq(0) }
       parsed = JSON.parse(output)
 
-      expect(parsed.keys).to match_array(%w[against current])
-      expect(parsed["against"]["tool"]).to eq("mutant")
-      expect(parsed["current"]["tool"]).to eq("evilution")
+      expect(parsed.keys).to include("schema", "summary", "shared_dead", "shared_alive",
+                                     "alive_only_against", "alive_only_current")
+      expect(parsed["summary"]["shared_dead"]).to eq(3)
+      expect(parsed["summary"]["shared_alive"]).to eq(1)
+      expect(parsed["summary"]["alive_only_against"]).to eq(0)
+      expect(parsed["summary"]["alive_only_current"]).to eq(0)
     end
 
     it "respects --against and --current flags" do
@@ -1252,8 +1255,15 @@ RSpec.describe Evilution::CLI do
       output = capture_stdout { expect(cli.call).to eq(0) }
       parsed = JSON.parse(output)
 
-      expect(parsed["against"]["path"]).to eq(mutant_path)
-      expect(parsed["current"]["path"]).to eq(evilution_path)
+      expect(parsed["summary"]["shared_dead"]).to eq(3)
+      expect(parsed["summary"]["shared_alive"]).to eq(1)
+    end
+
+    it "renders text output when --format text is given" do
+      cli = described_class.new(["compare", "--format", "text", mutant_path, evilution_path])
+      output = capture_stdout { expect(cli.call).to eq(0) }
+
+      expect(output).to include("Compare results")
     end
 
     it "returns exit code 2 with message when fewer than two files given" do
