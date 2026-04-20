@@ -6,9 +6,9 @@ require "evilution/compare/record"
 require "evilution/cli/printers/compare"
 
 RSpec.describe Evilution::CLI::Printers::Compare do
-  def record(fp:, file: "lib/x.rb", line: 1, operator: "Op::Swap", status: :survived)
+  def record(fp:, file: "lib/x.rb", line: 1, operator: "Op::Swap", status: :survived, source: :evilution)
     Evilution::Compare::Record.new(
-      source: :evilution, file_path: file, line: line, status: status,
+      source: source, file_path: file, line: line, status: status,
       fingerprint: fp, operator: operator, diff_body: "", raw: {}
     )
   end
@@ -93,6 +93,23 @@ RSpec.describe Evilution::CLI::Printers::Compare do
       described_class.new(buckets, format: :json).render(io)
       entry = JSON.parse(io.string)["shared_alive"].first
       expect(entry).to eq(["lib/qux.rb", 3, "Cond::Flip", "789abcdeeee"])
+    end
+
+    it "fills shared operator from the peer side when against is mutant-sourced (nil)" do
+      shared = {
+        alive_only_against: [],
+        alive_only_current: [],
+        shared_alive: [{
+          against: record(fp: "fp1", operator: nil, source: :mutant),
+          current: record(fp: "fp1", operator: "Arith::Swap")
+        }],
+        shared_dead: [],
+        excluded_against: 0,
+        excluded_current: 0
+      }
+      described_class.new(shared, format: :json).render(io)
+      entry = JSON.parse(io.string)["shared_alive"].first
+      expect(entry[2]).to eq("Arith::Swap")
     end
 
     it "renders nil operator as JSON null" do

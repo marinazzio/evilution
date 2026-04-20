@@ -13,7 +13,21 @@ module Evilution::Compare::Categorizer
 
   # @param against [Array<Record>] prior run (baseline)
   # @param current [Array<Record>] current run
-  # @return [Hash] see module docs for bucket structure
+  # @return [Hash] bucketed comparison result with keys:
+  #   - `:alive_only_against` => `Array<{record: Record, peer_status: Symbol|nil}>`
+  #     records that survived in against but not in current (or absent in current).
+  #     `peer_status` is the current-side record's status symbol, or `nil` when
+  #     no current-side record exists for that fingerprint.
+  #   - `:alive_only_current` => `Array<{record: Record, peer_status: Symbol|nil}>`
+  #     mirror of the above from the current side.
+  #   - `:shared_alive` => `Array<{against: Record, current: Record}>`
+  #     mutations that survived in both runs.
+  #   - `:shared_dead` => `Array<{against: Record, current: Record}>`
+  #     mutations killed/timed-out/errored in both runs.
+  #   - `:excluded_against` => `Integer`
+  #     count of against records with non-actionable statuses (neutral,
+  #     equivalent, unresolved, unparseable).
+  #   - `:excluded_current` => `Integer` mirror for the current side.
   def call(against, current)
     # Duplicate fingerprints within one side should not happen (Normalizer
     # invariant). If they do, last write wins — we do not dedupe proactively.

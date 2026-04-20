@@ -110,7 +110,14 @@ class Evilution::CLI::Printers::Compare
 
   def shared_entry_array(entry)
     r = entry[:against]
-    [r.file_path, r.line, r.operator, r.fingerprint]
+    [r.file_path, r.line, shared_operator(entry), r.fingerprint]
+  end
+
+  # Mutant-sourced records always have operator=nil. When comparing mutant
+  # vs evilution, prefer whichever side has an operator so the shared row
+  # stays informative.
+  def shared_operator(entry)
+    entry[:against].operator || entry[:current].operator
   end
 
   def print_alive_block(io, bucket_key, peer_side_label)
@@ -140,13 +147,13 @@ class Evilution::CLI::Printers::Compare
 
   def format_shared_row(entry)
     r = entry[:against]
-    "  #{row_prefix(r)}"
+    "  #{row_prefix(r, operator: shared_operator(entry))}"
   end
 
-  def row_prefix(record)
+  def row_prefix(record, operator: record.operator)
     file_line = "#{record.file_path}:#{record.line}"
-    operator  = record.operator || MUTANT_OPERATOR
+    op_label  = operator || MUTANT_OPERATOR
     fp        = record.fingerprint.to_s[0, FP_LENGTH]
-    "#{file_line.ljust(FILE_LINE_WIDTH)}#{operator.ljust(OPERATOR_WIDTH)}#{fp}"
+    "#{file_line.ljust(FILE_LINE_WIDTH)}#{op_label.ljust(OPERATOR_WIDTH)}#{fp}"
   end
 end
