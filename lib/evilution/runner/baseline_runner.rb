@@ -44,15 +44,6 @@ class Evilution::Runner::BaselineRunner
     klass.new(**kwargs)
   end
 
-  def build_example_filter
-    return nil unless config.example_targeting?
-
-    Evilution::ExampleFilter.new(
-      cache: Evilution::SpecAstCache.new(**config.example_targeting_cache),
-      fallback: config.example_targeting_fallback
-    )
-  end
-
   def call(subjects)
     return nil unless config.baseline? && subjects.any?
 
@@ -74,6 +65,15 @@ class Evilution::Runner::BaselineRunner
   private
 
   attr_reader :config, :hooks
+
+  def build_example_filter
+    return nil unless config.example_targeting?
+
+    Evilution::ExampleFilter.new(
+      cache: Evilution::SpecAstCache.new(**config.example_targeting_cache),
+      fallback: config.example_targeting_fallback
+    )
+  end
 
   def log_start
     return if config.quiet || !config.text? || !$stderr.tty?

@@ -797,6 +797,18 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(RSpec::Core::Runner).not_to have_received(:run)
     end
 
+    it "distinguishes example-targeting nil from spec-resolver nil in the error message" do
+      allow(example_filter).to receive(:call).and_return(nil)
+      filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run)
+
+      result = filtered.call(mutation)
+
+      expect(result[:error]).to match(/no matching example/i)
+      expect(result[:error]).not_to match(/no matching spec/i)
+      expect(result[:test_command]).to match(/example/i)
+    end
+
     it "falls back to plain spec paths when filter returns original spec_paths array" do
       allow(example_filter).to receive(:call)
         .with(mutation, ["spec/some_spec.rb"])

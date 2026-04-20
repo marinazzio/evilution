@@ -65,7 +65,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     return unresolved_result(mutation) if files.nil?
 
     targets = apply_example_filter(mutation, files)
-    return unresolved_result(mutation) if targets.nil?
+    return unresolved_example_result(mutation) if targets.nil?
 
     out = StringIO.new
     err = StringIO.new
@@ -103,6 +103,15 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       unresolved: true,
       error: "no matching spec resolved for #{mutation.file_path}",
       test_command: "rspec (skipped: no spec resolved for #{mutation.file_path})"
+    }
+  end
+
+  def unresolved_example_result(mutation)
+    {
+      passed: false,
+      unresolved: true,
+      error: "no matching example found for #{mutation.file_path}",
+      test_command: "rspec (skipped: no matching example for #{mutation.file_path})"
     }
   end
 
