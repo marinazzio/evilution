@@ -42,6 +42,7 @@ class Evilution::Runner::MutationExecutor
     mutations.each_with_index do |mutation, index|
       result = execute_one(mutation, integration)
       mutation.strip_sources!
+      result = neutralize_if_infra_error(result)
       result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
       results << result
       survived_count += 1 if result.survived?
@@ -106,6 +107,7 @@ class Evilution::Runner::MutationExecutor
 
   def process_batch(batch_results, baseline_result, spec_resolver, state)
     batch_results.each do |result|
+      result = neutralize_if_infra_error(result)
       result = neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
       state[:results] << result
       state[:survived_count] += 1 if result.survived?
@@ -117,17 +119,32 @@ class Evilution::Runner::MutationExecutor
     state[:truncated] = true if should_truncate?(state[:survived_count])
   end
 
-  def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
-    return result unless result.survived? && baseline_result && baseline_result.failed?
+  # Reclassify mutation :error results as :neutral when the signature points to
+  # test-infrastructure (missing require, spec_helper/rails_helper load failure,
+  # spec/support initialization) rather than a behavior change caused by the
+  # mutation itself. Keeps the kill-score signal uncontaminated by environment
+  # problems unrelated to the mutation.
+  INFRA_ERROR_CLASSES = %w[LoadError].freeze
+  INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
+  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
 
-    if config.spec_files.any?
-      neutralize = true
-    else
-      spec_file = spec_resolver.call(result.mutation.file_path) || baseline_runner.neutralization_fallback_dir
-      neutralize = baseline_result.failed_spec_files.include?(spec_file)
-    end
-    return result unless neutralize
+  def neutralize_if_infra_error(result)
+    return result unless result.error?
+    return neutralize(result) if infra_error_class?(result.error_class)
+    return neutralize(result) if result.error_class == "NameError" && infra_backtrace?(result.error_backtrace)
 
+    result
+  end
+
+  def infra_error_class?(error_class)
+    INFRA_ERROR_CLASSES.include?(error_class)
+  end
+
+  def infra_backtrace?(backtrace)
+    Array(backtrace).any? { |frame| frame =~ INFRA_BACKTRACE_PATHS }
+  end
+
+  def neutralize(result)
     Evilution::Result::MutationResult.new(
       mutation: result.mutation,
       status: :neutral,
@@ -140,6 +157,20 @@ class Evilution::Runner::MutationExecutor
       error_class: result.error_class,
       error_backtrace: result.error_backtrace
     )
+  end
+
+  def neutralize_if_baseline_failed(result, baseline_result, spec_resolver)
+    return result unless result.survived? && baseline_result && baseline_result.failed?
+
+    if config.spec_files.any?
+      should_neutralize = true
+    else
+      spec_file = spec_resolver.call(result.mutation.file_path) || baseline_runner.neutralization_fallback_dir
+      should_neutralize = baseline_result.failed_spec_files.include?(spec_file)
+    end
+    return result unless should_neutralize
+
+    neutralize(result)
   end
 
   def compact_result(result)
