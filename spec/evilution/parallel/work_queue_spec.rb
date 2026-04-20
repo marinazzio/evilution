@@ -570,5 +570,47 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       tmpfile&.close
       tmpfile&.unlink
     end
+
+    # EV-kdns / GH #817: set TEST_ENV_NUMBER per worker following the
+    # parallel_tests convention ("" for slot 0, "2" for slot 1, "3" for slot 2,
+    # ...). Rails apps whose config/database.yml interpolates TEST_ENV_NUMBER
+    # then automatically get one SQLite file per worker, avoiding lock
+    # contention under jobs > 1.
+    context "with TEST_ENV_NUMBER (parallel_tests convention)" do
+      it "sets TEST_ENV_NUMBER inside each worker process" do
+        queue = described_class.new(size: 3)
+        results = queue.map([1, 2, 3, 4, 5, 6]) { |_n| [Process.pid, ENV.fetch("TEST_ENV_NUMBER", nil)] }
+
+        pairs = results.uniq
+        grouped = pairs.group_by(&:first)
+        grouped.each_value { |pair_list| expect(pair_list.map(&:last).uniq.size).to eq(1) }
+
+        env_values = pairs.map(&:last).uniq.sort
+        expect(env_values).to eq(["", "2", "3"])
+      end
+
+      it "preserves TEST_ENV_NUMBER across worker recycling" do
+        queue = described_class.new(size: 1, worker_max_items: 2)
+        results = queue.map([1, 2, 3, 4, 5, 6]) { |_n| [Process.pid, ENV.fetch("TEST_ENV_NUMBER", nil)] }
+
+        pids = results.map(&:first).uniq
+        env_values = results.map(&:last).uniq
+
+        expect(pids.size).to be >= 2
+        expect(env_values).to eq([""])
+      end
+
+      it "does not leak TEST_ENV_NUMBER into the parent process" do
+        original = ENV.fetch("TEST_ENV_NUMBER", :unset)
+        queue = described_class.new(size: 2)
+        queue.map([1, 2]) { |_n| ENV.fetch("TEST_ENV_NUMBER", nil) }
+
+        if original == :unset
+          expect(ENV).not_to have_key("TEST_ENV_NUMBER")
+        else
+          expect(ENV.fetch("TEST_ENV_NUMBER")).to eq(original)
+        end
+      end
+    end
   end
 end
