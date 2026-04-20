@@ -1231,4 +1231,43 @@ RSpec.describe Evilution::CLI do
       expect(output).to include("diff")
     end
   end
+
+  describe "compare command" do
+    let(:fixture_dir) { File.expand_path("../support/fixtures/compare", __dir__) }
+    let(:mutant_path) { "#{fixture_dir}/mutant.json" }
+    let(:evilution_path) { "#{fixture_dir}/evilution.json" }
+
+    it "returns exit code 0 and emits JSON with both tool payloads (positional)" do
+      cli = described_class.new(["compare", mutant_path, evilution_path])
+      output = capture_stdout { expect(cli.call).to eq(0) }
+      parsed = JSON.parse(output)
+
+      expect(parsed.keys).to match_array(%w[against current])
+      expect(parsed["against"]["tool"]).to eq("mutant")
+      expect(parsed["current"]["tool"]).to eq("evilution")
+    end
+
+    it "respects --against and --current flags" do
+      cli = described_class.new(["compare", "--against", mutant_path, "--current", evilution_path])
+      output = capture_stdout { expect(cli.call).to eq(0) }
+      parsed = JSON.parse(output)
+
+      expect(parsed["against"]["path"]).to eq(mutant_path)
+      expect(parsed["current"]["path"]).to eq(evilution_path)
+    end
+
+    it "returns exit code 2 with message when fewer than two files given" do
+      cli = described_class.new(["compare"])
+      stderr = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(stderr).to include("exactly two file paths required for compare")
+    end
+
+    it "returns exit code 2 when a file does not exist" do
+      cli = described_class.new(["compare", "nope/missing.json", evilution_path])
+      stderr = capture_stderr { expect(cli.call).to eq(2) }
+
+      expect(stderr).to include("file not found")
+    end
+  end
 end

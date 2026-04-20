@@ -96,4 +96,14 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     options, = parse(["--example-targeting-fallback", "unresolved"])
     expect(options[:example_targeting_fallback]).to eq("unresolved")
   end
+
+  it "captures --against path" do
+    options, = parse(["--against=prior.json"])
+    expect(options[:against]).to eq("prior.json")
+  end
+
+  it "captures --current path" do
+    options, = parse(["--current=curr.json"])
+    expect(options[:current]).to eq("curr.json")
+  end
 end
