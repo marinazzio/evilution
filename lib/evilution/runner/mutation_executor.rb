@@ -119,29 +119,33 @@ class Evilution::Runner::MutationExecutor
     state[:truncated] = true if should_truncate?(state[:survived_count])
   end
 
-  # Reclassify mutation :error results as :neutral when the signature points to
-  # test-infrastructure (missing require, spec_helper/rails_helper load failure,
-  # spec/support initialization) rather than a behavior change caused by the
-  # mutation itself. Keeps the kill-score signal uncontaminated by environment
-  # problems unrelated to the mutation.
-  INFRA_ERROR_CLASSES = %w[LoadError].freeze
+  # Reclassify mutation :error results as :neutral when both the error class
+  # and the exception origin (first backtrace frame) point to test
+  # infrastructure — missing require, spec_helper/rails_helper load failure,
+  # or spec/support initialization — rather than a behavior change caused by
+  # the mutation itself. Keeps the kill-score signal uncontaminated by
+  # environment problems unrelated to the mutation.
+  #
+  # Origin-only match (not `any?`): Ruby backtraces typically carry spec_helper
+  # frames below mutation-caused errors, so matching any frame would
+  # misclassify real mutation NameError/LoadError as :neutral.
+  INFRA_ERROR_CLASSES = %w[LoadError NameError].freeze
   INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
   private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
 
   def neutralize_if_infra_error(result)
     return result unless result.error?
-    return neutralize(result) if infra_error_class?(result.error_class)
-    return neutralize(result) if result.error_class == "NameError" && infra_backtrace?(result.error_backtrace)
+    return result unless INFRA_ERROR_CLASSES.include?(result.error_class)
+    return result unless infra_origin?(result.error_backtrace)
 
-    result
+    neutralize(result)
   end
 
-  def infra_error_class?(error_class)
-    INFRA_ERROR_CLASSES.include?(error_class)
-  end
+  def infra_origin?(backtrace)
+    frames = Array(backtrace)
+    return false if frames.empty?
 
-  def infra_backtrace?(backtrace)
-    Array(backtrace).any? { |frame| frame =~ INFRA_BACKTRACE_PATHS }
+    frames.first =~ INFRA_BACKTRACE_PATHS ? true : false
   end
 
   def neutralize(result)
