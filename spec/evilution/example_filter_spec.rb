@@ -3,6 +3,7 @@
 require "tempfile"
 require "evilution/example_filter"
 require "evilution/spec_ast_cache"
+require "evilution/source_ast_cache"
 
 RSpec.describe Evilution::ExampleFilter do
   before { @tempfiles = [] }
@@ -328,6 +329,58 @@ RSpec.describe Evilution::ExampleFilter do
                                  .call(mutation(original_source: top_level_src, line: 1), [spec_path])
 
       expect(locations).to be_nil
+    end
+  end
+
+  describe "source AST cache integration" do
+    let(:src) do
+      <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+    end
+    let(:spec_path) do
+      write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "exercises bar_method" do
+            Foo.new.bar_method
+          end
+        end
+      RUBY
+    end
+
+    it "parses mutation.original_source once when reused with a source_cache" do
+      source_cache = Evilution::SourceAstCache.new
+      filter_with_cache = described_class.new(cache: cache, source_cache: source_cache)
+
+      mutation_parse_count = 0
+      original = Prism.method(:parse)
+      allow(Prism).to receive(:parse) do |arg|
+        mutation_parse_count += 1 if arg == src
+        original.call(arg)
+      end
+
+      filter_with_cache.call(mutation(original_source: src, line: 3), [spec_path])
+      filter_with_cache.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(mutation_parse_count).to eq(1)
+    end
+
+    it "parses mutation.original_source per call when no source_cache is injected" do
+      mutation_parse_count = 0
+      original = Prism.method(:parse)
+      allow(Prism).to receive(:parse) do |arg|
+        mutation_parse_count += 1 if arg == src
+        original.call(arg)
+      end
+
+      filter.call(mutation(original_source: src, line: 3), [spec_path])
+      filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(mutation_parse_count).to eq(2)
     end
   end
 
