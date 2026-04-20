@@ -784,6 +784,18 @@ RSpec.describe Evilution::Config do
   end
 
   describe "example_targeting" do
+    around do |example|
+      original = ENV.fetch("EV_DISABLE_EXAMPLE_TARGETING", :__unset__)
+      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      example.run
+    ensure
+      if original == :__unset__
+        ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      else
+        ENV["EV_DISABLE_EXAMPLE_TARGETING"] = original
+      end
+    end
+
     it "defaults to true" do
       config = described_class.new(skip_config_file: true)
 
@@ -818,11 +830,8 @@ RSpec.describe Evilution::Config do
 
     it "is disabled when EV_DISABLE_EXAMPLE_TARGETING=1 in env" do
       ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
-      config = described_class.new(skip_config_file: true)
 
-      expect(config.example_targeting?).to be false
-    ensure
-      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be false
     end
 
     it "env overrides file config" do
@@ -832,37 +841,26 @@ RSpec.describe Evilution::Config do
           ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
 
           expect(described_class.new.example_targeting?).to be false
-        ensure
-          ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
         end
       end
     end
 
     it "CLI options override env var" do
       ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
-      config = described_class.new(example_targeting: true, skip_config_file: true)
 
-      expect(config.example_targeting?).to be true
-    ensure
-      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      expect(described_class.new(example_targeting: true, skip_config_file: true).example_targeting?).to be true
     end
 
     it "ignores empty env var" do
       ENV["EV_DISABLE_EXAMPLE_TARGETING"] = ""
-      config = described_class.new(skip_config_file: true)
 
-      expect(config.example_targeting?).to be true
-    ensure
-      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
     end
 
     it "ignores env var set to 0" do
       ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "0"
-      config = described_class.new(skip_config_file: true)
 
-      expect(config.example_targeting?).to be true
-    ensure
-      ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
+      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
     end
   end
 
@@ -904,6 +902,12 @@ RSpec.describe Evilution::Config do
     it "rejects nil" do
       expect do
         described_class.new(example_targeting_fallback: nil, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
+    end
+
+    it "rejects integer with ConfigError (not NoMethodError)" do
+      expect do
+        described_class.new(example_targeting_fallback: 42, skip_config_file: true)
       end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
     end
   end
@@ -963,6 +967,12 @@ RSpec.describe Evilution::Config do
       expect do
         described_class.new(example_targeting_cache: { max_blocks: -1 }, skip_config_file: true)
       end.to raise_error(Evilution::ConfigError, /max_blocks must be a positive integer/)
+    end
+
+    it "rejects non-string/symbol keys with ConfigError (not NoMethodError)" do
+      expect do
+        described_class.new(example_targeting_cache: { 42 => 1 }, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /example_targeting_cache keys must be/)
     end
   end
 

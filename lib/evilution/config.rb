@@ -396,21 +396,31 @@ class Evilution::Config
   end
 
   def validate_example_targeting_fallback(value)
-    raise Evilution::ConfigError, "example_targeting_fallback must be full_file or unresolved, got nil" if value.nil?
-
-    value = value.to_sym
-    unless EXAMPLE_TARGETING_FALLBACKS.include?(value)
+    unless value.is_a?(String) || value.is_a?(Symbol)
       raise Evilution::ConfigError,
             "example_targeting_fallback must be full_file or unresolved, got #{value.inspect}"
     end
 
-    value
+    sym = value.to_sym
+    unless EXAMPLE_TARGETING_FALLBACKS.include?(sym)
+      raise Evilution::ConfigError,
+            "example_targeting_fallback must be full_file or unresolved, got #{sym.inspect}"
+    end
+
+    sym
   end
 
   def validate_example_targeting_cache(value)
     raise Evilution::ConfigError, "example_targeting_cache must be a Hash, got #{value.class}" unless value.is_a?(Hash)
 
-    merged = DEFAULTS[:example_targeting_cache].merge(value.transform_keys(&:to_sym))
+    normalized = value.each_with_object({}) do |(k, v), acc|
+      unless k.is_a?(String) || k.is_a?(Symbol)
+        raise Evilution::ConfigError,
+              "example_targeting_cache keys must be Strings or Symbols, got #{k.inspect}"
+      end
+      acc[k.to_sym] = v
+    end
+    merged = DEFAULTS[:example_targeting_cache].merge(normalized)
     validate_positive_int!(merged, :max_files)
     validate_positive_int!(merged, :max_blocks)
     merged
