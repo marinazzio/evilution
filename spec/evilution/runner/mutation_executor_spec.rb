@@ -45,6 +45,13 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 0.01)
   end
 
+  def error_result(mutation, error_class:, error_message: "boom", error_backtrace: [])
+    Evilution::Result::MutationResult.new(
+      mutation: mutation, status: :error, duration: 0.01,
+      error_class: error_class, error_message: error_message, error_backtrace: error_backtrace
+    )
+  end
+
   describe "#call" do
     it "runs mutations sequentially when config.jobs is 1 and returns results + truncated flag" do
       cfg = config(jobs: 1)
@@ -132,6 +139,150 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       results, = executor.call([m], baseline)
 
       expect(results.first.status).to eq(:neutral)
+    end
+
+    describe "infra-error neutralization" do
+      it "neutralizes :error LoadError when origin frame is spec_helper" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "LoadError",
+                          error_message: "cannot load such file -- missing_gem",
+                          error_backtrace: ["spec/spec_helper.rb:3:in `require'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "keeps :error LoadError when origin frame is lib/ (mutation dynamic require)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "LoadError",
+                          error_backtrace: ["lib/foo.rb:5:in `require'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:error)
+      end
+
+      it "neutralizes :error NameError when origin frame is spec_helper" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "NameError",
+                          error_backtrace: ["spec/spec_helper.rb:15:in `<top (required)>'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "neutralizes :error NameError when origin frame is rails_helper" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "NameError",
+                          error_backtrace: ["spec/rails_helper.rb:8:in `block'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "neutralizes :error NameError when origin frame is spec/support" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "NameError",
+                          error_backtrace: ["spec/support/fixture_helpers.rb:42:in `let_it_be'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
+      it "keeps :error NameError with lib/ origin as error (mutation-caused)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "NameError",
+                          error_backtrace: ["lib/foo.rb:10:in `bar'", "lib/foo.rb:20:in `baz'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:error)
+      end
+
+      # Regression for Copilot #795: an `any?` backtrace match would wrongly
+      # neutralize this case — mutation-caused error in lib/ with spec_helper
+      # frames deeper in the stack (typical when the helper required the file).
+      it "keeps :error as error when origin is lib/ even if spec_helper appears later in backtrace" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "NameError",
+                          error_backtrace: ["lib/foo.rb:10:in `bar'",
+                                            "spec/spec_helper.rb:3:in `require'",
+                                            "spec/foo_spec.rb:5:in `block'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:error)
+      end
+
+      it "keeps :error with empty backtrace as error (no origin signal)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "LoadError", error_backtrace: [])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:error)
+      end
+
+      it "keeps :error ArgumentError as error (not in infra allowlist)" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          error_result(m, error_class: "ArgumentError",
+                          error_backtrace: ["spec/spec_helper.rb:1:in `<top>'"])
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:error)
+      end
+
+      it "does not affect non-error statuses" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(killed_result(m))
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:killed)
+      end
     end
   end
 end
