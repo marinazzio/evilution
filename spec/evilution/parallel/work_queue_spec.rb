@@ -183,6 +183,43 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       expect(results).to eq([10, 20])
     end
 
+    # Regression for EV-r77x / GH #788: Rails sets Encoding.default_internal to
+    # UTF-8, which forces text-mode IO#write to transcode ASCII-8BIT payloads
+    # (Marshal output) into UTF-8. High bytes (e.g. \xDB) have no UTF-8 mapping
+    # and the write raises Encoding::UndefinedConversionError, taking down all
+    # jobs>1 runs. Pipes must be in binmode so Marshal blobs pass through as
+    # opaque bytes.
+    context "with Encoding.default_internal set to UTF-8 (Rails-host parity)" do
+      around do |example|
+        original = Encoding.default_internal
+        Encoding.default_internal = Encoding::UTF_8
+        example.run
+      ensure
+        Encoding.default_internal = original
+      end
+
+      it "sends binary Marshal payloads to workers without encoding errors" do
+        queue = described_class.new(size: 2)
+        binary = String.new("\xDB", encoding: Encoding::ASCII_8BIT)
+        results = queue.map([binary, binary], &:bytesize)
+
+        expect(results).to eq([1, 1])
+      end
+
+      it "round-trips binary Marshal payloads back to the parent without encoding errors" do
+        queue = described_class.new(size: 2)
+        results = queue.map([1, 2]) do |_n|
+          String.new((0..255).map(&:chr).join, encoding: Encoding::ASCII_8BIT)
+        end
+
+        expect(results.length).to eq(2)
+        results.each do |r|
+          expect(r.bytesize).to eq(256)
+          expect(r.encoding).to eq(Encoding::ASCII_8BIT)
+        end
+      end
+    end
+
     context "with prefetch" do
       it "defaults prefetch to 1" do
         queue = described_class.new(size: 2)
