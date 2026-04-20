@@ -50,6 +50,14 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--spec-dir DIR", "Include all specs in DIR") { |d| expand_spec_dir(d) }
     opts.on("--spec-pattern GLOB",
             "Restrict resolved spec candidates to files matching GLOB") { |p| @options[:spec_pattern] = p }
+    opts.on("--no-example-targeting",
+            "Disable per-mutation example targeting (run all examples in resolved spec files)") do
+      @options[:example_targeting] = false
+    end
+    opts.on("--example-targeting-fallback MODE", %w[full_file unresolved],
+            "Fallback when example targeting finds no match: full_file (default) or unresolved") do |m|
+      @options[:example_targeting_fallback] = m
+    end
     opts.on("--target EXPR",
             "Filter: method (Foo#bar), type (Foo#/Foo.), namespace (Foo*),",
             "class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
