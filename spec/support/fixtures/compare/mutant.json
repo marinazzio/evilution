@@ -1,0 +1,55 @@
+{
+  "session_id": "018f0000-0000-7000-8000-000000000000",
+  "mutant_version": "0.12.4",
+  "ruby_version": "3.3.0",
+  "runtime": 5.2,
+  "killtime": 0.04,
+  "subject_results": [
+    {
+      "expression_syntax": "Calc#run",
+      "identification": "Calc#run:lib/calc.rb:5",
+      "source_path": "lib/calc.rb",
+      "source": "def run\n  a + b\nend",
+      "amount_mutations": 4,
+      "tests": ["Calc#run"],
+      "coverage_results": [
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:Calc#run:lib/calc.rb:5:a1b2c",
+            "mutation_type": "evil",
+            "mutation_diff": "--- Calc#run\n+++ Calc#run:evil:a1b2c\n@@ -1,3 +1,3 @@\n def run\n-  a + b\n+  a - b\n end",
+            "runtime": 0.01
+          },
+          "criteria_result": { "process_abort": false, "test_result": true, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:Calc#run:lib/calc.rb:10:b2c3d",
+            "mutation_type": "evil",
+            "mutation_diff": "--- Calc#run\n+++ Calc#run:evil:b2c3d\n@@ -1,3 +1,3 @@\n def run\n-  true\n+  false\n end",
+            "runtime": 0.01
+          },
+          "criteria_result": { "process_abort": false, "test_result": true, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:Calc#run:lib/calc.rb:15:c3d4e",
+            "mutation_type": "evil",
+            "mutation_diff": "--- Calc#run\n+++ Calc#run:evil:c3d4e\n@@ -1,3 +1,3 @@\n def run\n-  x * y\n+  x / y\n end",
+            "runtime": 0.02
+          },
+          "criteria_result": { "process_abort": false, "test_result": false, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:Calc#run:lib/calc.rb:20:d4e5f",
+            "mutation_type": "evil",
+            "mutation_diff": "--- Calc#run\n+++ Calc#run:evil:d4e5f\n@@ -1,3 +1,3 @@\n def run\n-  if ok\n+  unless ok\n end",
+            "runtime": 5.0
+          },
+          "criteria_result": { "process_abort": false, "test_result": false, "timeout": true }
+        }
+      ]
+    }
+  ]
+}
