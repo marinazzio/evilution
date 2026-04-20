@@ -4,6 +4,7 @@ require_relative "../sections"
 require_relative "mutation_map"
 require_relative "survived_details"
 require_relative "error_details"
+require_relative "neutral_details"
 require_relative "unresolved_details"
 require_relative "unparseable_details"
 
@@ -45,6 +46,10 @@ class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HT
 
   def error_html
     Evilution::Reporter::HTML::Sections::ErrorDetails.render_if(@results.select(&:error?))
+  end
+
+  def neutral_html
+    Evilution::Reporter::HTML::Sections::NeutralDetails.render_if(@results.select(&:neutral?))
   end
 
   def unresolved_html

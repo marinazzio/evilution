@@ -1,0 +1,14 @@
+<div class="neutral-details">
+  <h3>Neutral (<%= neutral.length %>) — test infra error, excluded from score</h3>
+  <ul>
+    <%- sorted.each do |r| -%>
+    <li>
+      <span class="operator"><%= h(r.mutation.operator_name) %></span>
+      <span class="location"><%= h(r.mutation.file_path) %>:<%= r.mutation.line %></span>
+      <%- if r.error_class -%>
+      <span class="error-class">(<%= h(r.error_class) %>)</span>
+      <%- end -%>
+    </li>
+    <%- end -%>
+  </ul>
+</div>
