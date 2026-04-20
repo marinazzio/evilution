@@ -1,0 +1,55 @@
+{
+  "session_id": "018f0000-0000-7000-8000-e2e000000001",
+  "mutant_version": "0.12.4",
+  "ruby_version": "3.3.0",
+  "runtime": 1.0,
+  "killtime": 0.04,
+  "subject_results": [
+    {
+      "expression_syntax": "A#run",
+      "identification": "A#run:lib/a.rb:1",
+      "source_path": "lib/a.rb",
+      "source": "def run\n  a + b\nend",
+      "amount_mutations": 4,
+      "tests": ["A#run"],
+      "coverage_results": [
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:A#run:lib/a.rb:10:aaaa1",
+            "mutation_type": "evil",
+            "mutation_diff": "--- A#run\n+++ A#run:evil:aaaa1\n@@ -1,3 +1,3 @@\n def run\n-  a + b\n+  a - b\n end",
+            "runtime": 0.01
+          },
+          "criteria_result": { "process_abort": false, "test_result": false, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:A#run:lib/a.rb:20:bbbb2",
+            "mutation_type": "evil",
+            "mutation_diff": "--- A#run\n+++ A#run:evil:bbbb2\n@@ -1,3 +1,3 @@\n def run\n-  true\n+  false\n end",
+            "runtime": 0.01
+          },
+          "criteria_result": { "process_abort": false, "test_result": false, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:A#run:lib/a.rb:30:cccc3",
+            "mutation_type": "evil",
+            "mutation_diff": "--- A#run\n+++ A#run:evil:cccc3\n@@ -1,3 +1,3 @@\n def run\n-  x * y\n+  x / y\n end",
+            "runtime": 0.02
+          },
+          "criteria_result": { "process_abort": false, "test_result": true, "timeout": false }
+        },
+        {
+          "mutation_result": {
+            "mutation_identification": "evil:A#run:lib/a.rb:40:dddd4",
+            "mutation_type": "evil",
+            "mutation_diff": "--- A#run\n+++ A#run:evil:dddd4\n@@ -1,3 +1,3 @@\n def run\n-  if ok\n+  unless ok\n end",
+            "runtime": 0.01
+          },
+          "criteria_result": { "process_abort": false, "test_result": true, "timeout": false }
+        }
+      ]
+    }
+  ]
+}
