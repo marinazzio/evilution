@@ -21,10 +21,16 @@ module Evilution::TempDirTracker
   end
 
   def self.cleanup_all
-    @monitor.synchronize do
-      @dirs.each { |d| FileUtils.rm_rf(d) }
-      @dirs.clear
+    # Trap-safe: Signal.trap handlers forbid Monitor#synchronize, so we
+    # snapshot and iterate without the mutex. The trade-off is a best-effort
+    # guarantee against concurrent register/unregister during shutdown.
+    dirs = @dirs.to_a
+    dirs.each do |d|
+      FileUtils.rm_rf(d)
+    rescue StandardError
+      nil
     end
+    @dirs.clear
   end
 
   def self.tracked_dirs
