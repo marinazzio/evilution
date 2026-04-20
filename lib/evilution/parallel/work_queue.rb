@@ -59,9 +59,11 @@ class Evilution::Parallel::WorkQueue
     count.times.map do
       cmd_read, cmd_write = IO.pipe
       res_read, res_write = IO.pipe
-      # Marshal payloads are ASCII-8BIT; pipes default to text mode and would
-      # transcode to Encoding.default_external (UTF-8 in Rails hosts), failing
-      # on bytes with no UTF-8 mapping. Force binmode on all four ends.
+      # Marshal payloads are ASCII-8BIT; pipes default to text mode and may
+      # transcode according to their external/internal encodings (influenced by
+      # Encoding.default_external and/or Encoding.default_internal — Rails sets
+      # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
+      # all four ends.
       [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
 
       pid = Process.fork do

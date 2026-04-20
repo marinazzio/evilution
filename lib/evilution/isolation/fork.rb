@@ -20,9 +20,11 @@ class Evilution::Isolation::Fork
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     parent_rss = Evilution::Memory.rss_kb
     read_io, write_io = IO.pipe
-    # Marshal result payload is ASCII-8BIT; pipes default to text mode and would
-    # transcode to Encoding.default_external (UTF-8 in Rails hosts), failing on
-    # high bytes. Force binmode on both ends.
+    # Marshal result payload is ASCII-8BIT; pipes default to text mode and may
+    # transcode according to their external/internal encodings (influenced by
+    # Encoding.default_external and/or Encoding.default_internal — Rails sets
+    # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
+    # both ends.
     read_io.binmode
     write_io.binmode
 

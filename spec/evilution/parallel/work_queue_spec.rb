@@ -208,9 +208,10 @@ RSpec.describe Evilution::Parallel::WorkQueue do
 
       it "round-trips binary Marshal payloads back to the parent without encoding errors" do
         queue = described_class.new(size: 2)
-        results = queue.map([1, 2]) do |_n|
-          String.new((0..255).map(&:chr).join, encoding: Encoding::ASCII_8BIT)
-        end
+        # pack("C*") yields exactly 256 raw bytes tagged ASCII-8BIT — safer than
+        # (0..255).map(&:chr).join under UTF-8 default_internal where Integer#chr
+        # produces multi-byte characters for codepoints >= 128.
+        results = queue.map([1, 2]) { |_n| (0..255).to_a.pack("C*") }
 
         expect(results.length).to eq(2)
         results.each do |r|
