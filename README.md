@@ -44,6 +44,7 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `session gc --older-than D` | Garbage-collect sessions older than D (e.g. 30d) |         |
 | `util mutation`      | Preview mutations for a file or inline code         |         |
 | `environment show`   | Display runtime environment and settings            |         |
+| `compare --against A --current B` | Compare two saved session JSON files into fixed / new / persistent / flaky / reintroduced buckets |         |
 
 ### Options (for `run` command)
 
@@ -55,6 +56,9 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to auto-detection via `SpecResolver`. |
 | `--spec-dir DIR`             | String  | _(none)_     | Include all `*_spec.rb` files in DIR recursively. Composable with `--spec`. |
+| `--spec-pattern GLOB`        | String  | _(none)_     | Restrict resolved spec candidates to files matching GLOB (e.g. `spec/models/**/*_spec.rb`). |
+| `--no-example-targeting`     | Boolean | _(enabled)_  | Disable per-mutation example targeting (always run every example in the resolved spec file). Example targeting scans each example body for symbols from the mutated method and runs only the matching subset. |
+| `--example-targeting-fallback MODE` | String | `full_file` | Behavior when no example matches: `full_file` (run the whole spec file) or `unresolved` (skip the mutation as `:unresolved`). |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
@@ -103,6 +107,9 @@ Creates `.evilution.yml`:
 # baseline_session: null   # path to session file for HTML comparison
 # ignore_patterns: []      # AST patterns to exclude (see docs/ast_pattern_syntax.md)
 # progress: true           # TTY progress bar
+# example_targeting: true  # per-mutation example targeting via body-token scan
+# example_targeting_fallback: full_file  # full_file | unresolved
+# spec_pattern: null       # restrict resolved spec candidates to files matching GLOB
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.
@@ -444,6 +451,31 @@ bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
 ```
 
 Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only when you care about the exit code and do not need JSON output.
+
+### 9. Regression tracking across runs (`compare`)
+
+```bash
+bundle exec evilution run lib/ --format json --save-session
+# later, after edits:
+bundle exec evilution run lib/ --format json --save-session
+
+bundle exec evilution compare \
+  --against .evilution/results/<earlier>.json \
+  --current  .evilution/results/<later>.json \
+  --format json
+```
+
+Output buckets:
+
+| Bucket          | Meaning |
+|-----------------|---------|
+| `fixed`         | Survived previously, killed now — the new test actually landed |
+| `new`           | Did not exist previously, surviving now — a fresh gap |
+| `persistent`    | Survived in both runs — carry-over debt |
+| `reintroduced`  | Killed previously, survived now — regression |
+| `flaky`         | Status flipped and back — unstable test |
+
+Use in CI to gate merges on `reintroduced` being empty, or to surface `new` survivors for reviewer attention without failing the build on `persistent` debt.
 
 ## Parallel Runs with SQLite
 
