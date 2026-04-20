@@ -1,0 +1,48 @@
+{
+  "version": "0.22.0",
+  "timestamp": "2026-04-20T12:00:00Z",
+  "summary": { "total": 4, "killed": 1, "survived": 1, "timed_out": 0, "score": 0.5 },
+  "killed": [
+    {
+      "operator": "Arithmetic::Swap",
+      "file": "lib/a.rb",
+      "line": 30,
+      "status": "killed",
+      "duration": 0.02,
+      "diff": "-   x * y\n+   x / y"
+    }
+  ],
+  "survived": [
+    {
+      "operator": "BooleanLiteral::Flip",
+      "file": "lib/a.rb",
+      "line": 20,
+      "status": "survived",
+      "duration": 0.01,
+      "diff": "-   true\n+   false"
+    },
+    {
+      "operator": "StringLiteral::Empty",
+      "file": "lib/a.rb",
+      "line": 50,
+      "status": "survived",
+      "duration": 0.01,
+      "diff": "-   \"hi\"\n+   \"\""
+    }
+  ],
+  "timed_out": [],
+  "neutral": [
+    {
+      "operator": "Conditional::Flip",
+      "file": "lib/a.rb",
+      "line": 40,
+      "status": "neutral",
+      "duration": 0.01,
+      "diff": "-   if ok\n+   unless ok"
+    }
+  ],
+  "errors": [],
+  "equivalent": [],
+  "unresolved": [],
+  "unparseable": []
+}
