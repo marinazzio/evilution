@@ -204,6 +204,51 @@ RSpec.describe Evilution::ExampleFilter do
       expect(locations).to include("#{spec_path}:2")
     end
 
+    it "matches predicate method names ending in ?" do
+      src = <<~RUBY
+        class Foo
+          def valid?
+            true
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "is valid?" do
+            Foo.new.valid?
+          end
+          it "other" do
+            true
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "matches bang method names ending in !" do
+      src = <<~RUBY
+        class Foo
+          def save!
+            true
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "saves" do
+            Foo.new.save!
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
     it "spreads locations across multiple spec files" do
       src = <<~RUBY
         class Foo

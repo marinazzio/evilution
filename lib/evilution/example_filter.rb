@@ -46,7 +46,7 @@ class Evilution::ExampleFilter
   end
 
   def scan_specs(token, spec_paths)
-    pattern = /\b#{Regexp.escape(token.downcase)}\b/
+    pattern = /(?<!\w)#{Regexp.escape(token.downcase)}(?!\w)/
     locations = []
     spec_paths.each do |path|
       blocks = @cache.fetch(path)
@@ -86,6 +86,7 @@ class Evilution::ExampleFilter
 
     def visit_def_node(node)
       return if @found
+      return unless target_within?(node)
 
       @def_stack.push(node.name.to_s)
       capture_if_match(node)
@@ -95,6 +96,7 @@ class Evilution::ExampleFilter
 
     def visit_class_node(node)
       return if @found
+      return unless target_within?(node)
 
       @class_stack.push(unqualified_name(node.constant_path))
       capture_if_match(node)
@@ -104,6 +106,7 @@ class Evilution::ExampleFilter
 
     def visit_module_node(node)
       return if @found
+      return unless target_within?(node)
 
       @class_stack.push(unqualified_name(node.constant_path))
       capture_if_match(node)
@@ -115,20 +118,20 @@ class Evilution::ExampleFilter
 
     def capture_if_match(node)
       return if @found
-
-      loc = node.location
-      return unless @target_line.between?(loc.start_line, loc.end_line)
+      return unless target_within?(node)
 
       @token = @def_stack.last || @class_stack.last
       @found = true if @def_stack.any?
     end
 
+    def target_within?(node)
+      loc = node.location
+      @target_line.between?(loc.start_line, loc.end_line)
+    end
+
     def unqualified_name(constant_path)
-      if constant_path.respond_to?(:name)
-        constant_path.name.to_s
-      else
-        constant_path.to_s
-      end
+      raw = constant_path.respond_to?(:name) ? constant_path.name.to_s : constant_path.to_s
+      raw.split("::").last
     end
   end
   private_constant :EnclosingNodeFinder
