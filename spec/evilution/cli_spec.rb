@@ -1260,7 +1260,7 @@ RSpec.describe Evilution::CLI do
       cli = described_class.new(["compare"])
       stderr = capture_stderr { expect(cli.call).to eq(2) }
 
-      expect(stderr).to include("two file paths required for compare")
+      expect(stderr).to include("exactly two file paths required for compare")
     end
 
     it "returns exit code 2 when a file does not exist" do

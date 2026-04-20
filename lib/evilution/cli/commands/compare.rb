@@ -15,7 +15,7 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
 
   def perform
     paths = resolve_paths
-    raise Evilution::ConfigError, "two file paths required for compare" unless paths.length == 2
+    raise Evilution::ConfigError, "exactly two file paths required for compare" unless paths.length == 2
 
     payload = ROLES.zip(paths).to_h { |role, path| [role, load_and_normalize(path)] }
     @stdout.puts JSON.generate(payload)
@@ -24,10 +24,14 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
 
   # Flags bind to roles (--against -> slot 0, --current -> slot 1);
   # positional @files fill whatever role the flags didn't claim, in order.
+  # Extra positional args after both slots are filled are a user error.
   def resolve_paths
     positional = @files.dup
     against = @options[:against] || positional.shift
     current = @options[:current] || positional.shift
+
+    raise Evilution::ConfigError, "exactly two file paths required for compare" unless positional.empty?
+
     [against, current].compact
   end
 

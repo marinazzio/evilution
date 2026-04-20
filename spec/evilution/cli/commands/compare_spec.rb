@@ -155,11 +155,27 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       result = run_with(files: [])
       expect(result.exit_code).to eq(2)
       expect(result.error).to be_a(Evilution::ConfigError)
-      expect(result.error.message).to eq("two file paths required for compare")
+      expect(result.error.message).to eq("exactly two file paths required for compare")
     end
 
     it "returns exit 2 when only one path given" do
       result = run_with(files: ["only.json"])
+      expect(result.exit_code).to eq(2)
+      expect(result.error).to be_a(Evilution::ConfigError)
+    end
+
+    it "returns exit 2 when more than two positional paths given" do
+      result = run_with(files: %w[a.json b.json c.json])
+      expect(result.exit_code).to eq(2)
+      expect(result.error).to be_a(Evilution::ConfigError)
+      expect(result.error.message).to eq("exactly two file paths required for compare")
+    end
+
+    it "returns exit 2 when flags plus extra positional overflow slots" do
+      result = run_with(
+        files: ["extra.json"],
+        options: { against: "a.json", current: "b.json" }
+      )
       expect(result.exit_code).to eq(2)
       expect(result.error).to be_a(Evilution::ConfigError)
     end
