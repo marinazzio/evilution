@@ -4,6 +4,8 @@ require_relative "../baseline"
 require_relative "../spec_resolver"
 require_relative "../integration/rspec"
 require_relative "../integration/minitest"
+require_relative "../example_filter"
+require_relative "../spec_ast_cache"
 
 class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
@@ -35,7 +37,10 @@ class Evilution::Runner::BaselineRunner
       fallback_to_full_suite: config.fallback_to_full_suite?,
       spec_selector: config.spec_selector
     }
-    kwargs[:related_specs_heuristic] = config.related_specs_heuristic? if klass == Evilution::Integration::RSpec
+    if klass == Evilution::Integration::RSpec
+      kwargs[:related_specs_heuristic] = config.related_specs_heuristic?
+      kwargs[:example_filter] = build_example_filter
+    end
     klass.new(**kwargs)
   end
 
@@ -60,6 +65,15 @@ class Evilution::Runner::BaselineRunner
   private
 
   attr_reader :config, :hooks
+
+  def build_example_filter
+    return nil unless config.example_targeting?
+
+    Evilution::ExampleFilter.new(
+      cache: Evilution::SpecAstCache.new(**config.example_targeting_cache),
+      fallback: config.example_targeting_fallback
+    )
+  end
 
   def log_start
     return if config.quiet || !config.text? || !$stderr.tty?

@@ -2,6 +2,7 @@
 
 require "tempfile"
 require "evilution/integration/rspec"
+require "evilution/example_filter"
 
 RSpec.describe Evilution::Integration::RSpec do
   let(:source_file) { Tempfile.new(["mutation_target", ".rb"]) }
@@ -761,6 +762,86 @@ RSpec.describe Evilution::Integration::RSpec do
       end
 
       integration.call(mutation)
+    end
+  end
+
+  describe "example_filter wiring" do
+    let(:example_filter) { instance_double(Evilution::ExampleFilter) }
+
+    before { allow(Evilution).to receive(:const_defined?).and_call_original }
+
+    it "passes locations (path:LINE) as rspec args when filter returns matches" do
+      allow(example_filter).to receive(:call)
+        .with(mutation, ["spec/some_spec.rb"])
+        .and_return(["spec/some_spec.rb:12", "spec/some_spec.rb:34"])
+      filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/some_spec.rb:12")
+        expect(args).to include("spec/some_spec.rb:34")
+        expect(args).not_to include("spec/some_spec.rb")
+        0
+      end
+
+      filtered.call(mutation)
+    end
+
+    it "returns an unresolved result when filter returns nil" do
+      allow(example_filter).to receive(:call).and_return(nil)
+      filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run)
+
+      result = filtered.call(mutation)
+
+      expect(result[:unresolved]).to be true
+      expect(result[:passed]).to be false
+      expect(RSpec::Core::Runner).not_to have_received(:run)
+    end
+
+    it "distinguishes example-targeting nil from spec-resolver nil in the error message" do
+      allow(example_filter).to receive(:call).and_return(nil)
+      filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run)
+
+      result = filtered.call(mutation)
+
+      expect(result[:error]).to match(/no matching example/i)
+      expect(result[:error]).not_to match(/no matching spec/i)
+      expect(result[:test_command]).to match(/example/i)
+    end
+
+    it "falls back to plain spec paths when filter returns original spec_paths array" do
+      allow(example_filter).to receive(:call)
+        .with(mutation, ["spec/some_spec.rb"])
+        .and_return(["spec/some_spec.rb"])
+      filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/some_spec.rb")
+        0
+      end
+
+      filtered.call(mutation)
+    end
+
+    it "preserves current behavior when no example_filter is injected" do
+      no_filter = described_class.new(test_files: ["spec/some_spec.rb"])
+      allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+        expect(args).to include("spec/some_spec.rb")
+        0
+      end
+
+      no_filter.call(mutation)
+    end
+
+    it "does not invoke filter when resolve_test_files already returned nil (unresolved)" do
+      selector = instance_double(Evilution::SpecSelector)
+      allow(selector).to receive(:call).with(mutation.file_path).and_return(nil)
+      allow(example_filter).to receive(:call)
+      filtered = described_class.new(spec_selector: selector, example_filter: example_filter)
+      allow(RSpec::Core::Runner).to receive(:run)
+
+      filtered.call(mutation)
+
+      expect(example_filter).not_to have_received(:call)
     end
   end
 
