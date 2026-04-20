@@ -286,6 +286,81 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end
     end
 
+    context "with worker_max_items (recycling)" do
+      it "respawns the worker after completing K items" do
+        queue = described_class.new(size: 1, worker_max_items: 3)
+        results = queue.map([1, 2, 3, 4, 5, 6, 7, 8, 9]) { |_n| Process.pid }
+
+        expect(results.length).to eq(9)
+        expect(results.uniq.size).to be >= 3
+      end
+
+      it "preserves stats for retired workers alongside the active one" do
+        queue = described_class.new(size: 1, worker_max_items: 3)
+        queue.map([1, 2, 3, 4, 5, 6, 7, 8, 9]) { |n| n }
+
+        stats = queue.worker_stats
+        expect(stats.sum(&:items_completed)).to eq(9)
+        expect(stats.length).to be >= 3
+        expect(stats.map(&:pid).uniq.size).to eq(stats.length)
+      end
+
+      it "does not recycle when total items < K" do
+        queue = described_class.new(size: 1, worker_max_items: 10)
+        results = queue.map([1, 2, 3]) { |_n| Process.pid }
+
+        expect(results.uniq.size).to eq(1)
+      end
+
+      it "defaults to no recycling (worker_max_items: nil)" do
+        queue = described_class.new(size: 1)
+        results = queue.map([1, 2, 3, 4, 5]) { |_n| Process.pid }
+
+        expect(results.uniq.size).to eq(1)
+      end
+
+      it "does not recycle when remaining items == 0 (avoids spawning a no-op worker)" do
+        queue = described_class.new(size: 1, worker_max_items: 3)
+        queue.map([1, 2, 3]) { |n| n }
+
+        stats = queue.worker_stats
+        expect(stats.length).to eq(1)
+        expect(stats.first.items_completed).to eq(3)
+      end
+
+      it "rejects zero worker_max_items" do
+        expect { described_class.new(size: 1, worker_max_items: 0) }.to raise_error(ArgumentError, /worker_max_items/)
+      end
+
+      it "rejects negative worker_max_items" do
+        expect { described_class.new(size: 1, worker_max_items: -1) }.to raise_error(ArgumentError, /worker_max_items/)
+      end
+
+      it "reaps recycled worker PIDs (no zombies)" do
+        queue = described_class.new(size: 1, worker_max_items: 2)
+        queue.map([1, 2, 3, 4, 5, 6]) { |n| n }
+
+        retired = queue.worker_stats.map(&:pid)
+        retired.each do |pid|
+          expect { Process.waitpid(pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
+        end
+      end
+
+      it "returns correct results across recycles" do
+        queue = described_class.new(size: 2, worker_max_items: 2)
+        results = queue.map([1, 2, 3, 4, 5, 6, 7, 8]) { |n| n * 10 }
+
+        expect(results).to eq([10, 20, 30, 40, 50, 60, 70, 80])
+      end
+
+      it "works with prefetch > 1 (drains pending before recycle)" do
+        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 2)
+        results = queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
+
+        expect(results).to eq([10, 20, 30, 40, 50, 60])
+      end
+    end
+
     context "with worker stats" do
       it "tracks per-worker completion counts" do
         queue = described_class.new(size: 2)
