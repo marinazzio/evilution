@@ -235,4 +235,57 @@ RSpec.describe Evilution::MCP::InfoTool do
       expect(response.error?).to be_falsey
     end
   end
+
+  describe "action: statuses" do
+    it "returns an entry for every STATUSES value" do
+      data = parse_response(call(action: "statuses"))
+
+      expected = Evilution::Result::MutationResult::STATUSES.map(&:to_s).sort
+      actual = data["statuses"].map { |s| s["status"] }.sort
+      expect(actual).to eq(expected)
+    end
+
+    it "describes each status with meaning and scoring fields" do
+      data = parse_response(call(action: "statuses"))
+
+      data["statuses"].each do |entry|
+        expect(entry).to include("status", "meaning", "counted_in_score")
+        expect(entry["meaning"]).to be_a(String).and(satisfy { |s| !s.empty? })
+        expect([true, false]).to include(entry["counted_in_score"])
+      end
+    end
+
+    it "marks killed and survived as counted in score" do
+      data = parse_response(call(action: "statuses"))
+      by_status = data["statuses"].to_h { |s| [s["status"], s] }
+
+      expect(by_status["killed"]["counted_in_score"]).to be true
+      expect(by_status["survived"]["counted_in_score"]).to be true
+    end
+
+    it "marks neutral, error, equivalent, unresolved, unparseable as excluded from score" do
+      data = parse_response(call(action: "statuses"))
+      by_status = data["statuses"].to_h { |s| [s["status"], s] }
+
+      %w[neutral error equivalent unresolved unparseable].each do |status|
+        expect(by_status[status]["counted_in_score"]).to be(false), "#{status} should be excluded"
+      end
+    end
+
+    it "distinguishes neutral from error from unresolved in meaning text" do
+      data = parse_response(call(action: "statuses"))
+      by_status = data["statuses"].to_h { |s| [s["status"], s] }
+
+      expect(by_status["neutral"]["meaning"]).to match(/baseline|pre-existing|infra/i)
+      expect(by_status["error"]["meaning"]).to match(/error|crash|unexpected/i)
+      expect(by_status["unresolved"]["meaning"]).to match(/spec|resolve|coverage/i)
+    end
+
+    it "accepts no parameters" do
+      response = call(action: "statuses")
+
+      expect(response).to be_a(MCP::Tool::Response)
+      expect(response.error?).to be_falsey
+    end
+  end
 end

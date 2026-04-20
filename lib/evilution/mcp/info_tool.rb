@@ -5,6 +5,7 @@ require "mcp"
 require_relative "../config"
 require_relative "../runner"
 require_relative "../mutator/registry"
+require_relative "../result/mutation_result"
 require_relative "../spec_resolver"
 require_relative "../ast/pattern/filter"
 require_relative "../version"
@@ -14,20 +15,23 @@ require_relative "../mcp"
 class Evilution::MCP::InfoTool < MCP::Tool
   tool_name "evilution-info"
   description "Discover what evilution sees before running any mutations. " \
-              "One tool, three actions: " \
+              "One tool, four actions: " \
               "'subjects' lists every mutatable method in the target files with its file, line, and mutation count; " \
               "'tests' resolves which spec/test files cover the given sources (so you pick the right --spec before mutating); " \
               "'environment' dumps the effective config (version, ruby, config file, timeout, " \
-              "integration, isolation, and every other setting). " \
+              "integration, isolation, and every other setting); " \
+              "'statuses' returns the mutation-result status glossary (killed/survived/neutral/error/etc.) with " \
+              "per-status meaning and scoring semantics so agents can triage results without guessing. " \
               "Use this instead of shelling out to 'evilution subjects', 'evilution tests list', or 'evilution environment show' — " \
               "the response is structured JSON so you can plan the next mutation run without parsing CLI text."
   input_schema(
     properties: {
       action: {
         type: "string",
-        enum: %w[subjects tests environment],
+        enum: %w[subjects tests environment statuses],
         description: "Which discovery operation to perform. " \
-                     "'subjects' lists mutatable methods; 'tests' resolves specs for sources; 'environment' dumps effective config."
+                     "'subjects' lists mutatable methods; 'tests' resolves specs for sources; " \
+                     "'environment' dumps effective config; 'statuses' returns the result-status glossary."
       },
       files: {
         type: "array",
@@ -60,7 +64,61 @@ class Evilution::MCP::InfoTool < MCP::Tool
     required: ["action"]
   )
 
-  VALID_ACTIONS = %w[subjects tests environment].freeze
+  VALID_ACTIONS = %w[subjects tests environment statuses].freeze
+
+  STATUS_GLOSSARY = [
+    {
+      "status" => "killed",
+      "meaning" => "A test failed when the mutation was applied — the test suite caught the mutation. " \
+                   "This is the desired outcome.",
+      "counted_in_score" => true
+    },
+    {
+      "status" => "survived",
+      "meaning" => "No test failed when the mutation was applied — gap in coverage. " \
+                   "The test suite did not detect the behavioral change.",
+      "counted_in_score" => true
+    },
+    {
+      "status" => "timeout",
+      "meaning" => "Test run exceeded the configured per-mutation timeout. " \
+                   "Treated like survived for scoring (counted in the denominator); " \
+                   "may indicate an infinite loop introduced by the mutation.",
+      "counted_in_score" => true
+    },
+    {
+      "status" => "error",
+      "meaning" => "Mutation execution raised an unexpected error (syntax error at load time, " \
+                   "boot failure, test-infrastructure crash). The mutation could not be evaluated.",
+      "counted_in_score" => false
+    },
+    {
+      "status" => "neutral",
+      "meaning" => "Baseline tests already failed before the mutation was applied — pre-existing " \
+                   "test-suite problem (flaky spec, infra collision, fixture setup failure). " \
+                   "Not a meaningful mutation signal.",
+      "counted_in_score" => false
+    },
+    {
+      "status" => "equivalent",
+      "meaning" => "Mutation is provably identical to the original source " \
+                   "(e.g. a no-op replacement that the parser or evaluator treats as semantically equal).",
+      "counted_in_score" => false
+    },
+    {
+      "status" => "unresolved",
+      "meaning" => "No spec/test file resolved for the mutated source — coverage gap, not a failure. " \
+                   "The file has no corresponding test file the resolver could locate.",
+      "counted_in_score" => false
+    },
+    {
+      "status" => "unparseable",
+      "meaning" => "Mutated source failed to parse (e.g. dangling heredoc after method_body_replacement). " \
+                   "Short-circuited before execution; no test run was attempted.",
+      "counted_in_score" => false
+    }
+  ].freeze
+  private_constant :STATUS_GLOSSARY
 
   class << self
     # rubocop:disable Lint/UnusedMethodArgument
@@ -78,6 +136,8 @@ class Evilution::MCP::InfoTool < MCP::Tool
         tests_action(files: parsed_files, spec: spec, integration: integration, skip_config: skip_config)
       when "environment"
         environment_action
+      when "statuses"
+        statuses_action
       end
     rescue Evilution::Error => e
       error_response_for(e)
@@ -211,6 +271,18 @@ class Evilution::MCP::InfoTool < MCP::Tool
         "config_file" => config_file,
         "settings" => environment_settings(config)
       )
+    end
+
+    def statuses_action
+      # Guard against drift: every STATUSES symbol must have a glossary entry.
+      defined = Evilution::Result::MutationResult::STATUSES.map(&:to_s).sort
+      documented = STATUS_GLOSSARY.map { |s| s["status"] }.sort
+      if defined != documented
+        missing = (defined - documented) + (documented - defined)
+        raise Evilution::Error, "status glossary drift: #{missing.inspect}"
+      end
+
+      success_response("statuses" => STATUS_GLOSSARY)
     end
 
     def error_response_for(error)
