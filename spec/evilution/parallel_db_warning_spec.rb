@@ -41,6 +41,30 @@ RSpec.describe Evilution::ParallelDbWarning do
     YAML
   end
 
+  def mixed_yml_test_postgres
+    <<~YAML
+      development:
+        adapter: sqlite3
+        database: db/development.sqlite3
+      test:
+        adapter: postgresql
+        host: localhost
+        database: app_test
+    YAML
+  end
+
+  def erb_yml
+    <<~YAML
+      test:
+        adapter: sqlite3
+        database: db/test<%= ENV['TEST_ENV_NUMBER'] %>.sqlite3
+    YAML
+  end
+
+  def unparseable_yml
+    "test:\n  adapter: sqlite3\n  database: db/test<%= undefined_erb_helper_xyz %>.sqlite3\n"
+  end
+
   def call_warn(jobs:, root: @tmp)
     io = StringIO.new
     config = instance_double(Evilution::Config, jobs: jobs)
@@ -66,6 +90,27 @@ RSpec.describe Evilution::ParallelDbWarning do
 
     it "does not warn when database.yml is absent" do
       expect(call_warn(jobs: 4)).to eq("")
+    end
+
+    # Regression for Copilot review on PR #819: earlier implementation
+    # pattern-matched "sqlite3" anywhere in the file, so dev/prod using SQLite
+    # with test on Postgres/MySQL still fired the warning.
+    it "does not warn when only non-test environments use sqlite3" do
+      write_database_yml(mixed_yml_test_postgres)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "warns when test: uses sqlite3 via ERB-interpolated database path" do
+      write_database_yml(erb_yml)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "does not warn when database.yml cannot be parsed safely" do
+      write_database_yml(unparseable_yml)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to eq("")
     end
 
     it "does not warn twice for the same root" do
