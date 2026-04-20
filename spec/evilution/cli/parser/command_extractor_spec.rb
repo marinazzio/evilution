@@ -31,6 +31,12 @@ RSpec.describe Evilution::CLI::Parser::CommandExtractor do
       expect(extract(["subjects"]).command).to eq(:subjects)
     end
 
+    it "extracts 'compare' as :compare" do
+      result = described_class.call(["compare", "a.json", "b.json"])
+      expect(result.command).to eq(:compare)
+      expect(result.remaining_argv).to eq(["a.json", "b.json"])
+    end
+
     it "treats explicit 'run' as :run" do
       expect(extract(["run"]).command).to eq(:run)
     end

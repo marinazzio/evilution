@@ -23,6 +23,7 @@ class Evilution::CLI::Parser::OptionsBuilder
       add_flag_options(opts)
       add_extra_flag_options(opts)
       add_session_options(opts)
+      add_compare_options(opts)
     end
   end
 
@@ -33,7 +34,7 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
     opts.separator ""
     opts.separator "Commands: run (default), init, session {list,show,diff,gc}, subjects, tests {list},"
-    opts.separator "         util {mutation}, environment {show}, mcp, version"
+    opts.separator "         util {mutation}, environment {show}, compare, mcp, version"
     opts.separator ""
     opts.separator "Options:"
   end
@@ -103,6 +104,15 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--since DATE", "Show sessions since DATE (YYYY-MM-DD)") { |d| @options[:since] = d }
     opts.on("--older-than DURATION", "Delete sessions older than DURATION (e.g., 30d, 24h, 1w)") do |d|
       @options[:older_than] = d
+    end
+  end
+
+  def add_compare_options(opts)
+    opts.on("--against PATH", "Prior mutation run to compare against (used with `compare` command)") do |p|
+      @options[:against] = p
+    end
+    opts.on("--current PATH", "Current mutation run to compare (used with `compare` command)") do |p|
+      @options[:current] = p
     end
   end
 

@@ -5,7 +5,8 @@ class Evilution::CLI::Parser::CommandExtractor
     "version" => :version,
     "init" => :init,
     "mcp" => :mcp,
-    "subjects" => :subjects
+    "subjects" => :subjects,
+    "compare" => :compare
   }.freeze
 
   SESSION_SUBCOMMANDS = {
