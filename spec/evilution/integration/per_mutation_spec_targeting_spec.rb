@@ -4,6 +4,7 @@ require "tmpdir"
 require "fileutils"
 require "evilution/config"
 require "evilution/integration/rspec"
+require "evilution/runner/baseline_runner"
 
 RSpec.describe "Per-mutation spec targeting (integration)" do
   around do |example|
@@ -102,6 +103,76 @@ RSpec.describe "Per-mutation spec targeting (integration)" do
     captured.each do |args|
       expect(args).not_to include("spec")
       expect(args).not_to include(unrelated_spec)
+    end
+  end
+
+  describe "example-level targeting (Stage 2)" do
+    let(:targeted_source_path) { "app/services/checkout.rb" }
+    let(:targeted_spec_path) { "spec/services/checkout_spec.rb" }
+
+    before do
+      write_file(targeted_source_path, <<~RUBY)
+        class Checkout
+          def process_payment
+            42
+          end
+        end
+      RUBY
+      write_file(targeted_spec_path, <<~RUBY)
+        RSpec.describe Checkout do
+          it "handles process_payment" do
+            Checkout.new.process_payment
+          end
+
+          it "does an unrelated refund thing" do
+            expect(1).to eq(1)
+          end
+
+          it "does another unrelated thing" do
+            expect(2).to eq(2)
+          end
+        end
+      RUBY
+    end
+
+    let(:config) do
+      Evilution::Config.new(
+        skip_config_file: true,
+        integration: :rspec,
+        example_targeting: true,
+        baseline: false,
+        quiet: true
+      )
+    end
+    let(:runner) { Evilution::Runner::BaselineRunner.new(config) }
+    let(:targeted_integration) do
+      inst = runner.build_integration
+      allow(inst).to receive(:release_rspec_state)
+      allow(inst).to receive(:release_filtered_examples)
+      allow(inst).to receive(:release_reporter_state)
+      inst
+    end
+
+    def mutation_on_line(path, line)
+      instance_double(
+        Evilution::Mutation,
+        file_path: path,
+        original_source: File.read(path),
+        mutated_source: "# mutated\n#{File.read(path)}",
+        line: line,
+        diff: nil
+      )
+    end
+
+    it "passes only the matching example location (path:LINE) to RSpec::Core::Runner" do
+      captured = capture_runner_args
+
+      targeted_integration.call(mutation_on_line(targeted_source_path, 3))
+
+      args = captured.first
+      matching = args.grep(/#{Regexp.escape(targeted_spec_path)}:\d+/)
+      expect(matching.size).to eq(1)
+      expect(args).not_to include(targeted_spec_path)
     end
   end
 end

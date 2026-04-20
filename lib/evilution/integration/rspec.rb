@@ -28,13 +28,14 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   end
 
   def initialize(test_files: nil, hooks: nil, related_specs_heuristic: false, fallback_to_full_suite: false,
-                 spec_selector: nil)
+                 spec_selector: nil, example_filter: nil)
     @test_files = test_files
     @rspec_loaded = false
     @spec_selector = spec_selector || Evilution::SpecSelector.new
     @related_spec_heuristic = Evilution::RelatedSpecHeuristic.new
     @related_specs_heuristic_enabled = related_specs_heuristic
     @fallback_to_full_suite = fallback_to_full_suite
+    @example_filter = example_filter
     @crash_detector = nil
     @warned_files = Set.new
     super(hooks: hooks)
@@ -63,9 +64,12 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     files = resolve_test_files(mutation)
     return unresolved_result(mutation) if files.nil?
 
+    targets = apply_example_filter(mutation, files)
+    return unresolved_result(mutation) if targets.nil?
+
     out = StringIO.new
     err = StringIO.new
-    args = build_args(files)
+    args = build_args(targets)
     command = "rspec #{args.join(" ")}"
 
     detector = reset_crash_detector
@@ -85,6 +89,12 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   def build_args(files)
     ["--format", "progress", "--no-color", "--order", "defined", *files]
+  end
+
+  def apply_example_filter(mutation, files)
+    return files unless @example_filter
+
+    @example_filter.call(mutation, files)
   end
 
   def unresolved_result(mutation)

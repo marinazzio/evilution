@@ -3,6 +3,7 @@
 require "evilution/config"
 require "evilution/runner"
 require "evilution/runner/baseline_runner"
+require "evilution/example_filter"
 
 RSpec.describe Evilution::Runner::BaselineRunner do
   def config(**overrides)
@@ -78,6 +79,36 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner = described_class.new(cfg)
       expect(Evilution::Integration::Minitest).to receive(:new) do |**kwargs|
         expect(kwargs[:spec_selector]).to be(cfg.spec_selector)
+        Evilution::Integration::Minitest.allocate
+      end
+      runner.build_integration
+    end
+
+    it "passes an ExampleFilter for RSpec when example_targeting enabled" do
+      cfg = config(integration: :rspec, example_targeting: true)
+      runner = described_class.new(cfg)
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:example_filter]).to be_a(Evilution::ExampleFilter)
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
+    it "omits example_filter when example_targeting disabled" do
+      cfg = config(integration: :rspec, example_targeting: false)
+      runner = described_class.new(cfg)
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:example_filter]).to be_nil
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
+    it "omits example_filter for Minitest integration regardless of example_targeting" do
+      cfg = config(integration: :minitest, example_targeting: true)
+      runner = described_class.new(cfg)
+      expect(Evilution::Integration::Minitest).to receive(:new) do |**kwargs|
+        expect(kwargs).not_to have_key(:example_filter)
         Evilution::Integration::Minitest.allocate
       end
       runner.build_integration
