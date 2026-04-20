@@ -353,6 +353,19 @@ RSpec.describe Evilution::Runner::MutationExecutor do
         expect(results.first.status).to eq(:neutral)
       end
 
+      it "demotes :killed ActiveRecord::LockWaitTimeout to :neutral" do
+        cfg = config(jobs: 1)
+        m = mutation
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_return(
+          killed_crash_result(m, error_class: "ActiveRecord::LockWaitTimeout")
+        )
+
+        results, = build(cfg, isolator: isolator).call([m], nil)
+
+        expect(results.first.status).to eq(:neutral)
+      end
+
       it "demotes :killed SQLite3::BusyException to :neutral" do
         cfg = config(jobs: 1)
         m = mutation
