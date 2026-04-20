@@ -16,7 +16,9 @@ class Evilution::SourceAstCache
   end
 
   def fetch(source)
-    key = Digest::SHA256.hexdigest(source)
+    return Prism.parse(source) if @max_entries <= 0
+
+    key = Digest::SHA256.digest(source)
     if @entries.key?(key)
       result = @entries.delete(key)
       @entries[key] = result
@@ -32,11 +34,6 @@ class Evilution::SourceAstCache
   private
 
   def evict_until_within_bounds
-    while @entries.length > @max_entries
-      break if @entries.empty?
-
-      oldest = @entries.keys.first
-      @entries.delete(oldest)
-    end
+    @entries.shift while @entries.length > @max_entries
   end
 end
