@@ -95,4 +95,24 @@ RSpec.describe Evilution::Integration::CrashDetector do
       expect(detector.crash_summary).to be_nil
     end
   end
+
+  describe "#unique_crash_classes" do
+    it "returns empty array when no crashes recorded" do
+      expect(detector.unique_crash_classes).to eq([])
+    end
+
+    it "returns a single class name when all crashes share a class" do
+      3.times { detector.example_failed(make_notification(NoMethodError.new("foo"))) }
+
+      expect(detector.unique_crash_classes).to eq(["NoMethodError"])
+    end
+
+    it "returns all distinct classes preserving first-seen order" do
+      detector.example_failed(make_notification(TypeError.new("a")))
+      detector.example_failed(make_notification(NoMethodError.new("b")))
+      detector.example_failed(make_notification(TypeError.new("c")))
+
+      expect(detector.unique_crash_classes).to eq(%w[TypeError NoMethodError])
+    end
+  end
 end

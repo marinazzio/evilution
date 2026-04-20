@@ -92,6 +92,36 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
     end
   end
 
+  describe "#unique_crash_classes" do
+    it "returns empty array when no crashes" do
+      expect(detector.unique_crash_classes).to eq([])
+    end
+
+    it "returns single class when all crashes share a class" do
+      3.times do |i|
+        r = Minitest::Result.new("t#{i}")
+        r.failures << Minitest::UnexpectedError.new(RuntimeError.new("boom"))
+        detector.record(r)
+      end
+
+      expect(detector.unique_crash_classes).to eq(["RuntimeError"])
+    end
+
+    it "returns distinct classes preserving first-seen order" do
+      r1 = Minitest::Result.new("t1")
+      r1.failures << Minitest::UnexpectedError.new(TypeError.new("a"))
+      r2 = Minitest::Result.new("t2")
+      r2.failures << Minitest::UnexpectedError.new(NoMethodError.new("b"))
+      r3 = Minitest::Result.new("t3")
+      r3.failures << Minitest::UnexpectedError.new(TypeError.new("c"))
+      detector.record(r1)
+      detector.record(r2)
+      detector.record(r3)
+
+      expect(detector.unique_crash_classes).to eq(%w[TypeError NoMethodError])
+    end
+  end
+
   describe "#reset" do
     it "clears all tracked state" do
       result = Minitest::Result.new("test_foo")

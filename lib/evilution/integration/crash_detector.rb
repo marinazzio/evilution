@@ -41,8 +41,11 @@ class Evilution::Integration::CrashDetector
   def crash_summary
     return nil if @crashes.empty?
 
-    types = @crashes.map { |e| e.class.name }.uniq
-    "#{types.join(", ")} (#{@crashes.length} crash#{"es" unless @crashes.length == 1})"
+    "#{unique_crash_classes.join(", ")} (#{@crashes.length} crash#{"es" unless @crashes.length == 1})"
+  end
+
+  def unique_crash_classes
+    @crashes.map { |e| e.class.name }.uniq
   end
 
   private

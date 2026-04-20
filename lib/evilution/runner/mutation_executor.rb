@@ -119,26 +119,46 @@ class Evilution::Runner::MutationExecutor
     state[:truncated] = true if should_truncate?(state[:survived_count])
   end
 
-  # Reclassify mutation :error results as :neutral when both the error class
-  # and the exception origin (first backtrace frame) point to test
-  # infrastructure — missing require, spec_helper/rails_helper load failure,
-  # or spec/support initialization — rather than a behavior change caused by
-  # the mutation itself. Keeps the kill-score signal uncontaminated by
-  # environment problems unrelated to the mutation.
+  # Reclassify results as :neutral when the failure was caused by test
+  # infrastructure rather than by the mutation. Two independent paths:
   #
-  # Origin-only match (not `any?`): Ruby backtraces typically carry spec_helper
-  # frames below mutation-caused errors, so matching any frame would
-  # misclassify real mutation NameError/LoadError as :neutral.
+  # 1) :error from a missing require / spec_helper / rails_helper / spec/support
+  #    initialization — detected by error_class ∈ INFRA_ERROR_CLASSES and
+  #    first backtrace frame matching INFRA_BACKTRACE_PATHS. Origin-only match
+  #    (not `any?`): Ruby backtraces typically carry spec_helper frames below
+  #    mutation-caused errors, so matching any frame would misclassify real
+  #    mutation NameError/LoadError as :neutral.
+  #
+  # 2) :killed from a CrashDetector test_crashed whose sole crash class is in
+  #    INFRA_CRASH_CLASSES (ActiveRecord::StatementTimeout, Timeout::Error,
+  #    etc.). These surface under parallel workers sharing a DB file or on a
+  #    slow CI; fork.rb initially reports them as :killed, and without this
+  #    demotion the kill count inflates with infra noise. No backtrace check:
+  #    the single-class signal from CrashDetector already rules out mixed
+  #    mutation-caused failures. See EV-toid / GH #814.
   INFRA_ERROR_CLASSES = %w[LoadError NameError].freeze
   INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
-  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
+  INFRA_CRASH_CLASSES = %w[
+    Timeout::Error
+    ActiveRecord::StatementTimeout
+    ActiveRecord::Deadlocked
+    ActiveRecord::ConnectionTimeoutError
+    ActiveRecord::LockWaitTimeout
+    SQLite3::BusyException
+  ].freeze
+  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS, :INFRA_CRASH_CLASSES
 
   def neutralize_if_infra_error(result)
+    return neutralize(result) if infra_crash?(result)
     return result unless result.error?
     return result unless INFRA_ERROR_CLASSES.include?(result.error_class)
     return result unless infra_origin?(result.error_backtrace)
 
     neutralize(result)
+  end
+
+  def infra_crash?(result)
+    result.killed? && INFRA_CRASH_CLASSES.include?(result.error_class)
   end
 
   def infra_origin?(backtrace)
