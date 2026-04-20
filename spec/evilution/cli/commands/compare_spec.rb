@@ -27,8 +27,8 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(0)
 
       payload = JSON.parse(out.string)
-      expect(payload["against"]["path"]).to eq(mutant_path)
-      expect(payload["current"]["path"]).to eq(evilution_path)
+      expect(payload["summary"]["shared_dead"]).to eq(3)
+      expect(payload["summary"]["shared_alive"]).to eq(1)
     end
 
     it "uses --against and --current when both flags given" do
@@ -39,8 +39,8 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(0)
 
       payload = JSON.parse(out.string)
-      expect(payload["against"]["path"]).to eq(mutant_path)
-      expect(payload["current"]["path"]).to eq(evilution_path)
+      expect(payload["summary"]["shared_dead"]).to eq(3)
+      expect(payload["summary"]["shared_alive"]).to eq(1)
     end
 
     it "fills missing current slot from positional when only --against given" do
@@ -51,8 +51,8 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(0)
 
       payload = JSON.parse(out.string)
-      expect(payload["against"]["path"]).to eq(mutant_path)
-      expect(payload["current"]["path"]).to eq(evilution_path)
+      expect(payload["summary"]["shared_dead"]).to eq(3)
+      expect(payload["summary"]["shared_alive"]).to eq(1)
     end
 
     it "fills missing against slot from positional when only --current given" do
@@ -63,56 +63,44 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(0)
 
       payload = JSON.parse(out.string)
-      expect(payload["against"]["path"]).to eq(mutant_path)
-      expect(payload["current"]["path"]).to eq(evilution_path)
+      expect(payload["summary"]["shared_dead"]).to eq(3)
+      expect(payload["summary"]["shared_alive"]).to eq(1)
     end
   end
 
   describe "end-to-end with fixtures" do
-    it "emits JSON with normalized records from both tools" do
+    it "emits bucketed JSON with expected top-level keys" do
       result = run_with(files: [mutant_path, evilution_path])
       expect(result.exit_code).to eq(0)
 
       payload = JSON.parse(out.string)
-      expect(payload.keys).to match_array(%w[against current])
-
-      expect(payload["against"]["tool"]).to eq("mutant")
-      expect(payload["against"]["path"]).to eq(mutant_path)
-      expect(payload["against"]["records"].size).to eq(4)
-
-      expect(payload["current"]["tool"]).to eq("evilution")
-      expect(payload["current"]["path"]).to eq(evilution_path)
-      expect(payload["current"]["records"].size).to eq(4)
+      expect(payload.keys).to match_array(
+        %w[schema summary alive_only_against alive_only_current shared_alive shared_dead]
+      )
     end
 
-    it "produces matching fingerprints for equivalent mutations" do
+    it "summary reflects fixture composition (3 shared_dead, 1 shared_alive)" do
       run_with(files: [mutant_path, evilution_path])
 
       payload = JSON.parse(out.string)
-      mutant_fps = payload["against"]["records"].map { |r| r["fingerprint"] }.sort
-      evo_fps = payload["current"]["records"].map { |r| r["fingerprint"] }.sort
-      expect(mutant_fps).to eq(evo_fps)
-    end
-
-    it "serializes symbol status and source fields as strings" do
-      run_with(files: [mutant_path, evilution_path])
-
-      payload = JSON.parse(out.string)
-      mutant_records = payload["against"]["records"]
-      evo_records = payload["current"]["records"]
-
-      expect(mutant_records.map { |r| r["source"] }.uniq).to eq(["mutant"])
-      expect(evo_records.map { |r| r["source"] }.uniq).to eq(["evilution"])
-
-      evo_statuses = evo_records.map { |r| r["status"] }
-      expect(evo_statuses).to all(be_a(String))
-      expect(evo_statuses.sort).to eq(%w[killed killed survived timeout])
+      summary = payload["summary"]
+      expect(summary["shared_dead"]).to eq(3)
+      expect(summary["shared_alive"]).to eq(1)
+      expect(summary["alive_only_against"]).to eq(0)
+      expect(summary["alive_only_current"]).to eq(0)
     end
 
     it "emits single-line JSON (no pretty-print)" do
       run_with(files: [mutant_path, evilution_path])
       # @stdout.puts appends exactly one trailing newline; rest must be single line.
       expect(out.string.count("\n")).to eq(1)
+    end
+
+    it "renders text output when --format text is given" do
+      result = run_with(files: [mutant_path, evilution_path], options: { format: :text })
+      expect(result.exit_code).to eq(0)
+      expect(out.string).to include("Compare results")
+      expect(out.string).to include("shared_dead")
     end
   end
 
@@ -147,6 +135,16 @@ RSpec.describe Evilution::CLI::Commands::Compare do
         expect(result.error.message).to include(f.path)
         expect(result.error.message).to include("cannot detect tool")
       end
+    end
+
+    it "returns exit 2 with ConfigError for unsupported --format" do
+      result = run_with(
+        files: [mutant_path, evilution_path],
+        options: { format: :html }
+      )
+      expect(result.exit_code).to eq(2)
+      expect(result.error).to be_a(Evilution::ConfigError)
+      expect(result.error.message).to include("compare supports --format")
     end
   end
 

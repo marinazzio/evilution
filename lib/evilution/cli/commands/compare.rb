@@ -4,12 +4,14 @@ require "json"
 require_relative "../commands"
 require_relative "../command"
 require_relative "../dispatcher"
+require_relative "../printers/compare"
 require_relative "../../compare"
+require_relative "../../compare/categorizer"
 require_relative "../../compare/detector"
 require_relative "../../compare/normalizer"
 
 class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
-  ROLES = %i[against current].freeze
+  SUPPORTED_FORMATS = %i[json text].freeze
 
   private
 
@@ -17,8 +19,13 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
     paths = resolve_paths
     raise Evilution::ConfigError, "exactly two file paths required for compare" unless paths.length == 2
 
-    payload = ROLES.zip(paths).to_h { |role, path| [role, load_and_normalize(path)] }
-    @stdout.puts JSON.generate(payload)
+    fmt = @options[:format] || :json
+    raise Evilution::ConfigError, "compare supports --format text or json, got #{fmt.inspect}" unless SUPPORTED_FORMATS.include?(fmt)
+
+    against = load_and_normalize(paths[0])
+    current = load_and_normalize(paths[1])
+    buckets = Evilution::Compare::Categorizer.call(against, current)
+    Evilution::CLI::Printers::Compare.new(buckets, format: fmt).render(@stdout)
     0
   end
 
@@ -40,8 +47,7 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
 
     json = JSON.parse(File.read(path))
     tool = Evilution::Compare::Detector.call(json)
-    records = normalize(json, tool)
-    { path: path, tool: tool.to_s, records: records.map { |r| record_to_hash(r) } }
+    normalize(json, tool)
   rescue ::JSON::ParserError => e
     raise Evilution::Error, "invalid JSON in #{path}: #{e.message}"
   rescue Evilution::Compare::InvalidInput => e
@@ -56,15 +62,6 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
     when :mutant    then normalizer.from_mutant(json)
     when :evilution then normalizer.from_evilution(json)
     end
-  end
-
-  # Data#to_h keeps symbol values for :source and :status, which
-  # JSON.generate would reject. Stringify them for machine-friendly output.
-  def record_to_hash(record)
-    h = record.to_h
-    h[:source] = h[:source].to_s
-    h[:status] = h[:status].to_s
-    h
   end
 end
 
