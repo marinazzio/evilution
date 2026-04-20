@@ -21,9 +21,15 @@ module Evilution::TempDirTracker
   end
 
   def self.cleanup_all
-    @monitor.synchronize do
-      @dirs.each { |d| FileUtils.rm_rf(d) }
-      @dirs.clear
+    # Trap-safe: Signal.trap handlers forbid Monitor#synchronize, so both the
+    # snapshot and the per-dir tracking removal fall back to a lock-free path
+    # when ThreadError is raised. Successful removals drop the entry from
+    # @dirs; failures stay tracked so a later cleanup can retry.
+    snapshot_tracked_dirs.each do |d|
+      FileUtils.rm_rf(d)
+      remove_from_tracking(d)
+    rescue StandardError
+      nil
     end
   end
 
@@ -36,4 +42,18 @@ module Evilution::TempDirTracker
     @at_exit_registered = true
   end
   private_class_method :register_at_exit
+
+  def self.snapshot_tracked_dirs
+    @monitor.synchronize { @dirs.to_a }
+  rescue ThreadError
+    @dirs.to_a
+  end
+  private_class_method :snapshot_tracked_dirs
+
+  def self.remove_from_tracking(dir)
+    @monitor.synchronize { @dirs.delete(dir) }
+  rescue ThreadError
+    @dirs.delete(dir)
+  end
+  private_class_method :remove_from_tracking
 end
