@@ -118,5 +118,64 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         expect(File.read(marker)).to eq("loaded")
       end
     end
+
+    it "loads an explicit preload file under :in_process isolation" do
+      Dir.mktmpdir do |dir|
+        preload_file = File.join(dir, "preloaded.rb")
+        marker = File.join(dir, "marker")
+        File.write(preload_file, "File.write(#{marker.inspect}, 'loaded')\n")
+
+        resolver = described_class.new(
+          config(preload: preload_file, isolation: :in_process),
+          target_files: -> { [] }, hooks: nil
+        )
+        resolver.perform_preload
+
+        expect(File.read(marker)).to eq("loaded")
+      end
+    end
+
+    it "loads an explicit preload file under :auto when no Rails root is detected" do
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+      Dir.mktmpdir do |dir|
+        preload_file = File.join(dir, "preloaded.rb")
+        marker = File.join(dir, "marker")
+        File.write(preload_file, "File.write(#{marker.inspect}, 'loaded')\n")
+
+        resolver = described_class.new(
+          config(preload: preload_file, isolation: :auto),
+          target_files: -> { [] }, hooks: nil
+        )
+        resolver.perform_preload
+
+        expect(File.read(marker)).to eq("loaded")
+      end
+    end
+
+    it "skips auto-detected rails_helper under explicit :in_process isolation" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        FileUtils.mkdir_p(spec_dir)
+        rails_helper = File.join(spec_dir, "rails_helper.rb")
+        marker = File.join(dir, "marker")
+        File.write(rails_helper, "File.write(#{marker.inspect}, 'loaded')\n")
+
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+        resolver = described_class.new(
+          config(isolation: :in_process), target_files: -> { [] }, hooks: nil
+        )
+        resolver.perform_preload
+
+        expect(File.exist?(marker)).to be(false)
+      end
+    end
+
+    it "raises Evilution::ConfigError when explicit preload is missing under :in_process" do
+      resolver = described_class.new(
+        config(preload: "/nonexistent/helper.rb", isolation: :in_process),
+        target_files: -> { [] }, hooks: nil
+      )
+      expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /preload file not found/)
+    end
   end
 end

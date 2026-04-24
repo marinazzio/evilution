@@ -30,10 +30,10 @@ class Evilution::Runner::IsolationResolver
 
   def perform_preload
     return if config.preload == false
-    return unless resolve_isolation == :fork
 
     path = resolve_preload_path
     return unless path
+    return unless should_preload?
 
     prepare_load_path_for_preload
     require File.expand_path(path)
@@ -47,6 +47,17 @@ class Evilution::Runner::IsolationResolver
   private
 
   attr_reader :config, :hooks
+
+  # Under :fork, allow preloading — caller resolves whether a path exists (an
+  # explicit --preload / preload: value, or an auto-detected rails_helper) and
+  # bails early when none does. Under :in_process, only allow preloading when
+  # the user explicitly asked via --preload or preload: in YAML — don't
+  # auto-load spec/rails_helper.rb for a user who opted out of fork.
+  def should_preload?
+    return true if resolve_isolation == :fork
+
+    config.preload.is_a?(String)
+  end
 
   def target_files
     @target_files ||= @target_files_callback.call
