@@ -5,6 +5,26 @@ require "tmpdir"
 require "fileutils"
 
 RSpec.describe Evilution::Config do
+  describe "constants" do
+    it "exposes CONFIG_FILES with the expected search order" do
+      expect(described_class::CONFIG_FILES).to eq(%w[.evilution.yml config/evilution.yml])
+    end
+
+    it "freezes CONFIG_FILES" do
+      expect(described_class::CONFIG_FILES).to be_frozen
+    end
+
+    it "exposes DEFAULTS with representative defaults" do
+      expect(described_class::DEFAULTS).to include(
+        timeout: 30, format: :text, integration: :rspec, jobs: 1, isolation: :auto
+      )
+    end
+
+    it "freezes DEFAULTS" do
+      expect(described_class::DEFAULTS).to be_frozen
+    end
+  end
+
   describe "defaults" do
     subject(:config) { described_class.new(skip_config_file: true) }
 
@@ -24,8 +44,9 @@ RSpec.describe Evilution::Config do
       expect(config.min_score).to eq(0.0)
     end
 
-    it "sets integration to :rspec" do
+    it "sets integration to :rspec (Symbol)" do
       expect(config.integration).to eq(:rspec)
+      expect(config.integration).to be_a(Symbol)
     end
 
     it "disables verbose by default" do
@@ -50,6 +71,23 @@ RSpec.describe Evilution::Config do
 
     it "disables suggest_tests by default" do
       expect(config.suggest_tests).to be false
+    end
+
+    it "sets ignore_patterns to an empty Array" do
+      expect(config.ignore_patterns).to eq([])
+      expect(config.ignore_patterns).to be_a(Array)
+    end
+
+    it "defaults hooks to empty hash" do
+      expect(config.hooks).to eq({})
+    end
+
+    it "defaults jobs to 1" do
+      expect(config.jobs).to eq(1)
+    end
+
+    it "defaults isolation to :auto" do
+      expect(config.isolation).to eq(:auto)
     end
   end
 
@@ -102,27 +140,11 @@ RSpec.describe Evilution::Config do
       expect(config.spec_files).to eq(["spec/foo_spec.rb"])
     end
 
-    it "defaults hooks to empty hash" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.hooks).to eq({})
-    end
-
     it "accepts hooks configuration" do
       hooks_config = { worker_process_start: "config/hooks/worker.rb" }
       config = described_class.new(hooks: hooks_config, skip_config_file: true)
 
       expect(config.hooks).to eq(hooks_config)
-    end
-
-    it "rejects non-hash hooks value" do
-      expect { described_class.new(hooks: "not_a_hash", skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
-    end
-
-    it "rejects array hooks value" do
-      expect { described_class.new(hooks: ["file.rb"], skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
     end
 
     it "accepts fail_fast" do
@@ -138,7 +160,7 @@ RSpec.describe Evilution::Config do
     end
   end
 
-  describe "config file loading" do
+  describe "config file loading (orchestration)" do
     around do |example|
       Dir.mktmpdir do |dir|
         Dir.chdir(dir) { example.run }
@@ -154,25 +176,6 @@ RSpec.describe Evilution::Config do
       expect(config.format).to eq(:json)
     end
 
-    it "loads settings from config/evilution.yml" do
-      Dir.mkdir("config")
-      File.write("config/evilution.yml", "timeout: 20\n")
-
-      config = described_class.new
-
-      expect(config.timeout).to eq(20)
-    end
-
-    it "prefers .evilution.yml over config/evilution.yml" do
-      File.write(".evilution.yml", "timeout: 30\n")
-      Dir.mkdir("config")
-      File.write("config/evilution.yml", "timeout: 20\n")
-
-      config = described_class.new
-
-      expect(config.timeout).to eq(30)
-    end
-
     it "CLI options override file settings" do
       File.write(".evilution.yml", "timeout: 30\n")
 
@@ -181,227 +184,40 @@ RSpec.describe Evilution::Config do
       expect(config.timeout).to eq(5)
     end
 
-    it "handles empty config file gracefully" do
-      File.write(".evilution.yml", "")
+    it "skip_config_file: true bypasses file reading" do
+      File.write(".evilution.yml", "timeout: 999\n")
 
-      config = described_class.new
-
-      expect(config.timeout).to eq(30) # default
-    end
-
-    it "loads ignore_patterns from YAML" do
-      yaml = <<~YAML
-        ignore_patterns:
-          - "call{name=info, receiver=call{name=logger}}"
-          - "call{name=debug|warn}"
-      YAML
-      File.write(".evilution.yml", yaml)
-
-      config = described_class.new
-
-      expect(config.ignore_patterns).to eq([
-                                             "call{name=info, receiver=call{name=logger}}",
-                                             "call{name=debug|warn}"
-                                           ])
-    end
-
-    it "defaults ignore_patterns to empty when not in YAML" do
-      File.write(".evilution.yml", "timeout: 10\n")
-
-      config = described_class.new
-
-      expect(config.ignore_patterns).to eq([])
-    end
-
-    it "CLI options override ignore_patterns from file" do
-      File.write(".evilution.yml", "ignore_patterns:\n  - \"call{name=log}\"\n")
-
-      config = described_class.new(ignore_patterns: ["call{name=debug}"])
-
-      expect(config.ignore_patterns).to eq(["call{name=debug}"])
-    end
-
-    it "loads skip_heredoc_literals from YAML" do
-      File.write(".evilution.yml", "skip_heredoc_literals: true\n")
-
-      config = described_class.new
-
-      expect(config.skip_heredoc_literals?).to be true
-    end
-
-    it "defaults skip_heredoc_literals to false when not in YAML" do
-      File.write(".evilution.yml", "timeout: 10\n")
-
-      config = described_class.new
-
-      expect(config.skip_heredoc_literals?).to be false
-    end
-
-    it "CLI options override skip_heredoc_literals from file" do
-      File.write(".evilution.yml", "skip_heredoc_literals: true\n")
-
-      config = described_class.new(skip_heredoc_literals: false)
-
-      expect(config.skip_heredoc_literals?).to be false
-    end
-
-    it "loads related_specs_heuristic from YAML" do
-      File.write(".evilution.yml", "related_specs_heuristic: true\n")
-
-      config = described_class.new
-
-      expect(config.related_specs_heuristic?).to be true
-    end
-
-    it "defaults related_specs_heuristic to false when not in YAML" do
-      File.write(".evilution.yml", "timeout: 10\n")
-
-      config = described_class.new
-
-      expect(config.related_specs_heuristic?).to be false
-    end
-
-    it "CLI options override related_specs_heuristic from file" do
-      File.write(".evilution.yml", "related_specs_heuristic: true\n")
-
-      config = described_class.new(related_specs_heuristic: false)
-
-      expect(config.related_specs_heuristic?).to be false
-    end
-
-    it "defaults fallback_to_full_suite to false" do
       config = described_class.new(skip_config_file: true)
 
-      expect(config.fallback_to_full_suite?).to be false
+      expect(config.timeout).to eq(30)
     end
 
-    it "loads fallback_to_full_suite from YAML" do
-      File.write(".evilution.yml", "fallback_to_full_suite: true\n")
+    it "end-to-end merge exposes both file and explicit values" do
+      File.write(".evilution.yml", "timeout: 60\nformat: json\n")
 
-      config = described_class.new
+      config = described_class.new(jobs: 4)
 
-      expect(config.fallback_to_full_suite?).to be true
+      expect(config.timeout).to eq(60)
+      expect(config.format).to eq(:json)
+      expect(config.jobs).to eq(4)
+    end
+  end
+
+  describe ".file_options" do
+    around do |example|
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) { example.run }
+      end
     end
 
-    it "CLI options override fallback_to_full_suite from file" do
-      File.write(".evilution.yml", "fallback_to_full_suite: true\n")
+    it "delegates to FileLoader and returns parsed symbol-keyed options" do
+      File.write(".evilution.yml", "timeout: 42\n")
 
-      config = described_class.new(fallback_to_full_suite: false)
-
-      expect(config.fallback_to_full_suite?).to be false
+      expect(described_class.file_options).to eq(timeout: 42)
     end
 
-    it "defaults spec_mappings to empty hash" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.spec_mappings).to eq({})
-    end
-
-    it "defaults spec_pattern to nil" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.spec_pattern).to be_nil
-    end
-
-    it "loads spec_mappings from YAML and normalizes string values to arrays" do
-      File.write(".evilution.yml", <<~YAML)
-        spec_mappings:
-          app/controllers/games_controller.rb:
-            - spec/requests/games_overlay_spec.rb
-            - spec/requests/games_spec.rb
-          lib/shared/util.rb: spec/lib/shared/util_spec.rb
-      YAML
-
-      config = described_class.new
-
-      expect(config.spec_mappings).to eq(
-        "app/controllers/games_controller.rb" => [
-          "spec/requests/games_overlay_spec.rb",
-          "spec/requests/games_spec.rb"
-        ],
-        "lib/shared/util.rb" => ["spec/lib/shared/util_spec.rb"]
-      )
-    end
-
-    it "loads spec_pattern from YAML" do
-      File.write(".evilution.yml", "spec_pattern: \"spec/requests/**/*_spec.rb\"\n")
-
-      config = described_class.new
-
-      expect(config.spec_pattern).to eq("spec/requests/**/*_spec.rb")
-    end
-
-    it "CLI options override spec_pattern from file" do
-      File.write(".evilution.yml", "spec_pattern: \"spec/requests/**/*_spec.rb\"\n")
-
-      config = described_class.new(spec_pattern: "spec/helpers/**/*_spec.rb")
-
-      expect(config.spec_pattern).to eq("spec/helpers/**/*_spec.rb")
-    end
-
-    it "raises ConfigError when spec_mappings is not a hash" do
-      File.write(".evilution.yml", "spec_mappings: nope\n")
-
-      expect { described_class.new }.to raise_error(Evilution::ConfigError, /spec_mappings.*Hash/)
-    end
-
-    it "raises ConfigError when spec_mappings value is not a string or array" do
-      expect do
-        described_class.new(skip_config_file: true, spec_mappings: { "lib/foo.rb" => 42 })
-      end.to raise_error(Evilution::ConfigError, /spec_mappings.*string or array/)
-    end
-
-    it "raises ConfigError when spec_mappings array contains non-strings" do
-      expect do
-        described_class.new(skip_config_file: true, spec_mappings: { "lib/foo.rb" => [42] })
-      end.to raise_error(Evilution::ConfigError, /spec_mappings.*string/)
-    end
-
-    it "raises ConfigError when spec_pattern is not a string" do
-      expect do
-        described_class.new(skip_config_file: true, spec_pattern: 42)
-      end.to raise_error(Evilution::ConfigError, /spec_pattern.*String/)
-    end
-
-    it "warns when spec_mappings entry references a missing file" do
-      expect do
-        described_class.new(
-          skip_config_file: true,
-          spec_mappings: { "lib/foo.rb" => "spec/missing_spec.rb" }
-        )
-      end.to output(%r{spec_mappings.*spec/missing_spec\.rb.*not found}).to_stderr
-    end
-
-    it "does not warn when all spec_mappings entries exist" do
-      File.write("existing_spec.rb", "")
-
-      expect do
-        described_class.new(
-          skip_config_file: true,
-          spec_mappings: { "lib/foo.rb" => "existing_spec.rb" }
-        )
-      end.not_to output.to_stderr
-    end
-
-    it "normalizes leading ./ in spec_mappings keys" do
-      File.write("existing_spec.rb", "")
-      config = described_class.new(
-        skip_config_file: true,
-        spec_mappings: { "./lib/foo.rb" => "existing_spec.rb" }
-      )
-
-      expect(config.spec_mappings).to have_key("lib/foo.rb")
-      expect(config.spec_mappings).not_to have_key("./lib/foo.rb")
-    end
-
-    it "normalizes absolute (pwd-prefixed) spec_mappings keys" do
-      File.write("existing_spec.rb", "")
-      config = described_class.new(
-        skip_config_file: true,
-        spec_mappings: { "#{Dir.pwd}/lib/foo.rb" => "existing_spec.rb" }
-      )
-
-      expect(config.spec_mappings).to have_key("lib/foo.rb")
+    it "returns {} when no config file exists" do
+      expect(described_class.file_options).to eq({})
     end
   end
 
@@ -484,7 +300,14 @@ RSpec.describe Evilution::Config do
   end
 
   describe ".default_template" do
-    it "returns a YAML string with commented-out options" do
+    it "returns a non-empty YAML string containing the Evilution configuration header" do
+      template = described_class.default_template
+
+      expect(template).not_to be_empty
+      expect(template).to include("Evilution configuration")
+    end
+
+    it "includes commented-out options" do
       template = described_class.default_template
 
       expect(template).to include("# timeout:")
@@ -492,298 +315,177 @@ RSpec.describe Evilution::Config do
     end
   end
 
-  describe "#json?" do
-    it "returns true when format is json" do
-      config = described_class.new(format: :json, skip_config_file: true)
+  describe "predicate methods" do
+    describe "#json?" do
+      it "returns true when format is json" do
+        config = described_class.new(format: :json, skip_config_file: true)
 
-      expect(config.json?).to be true
+        expect(config.json?).to be true
+      end
+
+      it "returns false when format is text" do
+        config = described_class.new(format: :text, skip_config_file: true)
+
+        expect(config.json?).to be false
+      end
     end
 
-    it "returns false when format is text" do
-      config = described_class.new(format: :text, skip_config_file: true)
+    describe "#text?" do
+      it "returns true when format is text" do
+        config = described_class.new(format: :text, skip_config_file: true)
 
-      expect(config.json?).to be false
-    end
-  end
+        expect(config.text?).to be true
+      end
 
-  describe "#text?" do
-    it "returns true when format is text" do
-      config = described_class.new(format: :text, skip_config_file: true)
+      it "returns false when format is json" do
+        config = described_class.new(format: :json, skip_config_file: true)
 
-      expect(config.text?).to be true
-    end
-
-    it "returns false when format is json" do
-      config = described_class.new(format: :json, skip_config_file: true)
-
-      expect(config.text?).to be false
-    end
-  end
-
-  describe "#html?" do
-    it "returns true when format is html" do
-      config = described_class.new(format: :html, skip_config_file: true)
-
-      expect(config.html?).to be true
+        expect(config.text?).to be false
+      end
     end
 
-    it "returns false when format is text" do
-      config = described_class.new(format: :text, skip_config_file: true)
+    describe "#html?" do
+      it "returns true when format is html" do
+        config = described_class.new(format: :html, skip_config_file: true)
 
-      expect(config.html?).to be false
-    end
-  end
+        expect(config.html?).to be true
+      end
 
-  describe "#line_ranges?" do
-    it "returns true when line_ranges is non-empty" do
-      config = described_class.new(line_ranges: { "lib/foo.rb" => 10..20 }, skip_config_file: true)
+      it "returns false when format is text" do
+        config = described_class.new(format: :text, skip_config_file: true)
 
-      expect(config.line_ranges?).to be true
-    end
-
-    it "returns false when line_ranges is empty" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.line_ranges?).to be false
-    end
-  end
-
-  describe "#target?" do
-    it "returns true when target is set" do
-      config = described_class.new(target: "Foo#bar", skip_config_file: true)
-
-      expect(config.target?).to be true
+        expect(config.html?).to be false
+      end
     end
 
-    it "returns false when target is nil" do
-      config = described_class.new(skip_config_file: true)
+    describe "#line_ranges?" do
+      it "returns true when line_ranges is non-empty" do
+        config = described_class.new(line_ranges: { "lib/foo.rb" => 10..20 }, skip_config_file: true)
 
-      expect(config.target?).to be false
-    end
-  end
+        expect(config.line_ranges?).to be true
+      end
 
-  describe "#fail_fast?" do
-    it "returns true when fail_fast is set" do
-      config = described_class.new(fail_fast: 1, skip_config_file: true)
+      it "returns false when line_ranges is empty" do
+        config = described_class.new(skip_config_file: true)
 
-      expect(config.fail_fast?).to be true
-    end
-
-    it "returns false when fail_fast is nil" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.fail_fast?).to be false
-    end
-  end
-
-  describe "#suggest_tests?" do
-    it "returns true when suggest_tests is enabled" do
-      config = described_class.new(suggest_tests: true, skip_config_file: true)
-
-      expect(config.suggest_tests?).to be true
+        expect(config.line_ranges?).to be false
+      end
     end
 
-    it "returns false when suggest_tests is disabled" do
-      config = described_class.new(skip_config_file: true)
+    describe "#target?" do
+      it "returns true when target is set" do
+        config = described_class.new(target: "Foo#bar", skip_config_file: true)
 
-      expect(config.suggest_tests?).to be false
-    end
-  end
+        expect(config.target?).to be true
+      end
 
-  describe "#progress?" do
-    it "returns true by default" do
-      config = described_class.new(skip_config_file: true)
+      it "returns false when target is nil" do
+        config = described_class.new(skip_config_file: true)
 
-      expect(config.progress?).to be true
-    end
-
-    it "returns false when progress is disabled" do
-      config = described_class.new(progress: false, skip_config_file: true)
-
-      expect(config.progress?).to be false
-    end
-  end
-
-  describe "#show_disabled?" do
-    it "returns false by default" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.show_disabled?).to be false
+        expect(config.target?).to be false
+      end
     end
 
-    it "returns true when show_disabled is enabled" do
-      config = described_class.new(show_disabled: true, skip_config_file: true)
+    describe "#fail_fast?" do
+      it "returns true when fail_fast is set" do
+        config = described_class.new(fail_fast: 1, skip_config_file: true)
 
-      expect(config.show_disabled?).to be true
-    end
-  end
+        expect(config.fail_fast?).to be true
+      end
 
-  describe "#skip_heredoc_literals?" do
-    it "returns false by default" do
-      config = described_class.new(skip_config_file: true)
+      it "returns false when fail_fast is nil" do
+        config = described_class.new(skip_config_file: true)
 
-      expect(config.skip_heredoc_literals?).to be false
-    end
-
-    it "returns true when skip_heredoc_literals is enabled" do
-      config = described_class.new(skip_heredoc_literals: true, skip_config_file: true)
-
-      expect(config.skip_heredoc_literals?).to be true
-    end
-  end
-
-  describe "#related_specs_heuristic?" do
-    it "returns false by default" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.related_specs_heuristic?).to be false
+        expect(config.fail_fast?).to be false
+      end
     end
 
-    it "returns true when related_specs_heuristic is enabled" do
-      config = described_class.new(related_specs_heuristic: true, skip_config_file: true)
+    describe "#suggest_tests?" do
+      it "returns true when suggest_tests is enabled" do
+        config = described_class.new(suggest_tests: true, skip_config_file: true)
 
-      expect(config.related_specs_heuristic?).to be true
-    end
-  end
+        expect(config.suggest_tests?).to be true
+      end
 
-  describe "fail_fast validation" do
-    it "rejects zero" do
-      expect { described_class.new(fail_fast: 0, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
-    end
+      it "returns false when suggest_tests is disabled" do
+        config = described_class.new(skip_config_file: true)
 
-    it "rejects negative values" do
-      expect { described_class.new(fail_fast: -1, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
+        expect(config.suggest_tests?).to be false
+      end
     end
 
-    it "rejects non-integer string values" do
-      expect { described_class.new(fail_fast: "abc", skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
+    describe "#progress?" do
+      it "returns true by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.progress?).to be true
+      end
+
+      it "returns false when progress is disabled" do
+        config = described_class.new(progress: false, skip_config_file: true)
+
+        expect(config.progress?).to be false
+      end
     end
 
-    it "rejects boolean values" do
-      expect { described_class.new(fail_fast: true, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
+    describe "#show_disabled?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.show_disabled?).to be false
+      end
+
+      it "returns true when show_disabled is enabled" do
+        config = described_class.new(show_disabled: true, skip_config_file: true)
+
+        expect(config.show_disabled?).to be true
+      end
+    end
+
+    describe "#skip_heredoc_literals?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.skip_heredoc_literals?).to be false
+      end
+
+      it "returns true when skip_heredoc_literals is enabled" do
+        config = described_class.new(skip_heredoc_literals: true, skip_config_file: true)
+
+        expect(config.skip_heredoc_literals?).to be true
+      end
+    end
+
+    describe "#related_specs_heuristic?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.related_specs_heuristic?).to be false
+      end
+
+      it "returns true when related_specs_heuristic is enabled" do
+        config = described_class.new(related_specs_heuristic: true, skip_config_file: true)
+
+        expect(config.related_specs_heuristic?).to be true
+      end
+    end
+
+    describe "#fallback_to_full_suite?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.fallback_to_full_suite?).to be false
+      end
+
+      it "returns true when enabled" do
+        config = described_class.new(fallback_to_full_suite: true, skip_config_file: true)
+
+        expect(config.fallback_to_full_suite?).to be true
+      end
     end
   end
 
-  describe "jobs validation" do
-    it "defaults to 1" do
-      config = described_class.new(skip_config_file: true)
-      expect(config.jobs).to eq(1)
-    end
-
-    it "accepts positive integers" do
-      config = described_class.new(jobs: 4, skip_config_file: true)
-      expect(config.jobs).to eq(4)
-    end
-
-    it "rejects zero" do
-      expect { described_class.new(jobs: 0, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
-    end
-
-    it "rejects negative values" do
-      expect { described_class.new(jobs: -1, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
-    end
-
-    it "rejects non-integer string values" do
-      expect { described_class.new(jobs: "abc", skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
-    end
-
-    it "rejects float values" do
-      expect { described_class.new(jobs: 2.5, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /positive integer/)
-    end
-  end
-
-  describe "isolation validation" do
-    it "defaults to :auto" do
-      config = described_class.new(skip_config_file: true)
-      expect(config.isolation).to eq(:auto)
-    end
-
-    it "accepts :fork" do
-      config = described_class.new(isolation: :fork, skip_config_file: true)
-      expect(config.isolation).to eq(:fork)
-    end
-
-    it "accepts :in_process" do
-      config = described_class.new(isolation: :in_process, skip_config_file: true)
-      expect(config.isolation).to eq(:in_process)
-    end
-
-    it "accepts string values and converts to symbol" do
-      config = described_class.new(isolation: "fork", skip_config_file: true)
-      expect(config.isolation).to eq(:fork)
-    end
-
-    it "rejects invalid values" do
-      expect { described_class.new(isolation: :invalid, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /isolation must be/)
-    end
-
-    it "rejects nil values" do
-      expect { described_class.new(isolation: nil, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /isolation must be/)
-    end
-  end
-
-  describe "integration validation" do
-    it "defaults to :rspec" do
-      config = described_class.new(skip_config_file: true)
-      expect(config.integration).to eq(:rspec)
-    end
-
-    it "accepts :minitest" do
-      config = described_class.new(integration: :minitest, skip_config_file: true)
-      expect(config.integration).to eq(:minitest)
-    end
-
-    it "accepts string values and converts to symbol" do
-      config = described_class.new(integration: "minitest", skip_config_file: true)
-      expect(config.integration).to eq(:minitest)
-    end
-
-    it "rejects invalid values" do
-      expect { described_class.new(integration: :cucumber, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /integration must be/)
-    end
-
-    it "rejects nil values" do
-      expect { described_class.new(integration: nil, skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /integration must be/)
-    end
-  end
-
-  describe "ignore_patterns" do
-    it "defaults to empty array" do
-      config = described_class.new(skip_config_file: true)
-
-      expect(config.ignore_patterns).to eq([])
-    end
-
-    it "accepts an array of strings" do
-      config = described_class.new(ignore_patterns: ["call{name=log}"], skip_config_file: true)
-
-      expect(config.ignore_patterns).to eq(["call{name=log}"])
-    end
-
-    it "rejects non-string elements" do
-      expect { described_class.new(ignore_patterns: [123], skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /ignore_patterns must be an array of strings/)
-    end
-
-    it "rejects hash elements" do
-      expect { described_class.new(ignore_patterns: [{ name: "log" }], skip_config_file: true) }
-        .to raise_error(Evilution::ConfigError, /ignore_patterns must be an array of strings/)
-    end
-  end
-
-  describe "example_targeting" do
+  describe "example_targeting (orchestration)" do
     around do |example|
       original = ENV.fetch("EV_DISABLE_EXAMPLE_TARGETING", :__unset__)
       ENV.delete("EV_DISABLE_EXAMPLE_TARGETING")
@@ -802,7 +504,7 @@ RSpec.describe Evilution::Config do
       expect(config.example_targeting?).to be true
     end
 
-    it "accepts false" do
+    it "accepts false explicitly" do
       config = described_class.new(example_targeting: false, skip_config_file: true)
 
       expect(config.example_targeting?).to be false
@@ -827,44 +529,9 @@ RSpec.describe Evilution::Config do
         end
       end
     end
-
-    it "is disabled when EV_DISABLE_EXAMPLE_TARGETING=1 in env" do
-      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
-
-      expect(described_class.new(skip_config_file: true).example_targeting?).to be false
-    end
-
-    it "env overrides file config" do
-      Dir.mktmpdir do |dir|
-        Dir.chdir(dir) do
-          File.write(".evilution.yml", "example_targeting: true\n")
-          ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
-
-          expect(described_class.new.example_targeting?).to be false
-        end
-      end
-    end
-
-    it "CLI options override env var" do
-      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "1"
-
-      expect(described_class.new(example_targeting: true, skip_config_file: true).example_targeting?).to be true
-    end
-
-    it "ignores empty env var" do
-      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = ""
-
-      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
-    end
-
-    it "ignores env var set to 0" do
-      ENV["EV_DISABLE_EXAMPLE_TARGETING"] = "0"
-
-      expect(described_class.new(skip_config_file: true).example_targeting?).to be true
-    end
   end
 
-  describe "example_targeting_fallback" do
+  describe "example_targeting_fallback (orchestration)" do
     it "defaults to :full_file" do
       config = described_class.new(skip_config_file: true)
 
@@ -873,12 +540,6 @@ RSpec.describe Evilution::Config do
 
     it "accepts :unresolved" do
       config = described_class.new(example_targeting_fallback: :unresolved, skip_config_file: true)
-
-      expect(config.example_targeting_fallback).to eq(:unresolved)
-    end
-
-    it "accepts string and converts to symbol" do
-      config = described_class.new(example_targeting_fallback: "unresolved", skip_config_file: true)
 
       expect(config.example_targeting_fallback).to eq(:unresolved)
     end
@@ -892,27 +553,9 @@ RSpec.describe Evilution::Config do
         end
       end
     end
-
-    it "rejects invalid values" do
-      expect do
-        described_class.new(example_targeting_fallback: :invalid, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
-    end
-
-    it "rejects nil" do
-      expect do
-        described_class.new(example_targeting_fallback: nil, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
-    end
-
-    it "rejects integer with ConfigError (not NoMethodError)" do
-      expect do
-        described_class.new(example_targeting_fallback: 42, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /example_targeting_fallback must be/)
-    end
   end
 
-  describe "example_targeting_cache" do
+  describe "example_targeting_cache (orchestration)" do
     it "defaults to { max_files: 50, max_blocks: 10000 }" do
       config = described_class.new(skip_config_file: true)
 
@@ -949,30 +592,6 @@ RSpec.describe Evilution::Config do
           expect(described_class.new.example_targeting_cache).to eq(max_files: 25, max_blocks: 5_000)
         end
       end
-    end
-
-    it "rejects non-hash values" do
-      expect do
-        described_class.new(example_targeting_cache: "nope", skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /example_targeting_cache must be a Hash/)
-    end
-
-    it "rejects non-positive max_files" do
-      expect do
-        described_class.new(example_targeting_cache: { max_files: 0 }, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /max_files must be a positive integer/)
-    end
-
-    it "rejects non-positive max_blocks" do
-      expect do
-        described_class.new(example_targeting_cache: { max_blocks: -1 }, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /max_blocks must be a positive integer/)
-    end
-
-    it "rejects non-string/symbol keys with ConfigError (not NoMethodError)" do
-      expect do
-        described_class.new(example_targeting_cache: { 42 => 1 }, skip_config_file: true)
-      end.to raise_error(Evilution::ConfigError, /example_targeting_cache keys must be/)
     end
   end
 

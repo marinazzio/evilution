@@ -8,39 +8,16 @@ class Evilution::Config
   CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
 
   DEFAULTS = {
-    timeout: 30,
-    format: :text,
-    target: nil,
-    min_score: 0.0,
-    integration: :rspec,
-    verbose: false,
-    quiet: false,
-    jobs: 1,
-    fail_fast: nil,
-    baseline: true,
-    isolation: :auto,
-    incremental: false,
-    suggest_tests: false,
-    progress: true,
-    save_session: false,
-    line_ranges: {},
-    spec_files: [],
-    ignore_patterns: [],
-    show_disabled: false,
-    baseline_session: nil,
-    skip_heredoc_literals: false,
-    related_specs_heuristic: false,
-    fallback_to_full_suite: false,
-    preload: nil,
-    spec_mappings: {},
-    spec_pattern: nil,
-    example_targeting: true,
+    timeout: 30, format: :text, target: nil, min_score: 0.0, integration: :rspec,
+    verbose: false, quiet: false, jobs: 1, fail_fast: nil, baseline: true,
+    isolation: :auto, incremental: false, suggest_tests: false, progress: true,
+    save_session: false, line_ranges: {}, spec_files: [], ignore_patterns: [],
+    show_disabled: false, baseline_session: nil, skip_heredoc_literals: false,
+    related_specs_heuristic: false, fallback_to_full_suite: false, preload: nil,
+    spec_mappings: {}, spec_pattern: nil, example_targeting: true,
     example_targeting_fallback: :full_file,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 }
   }.freeze
-
-  EXAMPLE_TARGETING_FALLBACKS = %i[full_file unresolved].freeze
-  private_constant :EXAMPLE_TARGETING_FALLBACKS
 
   attr_reader :target_files, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
@@ -53,9 +30,8 @@ class Evilution::Config
               :spec_selector
 
   def initialize(**options)
-    file_options = options.delete(:skip_config_file) ? {} : load_config_file
-    env_options = load_env_options
-    merged = DEFAULTS.merge(file_options).merge(env_options).merge(options)
+    skip_file = options.delete(:skip_config_file) ? true : false
+    merged = Sources.merge(explicit: options, skip_file: skip_file)
     assign_attributes(merged)
     freeze
   end
@@ -125,18 +101,7 @@ class Evilution::Config
   end
 
   def self.file_options
-    CONFIG_FILES.each do |path|
-      next unless File.exist?(path)
-
-      data = YAML.safe_load_file(path, symbolize_names: true)
-      return data.is_a?(Hash) ? data : {}
-    rescue Psych::SyntaxError, Psych::DisallowedClass => e
-      raise Evilution::ConfigError.new("failed to parse config file #{path}: #{e.message}", file: path)
-    rescue SystemCallError => e
-      raise Evilution::ConfigError.new("cannot read config file #{path}: #{e.message}", file: path)
-    end
-
-    {}
+    FileLoader.load
   end
 
   # Generates a default config file template.
@@ -221,234 +186,75 @@ class Evilution::Config
 
   private
 
-  def validate_fail_fast(value)
-    return nil if value.nil?
-
-    value = Integer(value)
-    raise Evilution::ConfigError, "fail_fast must be a positive integer, got #{value}" unless value >= 1
-
-    value
-  rescue ::ArgumentError, ::TypeError
-    raise Evilution::ConfigError, "fail_fast must be a positive integer, got #{value.inspect}"
-  end
-
-  def assign_attributes(merged) # rubocop:disable Metrics/AbcSize
-    @target_files = Array(merged[:target_files])
-    @timeout = merged[:timeout]
-    @format = merged[:format].to_sym
-    @target = merged[:target]
-    @min_score = merged[:min_score].to_f
-    @integration = validate_integration(merged[:integration])
-    @verbose = merged[:verbose]
-    @quiet = merged[:quiet]
-    @jobs = validate_jobs(merged[:jobs])
-    @fail_fast = validate_fail_fast(merged[:fail_fast])
-    @baseline = merged[:baseline]
-    @isolation = validate_isolation(merged[:isolation])
-    @incremental = merged[:incremental]
-    @suggest_tests = merged[:suggest_tests]
-    @progress = merged[:progress]
-    @save_session = merged[:save_session]
-    @line_ranges = merged[:line_ranges] || {}
-    @spec_files = Array(merged[:spec_files])
-    @ignore_patterns = validate_ignore_patterns(merged[:ignore_patterns])
-    @show_disabled = merged[:show_disabled]
-    @baseline_session = merged[:baseline_session]
-    @skip_heredoc_literals = merged[:skip_heredoc_literals]
-    @related_specs_heuristic = merged[:related_specs_heuristic]
-    @fallback_to_full_suite = merged[:fallback_to_full_suite]
-    @hooks = validate_hooks(merged[:hooks])
-    @preload = validate_preload(merged[:preload])
-    @spec_mappings = validate_spec_mappings(merged[:spec_mappings])
-    @spec_pattern = validate_spec_pattern(merged[:spec_pattern])
+  def assign_attributes(merged)
+    assign_simple_attributes(merged)
+    assign_validated_attributes(merged)
     assign_example_targeting(merged)
-    @spec_selector = build_spec_selector
-  end
-
-  def assign_example_targeting(merged)
-    @example_targeting = merged[:example_targeting] ? true : false
-    @example_targeting_fallback = validate_example_targeting_fallback(merged[:example_targeting_fallback])
-    @example_targeting_cache = validate_example_targeting_cache(merged[:example_targeting_cache])
-  end
-
-  def build_spec_selector
-    Evilution::SpecSelector.new(
+    @spec_selector = Builders::SpecSelector.call(
       spec_files: @spec_files,
       spec_mappings: @spec_mappings,
       spec_pattern: @spec_pattern,
-      spec_resolver: build_spec_resolver
+      integration: @integration
     )
   end
 
-  def build_spec_resolver
-    case @integration
-    when :minitest
-      Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
-    else
-      Evilution::SpecResolver.new
-    end
+  def assign_simple_attributes(merged)
+    @target_files            = Array(merged[:target_files])
+    @timeout                 = merged[:timeout]
+    @format                  = merged[:format].to_sym
+    @target                  = merged[:target]
+    @min_score               = merged[:min_score].to_f
+    @verbose                 = merged[:verbose]
+    @quiet                   = merged[:quiet]
+    @baseline                = merged[:baseline]
+    @incremental             = merged[:incremental]
+    @suggest_tests           = merged[:suggest_tests]
+    @progress                = merged[:progress]
+    @save_session            = merged[:save_session]
+    @line_ranges             = merged[:line_ranges] || {}
+    @spec_files              = Array(merged[:spec_files])
+    @show_disabled           = merged[:show_disabled]
+    @baseline_session        = merged[:baseline_session]
+    @skip_heredoc_literals   = merged[:skip_heredoc_literals]
+    @related_specs_heuristic = merged[:related_specs_heuristic]
+    @fallback_to_full_suite  = merged[:fallback_to_full_suite]
   end
 
-  def validate_spec_mappings(value)
-    return {} if value.nil?
-
-    raise Evilution::ConfigError, "spec_mappings must be a Hash, got #{value.class}" unless value.is_a?(Hash)
-
-    normalized = value.each_with_object({}) do |(source, specs), acc|
-      key = normalize_spec_mappings_key(source)
-      acc[key] = normalize_spec_mappings_value(key, specs)
-    end
-
-    warn_missing_spec_mappings(normalized)
-    normalized
+  def assign_validated_attributes(merged)
+    @integration     = Validators::Integration.call(merged[:integration])
+    @jobs            = Validators::Jobs.call(merged[:jobs])
+    @fail_fast       = Validators::FailFast.call(merged[:fail_fast])
+    @isolation       = Validators::Isolation.call(merged[:isolation])
+    @ignore_patterns = Validators::IgnorePatterns.call(merged[:ignore_patterns])
+    @hooks           = Validators::Hooks.call(merged[:hooks])
+    @preload         = Validators::Preload.call(merged[:preload])
+    @spec_mappings   = Validators::SpecMappings.call(merged[:spec_mappings])
+    @spec_pattern    = Validators::SpecPattern.call(merged[:spec_pattern])
   end
 
-  def normalize_spec_mappings_key(source)
-    key = source.to_s
-    key = key.delete_prefix("#{Dir.pwd}/") if key.start_with?("/")
-    key.delete_prefix("./")
-  end
-
-  def normalize_spec_mappings_value(source, specs)
-    case specs
-    when String then [specs]
-    when Array
-      specs.each do |entry|
-        unless entry.is_a?(String)
-          raise Evilution::ConfigError,
-                "spec_mappings[#{source.inspect}] entries must be string paths, got #{entry.class}"
-        end
-      end
-      specs
-    else
-      raise Evilution::ConfigError,
-            "spec_mappings[#{source.inspect}] must be a string or array of strings, got #{specs.class}"
-    end
-  end
-
-  def warn_missing_spec_mappings(mappings)
-    mappings.each do |source, specs|
-      specs.each do |spec_path|
-        next if File.exist?(spec_path)
-
-        warn "[evilution] spec_mappings[#{source.inspect}]: #{spec_path} not found, skipping"
-      end
-    end
-  end
-
-  def validate_spec_pattern(value)
-    return nil if value.nil?
-    return value if value.is_a?(String)
-
-    raise Evilution::ConfigError, "spec_pattern must be nil or a String glob, got #{value.class}"
-  end
-
-  def validate_preload(value)
-    return nil if value.nil?
-    return false if value == false
-    return value if value.is_a?(String)
-
-    raise Evilution::ConfigError, "preload must be nil, false, or a String path, got #{value.inspect}"
-  end
-
-  def validate_integration(value)
-    raise Evilution::ConfigError, "integration must be rspec or minitest, got nil" if value.nil?
-
-    value = value.to_sym
-    unless %i[rspec minitest].include?(value)
-      raise Evilution::ConfigError,
-            "integration must be rspec or minitest, got #{value.inspect}"
-    end
-
-    value
-  end
-
-  def validate_isolation(value)
-    raise Evilution::ConfigError, "isolation must be auto, fork, or in_process, got nil" if value.nil?
-
-    value = value.to_sym
-    raise Evilution::ConfigError, "isolation must be auto, fork, or in_process, got #{value.inspect}" unless %i[auto fork
-                                                                                                                in_process].include?(value)
-
-    value
-  end
-
-  def validate_jobs(value)
-    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}" if value.is_a?(Float)
-
-    value = Integer(value)
-    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value}" unless value >= 1
-
-    value
-  rescue ::ArgumentError, ::TypeError
-    raise Evilution::ConfigError, "jobs must be a positive integer, got #{value.inspect}"
-  end
-
-  def validate_ignore_patterns(value)
-    patterns = Array(value)
-    patterns.each do |pattern|
-      unless pattern.is_a?(String)
-        raise Evilution::ConfigError,
-              "ignore_patterns must be an array of strings, got #{pattern.class} (#{pattern.inspect})"
-      end
-    end
-    patterns
-  end
-
-  def validate_example_targeting_fallback(value)
-    unless value.is_a?(String) || value.is_a?(Symbol)
-      raise Evilution::ConfigError,
-            "example_targeting_fallback must be full_file or unresolved, got #{value.inspect}"
-    end
-
-    sym = value.to_sym
-    unless EXAMPLE_TARGETING_FALLBACKS.include?(sym)
-      raise Evilution::ConfigError,
-            "example_targeting_fallback must be full_file or unresolved, got #{sym.inspect}"
-    end
-
-    sym
-  end
-
-  def validate_example_targeting_cache(value)
-    raise Evilution::ConfigError, "example_targeting_cache must be a Hash, got #{value.class}" unless value.is_a?(Hash)
-
-    normalized = value.each_with_object({}) do |(k, v), acc|
-      unless k.is_a?(String) || k.is_a?(Symbol)
-        raise Evilution::ConfigError,
-              "example_targeting_cache keys must be Strings or Symbols, got #{k.inspect}"
-      end
-      acc[k.to_sym] = v
-    end
-    merged = DEFAULTS[:example_targeting_cache].merge(normalized)
-    validate_positive_int!(merged, :max_files)
-    validate_positive_int!(merged, :max_blocks)
-    merged
-  end
-
-  def validate_positive_int!(cache, key)
-    v = cache[key]
-    return if v.is_a?(Integer) && v >= 1
-
-    raise Evilution::ConfigError,
-          "example_targeting_cache.#{key} must be a positive integer, got #{v.inspect}"
-  end
-
-  def load_env_options
-    opts = {}
-    val = ENV.fetch("EV_DISABLE_EXAMPLE_TARGETING", nil)
-    opts[:example_targeting] = false if val && !val.empty? && val != "0"
-    opts
-  end
-
-  def validate_hooks(value)
-    return {} if value.nil?
-    raise Evilution::ConfigError, "hooks must be a mapping of event names to file paths, got #{value.class}" unless value.is_a?(Hash)
-
-    value
-  end
-
-  def load_config_file
-    self.class.file_options
+  def assign_example_targeting(merged)
+    @example_targeting          = merged[:example_targeting] ? true : false
+    @example_targeting_fallback = Validators::ExampleTargetingFallback.call(merged[:example_targeting_fallback])
+    @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
   end
 end
+
+require_relative "config/file_loader"
+require_relative "config/env_loader"
+require_relative "config/sources"
+require_relative "config/validators"
+require_relative "config/validators/base"
+require_relative "config/validators/integration"
+require_relative "config/validators/isolation"
+require_relative "config/validators/jobs"
+require_relative "config/validators/fail_fast"
+require_relative "config/validators/preload"
+require_relative "config/validators/hooks"
+require_relative "config/validators/ignore_patterns"
+require_relative "config/validators/spec_pattern"
+require_relative "config/validators/spec_mappings"
+require_relative "config/validators/example_targeting_fallback"
+require_relative "config/validators/example_targeting_cache"
+require_relative "config/builders"
+require_relative "config/builders/spec_resolver"
+require_relative "config/builders/spec_selector"
