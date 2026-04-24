@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+require "fileutils"
 require "evilution/integration/loading/concern_state_cleaner"
 
 RSpec.describe Evilution::Integration::Loading::ConcernStateCleaner do

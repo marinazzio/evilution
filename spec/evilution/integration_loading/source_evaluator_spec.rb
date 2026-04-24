@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tempfile"
+require "tmpdir"
 require "evilution/integration/loading/source_evaluator"
 
 RSpec.describe Evilution::Integration::Loading::SourceEvaluator do

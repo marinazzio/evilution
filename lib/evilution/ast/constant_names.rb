@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require_relative "../ast"
 
 # Walks a Prism AST and returns every class/module constant declared, nested
 # names rendered fully-qualified (e.g. "Foo::Bar"). Order is source order:

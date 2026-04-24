@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tmpdir"
+require "fileutils"
 require "evilution/load_path/subpath_resolver"
 
 RSpec.describe Evilution::LoadPath::SubpathResolver do
