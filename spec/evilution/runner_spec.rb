@@ -315,7 +315,7 @@ RSpec.describe Evilution::Runner do
       )
       no_match_runner = described_class.new(config: no_match_config)
 
-      expect { no_match_runner.call }.to raise_error(Evilution::Error, /no method found matching 'Example#nonexistent'/)
+      expect { no_match_runner.call }.to raise_error(Evilution::Error, /no subject matched 'Example#nonexistent'/)
     end
   end
 
@@ -422,7 +422,7 @@ RSpec.describe Evilution::Runner do
       )
       runner = described_class.new(config: config)
 
-      expect { runner.call }.to raise_error(Evilution::Error, /no method found matching 'Nonexistent'/)
+      expect { runner.call }.to raise_error(Evilution::Error, /no subject matched 'Nonexistent'/)
     end
   end
 
@@ -681,7 +681,7 @@ RSpec.describe Evilution::Runner do
       )
       runner = described_class.new(config: config)
 
-      expect { runner.call }.to raise_error(Evilution::Error, /no method found matching/)
+      expect { runner.call }.to raise_error(Evilution::Error, /no subject matched/)
     end
   end
 
