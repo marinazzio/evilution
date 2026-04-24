@@ -237,10 +237,6 @@ class Evilution::Config
     @example_targeting_fallback = Validators::ExampleTargetingFallback.call(merged[:example_targeting_fallback])
     @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
   end
-
-  def load_config_file
-    self.class.file_options
-  end
 end
 
 require_relative "config/file_loader"

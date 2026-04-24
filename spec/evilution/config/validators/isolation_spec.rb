@@ -24,5 +24,15 @@ RSpec.describe Evilution::Config::Validators::Isolation do
       expect { described_class.call(:foo) }
         .to raise_error(Evilution::ConfigError, "isolation must be auto, fork, or in_process, got :foo")
     end
+
+    it "raises ConfigError on Integer (not NoMethodError)" do
+      expect { described_class.call(1) }
+        .to raise_error(Evilution::ConfigError, "isolation must be auto, fork, or in_process, got 1")
+    end
+
+    it "raises ConfigError on Boolean" do
+      expect { described_class.call(true) }
+        .to raise_error(Evilution::ConfigError, "isolation must be auto, fork, or in_process, got true")
+    end
   end
 end

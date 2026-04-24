@@ -26,5 +26,10 @@ RSpec.describe Evilution::Config::Validators::Integration do
       expect { described_class.call(:foo) }
         .to raise_error(Evilution::ConfigError, "integration must be rspec or minitest, got :foo")
     end
+
+    it "raises ConfigError on Integer (not NoMethodError)" do
+      expect { described_class.call(1) }
+        .to raise_error(Evilution::ConfigError, "integration must be rspec or minitest, got 1")
+    end
   end
 end

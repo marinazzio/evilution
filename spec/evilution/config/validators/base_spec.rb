@@ -40,6 +40,21 @@ RSpec.describe Evilution::Config::Validators::Base do
       expect { subclass.call_coerce_symbol(:z) }
         .to raise_error(Evilution::ConfigError, "test must be a or b, got :z")
     end
+
+    it "raises ConfigError on Integer (not NoMethodError)" do
+      expect { subclass.call_coerce_symbol(1) }
+        .to raise_error(Evilution::ConfigError, "test must be a or b, got 1")
+    end
+
+    it "raises ConfigError on Boolean" do
+      expect { subclass.call_coerce_symbol(true) }
+        .to raise_error(Evilution::ConfigError, "test must be a or b, got true")
+    end
+
+    it "raises ConfigError on Array" do
+      expect { subclass.call_coerce_symbol([:a]) }
+        .to raise_error(Evilution::ConfigError, "test must be a or b, got [:a]")
+    end
   end
 
   describe "coerce_positive_int!" do
