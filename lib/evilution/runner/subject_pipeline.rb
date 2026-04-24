@@ -20,13 +20,7 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def target_files
-    @target_files ||= if source_glob_target?
-                        resolve_source_glob
-                      elsif !config.target_files.empty?
-                        config.target_files
-                      else
-                        Evilution::Git::ChangedFiles.new.call
-                      end
+    @target_files ||= resolve_target_files
   end
 
   private
@@ -88,9 +82,25 @@ class Evilution::Runner::SubjectPipeline
 
   def filter_by_target(subjects)
     matched = subjects.select(&target_matcher)
-    raise Evilution::Error, "no method found matching '#{config.target}'" if matched.empty?
+    raise Evilution::Error, build_no_match_error if matched.empty?
 
     matched
+  end
+
+  def resolve_target_files
+    return resolve_source_glob if source_glob_target?
+    return config.target_files unless config.target_files.empty?
+
+    @used_git_fallback = true
+    Evilution::Git::ChangedFiles.new.call
+  end
+
+  def build_no_match_error
+    base = "no subject matched '#{config.target}'"
+    return base unless @used_git_fallback
+
+    "#{base}; scanned git-changed files only. Pass file paths or " \
+      "--target source:<glob> to scan the full codebase."
   end
 
   def target_matcher

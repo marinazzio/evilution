@@ -144,14 +144,60 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
-    it "raises Evilution::Error when no method matches" do
+    it "raises Evilution::Error when no subject matches with explicit files" do
       Dir.mktmpdir do |dir|
         file = write(dir, "lib/foo.rb", fixture)
         config = Evilution::Config.new(
           target_files: [file], target: "Nope#gone", quiet: true, baseline: false, skip_config_file: true
         )
         pipeline = described_class.new(config, parser: parser)
-        expect { pipeline.call }.to raise_error(Evilution::Error, /no method found/)
+        expect { pipeline.call }.to raise_error(Evilution::Error, /no subject matched 'Nope#gone'/)
+      end
+    end
+
+    it "does not include the git-changed hint when file scope was explicit" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", fixture)
+        config = Evilution::Config.new(
+          target_files: [file], target: "Nope#gone", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect { pipeline.call }.to raise_error(Evilution::Error) { |e|
+          expect(e.message).not_to match(/git-changed/)
+        }
+      end
+    end
+
+    it "raises with a git-changed-files hint when fallback returned empty" do
+      changed = instance_double(Evilution::Git::ChangedFiles, call: [])
+      allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed)
+
+      config = Evilution::Config.new(
+        target: "Foo::Bar", quiet: true, baseline: false, skip_config_file: true
+      )
+      pipeline = described_class.new(config, parser: parser)
+
+      expect { pipeline.call }.to raise_error(
+        Evilution::Error,
+        /no subject matched 'Foo::Bar'.*git-changed files.*source:/m
+      )
+    end
+
+    it "raises with a git-changed-files hint when fallback files lack the target class" do
+      Dir.mktmpdir do |dir|
+        unrelated = write(dir, "lib/unrelated.rb", "class Unrelated; def x; end; end\n")
+        changed = instance_double(Evilution::Git::ChangedFiles, call: [unrelated])
+        allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed)
+
+        config = Evilution::Config.new(
+          target: "PgObjects::Manager", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+
+        expect { pipeline.call }.to raise_error(
+          Evilution::Error,
+          /no subject matched 'PgObjects::Manager'.*git-changed files/m
+        )
       end
     end
   end
