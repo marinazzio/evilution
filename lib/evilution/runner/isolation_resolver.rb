@@ -48,9 +48,11 @@ class Evilution::Runner::IsolationResolver
 
   attr_reader :config, :hooks
 
-  # Preload runs under :fork always (Rails autodetect path). Under :in_process,
-  # only run when the user explicitly asked via --preload or preload: in YAML —
-  # don't auto-load spec/rails_helper.rb for a user who opted out of fork.
+  # Under :fork, allow preloading — caller resolves whether a path exists (an
+  # explicit --preload / preload: value, or an auto-detected rails_helper) and
+  # bails early when none does. Under :in_process, only allow preloading when
+  # the user explicitly asked via --preload or preload: in YAML — don't
+  # auto-load spec/rails_helper.rb for a user who opted out of fork.
   def should_preload?
     return true if resolve_isolation == :fork
 
