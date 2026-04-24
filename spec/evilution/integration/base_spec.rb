@@ -167,6 +167,30 @@ RSpec.describe Evilution::Integration::Base do
         expect(result[:passed]).to be false
       end
     end
+
+    context "with an injected mutation_applier" do
+      let(:applier) { instance_double(Evilution::Integration::Loading::MutationApplier) }
+
+      subject(:integration) { concrete_class.new(hooks: hooks, mutation_applier: applier) }
+
+      it "delegates mutation application to the applier and skips run_tests when the applier returns a failure" do
+        failure = { passed: false, error: "injected" }
+        expect(applier).to receive(:call).with(mutation).and_return(failure)
+
+        result = integration.call(mutation)
+
+        expect(result).to eq(failure)
+        expect(events).not_to include(:run_tests)
+      end
+
+      it "proceeds to run_tests when the applier returns nil" do
+        expect(applier).to receive(:call).with(mutation).and_return(nil)
+
+        integration.call(mutation)
+
+        expect(events).to include(:run_tests)
+      end
+    end
   end
 
   describe "mutation application" do
@@ -725,154 +749,6 @@ RSpec.describe Evilution::Integration::Base do
         expect(result2[:error]).to be_nil
       ensure
         Object.send(:remove_const, :EvilutionTestPrependedConsec) if defined?(EvilutionTestPrependedConsec)
-        $LOADED_FEATURES.delete(File.expand_path(source_path))
-      end
-
-      it "pins constants before clear_concern_state to prevent Zeitwerk re-autoload" do
-        # Zeitwerk's const_added hook can re-autoload the original file when
-        # a module is reopened from a temp dir, re-setting @_included_block
-        # after clear_concern_state already removed it.
-        # The fix: pin constants via const_get before clearing and loading,
-        # so Zeitwerk considers them already loaded and skips re-autoload.
-        stub_concern = Module.new do
-          def self.extended(base)
-            base.instance_variable_set(:@_not_a_concern, false)
-          end
-
-          def included(base = nil, &block)
-            if base.nil?
-              if instance_variable_defined?(:@_included_block)
-                if @_included_block.source_location != block.source_location
-                  raise "MultipleIncludedBlocks: Cannot define multiple 'included' blocks for a Concern"
-                end
-              else
-                @_included_block = block
-              end
-            else
-              super(base)
-            end
-          end
-        end
-        stub_const("ActiveSupport::Concern", stub_concern)
-
-        original = <<~RUBY
-          module EvilutionTestZeitwerk
-            extend ActiveSupport::Concern
-
-            included do
-              # setup callback
-            end
-
-            def some_method
-              :original
-            end
-          end
-        RUBY
-        mutated = <<~RUBY
-          module EvilutionTestZeitwerk
-            extend ActiveSupport::Concern
-
-            included do
-              # setup callback
-            end
-
-            def some_method
-              nil
-            end
-          end
-        RUBY
-
-        File.write(source_path, original)
-        load(source_path)
-        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
-
-        # Track call ordering: pin must happen before clear_concern_state
-        call_order = []
-        ordering_class = Class.new(described_class) do
-          define_method(:ensure_framework_loaded) { nil }
-          define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
-          define_method(:build_args) { |_mutation| [] }
-          define_method(:reset_state) { nil }
-
-          define_method(:pin_autoloaded_constants) do |source|
-            super(source).tap { |result| call_order << [:pin, result] }
-          end
-
-          define_method(:clear_concern_state) do |fp|
-            call_order << [:clear]
-            super(fp)
-          end
-        end
-
-        concern_mut = double(
-          "Mutation",
-          file_path: source_path,
-          original_source: original,
-          mutated_source: mutated
-        )
-
-        result = ordering_class.new.call(concern_mut)
-
-        expect(result[:passed]).to be true
-        expect(result[:error]).to be_nil
-
-        # Verify pin runs before clear
-        expect(call_order.map(&:first)).to eq(%i[pin clear])
-        expect(call_order.first[1]).to include("EvilutionTestZeitwerk")
-      ensure
-        Object.send(:remove_const, :EvilutionTestZeitwerk) if defined?(EvilutionTestZeitwerk)
-        $LOADED_FEATURES.delete(File.expand_path(source_path))
-      end
-
-      it "pins nested and multiple constants from source" do
-        original = <<~RUBY
-          module EvilutionTestOuter
-            class EvilutionTestInner
-              def value
-                :original
-              end
-            end
-          end
-        RUBY
-        mutated = <<~RUBY
-          module EvilutionTestOuter
-            class EvilutionTestInner
-              def value
-                nil
-              end
-            end
-          end
-        RUBY
-
-        File.write(source_path, original)
-        load(source_path)
-        $LOADED_FEATURES << File.expand_path(source_path) unless $LOADED_FEATURES.include?(File.expand_path(source_path))
-
-        pin_calls = []
-        pinning_class = Class.new(described_class) do
-          define_method(:ensure_framework_loaded) { nil }
-          define_method(:run_tests) { |_mutation| { passed: true, test_command: "test" } }
-          define_method(:build_args) { |_mutation| [] }
-          define_method(:reset_state) { nil }
-
-          define_method(:pin_autoloaded_constants) do |source|
-            super(source).tap { |result| pin_calls << result }
-          end
-        end
-
-        pin_mut = double(
-          "Mutation",
-          file_path: source_path,
-          original_source: original,
-          mutated_source: mutated
-        )
-
-        pinning_class.new.call(pin_mut)
-
-        expect(pin_calls.first).to include("EvilutionTestOuter")
-        expect(pin_calls.first).to include("EvilutionTestOuter::EvilutionTestInner")
-      ensure
-        Object.send(:remove_const, :EvilutionTestOuter) if defined?(EvilutionTestOuter)
         $LOADED_FEATURES.delete(File.expand_path(source_path))
       end
 
