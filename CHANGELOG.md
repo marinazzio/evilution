@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.26.0] - 2026-04-24
+
+### Removed
+
+- **Deprecated MCP session tools removed** — `evilution-session-list`, `evilution-session-show`, `evilution-session-diff` shims (deprecated since #637 after consolidation into `evilution-session`) deleted (#686, PR #851)
+
+### Fixed
+
+- **`preload` silently ignored under `:in_process` isolation** — `Runner::IsolationResolver#perform_preload` gated the preload on `resolve_isolation == :fork`, so non-Rails projects (auto-resolving to `:in_process`) silently skipped `preload:` from `.evilution.yml` or `--preload`. Preload now runs for `:in_process` too (#868, PR #871)
+- **`--target ClassName` silently narrowed to git-changed files** — when only a class/method target was given with no file scope, `Runner::SubjectPipeline#target_files` fell back to `Git::ChangedFiles`, producing a misleading `no method found matching 'X'` error when the class file was not in the working-tree diff. Target files now resolve from the configured source when a method/class target is given without explicit file scope (#869, PR #872)
+
+### Changed
+
+- **Internal `Evilution::Compare` refactor** — `lib/evilution/compare.rb` split into one class per file under `lib/evilution/compare/` (`Categorizer`, `Detector`, `Fingerprint`, `InvalidInput`, `Normalizer`, `Record`); `rubocop:disable Style/OneClassPerFile` removed (#825, PR #852)
+- **Internal `Evilution::Integration::Base` refactor** — decomposed into focused collaborators under `Evilution::Integration::Loading::*` (`SyntaxValidator`, `SourceEvaluator`, `ConstantPinner`, `RedefinitionRecovery`, `ConcernStateCleaner`, `MutationApplier`) plus shared helpers `Evilution::AST::ConstantNames` and `Evilution::LoadPath::SubpathResolver`. `Integration::Base` now delegates mutation application to an injectable `MutationApplier`; no user-visible behavior change (#845, PR #873)
+
 ## [0.25.0] - 2026-04-21
 
 ### Added

@@ -66,17 +66,30 @@ Evilution
   ::AST::SourceSurgeon     # Text-level mutation at byte offsets
   ::Mutator::Base          # Abstract operator base (Prism::Visitor)
   ::Mutator::Registry      # Node type → operator mapping
-  ::Mutator::Operator::*   # 18 concrete mutation operators
+  ::Mutator::Operator::*   # 72 concrete mutation operators
   ::Isolation::Fork        # Fork + pipe per mutation
+  ::Integration::Base      # Template-method orchestrator; delegates mutation apply to Loading::MutationApplier
   ::Integration::RSpec     # RSpec programmatic test runner
+  ::Integration::Minitest  # Minitest programmatic test runner
+  ::Integration::Loading::MutationApplier      # Composes the mutation-apply pipeline
+  ::Integration::Loading::SyntaxValidator      # Prism parse check
+  ::Integration::Loading::SourceEvaluator      # eval w/ TOPLEVEL_BINDING + absolute path
+  ::Integration::Loading::ConstantPinner       # const_get top-level constants to defeat Zeitwerk re-autoload
+  ::Integration::Loading::RedefinitionRecovery # Strip constants + retry on "already defined"
+  ::Integration::Loading::ConcernStateCleaner  # Clear AS::Concern @_included_block / @_prepended_block
+  ::AST::ConstantNames     # Prism walk → fully-qualified class/module names
+  ::LoadPath::SubpathResolver # Shortest $LOAD_PATH-relative path for a file
   ::Coverage::Collector    # Ruby Coverage module wrapper
   ::Coverage::TestMap      # Source line → test file mapping
+  ::Compare::Categorizer   # Fixed / new / persistent / flaky / reintroduced bucketing
+  ::Compare::Normalizer    # Canonicalize mutation records for cross-run compare
   ::Diff::Parser           # Git diff output parser
   ::Diff::FileFilter       # Filter subjects to changed code
   ::Result::MutationResult # Single mutation outcome
   ::Result::Summary        # Aggregated results
   ::Reporter::JSON         # Structured output for AI agents
   ::Reporter::CLI          # Human-readable terminal output
+  ::Reporter::HTML         # Section-based HTML report
   ::Reporter::Suggestion   # Actionable fix hint generator
 ```
 
