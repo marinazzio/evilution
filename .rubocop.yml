@@ -27,7 +27,6 @@ Metrics/BlockLength:
 Metrics/ClassLength:
   Max: 150
   Exclude:
-    - "lib/evilution/mcp/info_tool.rb"
     - "lib/evilution/parallel/work_queue.rb"
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/runner/mutation_executor.rb"
