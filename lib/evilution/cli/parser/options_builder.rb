@@ -70,7 +70,11 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--fail-fast", "Stop after N surviving mutants " \
                            "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
     opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }
-    opts.on("--incremental", "Cache killed/timeout results; skip re-running them on unchanged files") { @options[:incremental] = true }
+    opts.on("--[no-]incremental",
+            "Cache killed/timeout results; skip re-running them on unchanged files. " \
+            "Use --no-incremental to override `incremental: true` from .evilution.yml for one run.") do |v|
+      @options[:incremental] = v
+    end
     opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
     opts.on("--preload FILE", "Preload FILE in the parent process before forking " \
