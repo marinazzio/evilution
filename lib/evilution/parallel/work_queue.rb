@@ -88,23 +88,23 @@ class Evilution::Parallel::WorkQueue
     busy_time = 0.0
 
     loop do
-      data = read_command(cmd_read)
-      break if data == SHUTDOWN
+      data = Channel.read(cmd_read)
+      break if data.nil? || data == SHUTDOWN
 
       index, item = data
       begin
         t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         result = block.call(item)
         busy_time += Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-        write_message(res_write, [index, :ok, result])
+        Channel.write(res_write, [index, :ok, result])
       rescue Exception => e # rubocop:disable Lint/RescueException
         busy_time += Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-        write_message(res_write, [index, :error, e])
+        Channel.write(res_write, [index, :error, e])
       end
     end
 
     wall_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-    write_message(res_write, [STATS, busy_time, wall_time])
+    Channel.write(res_write, [STATS, busy_time, wall_time])
   ensure
     cmd_read.close
     res_write.close
@@ -151,7 +151,7 @@ class Evilution::Parallel::WorkQueue
   end
 
   def handle_result(io, worker, items, state, workers, io_to_worker, result_ios)
-    message = read_result(io)
+    message = Channel.read(io)
     return handle_dead_worker(worker, state) if message.nil?
 
     record_result(message, worker, state)
@@ -217,7 +217,7 @@ class Evilution::Parallel::WorkQueue
 
   def retire_worker(worker)
     begin
-      write_message(worker[:cmd_write], SHUTDOWN)
+      Channel.write(worker[:cmd_write], SHUTDOWN)
     rescue Errno::EPIPE
       nil
     end
@@ -238,7 +238,7 @@ class Evilution::Parallel::WorkQueue
   def drain_worker_stats(worker)
     return [0.0, 0.0] unless worker[:res_read].wait_readable(TIMING_GRACE_PERIOD)
 
-    message = read_result(worker[:res_read])
+    message = Channel.read(worker[:res_read])
     return [0.0, 0.0] if message.nil?
 
     tag, busy_time, wall_time = message
@@ -248,7 +248,7 @@ class Evilution::Parallel::WorkQueue
   end
 
   def send_item(worker, items, state)
-    write_message(worker[:cmd_write], [state.next_index, items[state.next_index]])
+    Channel.write(worker[:cmd_write], [state.next_index, items[state.next_index]])
     state.next_index += 1
     state.in_flight += 1
     worker[:pending] += 1
@@ -270,7 +270,7 @@ class Evilution::Parallel::WorkQueue
 
   def shutdown_workers(workers)
     workers.each do |worker|
-      write_message(worker[:cmd_write], SHUTDOWN)
+      Channel.write(worker[:cmd_write], SHUTDOWN)
     rescue Errno::EPIPE
       # Worker already exited
     end
@@ -302,7 +302,7 @@ class Evilution::Parallel::WorkQueue
   end
 
   def apply_worker_timing(worker, io)
-    message = read_result(io)
+    message = Channel.read(io)
     return if message.nil?
 
     tag, busy_time, wall_time = message
@@ -310,35 +310,6 @@ class Evilution::Parallel::WorkQueue
 
     worker[:busy_time] = busy_time
     worker[:wall_time] = wall_time
-  end
-
-  def write_message(io, data)
-    payload = Marshal.dump(data)
-    io.write([payload.bytesize].pack("N"))
-    io.write(payload)
-    io.flush
-  end
-
-  def read_command(io)
-    header = io.read(4)
-    return SHUTDOWN if header.nil? || header.bytesize < 4
-
-    length = header.unpack1("N")
-    payload = io.read(length)
-    return SHUTDOWN if payload.nil? || payload.bytesize < length
-
-    Marshal.load(payload) # rubocop:disable Security/MarshalLoad
-  end
-
-  def read_result(io)
-    header = io.read(4)
-    return nil if header.nil? || header.bytesize < 4
-
-    length = header.unpack1("N")
-    payload = io.read(length)
-    return nil if payload.nil? || payload.bytesize < length
-
-    Marshal.load(payload) # rubocop:disable Security/MarshalLoad
   end
 
   CollectionState = Struct.new(:results, :in_flight, :next_index, :first_error) do
@@ -354,3 +325,5 @@ require_relative "work_queue/validators"
 require_relative "work_queue/validators/positive_int"
 require_relative "work_queue/validators/optional_positive_int"
 require_relative "work_queue/validators/optional_positive_number"
+require_relative "work_queue/channel"
+require_relative "work_queue/channel/frame"
