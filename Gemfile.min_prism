@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gemspec
+
+gem "prism", "~> 1.5.0"
+
+# minitest 6.x requires prism ~> 1.5; restrict here so we exercise prism 1.5.x without conflict.
+
+group :development, :test do
+  gem "minitest", "~> 5.0"
+  gem "rake", "~> 13.4"
+  gem "rspec", "~> 3.0"
+end
