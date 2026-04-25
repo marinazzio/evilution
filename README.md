@@ -23,6 +23,40 @@ Or standalone: `gem install evilution`
 
 Requires `prism >= 1.5, < 2`. Older Rails apps (e.g. Rails 7.1 pins `prism 0.19`) must upgrade prism — the gemspec constraint forces bundler to resolve a compatible 1.x version. If your app pins `prism 2.x`, bundler will reject the install until evilution widens its upper bound.
 
+### Installing on Rails 7.1 + Ruby 3.3
+
+Two Bundler conflicts hit fresh installs on this stack:
+
+1. **`cgi` activation conflict.** Rails 7.1's `Gemfile.lock` pins `cgi 0.5.0`. Ruby 3.3.x ships `cgi 0.5.1` as a default gem. Loading evilution via Bundler aborts with:
+
+   ```
+   Gem::LoadError: can't activate cgi-0.5.1, already activated cgi-0.5.0.
+   Make sure all dependencies are added to Gemfile.
+   ```
+
+2. **`prism` pin.** Same lockfile pins `prism 0.19`, which lacks the `IfNode#subsequent` accessor evilution uses (renamed from `consequent` in prism 1.0). Symptom: `NoMethodError: undefined method 'subsequent' for an instance of Prism::IfNode`.
+
+Both resolve cleanly with a sidecar `Gemfile.local` that re-evaluates the project Gemfile and adds evilution + prism on top — no edits to the main `Gemfile.lock`:
+
+```ruby
+# Gemfile.local
+eval_gemfile("Gemfile")
+
+group :test, :development do
+  gem "evilution"
+  gem "prism", "~> 1.5"
+end
+```
+
+Then invoke evilution against that Gemfile:
+
+```sh
+BUNDLE_GEMFILE=Gemfile.local bundle install
+BUNDLE_GEMFILE=Gemfile.local bundle exec evilution run lib/foo.rb
+```
+
+The evilution gemspec already declares `prism >= 1.5, < 2`, so adding the `gem "prism"` line above is only necessary on stacks that also pin prism in `Gemfile.lock`.
+
 ## Command Reference
 
 ```
