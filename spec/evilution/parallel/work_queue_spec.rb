@@ -1,121 +1,64 @@
 # frozen_string_literal: true
 
 require "evilution/parallel/work_queue"
-require "tempfile"
 
+# This spec covers the public API contract of WorkQueue and a small set of
+# end-to-end smoke tests that exercise real Process.fork. Granular coverage of
+# the internals lives in per-class specs:
+#   - work_queue/worker_stat_spec.rb
+#   - work_queue/validators/*_spec.rb
+#   - work_queue/channel_spec.rb, work_queue/channel/frame_spec.rb
+#   - work_queue/worker_spec.rb, work_queue/worker/loop_spec.rb
+#   - work_queue/dispatcher_spec.rb
+#   - work_queue/collection_state_spec.rb
 RSpec.describe Evilution::Parallel::WorkQueue do
-  describe "#initialize" do
-    it "rejects zero size" do
+  describe "constants" do
+    it "exposes SHUTDOWN, STATS, TIMING_GRACE_PERIOD, and WorkerStat at the public name" do
+      expect(described_class::SHUTDOWN).to eq(:__shutdown__)
+      expect(described_class::STATS).to eq(:__stats__)
+      expect(described_class::TIMING_GRACE_PERIOD).to be_a(Numeric)
+      expect(described_class::WorkerStat).to be_a(Class)
+    end
+  end
+
+  describe "#initialize argument validation (smoke)" do
+    it "rejects invalid size via PositiveInt validator" do
       expect { described_class.new(size: 0) }.to raise_error(ArgumentError, /positive integer/)
     end
 
-    it "rejects negative size" do
-      expect { described_class.new(size: -1) }.to raise_error(ArgumentError, /positive integer/)
+    it "rejects invalid prefetch via PositiveInt validator" do
+      expect { described_class.new(size: 1, prefetch: 0) }.to raise_error(ArgumentError, /prefetch must be a positive integer/)
     end
 
-    it "accepts a valid size" do
-      queue = described_class.new(size: 2)
-      expect(queue).to be_a(described_class)
-    end
-
-    it "rejects zero item_timeout" do
-      expect { described_class.new(size: 1, item_timeout: 0) }.to raise_error(ArgumentError, /item_timeout/)
-    end
-
-    it "rejects negative item_timeout" do
+    it "rejects invalid item_timeout via OptionalPositiveNumber validator" do
       expect { described_class.new(size: 1, item_timeout: -1) }.to raise_error(ArgumentError, /item_timeout/)
     end
 
-    it "accepts nil item_timeout" do
-      queue = described_class.new(size: 1, item_timeout: nil)
-      expect(queue).to be_a(described_class)
+    it "rejects invalid worker_max_items via OptionalPositiveInt validator" do
+      expect { described_class.new(size: 1, worker_max_items: 0) }.to raise_error(ArgumentError, /worker_max_items/)
     end
 
-    it "accepts positive item_timeout" do
-      queue = described_class.new(size: 1, item_timeout: 5)
+    it "accepts valid arguments" do
+      queue = described_class.new(size: 2, prefetch: 1, item_timeout: 5, worker_max_items: 3)
       expect(queue).to be_a(described_class)
     end
   end
 
   describe "#map" do
-    it "executes block for each item and returns results in order" do
+    it "returns [] for empty input without spawning workers" do
+      queue = described_class.new(size: 2)
+      expect(queue.map([]) { |n| n }).to eq([])
+      expect(queue.worker_stats).to eq([])
+    end
+
+    it "executes block for each item and returns results in input order (golden path)" do
       queue = described_class.new(size: 2)
       results = queue.map([1, 2, 3, 4, 5]) { |n| n * 10 }
 
       expect(results).to eq([10, 20, 30, 40, 50])
     end
 
-    it "runs items in separate worker processes" do
-      queue = described_class.new(size: 3)
-      results = queue.map([1, 2, 3]) { |_n| Process.pid }
-
-      pids = results
-      expect(pids).not_to include(Process.pid)
-      expect(pids.uniq.size).to be <= 3
-    end
-
-    it "reuses workers across items (more items than workers)" do
-      queue = described_class.new(size: 2)
-      results = queue.map([1, 2, 3, 4, 5, 6]) { |_n| Process.pid }
-
-      pids = results.uniq
-      # Only 2 worker processes should have been forked
-      expect(pids.size).to eq(2)
-      expect(pids).not_to include(Process.pid)
-    end
-
-    it "returns empty array for empty input" do
-      queue = described_class.new(size: 2)
-      results = queue.map([]) { |n| n }
-
-      expect(results).to eq([])
-    end
-
-    it "handles single item" do
-      queue = described_class.new(size: 4)
-      results = queue.map([42]) { |n| n * 2 }
-
-      expect(results).to eq([84])
-    end
-
-    it "handles more workers than items" do
-      queue = described_class.new(size: 4)
-      results = queue.map([1, 2]) { |n| n * 3 }
-
-      expect(results).to eq([3, 6])
-    end
-
-    it "distributes work dynamically (fast items finish first)" do
-      queue = described_class.new(size: 2)
-      temp = Tempfile.new("work_queue_dynamic_order")
-
-      begin
-        results = queue.map([1, 2, 3, 4]) do |n|
-          # Make item 2 significantly slower than the others
-          if n == 2
-            sleep 0.3
-          else
-            sleep 0.05
-          end
-
-          File.open(temp.path, "a") { |f| f.puts(n) }
-          n * 10
-        end
-
-        expect(results).to eq([10, 20, 30, 40])
-
-        completion_order = File.read(temp.path).lines.map(&:to_i)
-        expect(completion_order.sort).to eq([1, 2, 3, 4])
-
-        # The slow item (2) should finish after faster items 3 and 4
-        expect(completion_order.index(3)).to be < completion_order.index(2)
-        expect(completion_order.index(4)).to be < completion_order.index(2)
-      ensure
-        temp.close!
-      end
-    end
-
-    it "propagates exceptions from the block" do
+    it "propagates exceptions raised by the user block" do
       queue = described_class.new(size: 2)
 
       expect do
@@ -127,393 +70,7 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end.to raise_error(RuntimeError, "boom")
     end
 
-    it "fires worker_process_start hook once per worker process" do
-      tmpfile = Tempfile.new("wq_hook_pids")
-      hooks = Evilution::Hooks::Registry.new
-      hooks.register(:worker_process_start) do
-        File.open(tmpfile.path, "a") { |f| f.puts(Process.pid) }
-      end
-      queue = described_class.new(size: 2, hooks: hooks)
-
-      results = queue.map([1, 2, 3, 4]) { |_n| Process.pid }
-
-      worker_pids = results.uniq
-      hook_pids = File.read(tmpfile.path).split.map(&:to_i).uniq
-
-      # Hook fires once per worker, not once per item
-      expect(hook_pids.size).to eq(2)
-      expect(hook_pids.sort).to eq(worker_pids.sort)
-    ensure
-      tmpfile&.close
-      tmpfile&.unlink
-    end
-
-    it "fires worker_process_start hook before the block runs" do
-      tmpfile = Tempfile.new("wq_hook_order")
-      hooks = Evilution::Hooks::Registry.new
-      hooks.register(:worker_process_start) { File.write(tmpfile.path, "hook_fired") }
-      queue = described_class.new(size: 1, hooks: hooks)
-
-      results = queue.map([1]) do |_n|
-        File.read(tmpfile.path)
-      end
-
-      expect(results.first).to eq("hook_fired")
-    ensure
-      tmpfile&.close
-      tmpfile&.unlink
-    end
-
-    it "raises a clear error when a worker exits unexpectedly" do
-      queue = described_class.new(size: 2)
-
-      expect do
-        queue.map([1, 2, 3]) do |n|
-          exit!(1) if n == 2
-
-          n
-        end
-      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
-    end
-
-    it "works without hooks" do
-      queue = described_class.new(size: 2)
-      results = queue.map([1, 2]) { |n| n * 10 }
-
-      expect(results).to eq([10, 20])
-    end
-
-    # Regression for EV-r77x / GH #788: Rails sets Encoding.default_internal to
-    # UTF-8, which forces text-mode IO#write to transcode ASCII-8BIT payloads
-    # (Marshal output) into UTF-8. High bytes (e.g. \xDB) have no UTF-8 mapping
-    # and the write raises Encoding::UndefinedConversionError, taking down all
-    # jobs>1 runs. Pipes must be in binmode so Marshal blobs pass through as
-    # opaque bytes.
-    context "with Encoding.default_internal set to UTF-8 (Rails-host parity)" do
-      around do |example|
-        original = Encoding.default_internal
-        Encoding.default_internal = Encoding::UTF_8
-        example.run
-      ensure
-        Encoding.default_internal = original
-      end
-
-      it "sends binary Marshal payloads to workers without encoding errors" do
-        queue = described_class.new(size: 2)
-        binary = String.new("\xDB", encoding: Encoding::ASCII_8BIT)
-        results = queue.map([binary, binary], &:bytesize)
-
-        expect(results).to eq([1, 1])
-      end
-
-      it "round-trips binary Marshal payloads back to the parent without encoding errors" do
-        queue = described_class.new(size: 2)
-        # pack("C*") yields exactly 256 raw bytes tagged ASCII-8BIT — safer than
-        # (0..255).map(&:chr).join under UTF-8 default_internal where Integer#chr
-        # produces multi-byte characters for codepoints >= 128.
-        results = queue.map([1, 2]) { |_n| (0..255).to_a.pack("C*") }
-
-        expect(results.length).to eq(2)
-        results.each do |r|
-          expect(r.bytesize).to eq(256)
-          expect(r.encoding).to eq(Encoding::ASCII_8BIT)
-        end
-      end
-    end
-
-    context "with prefetch" do
-      it "defaults prefetch to 1" do
-        queue = described_class.new(size: 2)
-        results = queue.map([1, 2, 3, 4]) { |n| n * 10 }
-
-        expect(results).to eq([10, 20, 30, 40])
-      end
-
-      it "pre-buffers items in worker pipes when prefetch > 1" do
-        temp = Tempfile.new("wq_prefetch_prebuffer")
-
-        begin
-          queue = described_class.new(size: 2, prefetch: 2)
-          results = queue.map([1, 2, 3, 4, 5, 6]) do |n|
-            # Make even-numbered items slower so completion order reflects scheduling
-            sleep(n.even? ? 0.2 : 0.05)
-            File.open(temp.path, "a") { |f| f.puts(n) }
-            n * 10
-          end
-
-          expect(results).to eq([10, 20, 30, 40, 50, 60])
-
-          completion_order = File.read(temp.path).lines.map(&:to_i)
-          # With effective prefetch and concurrent workers, completion order should
-          # differ from simple input order, indicating out-of-order processing
-          expect(completion_order).not_to eq(completion_order.sort)
-        ensure
-          temp.close!
-        end
-      end
-
-      it "rejects prefetch less than 1" do
-        expect { described_class.new(size: 2, prefetch: 0) }.to raise_error(ArgumentError, /prefetch must be a positive integer/)
-      end
-
-      it "handles prefetch larger than item count" do
-        queue = described_class.new(size: 2, prefetch: 10)
-        results = queue.map([1, 2]) { |n| n * 5 }
-
-        expect(results).to eq([5, 10])
-      end
-
-      it "reduces idle time with prefetch on variable-cost work" do
-        temp = Tempfile.new("wq_prefetch_order")
-
-        begin
-          # With prefetch=2 and round-robin seeding, worker A gets items 1,3 and worker B gets 2,4
-          # When worker A finishes item 1 quickly, item 3 is already in its pipe
-          queue = described_class.new(size: 2, prefetch: 2)
-          results = queue.map([1, 2, 3, 4, 5, 6]) do |n|
-            sleep(n == 2 ? 0.3 : 0.05)
-            File.open(temp.path, "a") { |f| f.puts(n) }
-            n * 10
-          end
-
-          expect(results).to eq([10, 20, 30, 40, 50, 60])
-
-          completion_order = File.read(temp.path).lines.map(&:to_i)
-          expect(completion_order.sort).to eq([1, 2, 3, 4, 5, 6])
-        ensure
-          temp.close!
-        end
-      end
-    end
-
-    context "with worker_max_items (recycling)" do
-      it "respawns the worker after completing K items" do
-        queue = described_class.new(size: 1, worker_max_items: 3)
-        results = queue.map([1, 2, 3, 4, 5, 6, 7, 8, 9]) { |_n| Process.pid }
-
-        expect(results.length).to eq(9)
-        expect(results.uniq.size).to be >= 3
-      end
-
-      it "preserves stats for retired workers alongside the active one" do
-        queue = described_class.new(size: 1, worker_max_items: 3)
-        queue.map([1, 2, 3, 4, 5, 6, 7, 8, 9]) { |n| n }
-
-        stats = queue.worker_stats
-        expect(stats.sum(&:items_completed)).to eq(9)
-        expect(stats.length).to be >= 3
-        expect(stats.map(&:pid).uniq.size).to eq(stats.length)
-      end
-
-      it "does not recycle when total items < K" do
-        queue = described_class.new(size: 1, worker_max_items: 10)
-        results = queue.map([1, 2, 3]) { |_n| Process.pid }
-
-        expect(results.uniq.size).to eq(1)
-      end
-
-      it "defaults to no recycling (worker_max_items: nil)" do
-        queue = described_class.new(size: 1)
-        results = queue.map([1, 2, 3, 4, 5]) { |_n| Process.pid }
-
-        expect(results.uniq.size).to eq(1)
-      end
-
-      it "does not recycle when remaining items == 0 (avoids spawning a no-op worker)" do
-        queue = described_class.new(size: 1, worker_max_items: 3)
-        queue.map([1, 2, 3]) { |n| n }
-
-        stats = queue.worker_stats
-        expect(stats.length).to eq(1)
-        expect(stats.first.items_completed).to eq(3)
-      end
-
-      it "rejects zero worker_max_items" do
-        expect { described_class.new(size: 1, worker_max_items: 0) }.to raise_error(ArgumentError, /worker_max_items/)
-      end
-
-      it "rejects negative worker_max_items" do
-        expect { described_class.new(size: 1, worker_max_items: -1) }.to raise_error(ArgumentError, /worker_max_items/)
-      end
-
-      it "reaps recycled worker PIDs (no zombies)" do
-        queue = described_class.new(size: 1, worker_max_items: 2)
-        queue.map([1, 2, 3, 4, 5, 6]) { |n| n }
-
-        retired = queue.worker_stats.map(&:pid)
-        retired.each do |pid|
-          expect { Process.waitpid(pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
-        end
-      end
-
-      it "returns correct results across recycles" do
-        queue = described_class.new(size: 2, worker_max_items: 2)
-        results = queue.map([1, 2, 3, 4, 5, 6, 7, 8]) { |n| n * 10 }
-
-        expect(results).to eq([10, 20, 30, 40, 50, 60, 70, 80])
-      end
-
-      it "works with prefetch > 1 (drains pending before recycle)" do
-        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 2)
-        results = queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
-
-        expect(results).to eq([10, 20, 30, 40, 50, 60])
-      end
-
-      # Regression for Copilot #792: prefetch > 1 replenished pending on every
-      # result, so `pending == 0` never held and recycling silently skipped.
-      # Fix drains dispatch once items_completed >= K; overshoot bounded by prefetch.
-      it "still recycles when prefetch keeps pending refilled" do
-        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 2)
-        queue.map([1, 2, 3, 4, 5, 6]) { |_n| Process.pid }
-
-        stats = queue.worker_stats
-        expect(stats.length).to be >= 2
-        expect(stats.map(&:items_completed).max).to be <= 2 + 2 - 1
-      end
-
-      it "bounds per-worker overshoot by prefetch when prefetch > worker_max_items" do
-        queue = described_class.new(size: 1, worker_max_items: 2, prefetch: 4)
-        queue.map([1, 2, 3, 4, 5, 6, 7, 8]) { |n| n }
-
-        stats = queue.worker_stats
-        expect(stats.map(&:items_completed).max).to be <= 2 + 4 - 1
-      end
-    end
-
-    context "with worker stats" do
-      it "tracks per-worker completion counts" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
-
-        stats = queue.worker_stats
-        expect(stats.length).to eq(2)
-        expect(stats.sum(&:items_completed)).to eq(6)
-        stats.each do |stat|
-          expect(stat.items_completed).to be >= 1
-        end
-      end
-
-      it "tracks worker PIDs in stats" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2]) { |_n| Process.pid }
-
-        stats = queue.worker_stats
-        pids = stats.map(&:pid)
-        expect(pids.uniq.size).to eq(2)
-        expect(pids).not_to include(Process.pid)
-      end
-
-      it "returns empty stats before map is called" do
-        queue = described_class.new(size: 2)
-        expect(queue.worker_stats).to eq([])
-      end
-
-      it "returns empty stats for empty input" do
-        queue = described_class.new(size: 2)
-        queue.map([]) { |n| n }
-        expect(queue.worker_stats).to eq([])
-      end
-
-      it "tracks busy_time per worker" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2, 3, 4]) do |_n|
-          sleep 0.05
-          :done
-        end
-
-        stats = queue.worker_stats
-        stats.each do |stat|
-          expect(stat.busy_time).to be_a(Float)
-          expect(stat.busy_time).to be > 0.0
-        end
-      end
-
-      it "tracks wall_time per worker" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2, 3, 4]) { |n| n }
-
-        stats = queue.worker_stats
-        stats.each do |stat|
-          expect(stat.wall_time).to be_a(Float)
-          expect(stat.wall_time).to be > 0.0
-        end
-      end
-
-      it "computes idle_time as wall_time minus busy_time" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2, 3, 4]) { |n| n }
-
-        stats = queue.worker_stats
-        stats.each do |stat|
-          expect(stat.idle_time).to be_a(Float)
-          expect(stat.idle_time).to be >= 0.0
-          expect(stat.idle_time).to be_within(0.001).of(stat.wall_time - stat.busy_time)
-        end
-      end
-
-      it "computes utilization as busy_time / wall_time" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2]) do |_n|
-          sleep 0.05
-          :done
-        end
-
-        stats = queue.worker_stats
-        stats.each do |stat|
-          expect(stat.utilization).to be_a(Float)
-          expect(stat.utilization).to be > 0.0
-          expect(stat.utilization).to be <= 1.0
-        end
-      end
-
-      it "does not hang collecting timing from a crashed worker" do
-        queue = described_class.new(size: 2)
-
-        expect do
-          queue.map([1, 2, 3, 4]) do |n|
-            exit!(1) if n == 2
-            n * 10
-          end
-        end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
-
-        stats = queue.worker_stats
-        expect(stats.length).to eq(2)
-      end
-
-      it "skips timing for workers that do not respond within the grace period" do
-        queue = described_class.new(size: 1, item_timeout: 0.5)
-
-        expect do
-          queue.map([1]) do |_n|
-            sleep 5
-            :done
-          end
-        end.to raise_error(Evilution::Error, /timed out/)
-
-        stats = queue.worker_stats
-        expect(stats.length).to eq(1)
-        expect(stats.first.busy_time).to eq(0.0)
-        expect(stats.first.wall_time).to eq(0.0)
-      end
-
-      it "reports positive utilization for all workers" do
-        queue = described_class.new(size: 2)
-        queue.map([1, 2, 3, 4]) do |_n|
-          sleep 0.05
-          :done
-        end
-
-        stats = queue.worker_stats
-        stats.each do |stat|
-          expect(stat.utilization).to be > 0.0
-          expect(stat.utilization).to be <= 1.0
-          expect(stat.busy_time).to be <= stat.wall_time
-        end
-      end
-    end
-
-    it "raises an error when a worker hangs beyond the item timeout" do
+    it "raises a timeout error when an item exceeds item_timeout" do
       queue = described_class.new(size: 1, item_timeout: 1)
 
       expect do
@@ -524,93 +81,40 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end.to raise_error(Evilution::Error, /timed out/)
     end
 
-    it "removes dead worker pipes from the select set" do
+    it "recycles workers after worker_max_items items are completed" do
+      queue = described_class.new(size: 1, worker_max_items: 2)
+      results = queue.map([1, 2, 3, 4, 5, 6]) { |n| n * 10 }
+
+      expect(results).to eq([10, 20, 30, 40, 50, 60])
+      stats = queue.worker_stats
+      # More retired stats than worker pool size proves recycling happened.
+      expect(stats.length).to be > 1
+      expect(stats.map(&:pid).uniq.size).to eq(stats.length)
+    end
+  end
+
+  describe "#worker_stats" do
+    it "returns frozen WorkerStat dups with the correct field types after map" do
       queue = described_class.new(size: 2)
-
-      expect do
-        queue.map([1, 2, 3, 4]) do |n|
-          exit!(1) if n == 1
-          n * 10
-        end
-      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
-    end
-
-    it "does not hang when a worker dies with prefetched items in its pipe" do
-      queue = described_class.new(size: 2, prefetch: 2)
-
-      expect do
-        queue.map([1, 2, 3, 4, 5, 6]) do |n|
-          exit!(1) if n == 1
-          n * 10
-        end
-      end.to raise_error(Evilution::Error, /worker process exited unexpectedly/)
-    end
-
-    it "cleans up worker processes even on error" do
-      tmpfile = Tempfile.new("wq_cleanup_pids")
-      hooks = Evilution::Hooks::Registry.new
-      hooks.register(:worker_process_start) do
-        File.open(tmpfile.path, "a") { |f| f.puts(Process.pid) }
-      end
-      queue = described_class.new(size: 2, hooks: hooks)
-
-      expect do
-        queue.map([1, 2, 3]) do |n|
-          raise "fail" if n == 1
-
-          n
-        end
-      end.to raise_error(RuntimeError, "fail")
-
-      worker_pids = File.read(tmpfile.path).split.map(&:to_i)
-      worker_pids.each do |pid|
-        expect { Process.waitpid(pid, Process::WNOHANG) }.to raise_error(Errno::ECHILD)
-      end
-    ensure
-      tmpfile&.close
-      tmpfile&.unlink
-    end
-
-    # EV-kdns / GH #817: set TEST_ENV_NUMBER per worker following the
-    # parallel_tests convention ("" for slot 0, "2" for slot 1, "3" for slot 2,
-    # ...). Rails apps whose config/database.yml interpolates TEST_ENV_NUMBER
-    # then automatically get one SQLite file per worker, avoiding lock
-    # contention under jobs > 1.
-    context "with TEST_ENV_NUMBER (parallel_tests convention)" do
-      it "sets TEST_ENV_NUMBER inside each worker process" do
-        queue = described_class.new(size: 3)
-        results = queue.map([1, 2, 3, 4, 5, 6]) { |_n| [Process.pid, ENV.fetch("TEST_ENV_NUMBER", nil)] }
-
-        pairs = results.uniq
-        grouped = pairs.group_by(&:first)
-        grouped.each_value { |pair_list| expect(pair_list.map(&:last).uniq.size).to eq(1) }
-
-        env_values = pairs.map(&:last).uniq.sort
-        expect(env_values).to eq(["", "2", "3"])
+      queue.map([1, 2, 3, 4]) do |_n|
+        sleep 0.01
+        :done
       end
 
-      it "preserves TEST_ENV_NUMBER across worker recycling" do
-        queue = described_class.new(size: 1, worker_max_items: 2)
-        results = queue.map([1, 2, 3, 4, 5, 6]) { |_n| [Process.pid, ENV.fetch("TEST_ENV_NUMBER", nil)] }
-
-        pids = results.map(&:first).uniq
-        env_values = results.map(&:last).uniq
-
-        expect(pids.size).to be >= 2
-        expect(env_values).to eq([""])
+      stats = queue.worker_stats
+      expect(stats).to be_an(Array)
+      expect(stats.length).to eq(2)
+      stats.each do |stat|
+        expect(stat).to be_a(described_class::WorkerStat)
+        expect(stat).to be_frozen
+        expect(stat.pid).to be_a(Integer)
+        expect(stat.items_completed).to be_a(Integer)
+        expect(stat.busy_time).to be_a(Float)
+        expect(stat.wall_time).to be_a(Float)
+        expect(stat.idle_time).to be_a(Float)
+        expect(stat.utilization).to be_a(Float)
       end
-
-      it "does not leak TEST_ENV_NUMBER into the parent process" do
-        original = ENV.fetch("TEST_ENV_NUMBER", :unset)
-        queue = described_class.new(size: 2)
-        queue.map([1, 2]) { |_n| ENV.fetch("TEST_ENV_NUMBER", nil) }
-
-        if original == :unset
-          expect(ENV).not_to have_key("TEST_ENV_NUMBER")
-        else
-          expect(ENV.fetch("TEST_ENV_NUMBER")).to eq(original)
-        end
-      end
+      expect(stats.sum(&:items_completed)).to eq(4)
     end
   end
 end
