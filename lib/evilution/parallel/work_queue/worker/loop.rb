@@ -34,10 +34,12 @@ module Evilution::Parallel::WorkQueue::Worker::Loop
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     begin
       result = block.call(item)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Evilution::Parallel::WorkQueue::Channel.write(res_io, [index, :ok, result])
     rescue Exception => e # rubocop:disable Lint/RescueException
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Evilution::Parallel::WorkQueue::Channel.write(res_io, [index, :error, e])
     end
-    Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+    elapsed
   end
 end

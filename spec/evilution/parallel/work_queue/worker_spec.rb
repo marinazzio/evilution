@@ -52,13 +52,17 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
   describe "#shutdown swallows Errno::EPIPE" do
     it "does not raise when child has already exited" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
-      worker.kill
       begin
-        Process.wait(worker.pid)
-      rescue Errno::ECHILD
-        nil
+        worker.kill
+        begin
+          Process.wait(worker.pid)
+        rescue Errno::ECHILD
+          nil
+        end
+        expect { worker.shutdown }.not_to raise_error
+      ensure
+        worker.close_pipes
       end
-      expect { worker.shutdown }.not_to raise_error
     end
   end
 
