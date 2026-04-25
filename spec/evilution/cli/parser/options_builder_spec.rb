@@ -49,7 +49,7 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:incremental]).to be(true)
   end
 
-  it "parses --no-incremental to false (overrides config-file incremental: true)" do
+  it "parses --no-incremental to false" do
     options, = parse(["--no-incremental"])
     expect(options[:incremental]).to be(false)
   end

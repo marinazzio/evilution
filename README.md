@@ -105,7 +105,7 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
 | `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec` or `minitest`.  |
-| `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from `.evilution.yml` for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
+| `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects. See [docs/isolation.md](docs/isolation.md). |

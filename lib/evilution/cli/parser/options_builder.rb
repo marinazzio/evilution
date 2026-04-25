@@ -72,7 +72,7 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }
     opts.on("--[no-]incremental",
             "Cache killed/timeout results; skip re-running them on unchanged files. " \
-            "Use --no-incremental to override `incremental: true` from .evilution.yml for one run.") do |v|
+            "Use --no-incremental to override `incremental: true` from the config file for one run.") do |v|
       @options[:incremental] = v
     end
     opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
