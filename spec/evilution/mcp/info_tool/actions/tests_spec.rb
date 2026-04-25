@@ -48,6 +48,21 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Tests do
       expect(body["total_specs"]).to eq(1)
     end
 
+    it "deduplicates total_specs in the explicit-specs branch" do
+      config = instance_double(
+        Evilution::Config, spec_files: ["spec/foo_spec.rb", "spec/foo_spec.rb"]
+      )
+      allow(Evilution::MCP::InfoTool::ConfigFactory).to receive(:tests).and_return(config)
+
+      response = described_class.call(
+        files: ["lib/foo.rb"],
+        spec: ["spec/foo_spec.rb", "spec/foo_spec.rb"],
+        integration: nil, skip_config: nil
+      )
+      body = parse_body(response)
+      expect(body["total_specs"]).to eq(1)
+    end
+
     it "uses integration class's baseline spec_resolver when available" do
       config = instance_double(Evilution::Config, spec_files: [], integration: :rspec)
       allow(Evilution::MCP::InfoTool::ConfigFactory).to receive(:tests).and_return(config)

@@ -13,6 +13,8 @@ require_relative "../version"
 require_relative "../mcp"
 
 class Evilution::MCP::InfoTool < MCP::Tool
+  VALID_ACTIONS = %w[subjects tests environment statuses].freeze
+
   tool_name "evilution-info"
   description "Discover what evilution sees before running any mutations. " \
               "One tool, four actions: " \
@@ -28,7 +30,7 @@ class Evilution::MCP::InfoTool < MCP::Tool
     properties: {
       action: {
         type: "string",
-        enum: %w[subjects tests environment statuses],
+        enum: VALID_ACTIONS,
         description: "Which discovery operation to perform. " \
                      "'subjects' lists mutatable methods; 'tests' resolves specs for sources; " \
                      "'environment' dumps effective config; 'statuses' returns the result-status glossary."
@@ -64,13 +66,11 @@ class Evilution::MCP::InfoTool < MCP::Tool
     required: ["action"]
   )
 
-  VALID_ACTIONS = %w[subjects tests environment statuses].freeze
-
   class << self
     # rubocop:disable Lint/UnusedMethodArgument
     def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil, skip_config: nil)
       return ResponseFormatter.error("config_error", "action is required") unless action
-      return ResponseFormatter.error("config_error", "unknown action: #{action}") unless VALID_ACTIONS.include?(action)
+      return ResponseFormatter.error("config_error", "unknown action: #{action}") unless ACTIONS.key?(action)
 
       parsed_files, line_ranges = RequestParser.parse_files(Array(files)) if files
 
@@ -104,3 +104,7 @@ Evilution::MCP::InfoTool.const_set(:ACTIONS, {
   "statuses" => Evilution::MCP::InfoTool::Actions::Statuses
 }.freeze)
 Evilution::MCP::InfoTool.send(:private_constant, :ACTIONS)
+
+unless Evilution::MCP::InfoTool.send(:const_get, :ACTIONS).keys == Evilution::MCP::InfoTool::VALID_ACTIONS
+  raise "InfoTool action drift: ACTIONS keys do not match VALID_ACTIONS"
+end

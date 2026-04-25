@@ -34,5 +34,19 @@ RSpec.describe Evilution::MCP::InfoTool::StatusGlossary do
     it "is frozen" do
       expect(described_class::ENTRIES).to be_frozen
     end
+
+    it "freezes every entry hash" do
+      described_class::ENTRIES.each do |entry|
+        expect(entry).to be_frozen
+      end
+    end
+
+    it "freezes every string value inside each entry" do
+      described_class::ENTRIES.each do |entry|
+        entry.each_value do |value|
+          expect(value).to be_frozen if value.is_a?(String)
+        end
+      end
+    end
   end
 end

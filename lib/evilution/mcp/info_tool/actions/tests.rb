@@ -39,7 +39,7 @@ class Evilution::MCP::InfoTool::Actions::Tests < Evilution::MCP::InfoTool::Actio
         "specs" => spec_files.map { |f| { "source" => nil, "spec" => f } },
         "unresolved" => [],
         "total_sources" => files.length,
-        "total_specs" => spec_files.length
+        "total_specs" => spec_files.uniq.length
       )
     end
 

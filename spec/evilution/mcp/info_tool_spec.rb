@@ -36,6 +36,11 @@ RSpec.describe Evilution::MCP::InfoTool do
     it "is frozen" do
       expect(described_class::VALID_ACTIONS).to be_frozen
     end
+
+    it "matches the dispatch ACTIONS table keys" do
+      actions = described_class.send(:const_get, :ACTIONS)
+      expect(actions.keys).to eq(described_class::VALID_ACTIONS)
+    end
   end
 
   describe "action validation" do

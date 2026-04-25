@@ -55,7 +55,7 @@ module Evilution::MCP::InfoTool::StatusGlossary
                    "Short-circuited before execution; no test run was attempted.",
       "counted_in_score" => false
     }
-  ].freeze
+  ].each(&:freeze).freeze
 
   module_function
 
@@ -65,11 +65,11 @@ module Evilution::MCP::InfoTool::StatusGlossary
   end
 
   def check_drift!
-    defined    = Evilution::Result::MutationResult::STATUSES.map(&:to_s).sort
+    defined_statuses = Evilution::Result::MutationResult::STATUSES.map(&:to_s).sort
     documented = ENTRIES.map { |s| s["status"] }.sort
-    return if defined == documented
+    return if defined_statuses == documented
 
-    missing = (defined - documented) + (documented - defined)
+    missing = (defined_statuses - documented) + (documented - defined_statuses)
     raise Evilution::Error, "status glossary drift: #{missing.inspect}"
   end
 end
