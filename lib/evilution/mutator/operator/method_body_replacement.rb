@@ -28,11 +28,11 @@ class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::
 
   # The bare-super replacement raises NoMethodError at runtime when the enclosing
   # class has no parent implementation of the method. We emit it only when the
-  # original body already calls super — proving the super target exists in this
-  # context. See EV-ilu3.
+  # original body already calls super, using that as a heuristic that a super
+  # target is intended in this context.
   def body_calls_super?(node)
     return true if node.is_a?(Prism::SuperNode) || node.is_a?(Prism::ForwardingSuperNode)
 
-    node.compact_child_nodes.any? { |child| body_calls_super?(child) }
+    node.child_nodes.any? { |child| child && body_calls_super?(child) }
   end
 end

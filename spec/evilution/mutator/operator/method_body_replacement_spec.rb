@@ -44,7 +44,7 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       expect(super_mut).to be_nil
     end
 
-    it "emits a super-replacement when body already calls super (proven safe in context)" do
+    it "emits a super-replacement when body already calls super (heuristic: super target presumed intended)" do
       muts = mutations_for("with_super_in_body")
 
       expect(muts.length).to eq(3)
