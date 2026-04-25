@@ -158,7 +158,8 @@ RSpec.describe Evilution::Runner, "preload" do
       runner = described_class.new(config: build_config)
 
       load_order = []
-      allow(runner).to receive(:require).and_wrap_original do |original, path|
+      resolver = runner.send(:isolation_resolver)
+      allow(resolver).to receive(:require).and_wrap_original do |original, path|
         load_order << path
         original.call(path)
       end

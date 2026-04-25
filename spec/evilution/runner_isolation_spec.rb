@@ -40,7 +40,7 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
   end
 
   def resolved_isolator_class(runner)
-    runner.send(:build_isolator).class
+    runner.send(:isolator).class
   end
 
   describe "with isolation: :auto" do
@@ -63,7 +63,7 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
       config = build_config(target_files: [])
       runner = described_class.new(config: config)
       resolved = [File.join(@tmp, "app", "models", "user.rb")]
-      allow(runner).to receive(:resolve_target_files).and_return(resolved)
+      allow(runner.send(:subject_pipeline)).to receive(:target_files).and_return(resolved)
       expect(resolved_isolator_class(runner)).to eq(Evilution::Isolation::Fork)
     end
   end
@@ -118,7 +118,7 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
         quiet: true
       )
       runner = described_class.new(config: config)
-      expect { runner.send(:build_isolator) }.not_to output.to_stderr
+      expect { runner.send(:isolator) }.not_to output.to_stderr
     end
 
     it "does not warn twice for repeated calls in the same run" do
@@ -132,21 +132,21 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
       orig = $stderr
       $stderr = captured
       runner = described_class.new(config: config)
-      runner.send(:build_isolator) # first warn
-      runner.send(:build_isolator) # should not warn again
+      runner.send(:isolator) # first warn
+      runner.send(:isolator) # should not warn again
       $stderr = orig
       expect(captured.string.scan("handle_interrupt").length).to eq(1)
     end
   end
 
   describe "parallel mode" do
-    it "uses build_isolator for worker isolation, not hardcoded InProcess" do
+    it "uses isolator for worker isolation, not hardcoded InProcess" do
       write_plain_target
       config = build_config(isolation: :fork, jobs: 2)
       runner = described_class.new(config: config)
 
-      expect(runner).to receive(:build_isolator).at_least(:once).and_call_original
-      runner.send(:run_mutations_parallel, [])
+      expect(runner).to receive(:isolator).at_least(:once).and_call_original
+      runner.send(:mutation_executor).send(:run_parallel, [], nil)
     end
   end
 end

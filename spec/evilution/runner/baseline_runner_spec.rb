@@ -130,7 +130,7 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner = described_class.new(config(baseline: true, integration: :rspec, timeout: 7))
       baseline = instance_double(Evilution::Baseline, call: :ok)
       expect(Evilution::Baseline).to receive(:new)
-        .with(hash_including(timeout: 7, runner: instance_of(Proc)))
+        .with(hash_including(timeout: 7, runner: instance_of(Evilution::Integration::RSpec::BaselineRunner)))
         .and_return(baseline)
       expect(runner.call([:subject])).to eq(:ok)
     end
