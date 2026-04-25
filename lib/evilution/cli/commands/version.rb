@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "mcp"
 require_relative "../commands"
 require_relative "../command"
 require_relative "../dispatcher"
@@ -10,6 +11,7 @@ class Evilution::CLI::Commands::Version < Evilution::CLI::Command
 
   def perform
     @stdout.puts(Evilution::VERSION)
+    @stdout.puts("mcp gem #{::MCP::VERSION} (server compatibility)")
     0
   end
 end
