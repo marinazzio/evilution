@@ -36,19 +36,30 @@ module CliGoldenSummary
 
   module_function
 
+  # Field values mirror real `Evilution::Result::Summary` math:
+  #   total           = killed + survived + timed_out + neutral +
+  #                     equivalent + unresolved + unparseable + errors
+  #   score_denominator = total - errors - neutral - equivalent -
+  #                       unresolved - unparseable
+  #   score           = killed.to_f / score_denominator
+  # `skipped` is a separate counter (not part of `total`).
+  # `results` carries 3 entries (1 non-errored, 2 errored) only because the CLI
+  # uses it solely to drive `select(&:error?)`; we deliberately do not pad
+  # `results` to length 16 — its presence here is an input to the error filter,
+  # not the source of truth for `total`.
   def call(truncated: false)
     Summary.new(
-      10, # total
+      16, # total = 8 killed + 2 survived + 0 timed_out + 1 neutral + 1 equivalent + 1 unresolved + 1 unparseable + 2 errors
       8,  # killed
-      1,  # survived
+      2,  # survived
       0,  # timed_out
       1,  # neutral
       1,  # equivalent
       1,  # unresolved
       1,  # unparseable
-      1,  # skipped
-      0.85, # score
-      10,   # score_denominator
+      1,  # skipped (independent counter, not part of total)
+      0.8,  # score = killed (8) / score_denominator (10)
+      10,   # score_denominator = total (16) - errors (2) - neutral (1) - equivalent (1) - unresolved (1) - unparseable (1)
       2.5,  # duration
       0.34, # efficiency
       4.0,  # mutations_per_second

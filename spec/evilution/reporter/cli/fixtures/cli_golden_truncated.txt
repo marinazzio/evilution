@@ -1,8 +1,8 @@
-Evilution v0.26.0 — Mutation Testing Results
+Evilution vEVILUTION_VERSION — Mutation Testing Results
 ============================================
 
-Mutations: 10 total, 8 killed, 1 survived, 0 timed out, 1 neutral, 1 equivalent, 1 unresolved, 1 unparseable, 1 skipped
-Score: 85.00% (8/10)
+Mutations: 16 total, 8 killed, 2 survived, 0 timed out, 1 neutral, 1 equivalent, 1 unresolved, 1 unparseable, 1 skipped
+Score: 80.00% (8/10)
 Duration: 2.50s
 Efficiency: 34.00% killtime, 4.00 mutations/s
 Peak memory: 120.5 MB
@@ -40,4 +40,4 @@ Disabled mutations (skipped by # evilution:disable):
   BooleanFlip: lib/disabled.rb:99
 
 [TRUNCATED] Stopped early due to --fail-fast
-Result: PASS (score 85.00% >= 80.00%)
+Result: PASS (score 80.00% >= 80.00%)
