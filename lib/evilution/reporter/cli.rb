@@ -5,172 +5,88 @@ require_relative "../reporter"
 class Evilution::Reporter::CLI
   SEPARATOR = "=" * 44
 
+  def initialize(
+    header: LineFormatters::Header.new,
+    metrics_block: MetricsBlock.new,
+    section_renderer: SectionRenderer.new,
+    sections: DEFAULT_SECTIONS,
+    trailer: Trailer.new
+  )
+    @header = header
+    @metrics_block = metrics_block
+    @section_renderer = section_renderer
+    @sections = sections
+    @trailer = trailer
+  end
+
   def call(summary)
     lines = []
-    append_metrics(lines, summary)
-    append_sections(lines, summary)
-    lines << ""
-    lines << "[TRUNCATED] Stopped early due to --fail-fast" if summary.truncated?
-    lines << result_line(summary)
-    lines.join("\n")
-  end
-
-  private
-
-  def append_metrics(lines, summary)
-    lines << header
+    lines << @header.format(summary)
     lines << SEPARATOR
     lines << ""
-    lines << mutations_line(summary)
-    lines << score_line(summary)
-    lines << duration_line(summary)
-    lines << efficiency_line(summary) if summary.duration.positive?
-    peak = summary.peak_memory_mb
-    lines << peak_memory_line(peak) if peak
-  end
-
-  def append_sections(lines, summary)
-    append_survived(lines, summary)
-    append_neutral(lines, summary)
-    append_equivalent(lines, summary)
-    append_unresolved(lines, summary)
-    append_unparseable(lines, summary)
-    append_errors(lines, summary)
-    append_disabled(lines, summary)
-  end
-
-  def append_survived(lines, summary)
-    gaps = summary.coverage_gaps
-    return unless gaps.any?
-
+    lines.concat(@metrics_block.call(summary))
+    @sections.each { |section| lines.concat(@section_renderer.call(section, summary)) }
     lines << ""
-    lines << "Survived mutations (#{gaps.length} coverage gap#{"s" unless gaps.length == 1}):"
-    gaps.each { |gap| lines << format_coverage_gap(gap) }
-  end
-
-  def append_neutral(lines, summary)
-    return unless summary.neutral_results.any?
-
-    lines << ""
-    lines << "Neutral mutations (test already failing):"
-    summary.neutral_results.each { |result| lines << format_neutral(result) }
-  end
-
-  def append_equivalent(lines, summary)
-    return unless summary.equivalent_results.any?
-
-    lines << ""
-    lines << "Equivalent mutations (provably identical behavior):"
-    summary.equivalent_results.each { |result| lines << format_neutral(result) }
-  end
-
-  def append_unresolved(lines, summary)
-    return unless summary.unresolved_results.any?
-
-    lines << ""
-    lines << "Unresolved mutations (no test file resolved):"
-    summary.unresolved_results.each { |result| lines << format_neutral(result) }
-  end
-
-  def append_unparseable(lines, summary)
-    return unless summary.unparseable_results.any?
-
-    lines << ""
-    lines << "Unparseable mutations (mutated source did not parse):"
-    summary.unparseable_results.each { |result| lines << format_neutral(result) }
-  end
-
-  def append_errors(lines, summary)
-    errored = summary.results.select(&:error?)
-    return if errored.empty?
-
-    lines << ""
-    lines << "Errored mutations:"
-    errored.each { |result| lines << format_error(result) }
-  end
-
-  def format_error(result)
-    mutation = result.mutation
-    header = "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
-    return header unless result.error_message
-
-    indented = result.error_message.lines.map { |line| "    #{line.chomp}" }.join("\n")
-    "#{header}\n#{indented}"
-  end
-
-  def append_disabled(lines, summary)
-    return unless summary.disabled_mutations.any?
-
-    lines << ""
-    lines << "Disabled mutations (skipped by # evilution:disable):"
-    summary.disabled_mutations.each { |mutation| lines << format_disabled(mutation) }
-  end
-
-  def header
-    "Evilution v#{Evilution::VERSION} — Mutation Testing Results"
-  end
-
-  def mutations_line(summary)
-    parts = "Mutations: #{summary.total} total, #{summary.killed} killed, " \
-            "#{summary.survived} survived, #{summary.timed_out} timed out"
-    parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
-    parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
-    parts += ", #{summary.unresolved} unresolved" if summary.unresolved.positive?
-    parts += ", #{summary.unparseable} unparseable" if summary.unparseable.positive?
-    parts += ", #{summary.skipped} skipped" if summary.skipped.positive?
-    parts
-  end
-
-  def score_line(summary)
-    score_pct = format_pct(summary.score)
-    "Score: #{score_pct} (#{summary.killed}/#{summary.score_denominator})"
-  end
-
-  def duration_line(summary)
-    "Duration: #{format("%.2f", summary.duration)}s"
-  end
-
-  def efficiency_line(summary)
-    pct = format("%.2f%%", summary.efficiency * 100)
-    rate = format("%.2f", summary.mutations_per_second)
-    "Efficiency: #{pct} killtime, #{rate} mutations/s"
-  end
-
-  def format_coverage_gap(gap)
-    location = "#{gap.file_path}:#{gap.line}"
-    header = if gap.single?
-               "  #{gap.primary_operator}: #{location} (#{gap.subject_name})"
-             else
-               operators = gap.operator_names.join(", ")
-               "  #{location} (#{gap.subject_name}) [#{gap.count} mutations: #{operators}]"
-             end
-    body = gap.mutation_results.first.mutation.unified_diff || gap.primary_diff
-    indented = body.split("\n").map { |l| "    #{l}" }.join("\n")
-    "#{header}\n#{indented}"
-  end
-
-  def format_neutral(result)
-    mutation = result.mutation
-    "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
-  end
-
-  def format_disabled(mutation)
-    "  #{mutation.operator_name}: #{mutation.file_path}:#{mutation.line}"
-  end
-
-  def result_line(summary)
-    min_score = 0.8
-    pass_fail = summary.success?(min_score: min_score) ? "PASS" : "FAIL"
-    score_pct = format_pct(summary.score)
-    threshold_pct = format_pct(min_score)
-    "Result: #{pass_fail} (score #{score_pct} #{pass_fail == "PASS" ? ">=" : "<"} #{threshold_pct})"
-  end
-
-  def peak_memory_line(peak_mb)
-    format("Peak memory: %<mb>.1f MB", mb: peak_mb)
-  end
-
-  def format_pct(value)
-    format("%.2f%%", value * 100)
+    lines.concat(@trailer.call(summary))
+    lines.join("\n")
   end
 end
+
+require_relative "cli/pct"
+require_relative "cli/section"
+require_relative "cli/section_renderer"
+require_relative "cli/line_formatters/header"
+require_relative "cli/line_formatters/mutations"
+require_relative "cli/line_formatters/score"
+require_relative "cli/line_formatters/duration"
+require_relative "cli/line_formatters/efficiency"
+require_relative "cli/line_formatters/peak_memory"
+require_relative "cli/line_formatters/truncation_notice"
+require_relative "cli/line_formatters/result_line"
+require_relative "cli/item_formatters/coverage_gap"
+require_relative "cli/item_formatters/result_location"
+require_relative "cli/item_formatters/error"
+require_relative "cli/item_formatters/disabled"
+require_relative "cli/metrics_block"
+require_relative "cli/trailer"
+
+Evilution::Reporter::CLI.const_set(
+  :DEFAULT_SECTIONS,
+  [
+    Evilution::Reporter::CLI::Section.new(
+      title: ->(gaps) { "Survived mutations (#{gaps.length} coverage gap#{"s" unless gaps.length == 1}):" },
+      fetcher: lambda(&:coverage_gaps),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::CoverageGap.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Neutral mutations (test already failing):",
+      fetcher: lambda(&:neutral_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Equivalent mutations (provably identical behavior):",
+      fetcher: lambda(&:equivalent_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Unresolved mutations (no test file resolved):",
+      fetcher: lambda(&:unresolved_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Unparseable mutations (mutated source did not parse):",
+      fetcher: lambda(&:unparseable_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Errored mutations:",
+      fetcher: ->(s) { s.results.select(&:error?) },
+      formatter: Evilution::Reporter::CLI::ItemFormatters::Error.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Disabled mutations (skipped by # evilution:disable):",
+      fetcher: lambda(&:disabled_mutations),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::Disabled.new
+    )
+  ].freeze
+)
