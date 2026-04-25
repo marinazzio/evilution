@@ -11,4 +11,13 @@ class MethodBodyExample
 
   def empty_method
   end
+
+  def with_super_in_body
+    super
+    42
+  end
+
+  def with_forwarding_super(...)
+    super(...)
+  end
 end
