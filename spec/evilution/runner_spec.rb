@@ -2094,7 +2094,12 @@ RSpec.describe Evilution::Runner do
         )
       end
 
-      it "stores cache without TypeError when batch is stripped after store (regression EV-owgh)" do
+      it "stores cache without TypeError when strip_sources! nils original_source (regression EV-owgh)" do
+        allow(mutation).to receive(:strip_sources!) do
+          allow(mutation).to receive(:original_source).and_return(nil)
+          allow(mutation).to receive(:mutated_source).and_return(nil)
+        end
+
         pool = instance_double(Evilution::Parallel::Pool)
         allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
         compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
