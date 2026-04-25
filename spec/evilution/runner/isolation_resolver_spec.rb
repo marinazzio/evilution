@@ -177,5 +177,71 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       )
       expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /preload file not found/)
     end
+
+    describe "autodetect fallback chain (Rails detected, no explicit preload)" do
+      def with_rails_root_having(file_paths)
+        Dir.mktmpdir do |dir|
+          markers = {}
+          file_paths.each do |rel|
+            abs = File.join(dir, rel)
+            FileUtils.mkdir_p(File.dirname(abs))
+            marker = File.join(dir, "marker_#{File.basename(rel, ".rb")}")
+            markers[rel] = marker
+            File.write(abs, "File.write(#{marker.inspect}, #{rel.inspect})\n")
+          end
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          yield(dir, markers)
+        end
+      end
+
+      it "loads spec/rails_helper.rb when present" do
+        with_rails_root_having(["spec/rails_helper.rb", "spec/spec_helper.rb"]) do |_dir, markers|
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+          expect(File.read(markers["spec/rails_helper.rb"])).to eq("spec/rails_helper.rb")
+          expect(File.exist?(markers["spec/spec_helper.rb"])).to be(false)
+        end
+      end
+
+      it "falls back to spec/spec_helper.rb when rails_helper is absent" do
+        with_rails_root_having(["spec/spec_helper.rb"]) do |_dir, markers|
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+          expect(File.read(markers["spec/spec_helper.rb"])).to eq("spec/spec_helper.rb")
+        end
+      end
+
+      it "falls back to test/test_helper.rb when no spec helpers exist" do
+        with_rails_root_having(["test/test_helper.rb"]) do |_dir, markers|
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+          expect(File.read(markers["test/test_helper.rb"])).to eq("test/test_helper.rb")
+        end
+      end
+
+      it "raises ConfigError listing every tried path when chain finds nothing" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+
+          expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError) do |e|
+            expect(e.message).to include("spec/rails_helper.rb")
+            expect(e.message).to include("spec/spec_helper.rb")
+            expect(e.message).to include("test/test_helper.rb")
+            expect(e.message).to match(/--preload|preload:/)
+          end
+        end
+      end
+
+      it "is a no-op under :in_process even when Rails is detected and no helpers exist" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(
+            config(isolation: :in_process), target_files: -> { [] }, hooks: nil
+          )
+          expect { resolver.perform_preload }.not_to raise_error
+        end
+      end
+    end
   end
 end

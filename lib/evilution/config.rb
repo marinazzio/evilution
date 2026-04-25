@@ -150,9 +150,10 @@ class Evilution::Config
       # fallback_to_full_suite: false
 
       # Preload file required in the parent process before forking workers.
-      # For Rails projects, spec/rails_helper.rb or test/test_helper.rb is
-      # auto-detected when isolation resolves to :fork. Set to false to disable.
-      # preload: spec/rails_helper.rb # or test/test_helper.rb
+      # For Rails projects, the autodetect chain tries (in order):
+      # spec/rails_helper.rb -> spec/spec_helper.rb -> test/test_helper.rb
+      # when isolation resolves to :fork. Set to false to disable.
+      # preload: spec/rails_helper.rb # or spec/spec_helper.rb, test/test_helper.rb
 
       # Hooks: Ruby files returning a Proc, keyed by lifecycle event
       # hooks:

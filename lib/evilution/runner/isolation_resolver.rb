@@ -9,6 +9,7 @@ class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disabl
 class Evilution::Runner::IsolationResolver
   PRELOAD_CANDIDATES = [
     File.join("spec", "rails_helper.rb"),
+    File.join("spec", "spec_helper.rb"),
     File.join("test", "test_helper.rb")
   ].freeze
 
@@ -30,13 +31,15 @@ class Evilution::Runner::IsolationResolver
 
   def perform_preload
     return if config.preload == false
+    return unless should_preload?
 
     path = resolve_preload_path
     return unless path
-    return unless should_preload?
 
     prepare_load_path_for_preload
     require File.expand_path(path)
+  rescue Evilution::ConfigError
+    raise
   rescue ScriptError, StandardError => e
     raise Evilution::ConfigError.new(
       "failed to preload #{path.inspect}: #{e.class}: #{e.message}",
@@ -123,7 +126,11 @@ class Evilution::Runner::IsolationResolver
       abs = File.join(root, rel)
       return abs if File.file?(abs)
     end
-    nil
+
+    raise Evilution::ConfigError,
+          "Preload file not found. Tried: [#{PRELOAD_CANDIDATES.join(", ")}]. " \
+          "Pass --preload <file> or set preload: in .evilution.yml. " \
+          "Use --no-preload (or preload: false) to disable preloading entirely."
   end
 
   # When the user explicitly requests InProcess on a Rails project, warn once
