@@ -29,5 +29,13 @@ RSpec.describe Evilution::Config::Sources do
       expect(merged[:example_targeting]).to eq(false)
       expect(merged[:jobs]).to eq(8)
     end
+
+    it "lets explicit incremental: false override file incremental: true (--no-incremental escape hatch)" do
+      allow(Evilution::Config::FileLoader).to receive(:load).and_return(incremental: true)
+
+      merged = described_class.merge(explicit: { incremental: false }, skip_file: false)
+
+      expect(merged[:incremental]).to be(false)
+    end
   end
 end
