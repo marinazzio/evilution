@@ -27,6 +27,8 @@ class Evilution::Cache
   end
 
   def store(mutation, result_data)
+    return if mutation.original_source.nil?
+
     file_key = file_key(mutation)
     entry_key = entry_key(mutation)
     data = read_file(file_key) || {}
