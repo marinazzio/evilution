@@ -1,0 +1,42 @@
+Evilution v0.26.0 — Mutation Testing Results
+============================================
+
+Mutations: 10 total, 8 killed, 1 survived, 0 timed out, 1 neutral, 1 equivalent, 1 unresolved, 1 unparseable, 1 skipped
+Score: 85.00% (8/10)
+Duration: 2.50s
+Efficiency: 34.00% killtime, 4.00 mutations/s
+Peak memory: 120.5 MB
+
+Survived mutations (2 coverage gaps):
+  BooleanFlip: lib/foo.rb:12 (Foo#bar)
+    @@ -1,1 +1,1 @@
+    -true
+    +false
+  lib/baz.rb:7 (Baz#qux) [2 mutations: ArithmeticReplace, ConstantReplace]
+    @@ -2,2 +2,2 @@
+    -x + 1
+    +x - 1
+
+Neutral mutations (test already failing):
+  StatementDeletion: lib/n.rb:3
+
+Equivalent mutations (provably identical behavior):
+  ScalarReturn: lib/e.rb:5
+
+Unresolved mutations (no test file resolved):
+  BooleanFlip: lib/u.rb:8
+
+Unparseable mutations (mutated source did not parse):
+  MethodBody: lib/p.rb:11
+
+Errored mutations:
+  ArithmeticReplace: lib/err.rb:22
+    RuntimeError: kaboom
+      at lib/err.rb:22
+      at lib/err.rb:30
+  ConstantReplace: lib/err2.rb:4
+
+Disabled mutations (skipped by # evilution:disable):
+  BooleanFlip: lib/disabled.rb:99
+
+Result: PASS (score 85.00% >= 80.00%)

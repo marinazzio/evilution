@@ -29,7 +29,6 @@ Metrics/ClassLength:
   Exclude:
     - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/runner/mutation_executor.rb"
-    - "lib/evilution/reporter/cli.rb"
 
 Metrics/ModuleLength:
   Exclude:
