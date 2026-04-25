@@ -109,7 +109,7 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects. See [docs/isolation.md](docs/isolation.md). |
-| `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers (e.g. `spec/rails_helper.rb`). Auto-detected for Rails. |
+| `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. Errors with the full chain listed if none exist; pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
