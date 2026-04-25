@@ -34,7 +34,7 @@ Two Bundler conflicts hit fresh installs on this stack:
    Make sure all dependencies are added to Gemfile.
    ```
 
-2. **`prism` pin.** Same lockfile pins `prism 0.19`, which lacks the `IfNode#subsequent` accessor evilution uses (renamed from `consequent` in prism 1.0). Symptom: `NoMethodError: undefined method 'subsequent' for an instance of Prism::IfNode`.
+2. **`prism` pin.** Same lockfile pins `prism 0.19`, which lacks the `IfNode#subsequent` accessor evilution uses (older Prism releases exposed it as `consequent`). Symptom: `NoMethodError: undefined method 'subsequent' for an instance of Prism::IfNode`.
 
 Both resolve cleanly with a sidecar `Gemfile.local` that re-evaluates the project Gemfile and adds evilution + prism on top — no edits to the main `Gemfile.lock`:
 
@@ -54,6 +54,8 @@ Then invoke evilution against that Gemfile:
 BUNDLE_GEMFILE=Gemfile.local bundle install
 BUNDLE_GEMFILE=Gemfile.local bundle exec evilution run lib/foo.rb
 ```
+
+The first command writes a sibling `Gemfile.local.lock`. Decide whether to commit or `.gitignore` it the same way you would for any developer-only Gemfile — typically gitignored when only one or two engineers run mutation testing locally, committed when CI also runs evilution against the sidecar Gemfile.
 
 The evilution gemspec already declares `prism >= 1.5, < 2`, so adding the `gem "prism"` line above is only necessary on stacks that also pin prism in `Gemfile.lock`.
 
