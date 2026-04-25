@@ -65,6 +65,25 @@ RSpec.describe Evilution::Mutator::Operator::BlockRemoval do
       expect(muts.first.mutated_source).not_to include("loop {")
     end
 
+    it "skips block-pass arguments (&:sym) — stripping them inside parens yields invalid Ruby" do
+      muts = mutations_for("block_pass_symbol")
+
+      expect(muts).to be_empty
+    end
+
+    it "skips block-pass argument on index_by(&:id)" do
+      muts = mutations_for("block_pass_index_by")
+
+      expect(muts).to be_empty
+    end
+
+    it "still mutates an explicit brace block in a chain even when other links use block-pass" do
+      muts = mutations_for("chained_block_pass")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.flat_map.compact.map!(&:upcase)")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

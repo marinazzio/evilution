@@ -4,7 +4,7 @@ require_relative "../operator"
 
 class Evilution::Mutator::Operator::BlockRemoval < Evilution::Mutator::Base
   def visit_call_node(node)
-    if node.block
+    if node.block && !node.block.is_a?(Prism::BlockArgumentNode)
       block_node = node.block
       call_end = block_node.location.start_offset
       call_start = node.location.start_offset
