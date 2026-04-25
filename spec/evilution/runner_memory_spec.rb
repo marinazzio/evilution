@@ -16,7 +16,9 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       line: 3,
       column: 4,
       diff: "- a >= b\n+ a > b",
-      strip_sources!: nil
+      strip_sources!: nil,
+      unparseable?: false,
+      unified_diff: nil
     )
   end
 

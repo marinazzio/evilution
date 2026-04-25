@@ -27,7 +27,6 @@ Metrics/BlockLength:
 Metrics/ClassLength:
   Max: 150
   Exclude:
-    - "lib/evilution/integration/rspec.rb"
     - "lib/evilution/runner/mutation_executor.rb"
 
 Metrics/ModuleLength:
@@ -57,6 +56,8 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Max: 8
+  Exclude:
+    - "lib/evilution/integration/rspec.rb"
 
 Layout/LineLength:
   Max: 140

@@ -153,30 +153,44 @@ RSpec.describe Evilution::Integration::RSpec do
       end
     end
 
-    it "removes ExampleGroup constants after each run" do
-      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
-      allow(RSpec::ExampleGroups).to receive(:remove_all_constants)
+    # Snapshot-aware ExampleGroups constant removal (only constants added
+    # during the run are removed, pre-existing host constants survive) is
+    # covered end-to-end in spec/evilution/integration/rspec_host_isolation_spec.rb
+    # and at the unit level in
+    # spec/evilution/integration/rspec/state_guard/example_groups_constants_spec.rb.
+    # The previous test here asserted the old blanket-clear behavior
+    # (RSpec::ExampleGroups.remove_all_constants) which was the bug fixed by
+    # the StateGuard refactor and is intentionally no longer used.
 
-      integration.call(mutation)
-
-      expect(RSpec::ExampleGroups).to have_received(:remove_all_constants).at_least(:once)
-    end
-
-    it "raises Evilution::Error when rspec-core is not available" do
-      integration_no_rspec = described_class.new(test_files: ["spec/some_spec.rb"])
-      integration_no_rspec.instance_variable_set(:@rspec_loaded, false)
-      allow(integration_no_rspec).to receive(:require).with("rspec/core").and_raise(LoadError, "cannot load such file -- rspec/core")
+    it "propagates Evilution::Error raised by the framework loader" do
+      failing_loader = instance_double(
+        Evilution::Integration::RSpec::FrameworkLoader,
+        loaded?: false
+      )
+      allow(failing_loader).to receive(:call).and_raise(
+        Evilution::Error, "rspec-core is required but not available: cannot load such file -- rspec/core"
+      )
+      integration_no_rspec = described_class.new(
+        test_files: ["spec/some_spec.rb"],
+        framework_loader: failing_loader
+      )
 
       expect { integration_no_rspec.call(mutation) }.to raise_error(Evilution::Error, /rspec-core is required/)
     end
 
-    it "does not modify original file when ensure_rspec_loaded raises" do
-      integration_no_rspec = described_class.new(test_files: ["spec/some_spec.rb"])
-      integration_no_rspec.instance_variable_set(:@rspec_loaded, false)
-      allow(integration_no_rspec).to receive(:require).with("rspec/core").and_raise(LoadError, "nope")
+    it "does not modify original file when framework loader raises" do
+      failing_loader = instance_double(
+        Evilution::Integration::RSpec::FrameworkLoader,
+        loaded?: false
+      )
+      allow(failing_loader).to receive(:call).and_raise(Evilution::Error, "nope")
+      integration_no_rspec = described_class.new(
+        test_files: ["spec/some_spec.rb"],
+        framework_loader: failing_loader
+      )
 
       expect { integration_no_rspec.call(mutation) }.to raise_error(Evilution::Error)
-      # Original file should never be touched
+      # Original file should never be touched (loader runs before mutation_applier)
       expect(File.read(source_file.path)).to eq(original_source)
     end
   end
@@ -439,40 +453,57 @@ RSpec.describe Evilution::Integration::RSpec do
   end
 
   describe "setup_integration hooks" do
+    # A fake framework loader that records when #call fires so tests can
+    # observe ordering between setup_integration hooks and the actual load.
+    let(:recording_loader_class) do
+      Class.new do
+        attr_reader :events
+
+        def initialize(events)
+          @events = events
+          @loaded = false
+        end
+
+        def loaded?
+          @loaded
+        end
+
+        def call
+          @events << :load
+          @loaded = true
+        end
+      end
+    end
+
     it "fires setup_integration_pre before loading rspec" do
       hooks = Evilution::Hooks::Registry.new
       events = []
       hooks.register(:setup_integration_pre) { events << :setup_pre }
-      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
-      hooked_integration.instance_variable_set(:@rspec_loaded, false)
-
-      allow(hooked_integration).to receive(:require).with("rspec/core") do
-        events << :require
-        # Simulate successful load
-      end
+      loader = recording_loader_class.new(events)
+      hooked_integration = described_class.new(
+        test_files: ["spec/some_spec.rb"], hooks: hooks, framework_loader: loader
+      )
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       hooked_integration.call(mutation)
 
       expect(events[0]).to eq(:setup_pre)
-      expect(events[1]).to eq(:require)
+      expect(events[1]).to eq(:load)
     end
 
     it "fires setup_integration_post after loading rspec" do
       hooks = Evilution::Hooks::Registry.new
       events = []
       hooks.register(:setup_integration_post) { events << :setup_post }
-      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
-      hooked_integration.instance_variable_set(:@rspec_loaded, false)
-
-      allow(hooked_integration).to receive(:require).with("rspec/core") do
-        events << :require
-      end
+      loader = recording_loader_class.new(events)
+      hooked_integration = described_class.new(
+        test_files: ["spec/some_spec.rb"], hooks: hooks, framework_loader: loader
+      )
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       hooked_integration.call(mutation)
 
-      expect(events[0]).to eq(:require)
+      expect(events[0]).to eq(:load)
       expect(events[1]).to eq(:setup_post)
     end
 
@@ -481,15 +512,15 @@ RSpec.describe Evilution::Integration::RSpec do
       events = []
       hooks.register(:setup_integration_pre) { events << :setup_pre }
       hooks.register(:setup_integration_post) { events << :setup_post }
-      hooked_integration = described_class.new(test_files: ["spec/some_spec.rb"], hooks: hooks)
-      hooked_integration.instance_variable_set(:@rspec_loaded, false)
-
-      allow(hooked_integration).to receive(:require).with("rspec/core")
+      loader = recording_loader_class.new(events)
+      hooked_integration = described_class.new(
+        test_files: ["spec/some_spec.rb"], hooks: hooks, framework_loader: loader
+      )
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       hooked_integration.call(mutation)
 
-      expect(events).to eq(%i[setup_pre setup_post])
+      expect(events).to eq(%i[setup_pre load setup_post])
     end
 
     it "provides integration type in hook payload" do
@@ -518,9 +549,10 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     it "works without hooks (backwards compatible)" do
-      no_hooks_integration = described_class.new(test_files: ["spec/some_spec.rb"])
-      no_hooks_integration.instance_variable_set(:@rspec_loaded, false)
-      allow(no_hooks_integration).to receive(:require).with("rspec/core")
+      loader = recording_loader_class.new([])
+      no_hooks_integration = described_class.new(
+        test_files: ["spec/some_spec.rb"], framework_loader: loader
+      )
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       result = no_hooks_integration.call(mutation)

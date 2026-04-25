@@ -28,7 +28,9 @@ RSpec.describe Evilution::Runner do
       line: 3,
       column: 4,
       diff: "- a >= b\n+ a > b",
-      strip_sources!: nil
+      strip_sources!: nil,
+      unparseable?: false,
+      unified_diff: nil
     )
   end
 
@@ -125,7 +127,9 @@ RSpec.describe Evilution::Runner do
           line: 5,
           column: 0,
           diff: "- x\n+ nil",
-          strip_sources!: nil
+          strip_sources!: nil,
+          unparseable?: false,
+          unified_diff: nil
         )
       end
 
@@ -844,7 +848,8 @@ RSpec.describe Evilution::Runner do
 
     it "passes spec_files to the RSpec integration" do
       expect(Evilution::Integration::RSpec).to receive(:new)
-        .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything, related_specs_heuristic: anything)
+        .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything,
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
         .and_call_original
 
       runner.call
@@ -863,7 +868,8 @@ RSpec.describe Evilution::Runner do
       empty_runner = described_class.new(config: empty_config)
 
       expect(Evilution::Integration::RSpec).to receive(:new)
-        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything, related_specs_heuristic: anything)
+        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything,
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
         .and_call_original
 
       empty_runner.call
@@ -900,7 +906,7 @@ RSpec.describe Evilution::Runner do
 
     it "dispatches to Integration::Minitest" do
       expect(Evilution::Integration::Minitest).to receive(:new)
-        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything).and_call_original
+        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything, spec_selector: anything).and_call_original
 
       runner.call
     end
@@ -920,7 +926,8 @@ RSpec.describe Evilution::Runner do
       minitest_runner = described_class.new(config: minitest_config)
 
       expect(Evilution::Integration::Minitest).to receive(:new)
-        .with(test_files: ["test/example_test.rb"], hooks: nil, fallback_to_full_suite: anything).and_call_original
+        .with(test_files: ["test/example_test.rb"], hooks: nil, fallback_to_full_suite: anything,
+              spec_selector: anything).and_call_original
 
       minitest_runner.call
     end
@@ -955,7 +962,7 @@ RSpec.describe Evilution::Runner do
 
     it "passes integration baseline_runner to Baseline" do
       expect(Evilution::Baseline).to receive(:new).with(
-        hash_including(runner: an_instance_of(Proc))
+        hash_including(runner: an_instance_of(Evilution::Integration::RSpec::BaselineRunner))
       ).and_call_original
 
       runner.call
@@ -1005,7 +1012,9 @@ RSpec.describe Evilution::Runner do
         line: 5,
         column: 0,
         diff: "- x\n+ nil",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -1020,7 +1029,9 @@ RSpec.describe Evilution::Runner do
         line: 7,
         column: 0,
         diff: "- true\n+ false",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -1413,7 +1424,9 @@ RSpec.describe Evilution::Runner do
         line: 5,
         column: 0,
         diff: "- x\n+ nil",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
       survived2 = Evilution::Result::MutationResult.new(
         mutation: mutation2, status: :survived, duration: 0.1
@@ -1590,7 +1603,9 @@ RSpec.describe Evilution::Runner do
         line: 5,
         column: 4,
         diff: "- true\n+ false",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -1734,7 +1749,9 @@ RSpec.describe Evilution::Runner do
         line: 7,
         column: 4,
         diff: "- nil\n+ 0",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
 
       registry = Evilution::Mutator::Registry.default
@@ -1891,7 +1908,7 @@ RSpec.describe Evilution::Runner do
              subject: subject_a, operator_name: "op_a",
              original_source: "a", mutated_source: "b",
              file_path: "lib/example.rb", line: 1, column: 0,
-             diff: "- a\n+ b", strip_sources!: nil)
+             diff: "- a\n+ b", strip_sources!: nil, unparseable?: false, unified_diff: nil)
     end
 
     let(:mutation_b) do
@@ -1899,7 +1916,7 @@ RSpec.describe Evilution::Runner do
              subject: subject_b, operator_name: "op_b",
              original_source: "c", mutated_source: "d",
              file_path: "lib/example.rb", line: 10, column: 0,
-             diff: "- c\n+ d", strip_sources!: nil)
+             diff: "- c\n+ d", strip_sources!: nil, unparseable?: false, unified_diff: nil)
     end
 
     before do
@@ -2185,7 +2202,9 @@ RSpec.describe Evilution::Runner do
         line: 5,
         column: 4,
         diff: "- a >= b\n+ a > b",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -2200,7 +2219,9 @@ RSpec.describe Evilution::Runner do
         line: 10,
         column: 4,
         diff: "- true\n+ false",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -2297,7 +2318,9 @@ RSpec.describe Evilution::Runner do
         line: 4,
         column: 4,
         diff: "- true\n+ false",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -2312,7 +2335,9 @@ RSpec.describe Evilution::Runner do
         line: 10,
         column: 4,
         diff: "- a >= b\n+ a > b",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
     end
 
@@ -2438,7 +2463,8 @@ RSpec.describe Evilution::Runner do
       allow(isolator).to receive(:call).and_return(mutation_result)
 
       expect(Evilution::Integration::RSpec).to receive(:new)
-        .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything, related_specs_heuristic: anything)
+        .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything,
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
         .and_call_original
 
       hooked_runner = described_class.new(
@@ -2467,7 +2493,9 @@ RSpec.describe Evilution::Runner do
         line: 5,
         column: 4,
         diff: "- true\n+ false",
-        strip_sources!: nil
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
       )
 
       registry = instance_double(Evilution::Mutator::Registry)

@@ -7,13 +7,17 @@ require "evilution/result/mutation_result"
 require "evilution/result/summary"
 
 RSpec.describe "Reporter memory stats" do
+  let(:subject_obj) { double("Subject", name: "User#valid?") }
+
   let(:mutation) do
     double("Mutation",
            operator_name: "comparison_replacement",
            file_path: "lib/user.rb",
            line: 9,
            diff: "- x >= 10\n+ x > 10",
-           unified_diff: nil)
+           unified_diff: nil,
+           subject: subject_obj,
+           unparseable?: false)
   end
 
   let(:result_with_rss) do
