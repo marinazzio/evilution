@@ -60,7 +60,8 @@ RSpec.describe "Evilution::Integration::RSpec host isolation" do
   end
 
   it "preserves pre-existing RSpec::ExampleGroups constants across a run" do
-    RSpec::ExampleGroups.const_set(:HostPre, Class.new) unless RSpec::ExampleGroups.const_defined?(:HostPre)
+    host_pre_was_preexisting = RSpec::ExampleGroups.const_defined?(:HostPre)
+    RSpec::ExampleGroups.const_set(:HostPre, Class.new) unless host_pre_was_preexisting
 
     integration = Evilution::Integration::RSpec.new(test_files: ["spec/nonexistent_spec.rb"])
     allow(RSpec::Core::Runner).to receive(:run) do |_, _, _|
@@ -75,7 +76,7 @@ RSpec.describe "Evilution::Integration::RSpec host isolation" do
     expect(RSpec::ExampleGroups.const_defined?(:HostPre)).to be true
     expect(RSpec::ExampleGroups.const_defined?(:AddedDuringRun)).to be false
   ensure
-    RSpec::ExampleGroups.send(:remove_const, :HostPre) if RSpec::ExampleGroups.const_defined?(:HostPre)
+    RSpec::ExampleGroups.send(:remove_const, :HostPre) if !host_pre_was_preexisting && RSpec::ExampleGroups.const_defined?(:HostPre)
     RSpec::ExampleGroups.send(:remove_const, :AddedDuringRun) if RSpec::ExampleGroups.const_defined?(:AddedDuringRun)
   end
 end
