@@ -31,10 +31,10 @@ class Evilution::Runner::IsolationResolver
 
   def perform_preload
     return if config.preload == false
+    return unless should_preload?
 
     path = resolve_preload_path
     return unless path
-    return unless should_preload?
 
     prepare_load_path_for_preload
     require File.expand_path(path)

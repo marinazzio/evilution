@@ -232,6 +232,16 @@ RSpec.describe Evilution::Runner::IsolationResolver do
           end
         end
       end
+
+      it "is a no-op under :in_process even when Rails is detected and no helpers exist" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(
+            config(isolation: :in_process), target_files: -> { [] }, hooks: nil
+          )
+          expect { resolver.perform_preload }.not_to raise_error
+        end
+      end
     end
   end
 end
