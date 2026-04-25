@@ -32,7 +32,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
   end
 
   def notifier(diags = diagnostics)
-    Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg, hooks: nil, diagnostics: diags, on_result: nil)
+    Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg, diagnostics: diags, on_result: nil)
   end
 
   it "calls isolator inside the pool for uncached mutations and rebuilds via packer" do
@@ -118,7 +118,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       isolator: isolator,
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
-      notifier: Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg_ff, hooks: nil, diagnostics: diags, on_result: nil),
+      notifier: Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg_ff, diagnostics: diags, on_result: nil),
       pool_factory: -> { pool },
       config: cfg_ff
     )

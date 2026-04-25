@@ -47,7 +47,7 @@ class Evilution::Runner::MutationExecutor
   end
 
   def build_notifier
-    ResultNotifier.new(@config, hooks: @hooks, diagnostics: @diagnostics, on_result: @on_result)
+    ResultNotifier.new(@config, diagnostics: @diagnostics, on_result: @on_result)
   end
 
   def build_pipeline(spec_resolver)

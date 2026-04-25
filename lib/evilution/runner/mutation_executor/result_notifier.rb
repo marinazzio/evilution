@@ -6,9 +6,8 @@ class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disabl
 class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::MutationExecutor::ResultNotifier
-  def initialize(config, hooks:, diagnostics:, on_result:)
+  def initialize(config, diagnostics:, on_result:)
     @config = config
-    @hooks = hooks
     @diagnostics = diagnostics
     @on_result = on_result
     @survived_count = 0

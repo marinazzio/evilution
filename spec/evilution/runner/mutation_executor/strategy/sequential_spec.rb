@@ -39,7 +39,6 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
   def notifier(config: cfg, on_result: nil)
     Evilution::Runner::MutationExecutor::ResultNotifier.new(
       config,
-      hooks: nil,
       diagnostics: Evilution::Runner::Diagnostics.new(config),
       on_result: on_result
     )
