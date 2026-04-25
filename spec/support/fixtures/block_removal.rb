@@ -24,4 +24,16 @@ class BlockRemovalExample
   def block_no_receiver
     loop { break }
   end
+
+  def block_pass_symbol(items)
+    items.map!(&:to_s)
+  end
+
+  def block_pass_index_by(items)
+    items.index_by(&:id)
+  end
+
+  def chained_block_pass(items)
+    items.flat_map { |x| x }.compact.map!(&:upcase)
+  end
 end
