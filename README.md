@@ -413,6 +413,12 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
+### After upgrading the gem: restart the MCP server
+
+The MCP server is a long-lived stdio process spawned by the agent host. `bundle update evilution` swaps the gem on disk but the running process keeps the old code in memory — symptom is opaque "Internal error" responses to flags or shapes the old build doesn't recognize. Restart the server (reload the workspace in Claude Code / Copilot / etc.) so the new gem loads.
+
+`evilution version` prints the gem version and the bundled `mcp` gem version on separate lines — run it in the same bundle the MCP server uses to confirm what's loaded.
+
 ## Recommended Workflows for AI Agents
 
 ### 1. Full project scan
