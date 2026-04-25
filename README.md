@@ -21,6 +21,8 @@ Then: `bundle install`
 
 Or standalone: `gem install evilution`
 
+Requires `prism >= 1.5`. Older Rails apps (e.g. Rails 7.1 pins `prism 0.19`) must upgrade prism — the gemspec constraint forces bundler to resolve a compatible version.
+
 ## Command Reference
 
 ```

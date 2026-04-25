@@ -4,6 +4,7 @@ PATH
     evilution (0.26.0)
       diff-lcs (>= 1.5, < 3)
       mcp (>= 0.8, < 2)
+      prism (>= 1.5, < 2)
 
 GEM
   remote: https://rubygems.org/
