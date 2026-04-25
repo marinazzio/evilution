@@ -10,7 +10,11 @@ class Evilution::Parallel::WorkQueue
   TIMING_GRACE_PERIOD = 5
 
   def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
-    validate_init_args(size, prefetch, item_timeout, worker_max_items)
+    Validators::PositiveInt.call!(:size, size)
+    Validators::PositiveInt.call!(:prefetch, prefetch)
+    Validators::OptionalPositiveNumber.call!(:item_timeout, item_timeout)
+    Validators::OptionalPositiveInt.call!(:worker_max_items, worker_max_items)
+
     @size = size
     @hooks = hooks
     @prefetch = prefetch
@@ -42,31 +46,6 @@ class Evilution::Parallel::WorkQueue
   end
 
   private
-
-  def validate_init_args(size, prefetch, item_timeout, worker_max_items)
-    validate_positive_int!(:size, size)
-    validate_positive_int!(:prefetch, prefetch)
-    validate_optional_positive_number!(:item_timeout, item_timeout)
-    validate_optional_positive_int!(:worker_max_items, worker_max_items)
-  end
-
-  def validate_positive_int!(name, value)
-    return if value.is_a?(Integer) && value >= 1
-
-    raise ArgumentError, "#{name} must be a positive integer, got #{value.inspect}"
-  end
-
-  def validate_optional_positive_int!(name, value)
-    return if value.nil? || (value.is_a?(Integer) && value.positive?)
-
-    raise ArgumentError, "#{name} must be nil or a positive integer, got #{value.inspect}"
-  end
-
-  def validate_optional_positive_number!(name, value)
-    return if value.nil? || (value.is_a?(Numeric) && value.positive?)
-
-    raise ArgumentError, "#{name} must be nil or a positive number, got #{value.inspect}"
-  end
 
   def spawn_workers(count, &block)
     count.times.map { |slot| spawn_one_worker(worker_index: slot, &block) }
@@ -371,3 +350,7 @@ class Evilution::Parallel::WorkQueue
 end
 
 require_relative "work_queue/worker_stat"
+require_relative "work_queue/validators"
+require_relative "work_queue/validators/positive_int"
+require_relative "work_queue/validators/optional_positive_int"
+require_relative "work_queue/validators/optional_positive_number"
