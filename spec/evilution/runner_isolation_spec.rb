@@ -139,14 +139,6 @@ RSpec.describe Evilution::Runner, "isolation resolution" do
     end
   end
 
-  describe "parallel mode" do
-    it "uses isolator for worker isolation, not hardcoded InProcess" do
-      write_plain_target
-      config = build_config(isolation: :fork, jobs: 2)
-      runner = described_class.new(config: config)
-
-      expect(runner).to receive(:isolator).at_least(:once).and_call_original
-      runner.send(:mutation_executor).send(:run_parallel, [], nil)
-    end
-  end
+  # parallel mode isolator wiring covered by:
+  # spec/evilution/runner/mutation_executor/strategy/parallel_spec.rb
 end
