@@ -17,10 +17,10 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
   end
 
   describe "#call" do
-    it "generates 3 mutations for a method with a body" do
+    it "generates 2 mutations for a method without super in body (nil + self only)" do
       muts = mutations_for("with_body")
 
-      expect(muts.length).to eq(3)
+      expect(muts.length).to eq(2)
     end
 
     it "replaces body with nil" do
@@ -37,11 +37,25 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       expect(self_mut).not_to be_nil
     end
 
-    it "replaces body with super" do
+    it "does not emit a super-replacement when body lacks super (avoids NoMethodError at runtime)" do
       muts = mutations_for("with_body")
 
       super_mut = muts.find { |m| m.mutated_source.match?(/def with_body\s+super\s+end/) }
+      expect(super_mut).to be_nil
+    end
+
+    it "emits a super-replacement when body already calls super (heuristic: super target presumed intended)" do
+      muts = mutations_for("with_super_in_body")
+
+      expect(muts.length).to eq(3)
+      super_mut = muts.find { |m| m.mutated_source.match?(/def with_super_in_body\s+super\s+end/) }
       expect(super_mut).not_to be_nil
+    end
+
+    it "emits a super-replacement when body calls forwarding super" do
+      muts = mutations_for("with_forwarding_super")
+
+      expect(muts.length).to eq(3)
     end
 
     it "generates 0 mutations for an empty method" do
