@@ -9,18 +9,6 @@ class Evilution::Parallel::WorkQueue
 
   TIMING_GRACE_PERIOD = 5
 
-  WorkerStat = Struct.new(:pid, :items_completed, :busy_time, :wall_time) do
-    def idle_time
-      wall_time - busy_time
-    end
-
-    def utilization
-      return 0.0 if wall_time.nil? || wall_time.zero?
-
-      busy_time / wall_time
-    end
-  end
-
   def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
     validate_init_args(size, prefetch, item_timeout, worker_max_items)
     @size = size
@@ -381,3 +369,5 @@ class Evilution::Parallel::WorkQueue
   end
   private_constant :CollectionState
 end
+
+require_relative "work_queue/worker_stat"
