@@ -26,8 +26,6 @@ Metrics/BlockLength:
 # target 150
 Metrics/ClassLength:
   Max: 150
-  Exclude:
-    - "lib/evilution/runner/mutation_executor.rb"
 
 Metrics/ModuleLength:
   Exclude:
