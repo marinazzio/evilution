@@ -156,4 +156,44 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
 
     strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
   end
+
+  it "stores cache entries before stripping sources so backend sees non-nil original_source" do
+    m1 = instance_double(
+      Evilution::Mutation,
+      file_path: "lib/foo.rb",
+      to_s: "m1",
+      unparseable?: false,
+      original_source: "x = 1\n"
+    )
+    call_order = []
+    allow(m1).to receive(:strip_sources!) do
+      call_order << :strip
+      allow(m1).to receive(:original_source).and_return(nil)
+    end
+
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store) do |mutation, _result|
+      call_order << :store
+      expect(mutation.original_source).not_to be_nil
+    end
+
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(killed(m1))
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map) { |uncached, &block| uncached.map(&block) }
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier,
+      pool_factory: -> { pool },
+      config: cfg
+    )
+
+    strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    expect(call_order).to eq(%i[store strip])
+  end
 end

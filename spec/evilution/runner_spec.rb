@@ -2078,6 +2078,36 @@ RSpec.describe Evilution::Runner do
       expect(summary.results.length).to eq(1)
       expect(summary.results.first.status).to eq(:killed)
     end
+
+    context "with parallel execution (jobs > 1)" do
+      let(:parallel_incremental_config) do
+        Evilution::Config.new(
+          target_files: ["lib/example.rb"],
+          format: :json,
+          timeout: 5,
+          quiet: true,
+          baseline: false,
+          isolation: :fork,
+          incremental: true,
+          jobs: 2,
+          skip_config_file: true
+        )
+      end
+
+      it "stores cache without TypeError when batch is stripped after store (regression EV-owgh)" do
+        pool = instance_double(Evilution::Parallel::Pool)
+        allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+        compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
+        allow(pool).to receive(:map).and_return(compact)
+        allow(pool).to receive(:worker_stats).and_return([])
+
+        runner = described_class.new(config: parallel_incremental_config)
+        expect { runner.call }.not_to raise_error
+
+        cache_files = Dir.glob(File.join(cache_dir, "*.json"))
+        expect(cache_files).not_to be_empty
+      end
+    end
   end
 
   describe "progress bar integration" do

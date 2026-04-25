@@ -78,6 +78,18 @@ RSpec.describe Evilution::Cache do
 
       expect(File.directory?(nested_dir)).to be true
     end
+
+    it "is a no-op when original_source is nil (stripped mutation)" do
+      stripped = double("Mutation",
+                        file_path: "lib/example.rb",
+                        original_source: nil,
+                        operator_name: "arithmetic_replacement",
+                        line: 3,
+                        column: 6)
+
+      expect { cache.store(stripped, result_data) }.not_to raise_error
+      expect(Dir.glob(File.join(cache_dir, "*.json"))).to be_empty
+    end
   end
 
   describe "#clear" do

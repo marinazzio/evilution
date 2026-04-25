@@ -41,9 +41,9 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     uncached_indices, cached_results = @cache.partition(batch, packer: @packer)
     worker_results = run_uncached(batch, uncached_indices, pool, integration)
     compact_results = merge(batch, uncached_indices, cached_results, worker_results)
-    batch.each(&:strip_sources!)
     batch_results = batch.zip(compact_results).map { |m, h| @packer.rebuild(m, h) }
     uncached_indices.each { |i| @cache.store(batch_results[i].mutation, batch_results[i]) }
+    batch.each(&:strip_sources!)
     batch_results
   end
 
