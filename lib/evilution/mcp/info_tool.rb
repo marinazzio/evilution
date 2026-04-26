@@ -13,17 +13,19 @@ require_relative "../version"
 require_relative "../mcp"
 
 class Evilution::MCP::InfoTool < MCP::Tool
-  VALID_ACTIONS = %w[subjects tests environment statuses].freeze
+  VALID_ACTIONS = %w[subjects tests environment statuses feedback].freeze
 
   tool_name "evilution-info"
   description "Discover what evilution sees before running any mutations. " \
-              "One tool, four actions: " \
+              "One tool, five actions: " \
               "'subjects' lists every mutatable method in the target files with its file, line, and mutation count; " \
               "'tests' resolves which spec/test files cover the given sources (so you pick the right --spec before mutating); " \
               "'environment' dumps the effective config (version, ruby, config file, timeout, " \
               "integration, isolation, and every other setting); " \
               "'statuses' returns the mutation-result status glossary (killed/survived/neutral/error/etc.) with " \
-              "per-status meaning and scoring semantics so agents can triage results without guessing. " \
+              "per-status meaning and scoring semantics so agents can triage results without guessing; " \
+              "'feedback' returns the public discussion URL plus consent and privacy guidance for posting " \
+              "feedback on errors, usage problems, friction, or missing capabilities. " \
               "Use this instead of shelling out to 'evilution subjects', 'evilution tests list', or 'evilution environment show' — " \
               "the response is structured JSON so you can plan the next mutation run without parsing CLI text."
   input_schema(
@@ -33,7 +35,8 @@ class Evilution::MCP::InfoTool < MCP::Tool
         enum: VALID_ACTIONS,
         description: "Which discovery operation to perform. " \
                      "'subjects' lists mutatable methods; 'tests' resolves specs for sources; " \
-                     "'environment' dumps effective config; 'statuses' returns the result-status glossary."
+                     "'environment' dumps effective config; 'statuses' returns the result-status glossary; " \
+                     "'feedback' returns the discussion URL and consent/privacy guidance."
       },
       files: {
         type: "array",
@@ -96,12 +99,14 @@ require_relative "info_tool/actions/subjects"
 require_relative "info_tool/actions/tests"
 require_relative "info_tool/actions/environment"
 require_relative "info_tool/actions/statuses"
+require_relative "info_tool/actions/feedback"
 
 Evilution::MCP::InfoTool.const_set(:ACTIONS, {
   "subjects" => Evilution::MCP::InfoTool::Actions::Subjects,
   "tests" => Evilution::MCP::InfoTool::Actions::Tests,
   "environment" => Evilution::MCP::InfoTool::Actions::Environment,
-  "statuses" => Evilution::MCP::InfoTool::Actions::Statuses
+  "statuses" => Evilution::MCP::InfoTool::Actions::Statuses,
+  "feedback" => Evilution::MCP::InfoTool::Actions::Feedback
 }.freeze)
 Evilution::MCP::InfoTool.send(:private_constant, :ACTIONS)
 

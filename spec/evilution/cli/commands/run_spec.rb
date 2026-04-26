@@ -64,7 +64,8 @@ RSpec.describe Evilution::CLI::Commands::Run do
       expect(result.error.message).to eq("boom")
       expect(result.error_rendered).to be(false)
       expect(out.string).to be_empty
-      expect(err.string).to be_empty
+      # stderr carries the Surface 2 feedback footer (full assertions in the
+      # dedicated "feedback footer on error path" describe block below).
     end
   end
 
@@ -140,5 +141,38 @@ RSpec.describe Evilution::CLI::Commands::Run do
     require "evilution/cli/dispatcher"
     expect(Evilution::CLI::Dispatcher.registered?(:run)).to be(true)
     expect(Evilution::CLI::Dispatcher.lookup(:run)).to eq(described_class)
+  end
+end
+
+RSpec.describe Evilution::CLI::Commands::Run, "feedback footer on error path (Surface 2)" do
+  require "evilution/feedback"
+  require "evilution/feedback/messages"
+
+  let(:stdout) { StringIO.new }
+  let(:stderr) { StringIO.new }
+
+  def parsed(options)
+    Evilution::CLI::ParsedArgs.new(command: :run, files: [], options: options)
+  end
+
+  before do
+    # Force an Evilution::ConfigError early in #call so #handle_error runs.
+    allow(Evilution::Config).to receive(:new).and_raise(Evilution::ConfigError, "boom")
+    allow(Evilution::Config).to receive(:file_options).and_return(nil)
+  end
+
+  it "emits the feedback footer on stderr in text mode" do
+    described_class.new(parsed(format: :text), stdout: stdout, stderr: stderr).call
+    expect(stderr.string).to include(Evilution::Feedback::Messages.cli_footer)
+  end
+
+  it "does NOT emit the feedback footer on stderr in json mode" do
+    described_class.new(parsed(format: :json), stdout: stdout, stderr: stderr).call
+    expect(stderr.string).not_to include(Evilution::Feedback::DISCUSSION_URL)
+  end
+
+  it "does NOT emit the feedback footer on stderr when quiet=true" do
+    described_class.new(parsed(format: :text, quiet: true), stdout: stdout, stderr: stderr).call
+    expect(stderr.string).not_to include(Evilution::Feedback::DISCUSSION_URL)
   end
 end

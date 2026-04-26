@@ -10,6 +10,7 @@ require_relative "../../runner"
 require_relative "../../hooks"
 require_relative "../../hooks/registry"
 require_relative "../../hooks/loader"
+require_relative "../../feedback/messages"
 
 class Evilution::CLI::Commands::Run < Evilution::CLI::Command
   def call
@@ -34,8 +35,16 @@ class Evilution::CLI::Commands::Run < Evilution::CLI::Command
       @stdout.puts(JSON.generate(error_payload(error)))
       Evilution::CLI::Result.new(exit_code: 2, error: error, error_rendered: true)
     else
+      @stderr.puts(Evilution::Feedback::Messages.cli_footer) unless quiet?(config, file_options)
       Evilution::CLI::Result.new(exit_code: 2, error: error)
     end
+  end
+
+  def quiet?(config, file_options)
+    return config.quiet unless config.nil?
+    return true if @options[:quiet]
+
+    file_options && file_options[:quiet]
   end
 
   def build_hooks(config)

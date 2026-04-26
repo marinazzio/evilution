@@ -67,3 +67,48 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(captured[2]).to be(cfg)
   end
 end
+
+require "evilution/feedback"
+require "evilution/feedback/messages"
+
+unless defined?(TrimmerFrictionSummary)
+  TrimmerFrictionSummary = Struct.new(:errors, :unparseable, :unresolved, keyword_init: true) do
+    def initialize(errors: 0, unparseable: 0, unresolved: 0)
+      super
+    end
+  end
+end
+
+RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "feedback embedding" do
+  let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [] }) }
+  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:config) { instance_double(Evilution::Config) }
+
+  it "embeds feedback_url + feedback_hint when summary has friction" do
+    result = described_class.call(
+      bare_report,
+      verbosity: "summary",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: TrimmerFrictionSummary.new(errors: 1)
+    )
+    data = JSON.parse(result)
+    expect(data["feedback_url"]).to eq(Evilution::Feedback::DISCUSSION_URL)
+    expect(data["feedback_hint"]).to eq(Evilution::Feedback::Messages.mcp_hint)
+  end
+
+  it "omits feedback fields on a clean summary" do
+    result = described_class.call(
+      bare_report,
+      verbosity: "summary",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: TrimmerFrictionSummary.new
+    )
+    data = JSON.parse(result)
+    expect(data).not_to have_key("feedback_url")
+    expect(data).not_to have_key("feedback_hint")
+  end
+end

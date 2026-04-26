@@ -1018,3 +1018,18 @@ RSpec.describe Evilution::MCP::MutateTool do
     end
   end
 end
+
+RSpec.describe Evilution::MCP::MutateTool, "feedback hint in tool description" do
+  it "mentions the feedback channel" do
+    expect(described_class.description).to match(/feedback/i)
+  end
+
+  it "mentions evilution-info action=feedback" do
+    expect(described_class.description).to include("evilution-info")
+    expect(described_class.description).to match(/action[= ]feedback/i)
+  end
+
+  it "explicitly tells the agent to ask the user before posting" do
+    expect(described_class.description).to match(/ask the user|user permission|user approval/i)
+  end
+end

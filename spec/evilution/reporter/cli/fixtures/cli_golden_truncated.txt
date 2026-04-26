@@ -41,3 +41,4 @@ Disabled mutations (skipped by # evilution:disable):
 
 [TRUNCATED] Stopped early due to --fail-fast
 Result: PASS (score 80.00% >= 80.00%)
+> Hit friction with evilution vEVILUTION_VERSION? Share details: https://github.com/marinazzio/evilution/discussions
