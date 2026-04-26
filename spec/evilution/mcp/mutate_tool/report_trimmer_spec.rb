@@ -112,3 +112,24 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "feedback embedding" d
     expect(data).not_to have_key("feedback_hint")
   end
 end
+
+RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity preserves contract" do
+  let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [], "killed" => [] }) }
+  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:config) { instance_double(Evilution::Config) }
+
+  it "does NOT embed feedback fields when verbosity=minimal even on friction" do
+    result = described_class.call(
+      bare_report,
+      verbosity: "minimal",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: TrimmerFrictionSummary.new(errors: 5)
+    )
+    data = JSON.parse(result)
+    expect(data).not_to have_key("feedback_url")
+    expect(data).not_to have_key("feedback_hint")
+    expect(data.keys).to contain_exactly("summary", "survived")
+  end
+end

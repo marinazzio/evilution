@@ -22,7 +22,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
       data.keep_if { |key, _| MINIMAL_KEYS.include?(key) }
     end
     enricher.call(data, survived_results, config)
-    embed_feedback(data, summary)
+    embed_feedback(data, summary) unless verbosity == "minimal"
     ::JSON.generate(data)
   end
 
