@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    evilution (0.26.0)
+    evilution (0.27.0)
       diff-lcs (>= 1.5, < 3)
       mcp (>= 0.8, < 2)
       prism (>= 1.5, < 2)
@@ -51,7 +51,7 @@ CHECKSUMS
   addressable (2.9.0) sha256=7fdf6ac3660f7f4e867a0838be3f6cf722ace541dd97767fa42bc6cfa980c7af
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
-  evilution (0.26.0)
+  evilution (0.27.0)
   json-schema (6.2.0) sha256=e8bff46ed845a22c1ab2bd0d7eccf831c01fe23bb3920caa4c74db4306813666
   mcp (0.14.0) sha256=9e3ca2e6b5e568739e8c07090982829896f2e4d884ffbb668d06f0fe758489e1
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
