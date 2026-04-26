@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../work_queue"
+require_relative "../../child_output"
 require_relative "channel"
 require_relative "channel/frame"
 
@@ -17,6 +18,7 @@ class Evilution::Parallel::WorkQueue::Worker
       cmd_write.close
       res_read.close
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
+      Evilution::ChildOutput.redirect!
       Loop.run(cmd_read, res_write, hooks: hooks, &block)
     end
 

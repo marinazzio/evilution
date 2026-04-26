@@ -1,0 +1,7 @@
+# This file lists per-file metric exclusions that should eventually be paid down
+# (refactor the file rather than expanding the exclude list). Inherited from .rubocop.yml.
+
+Metrics/AbcSize:
+  Exclude:
+    - "lib/evilution/config.rb"
+    - "lib/evilution/runner.rb"

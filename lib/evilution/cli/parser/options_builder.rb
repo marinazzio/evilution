@@ -84,6 +84,15 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
     opts.on("--suggest-tests", "Generate concrete test code in suggestions (RSpec or Minitest)") { @options[:suggest_tests] = true }
     opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }
+    opts.on("--quiet-children",
+            "Redirect each child process's stdout/stderr to per-pid files under " \
+            "tmp/evilution_children (or --quiet-children-dir DIR), keeping parent output clean.") do
+      @options[:quiet_children] = true
+    end
+    opts.on("--quiet-children-dir DIR",
+            "Directory for --quiet-children per-pid log files (default: tmp/evilution_children)") do |d|
+      @options[:quiet_children_dir] = d
+    end
   end
 
   def add_extra_flag_options(opts)

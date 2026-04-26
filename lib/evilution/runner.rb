@@ -22,6 +22,7 @@ require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"
 require_relative "parallel_db_warning"
+require_relative "child_output"
 require_relative "runner/subject_pipeline"
 require_relative "runner/mutation_planner"
 require_relative "runner/isolation_resolver"
@@ -44,6 +45,7 @@ class Evilution::Runner
 
   def call
     install_signal_handlers
+    configure_child_output
     emit_parallel_db_warning
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
@@ -154,6 +156,10 @@ class Evilution::Runner
 
   def emit_parallel_db_warning
     Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
+  end
+
+  def configure_child_output
+    Evilution::ChildOutput.log_dir = config.quiet_children ? config.quiet_children_dir : nil
   end
 
   def install_signal_handlers

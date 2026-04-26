@@ -108,6 +108,8 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
+| `--quiet-children`           | Boolean | false        | Redirect each forked worker's stdout/stderr to per-pid files under `tmp/evilution_children/<pid>.{out,err}` so noisy app initializers (Datadog, Bullet, etc.) don't merge with parent output. Trade-off: live worker errors only appear in the side files, not the terminal — `tail -f tmp/evilution_children/*.err` to watch them. |
+| `--quiet-children-dir DIR`   | String  | `tmp/evilution_children` | Override the directory used by `--quiet-children`.    |
 | `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects. See [docs/isolation.md](docs/isolation.md). |
 | `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. Errors with the full chain listed if none exist; pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |

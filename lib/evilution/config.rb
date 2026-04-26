@@ -16,7 +16,8 @@ class Evilution::Config
     related_specs_heuristic: false, fallback_to_full_suite: false, preload: nil,
     spec_mappings: {}, spec_pattern: nil, example_targeting: true,
     example_targeting_fallback: :full_file,
-    example_targeting_cache: { max_files: 50, max_blocks: 10_000 }
+    example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
+    quiet_children: false, quiet_children_dir: "tmp/evilution_children"
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
@@ -27,7 +28,7 @@ class Evilution::Config
               :skip_heredoc_literals, :related_specs_heuristic,
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
               :example_targeting, :example_targeting_fallback, :example_targeting_cache,
-              :spec_selector
+              :spec_selector, :quiet_children, :quiet_children_dir
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -219,6 +220,8 @@ class Evilution::Config
     @skip_heredoc_literals   = merged[:skip_heredoc_literals]
     @related_specs_heuristic = merged[:related_specs_heuristic]
     @fallback_to_full_suite  = merged[:fallback_to_full_suite]
+    @quiet_children          = merged[:quiet_children]
+    @quiet_children_dir      = merged[:quiet_children_dir]
   end
 
   def assign_validated_attributes(merged)

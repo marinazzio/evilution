@@ -4,6 +4,7 @@ require "fileutils"
 require "tmpdir"
 require_relative "../memory"
 require_relative "../temp_dir_tracker"
+require_relative "../child_output"
 
 require_relative "../isolation"
 
@@ -59,8 +60,12 @@ class Evilution::Isolation::Fork
   end
 
   def suppress_child_output
-    $stdout.reopen(File::NULL, "w")
-    $stderr.reopen(File::NULL, "w")
+    if Evilution::ChildOutput.log_dir
+      Evilution::ChildOutput.redirect!
+    else
+      $stdout.reopen(File::NULL, "w")
+      $stderr.reopen(File::NULL, "w")
+    end
   end
 
   def execute_in_child(mutation, test_command)
