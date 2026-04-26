@@ -62,6 +62,16 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:incremental]).to be(true)
   end
 
+  it "parses --quiet-children to true" do
+    options, = parse(["--quiet-children"])
+    expect(options[:quiet_children]).to be(true)
+  end
+
+  it "parses --quiet-children-dir as a string" do
+    options, = parse(["--quiet-children-dir", "log/evilution_workers"])
+    expect(options[:quiet_children_dir]).to eq("log/evilution_workers")
+  end
+
   it "parses --verbose" do
     options, = parse(["-v"])
     expect(options[:verbose]).to be(true)

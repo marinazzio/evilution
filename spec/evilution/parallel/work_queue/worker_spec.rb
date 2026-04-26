@@ -47,6 +47,29 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       worker2.pending -= 1
       worker2.retire
     end
+
+    it "redirects stderr to per-pid file under ChildOutput.log_dir when set" do
+      Dir.mktmpdir do |dir|
+        Evilution::ChildOutput.log_dir = dir
+        worker = described_class.spawn(worker_index: 0, hooks: nil) do |x|
+          warn "noisy-#{x}"
+          x
+        end
+        worker.send_item(0, "init")
+        msg = nil
+        Timeout.timeout(5) { msg = worker.read_result until msg }
+        expect(msg[2]).to eq("init")
+        worker.items_completed += 1
+        worker.pending -= 1
+        worker.retire
+
+        err_file = File.join(dir, "#{worker.pid}.err")
+        expect(File.exist?(err_file)).to be(true)
+        expect(File.read(err_file)).to include("noisy-init")
+      ensure
+        Evilution::ChildOutput.log_dir = nil
+      end
+    end
   end
 
   describe "#shutdown swallows Errno::EPIPE" do

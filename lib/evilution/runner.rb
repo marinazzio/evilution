@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require_relative "config"
 require_relative "ast/parser"
 require_relative "memory"
@@ -22,6 +23,7 @@ require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"
 require_relative "parallel_db_warning"
+require_relative "child_output"
 require_relative "runner/subject_pipeline"
 require_relative "runner/mutation_planner"
 require_relative "runner/isolation_resolver"
@@ -44,6 +46,7 @@ class Evilution::Runner
 
   def call
     install_signal_handlers
+    configure_child_output
     emit_parallel_db_warning
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
@@ -154,6 +157,24 @@ class Evilution::Runner
 
   def emit_parallel_db_warning
     Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
+  end
+
+  def configure_child_output
+    unless config.quiet_children
+      Evilution::ChildOutput.log_dir = nil
+      return
+    end
+
+    dir = config.quiet_children_dir
+    begin
+      FileUtils.rm_rf(dir)
+      FileUtils.mkdir_p(dir)
+    rescue SystemCallError => e
+      raise Evilution::ConfigError,
+            "quiet_children_dir #{dir.inspect} is not writable: #{e.class}: #{e.message}. " \
+            "Pass --quiet-children-dir <writable path> or drop --quiet-children."
+    end
+    Evilution::ChildOutput.log_dir = dir
   end
 
   def install_signal_handlers
