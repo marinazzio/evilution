@@ -26,7 +26,9 @@ class Evilution::MCP::MutateTool < MCP::Tool
               "'subject' (Class#method), resolved 'spec_file', and a concrete 'next_step' hint — " \
               "so the agent can jump straight to writing the missing test. " \
               "Prefer this over shelling out to 'evilution' — the response is machine-readable " \
-              "and already trimmed for survived-mutant triage."
+              "and already trimmed for survived-mutant triage. " \
+              "Hitting errors, friction, or missing capabilities? See evilution-info action=feedback for the " \
+              "public feedback channel — ask the user before posting anything."
   input_schema(
     properties: {
       files: {
@@ -126,7 +128,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
         verbosity: normalized_verbosity,
         survived_results: summary.survived_results,
         config: config,
-        enricher: Evilution::MCP::MutateTool::SurvivedEnricher
+        enricher: Evilution::MCP::MutateTool::SurvivedEnricher,
+        summary: summary
       )
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])

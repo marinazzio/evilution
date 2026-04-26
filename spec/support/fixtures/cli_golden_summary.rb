@@ -24,7 +24,7 @@ module CliGoldenSummary
   # rubocop:enable Lint/StructNewOverride
   Summary = Struct.new(
     :total, :killed, :survived, :timed_out, :neutral, :equivalent,
-    :unresolved, :unparseable, :skipped, :score, :score_denominator,
+    :unresolved, :unparseable, :errors, :skipped, :score, :score_denominator,
     :duration, :efficiency, :mutations_per_second, :peak_memory_mb,
     :coverage_gaps, :neutral_results, :equivalent_results, :unresolved_results,
     :unparseable_results, :results, :disabled_mutations, :truncated?
@@ -57,6 +57,7 @@ module CliGoldenSummary
       1,  # equivalent
       1,  # unresolved
       1,  # unparseable
+      2,  # errors
       1,  # skipped (independent counter, not part of total)
       0.8,  # score = killed (8) / score_denominator (10)
       10,   # score_denominator = total (16) - errors (2) - neutral (1) - equivalent (1) - unresolved (1) - unparseable (1)

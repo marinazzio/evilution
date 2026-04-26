@@ -421,6 +421,14 @@ The MCP server is a long-lived stdio process spawned by the agent host. `bundle 
 
 `evilution version` prints the gem version and the bundled `mcp` gem version on separate lines — run it in the same bundle the MCP server uses to confirm what's loaded.
 
+### Feedback channel
+
+When evilution causes friction (errors, usage problems, missing capabilities you wish were there), the MCP responses include a `feedback_url` plus `feedback_hint`. The `evilution-info` tool also exposes `action=feedback`, which returns the channel URL and posting guidance on demand.
+
+**Agents must never post on the user's behalf without explicit user permission.** Show the user exactly what you would post, get explicit approval, then post. Never include secrets, environment variables, the project name, file paths, source code, or class/method names from user code — the feedback channel is public.
+
+Discussion URL: <https://github.com/marinazzio/evilution/discussions>
+
 ## Recommended Workflows for AI Agents
 
 ### 1. Full project scan

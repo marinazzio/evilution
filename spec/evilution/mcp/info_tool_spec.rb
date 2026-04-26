@@ -3,6 +3,7 @@
 require "json"
 require "evilution/mcp/info_tool"
 require "evilution/version"
+require "evilution/feedback"
 
 RSpec.describe Evilution::MCP::InfoTool do
   def call(**params)
@@ -29,8 +30,8 @@ RSpec.describe Evilution::MCP::InfoTool do
   end
 
   describe "VALID_ACTIONS" do
-    it "lists the four supported actions" do
-      expect(described_class::VALID_ACTIONS).to eq(%w[subjects tests environment statuses])
+    it "lists the five supported actions" do
+      expect(described_class::VALID_ACTIONS).to eq(%w[subjects tests environment statuses feedback])
     end
 
     it "is frozen" do
@@ -68,7 +69,8 @@ RSpec.describe Evilution::MCP::InfoTool do
       "subjects" => Evilution::MCP::InfoTool::Actions::Subjects,
       "tests" => Evilution::MCP::InfoTool::Actions::Tests,
       "environment" => Evilution::MCP::InfoTool::Actions::Environment,
-      "statuses" => Evilution::MCP::InfoTool::Actions::Statuses
+      "statuses" => Evilution::MCP::InfoTool::Actions::Statuses,
+      "feedback" => Evilution::MCP::InfoTool::Actions::Feedback
     }.each do |action, klass|
       it "routes action '#{action}' to #{klass}" do
         expect(klass).to receive(:call)
@@ -104,5 +106,17 @@ RSpec.describe Evilution::MCP::InfoTool do
       expect(data["error"]["type"]).to eq("config_error")
       expect(data["error"]["message"]).to eq("boom")
     end
+  end
+end
+
+RSpec.describe Evilution::MCP::InfoTool, "feedback action registration" do
+  it "lists feedback in VALID_ACTIONS" do
+    expect(described_class::VALID_ACTIONS).to include("feedback")
+  end
+
+  it "dispatches action='feedback' to Actions::Feedback" do
+    response = described_class.call(server_context: nil, action: "feedback")
+    body = JSON.parse(response.content.first[:text])
+    expect(body["discussion_url"]).to eq(Evilution::Feedback::DISCUSSION_URL)
   end
 end

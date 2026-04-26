@@ -77,6 +77,77 @@ RSpec.describe Evilution::Runner::ReportPublisher do
     end
   end
 
+  describe "feedback footer suppression (Surface 1)" do
+    require "evilution/feedback"
+
+    # Summary fake covering both the friction signals (Detector reads errors/
+    # unparseable/unresolved) and every method Reporter::CLI invokes when it
+    # renders a real text report. Fresh name avoids collisions with structs
+    # defined in other reporter specs (Summary, FrictionSummary, TrailerFrictionSummary).
+    unless defined?(PublisherFrictionSummary)
+      PublisherFrictionSummary = Struct.new(
+        :errors, :unparseable, :unresolved,
+        :results, :total, :killed, :survived, :timed_out, :neutral, :equivalent,
+        :duration, :killtime, :efficiency, :mutations_per_second, :peak_memory_mb,
+        :score, :score_denominator, :skipped, :disabled_mutations,
+        :survived_results, :killed_results, :neutral_results, :equivalent_results,
+        :unresolved_results, :unparseable_results, :coverage_gaps,
+        keyword_init: true
+      ) do
+        def initialize(errors: 0, unparseable: 0, unresolved: 0)
+          super(
+            errors: errors, unparseable: unparseable, unresolved: unresolved,
+            results: [], total: 0, killed: 0, survived: 0, timed_out: 0,
+            neutral: 0, equivalent: 0, duration: 0.0, killtime: 0.0,
+            efficiency: 0.0, mutations_per_second: 0.0, peak_memory_mb: nil,
+            score: 0.0, score_denominator: 0, skipped: 0,
+            disabled_mutations: [], survived_results: [], killed_results: [],
+            neutral_results: [], equivalent_results: [], unresolved_results: [],
+            unparseable_results: [], coverage_gaps: []
+          )
+        end
+
+        def truncated?
+          false
+        end
+
+        def success?(min_score:)
+          score >= min_score
+        end
+      end
+    end
+
+    let(:friction_summary) { PublisherFrictionSummary.new(errors: 1) }
+
+    it "does NOT emit feedback URL when format=json" do
+      cfg = config(format: :json)
+      expect { described_class.new(cfg).publish(friction_summary) }
+        .not_to output(/#{Regexp.escape(Evilution::Feedback::DISCUSSION_URL)}/).to_stdout
+    end
+
+    it "does NOT emit feedback URL when quiet=true and format=text" do
+      cfg = config(format: :text, quiet: true)
+      expect { described_class.new(cfg).publish(friction_summary) }
+        .not_to output(/#{Regexp.escape(Evilution::Feedback::DISCUSSION_URL)}/).to_stdout
+    end
+
+    it "does NOT emit feedback URL via stdout when format=html" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          cfg = config(format: :html)
+          expect { described_class.new(cfg).publish(friction_summary) }
+            .not_to output(/#{Regexp.escape(Evilution::Feedback::DISCUSSION_URL)}/).to_stdout
+        end
+      end
+    end
+
+    it "DOES emit feedback URL when format=text and not quiet" do
+      cfg = config(format: :text)
+      expect { described_class.new(cfg).publish(friction_summary) }
+        .to output(/#{Regexp.escape(Evilution::Feedback::DISCUSSION_URL)}/).to_stdout
+    end
+  end
+
   describe "#save_session" do
     it "is a no-op when save_session is disabled" do
       publisher = described_class.new(config(save_session: false))
