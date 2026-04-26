@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require_relative "config"
 require_relative "ast/parser"
 require_relative "memory"
@@ -159,7 +160,21 @@ class Evilution::Runner
   end
 
   def configure_child_output
-    Evilution::ChildOutput.log_dir = config.quiet_children ? config.quiet_children_dir : nil
+    unless config.quiet_children
+      Evilution::ChildOutput.log_dir = nil
+      return
+    end
+
+    dir = config.quiet_children_dir
+    begin
+      FileUtils.rm_rf(dir)
+      FileUtils.mkdir_p(dir)
+    rescue SystemCallError => e
+      raise Evilution::ConfigError,
+            "quiet_children_dir #{dir.inspect} is not writable: #{e.class}: #{e.message}. " \
+            "Pass --quiet-children-dir <writable path> or drop --quiet-children."
+    end
+    Evilution::ChildOutput.log_dir = dir
   end
 
   def install_signal_handlers

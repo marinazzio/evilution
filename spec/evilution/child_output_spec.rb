@@ -23,10 +23,9 @@ RSpec.describe Evilution::ChildOutput do
       expect { described_class.redirect! }.not_to raise_error
     end
 
-    it "creates the directory if missing and reopens $stdout/$stderr to per-pid files in a forked child" do
-      Dir.mktmpdir do |parent_tmp|
-        log_dir = File.join(parent_tmp, "children")
-        marker = File.join(parent_tmp, "ack")
+    it "reopens $stdout/$stderr to per-pid files in a forked child (parent must pre-create the dir)" do
+      Dir.mktmpdir do |log_dir|
+        marker = File.join(log_dir, "ack")
 
         pid = Process.fork do
           described_class.log_dir = log_dir
@@ -38,11 +37,30 @@ RSpec.describe Evilution::ChildOutput do
         Process.wait(pid)
 
         expect(File.read(marker)).to eq("ok")
-        expect(File.directory?(log_dir)).to be(true)
         err_file = File.join(log_dir, "#{pid}.err")
         out_file = File.join(log_dir, "#{pid}.out")
         expect(File.read(err_file)).to include("stderr-message")
         expect(File.read(out_file)).to include("stdout-message")
+      end
+    end
+
+    it "appends within a run so multiple redirects from the same PID accumulate output" do
+      Dir.mktmpdir do |log_dir|
+        marker = File.join(log_dir, "ack")
+
+        pid = Process.fork do
+          described_class.log_dir = log_dir
+          described_class.redirect!
+          warn "first"
+          described_class.redirect!
+          warn "second"
+          File.write(marker, "ok")
+        end
+        Process.wait(pid)
+
+        contents = File.read(File.join(log_dir, "#{pid}.err"))
+        expect(contents).to include("first")
+        expect(contents).to include("second")
       end
     end
   end
