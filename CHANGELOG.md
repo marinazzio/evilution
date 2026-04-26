@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.27.0] - 2026-04-26
+
+### Added
+
+- **`prism` declared as a runtime dependency (`>= 1.5, < 2`)** — Rails 7.1 stacks pin `prism 0.19` (which lacks `IfNode#subsequent`), causing a `NoMethodError` on the first `if` evilution mutated. Bundler now refuses incompatible prism versions at install time instead of crashing at runtime (#876, PR #891)
+- **`--[no-]incremental` CLI flag** — `--no-incremental` overrides `incremental: true` from the config file for one invocation (cold-cache debugging, CI escape hatch). Last flag wins when both forms are given (#878, PR #897)
+- **`--quiet-children` and `--quiet-children-dir DIR` flags** — redirect each forked worker's stdout/stderr to per-pid files under `tmp/evilution_children/<pid>.{out,err}` (configurable). Keeps parent output clean when app initializers (Datadog, Bullet, etc.) emit warnings on every fork. Trade-off: live worker errors only appear in the side files (`tail -f tmp/evilution_children/*.err`) (#880, PR #899)
+- **Preload autodetect chain extended** — `Runner::IsolationResolver` now probes `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb` (was: rails_helper + test_helper only). Rails projects that consolidate everything into `spec/spec_helper.rb` no longer need an explicit `preload:` setting. When the chain finds nothing under a Rails project, raises a `ConfigError` listing every path tried and pointing at `--preload` / `--no-preload` (#879, PR #898)
+- **`evilution version` prints the bundled `mcp` gem version** — second line shows `mcp gem X.Y.Z (server compatibility)`. Run inside the same bundle the MCP server uses to confirm what's loaded after a `bundle update` (#883, PR #894)
+
+### Fixed
+
+- **`Cache#store` crashed with `TypeError: no implicit conversion of nil into String` when `incremental: true` and `jobs >= 2`** — `Strategy::Parallel#run_batch` called `batch.each(&:strip_sources!)` before `@cache.store`, leaving `mutation.original_source = nil` for `Digest::SHA256.hexdigest`. Reordered so store runs before strip; added a defensive nil-source guard in `Cache#store` mirroring the existing one in `Cache#fetch` (#875, PR #890)
+- **`block_removal` produced unparseable mutations on block-pass arguments (`map!(&:sym)`, `index_by(&:id)`, `flat_map(&block)`)** — operator stripped the `BlockArgumentNode` from inside the call's parens, leaving a dangling open paren. Operator now skips emission when `node.block.is_a?(Prism::BlockArgumentNode)`; explicit `{}` / `do..end` blocks are unaffected (#881, PR #895)
+- **`method_body_replacement` errored at runtime when generating the `super`-replacement on methods whose enclosing class had no parent implementation** — `super`-replacement now only emitted when the original body already calls `super` (`SuperNode` or `ForwardingSuperNode`), using that as a heuristic that a super target exists in this context. Methods without `super` get only the `nil` and `self` replacements (#877, PR #892)
+
+### Documentation
+
+- **README "Installing on Rails 7.1 + Ruby 3.3" section** — covers the `cgi 0.5.0` (Rails-pinned) vs `cgi 0.5.1` (Ruby 3.3 default-gem) Bundler activation conflict, the sidecar `Gemfile.local` workaround (`eval_gemfile("Gemfile")` + add evilution + prism), the `BUNDLE_GEMFILE=Gemfile.local` invocation, and guidance on whether to commit or `.gitignore` the resulting `Gemfile.local.lock` (#882, PR #893)
+- **README MCP "After upgrading the gem: restart the MCP server" subsection** — explains that the MCP server is a long-lived stdio process the agent host spawns; `bundle update evilution` swaps the gem on disk but the running process keeps the old code in memory until restart. Symptom is opaque "Internal error" responses to flags the old build doesn't recognize (#883, PR #894)
+
 ## [0.26.0] - 2026-04-24
 
 ### Removed
