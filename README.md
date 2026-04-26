@@ -363,7 +363,7 @@ The server exposes the following tools:
 |---|---|
 | `evilution-mutate` | Run mutation testing on target files with structured JSON results |
 | `evilution-session` | Inspect mutation testing history — `action: list` browses saved sessions, `action: show` displays one, `action: diff` compares two (fixed/new/persistent survivors, score delta) |
-| `evilution-info` | Discovery before mutation — `action: subjects` lists mutatable methods with mutation counts, `action: tests` resolves which specs cover given sources, `action: environment` dumps the effective config |
+| `evilution-info` | Discovery before mutation — `action: subjects` lists mutatable methods with mutation counts, `action: tests` resolves which specs cover given sources, `action: environment` dumps the effective config, `action: statuses` returns the mutation-result status glossary, `action: feedback` returns the public Discussions URL plus consent + privacy guidance for posting feedback |
 
 ### Verbosity Control
 
