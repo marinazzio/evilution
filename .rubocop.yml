@@ -30,9 +30,10 @@ Metrics/ClassLength:
   Max: 150
 
 Metrics/ModuleLength:
-  Exclude:
-    - "lib/evilution/reporter/suggestion/templates/rspec.rb"
-    - "lib/evilution/reporter/suggestion/templates/minitest.rb"
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
 
 # target 20
 Metrics/MethodLength:
