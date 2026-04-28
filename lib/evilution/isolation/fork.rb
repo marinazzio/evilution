@@ -143,11 +143,11 @@ class Evilution::Isolation::Fork
       status: status,
       duration: duration,
       test_command: result[:test_command],
-      memory: Evilution::Result::MemoryStats.new(
+      memory: Evilution::Result::MemoryStats.from_fields(
         child_rss_kb: result[:child_rss_kb],
         parent_rss_kb: parent_rss_kb
       ),
-      error: Evilution::Result::ErrorInfo.new(
+      error: Evilution::Result::ErrorInfo.from_fields(
         message: result[:error],
         klass: result[:error_class],
         backtrace: result[:error_backtrace]
