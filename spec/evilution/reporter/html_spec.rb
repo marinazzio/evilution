@@ -236,9 +236,11 @@ RSpec.describe Evilution::Reporter::HTML do
           mutation: neutral_mutation,
           status: :neutral,
           duration: 0.1,
-          error_class: "NameError",
-          error_message: "undefined method `let_it_be'",
-          error_backtrace: ["spec/support/fixture_helpers.rb:42:in `let_it_be'"]
+          error: Evilution::Result::ErrorInfo.new(
+            klass: "NameError",
+            message: "undefined method `let_it_be'",
+            backtrace: ["spec/support/fixture_helpers.rb:42:in `let_it_be'"]
+          )
         )
       end
 
@@ -435,7 +437,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: killed_mutation,
         status: :killed,
         duration: 0.5,
-        child_rss_kb: 51_200
+        memory: Evilution::Result::MemoryStats.new(child_rss_kb: 51_200)
       )
       mem_summary = Evilution::Result::Summary.new(results: [result_with_memory], duration: 0.5)
       output = reporter.call(mem_summary)
@@ -508,7 +510,9 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: killed_mutation,
         status: :error,
         duration: 0.05,
-        error_message: "syntax error in mutated source: unexpected token"
+        error: Evilution::Result::ErrorInfo.new(
+          message: "syntax error in mutated source: unexpected token"
+        )
       )
     end
 
@@ -530,7 +534,9 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: killed_mutation,
         status: :error,
         duration: 0.05,
-        error_message: "syntax error\n  unexpected token\n  at line 5"
+        error: Evilution::Result::ErrorInfo.new(
+          message: "syntax error\n  unexpected token\n  at line 5"
+        )
       )
       multiline_summary = Evilution::Result::Summary.new(
         results: [multiline_result],
@@ -547,7 +553,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: killed_mutation,
         status: :error,
         duration: 0.05,
-        error_message: 'oops <script>alert("x")</script>'
+        error: Evilution::Result::ErrorInfo.new(message: 'oops <script>alert("x")</script>')
       )
       dangerous_summary = Evilution::Result::Summary.new(
         results: [dangerous_result],
@@ -589,7 +595,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: error_mutation_a,
         status: :error,
         duration: 0.05,
-        error_message: "syntax error at line 5"
+        error: Evilution::Result::ErrorInfo.new(message: "syntax error at line 5")
       )
     end
 
@@ -598,7 +604,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: error_mutation_b,
         status: :error,
         duration: 0.05,
-        error_message: "NoMethodError: undefined method `foo'"
+        error: Evilution::Result::ErrorInfo.new(message: "NoMethodError: undefined method `foo'")
       )
     end
 
@@ -652,7 +658,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: error_mutation_a,
         status: :error,
         duration: 0.05,
-        error_message: "<script>alert(1)</script>"
+        error: Evilution::Result::ErrorInfo.new(message: "<script>alert(1)</script>")
       )
       nasty_summary = Evilution::Result::Summary.new(results: [nasty], duration: 0.1)
 
@@ -676,7 +682,7 @@ RSpec.describe Evilution::Reporter::HTML do
         mutation: other_file_error_mutation,
         status: :error,
         duration: 0.05,
-        error_message: "error in account"
+        error: Evilution::Result::ErrorInfo.new(message: "error in account")
       )
       multi_summary = Evilution::Result::Summary.new(
         results: [error_result_a, other_file_error],

@@ -80,12 +80,16 @@ class Evilution::Isolation::InProcess
       status: status,
       duration: duration,
       test_command: result[:test_command],
-      child_rss_kb: rss_after,
-      memory_delta_kb: memory_delta_kb,
-      parent_rss_kb: rss_before,
-      error_message: result[:error],
-      error_class: result[:error_class],
-      error_backtrace: result[:error_backtrace]
+      memory: Evilution::Result::MemoryStats.new(
+        child_rss_kb: rss_after,
+        memory_delta_kb: memory_delta_kb,
+        parent_rss_kb: rss_before
+      ),
+      error: Evilution::Result::ErrorInfo.new(
+        message: result[:error],
+        klass: result[:error_class],
+        backtrace: result[:error_backtrace]
+      )
     )
   end
 end

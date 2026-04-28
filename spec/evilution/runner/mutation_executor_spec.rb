@@ -58,7 +58,9 @@ RSpec.describe Evilution::Runner::MutationExecutor do
   def error_result(mutation, error_class:, error_message: "boom", error_backtrace: [])
     Evilution::Result::MutationResult.new(
       mutation: mutation, status: :error, duration: 0.01,
-      error_class: error_class, error_message: error_message, error_backtrace: error_backtrace
+      error: Evilution::Result::ErrorInfo.new(
+        klass: error_class, message: error_message, backtrace: error_backtrace
+      )
     )
   end
 

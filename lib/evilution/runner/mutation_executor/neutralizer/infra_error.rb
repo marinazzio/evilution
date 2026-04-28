@@ -64,12 +64,8 @@ class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
       status: :neutral,
       duration: result.duration,
       test_command: result.test_command,
-      child_rss_kb: result.child_rss_kb,
-      memory_delta_kb: result.memory_delta_kb,
-      parent_rss_kb: result.parent_rss_kb,
-      error_message: result.error_message,
-      error_class: result.error_class,
-      error_backtrace: result.error_backtrace
+      memory: result.memory,
+      error: result.error
     )
   end
 end

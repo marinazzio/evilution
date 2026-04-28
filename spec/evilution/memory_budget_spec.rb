@@ -82,8 +82,10 @@ RSpec.describe "Memory budget", :memory_budget do
             mutation:,
             status: data[:status],
             duration: data[:duration],
-            child_rss_kb: data[:child_rss_kb],
-            memory_delta_kb: data[:memory_delta_kb]
+            memory: Evilution::Result::MemoryStats.new(
+              child_rss_kb: data[:child_rss_kb],
+              memory_delta_kb: data[:memory_delta_kb]
+            )
           )
         end
       end.not_to leak_memory.over(10).by_more_than(10_240)
