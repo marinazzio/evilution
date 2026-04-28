@@ -394,7 +394,7 @@ RSpec.describe Evilution::Reporter::JSON do
         mutation: killed_mutation,
         status: :killed,
         duration: 0.456,
-        parent_rss_kb: 50_000
+        memory: Evilution::Result::MemoryStats.new(parent_rss_kb: 50_000)
       )
       rss_summary = Evilution::Result::Summary.new(results: [result_with_rss], duration: 0.5)
       parsed = JSON.parse(reporter.call(rss_summary))
@@ -420,7 +420,7 @@ RSpec.describe Evilution::Reporter::JSON do
         mutation: killed_mutation,
         status: :error,
         duration: 0.1,
-        error_message: "syntax error in mutated source: unexpected token"
+        error: Evilution::Result::ErrorInfo.new(message: "syntax error in mutated source: unexpected token")
       )
       error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
       parsed = JSON.parse(reporter.call(error_summary))
@@ -441,8 +441,7 @@ RSpec.describe Evilution::Reporter::JSON do
         mutation: killed_mutation,
         status: :error,
         duration: 0.1,
-        error_message: "boom",
-        error_class: "SyntaxError"
+        error: Evilution::Result::ErrorInfo.new(message: "boom", klass: "SyntaxError")
       )
       error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
       parsed = JSON.parse(reporter.call(error_summary))
@@ -456,9 +455,9 @@ RSpec.describe Evilution::Reporter::JSON do
         mutation: killed_mutation,
         status: :error,
         duration: 0.1,
-        error_message: "boom",
-        error_class: "RuntimeError",
-        error_backtrace: backtrace
+        error: Evilution::Result::ErrorInfo.new(
+          message: "boom", klass: "RuntimeError", backtrace: backtrace
+        )
       )
       error_summary = Evilution::Result::Summary.new(results: [error_result], duration: 0.2)
       parsed = JSON.parse(reporter.call(error_summary))

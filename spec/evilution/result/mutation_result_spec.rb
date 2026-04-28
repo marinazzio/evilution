@@ -100,50 +100,54 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.test_command).to be_nil
   end
 
-  it "stores parent_rss_kb" do
-    result = described_class.new(mutation: mutation, status: :killed, parent_rss_kb: 50_000)
+  it "stores parent_rss_kb via memory" do
+    memory = Evilution::Result::MemoryStats.new(parent_rss_kb: 50_000)
+    result = described_class.new(mutation: mutation, status: :killed, memory: memory)
 
     expect(result.parent_rss_kb).to eq(50_000)
   end
 
-  it "defaults parent_rss_kb to nil" do
+  it "defaults parent_rss_kb to nil when memory is absent" do
     result = described_class.new(mutation: mutation, status: :killed)
 
     expect(result.parent_rss_kb).to be_nil
   end
 
-  it "stores error_message" do
-    result = described_class.new(mutation: mutation, status: :error, error_message: "boom")
+  it "stores error_message via error" do
+    error = Evilution::Result::ErrorInfo.new(message: "boom")
+    result = described_class.new(mutation: mutation, status: :error, error: error)
 
     expect(result.error_message).to eq("boom")
   end
 
-  it "defaults error_message to nil" do
+  it "defaults error_message to nil when error is absent" do
     result = described_class.new(mutation: mutation, status: :killed)
 
     expect(result.error_message).to be_nil
   end
 
-  it "stores error_class" do
-    result = described_class.new(mutation: mutation, status: :error, error_class: "SyntaxError")
+  it "stores error_class via error" do
+    error = Evilution::Result::ErrorInfo.new(klass: "SyntaxError")
+    result = described_class.new(mutation: mutation, status: :error, error: error)
 
     expect(result.error_class).to eq("SyntaxError")
   end
 
-  it "defaults error_class to nil" do
+  it "defaults error_class to nil when error is absent" do
     result = described_class.new(mutation: mutation, status: :killed)
 
     expect(result.error_class).to be_nil
   end
 
-  it "stores error_backtrace" do
+  it "stores error_backtrace via error" do
     backtrace = ["lib/foo.rb:10:in `bar'", "lib/foo.rb:20:in `baz'"]
-    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+    error = Evilution::Result::ErrorInfo.new(backtrace: backtrace)
+    result = described_class.new(mutation: mutation, status: :error, error: error)
 
     expect(result.error_backtrace).to eq(backtrace)
   end
 
-  it "defaults error_backtrace to nil" do
+  it "defaults error_backtrace to nil when error is absent" do
     result = described_class.new(mutation: mutation, status: :killed)
 
     expect(result.error_backtrace).to be_nil
@@ -151,7 +155,8 @@ RSpec.describe Evilution::Result::MutationResult do
 
   it "freezes error_backtrace to prevent external mutation" do
     backtrace = ["lib/foo.rb:10:in `bar'"]
-    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+    error = Evilution::Result::ErrorInfo.new(backtrace: backtrace)
+    result = described_class.new(mutation: mutation, status: :error, error: error)
 
     expect(result.error_backtrace).to be_frozen
     expect { result.error_backtrace << "extra" }.to raise_error(FrozenError)
@@ -159,7 +164,8 @@ RSpec.describe Evilution::Result::MutationResult do
 
   it "does not reflect post-construction mutation of the caller's backtrace array" do
     backtrace = ["lib/foo.rb:10:in `bar'"]
-    result = described_class.new(mutation: mutation, status: :error, error_backtrace: backtrace)
+    error = Evilution::Result::ErrorInfo.new(backtrace: backtrace)
+    result = described_class.new(mutation: mutation, status: :error, error: error)
 
     backtrace << "lib/foo.rb:20:in `baz'"
 

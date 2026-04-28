@@ -37,9 +37,11 @@ RSpec.describe "let_it_be collision neutralization end-to-end" do
       mutation: mutation,
       status: :error,
       duration: 0.01,
-      error_class: "NameError",
-      error_message: "undefined method `let_it_be' for ...",
-      error_backtrace: backtrace
+      error: Evilution::Result::ErrorInfo.new(
+        klass: "NameError",
+        message: "undefined method `let_it_be' for ...",
+        backtrace: backtrace
+      )
     )
   end
 

@@ -16,12 +16,12 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       duration: 0.5,
       killing_test: "spec/foo_spec.rb:10",
       test_command: "rspec spec/foo_spec.rb",
-      child_rss_kb: 1024,
-      memory_delta_kb: 256,
-      parent_rss_kb: 2048,
-      error_message: "msg",
-      error_class: "RuntimeError",
-      error_backtrace: ["a.rb:1"]
+      memory: Evilution::Result::MemoryStats.new(
+        child_rss_kb: 1024, memory_delta_kb: 256, parent_rss_kb: 2048
+      ),
+      error: Evilution::Result::ErrorInfo.new(
+        message: "msg", klass: "RuntimeError", backtrace: ["a.rb:1"]
+      )
     )
   end
 

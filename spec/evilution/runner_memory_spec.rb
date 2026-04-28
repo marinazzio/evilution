@@ -96,7 +96,8 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "logs per-mutation child_rss_kb when available" do
       result_with_rss = Evilution::Result::MutationResult.new(
-        mutation: mutation, status: :killed, duration: 0.1, child_rss_kb: 51_200
+        mutation: mutation, status: :killed, duration: 0.1,
+        memory: Evilution::Result::MemoryStats.new(child_rss_kb: 51_200)
       )
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).and_return(result_with_rss)
@@ -107,7 +108,8 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "logs per-mutation memory_delta_kb when available" do
       result_with_delta = Evilution::Result::MutationResult.new(
-        mutation: mutation, status: :killed, duration: 0.1, memory_delta_kb: 2400
+        mutation: mutation, status: :killed, duration: 0.1,
+        memory: Evilution::Result::MemoryStats.new(memory_delta_kb: 2400)
       )
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).and_return(result_with_delta)
@@ -118,7 +120,8 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
 
     it "formats negative memory_delta_kb without double sign" do
       result_with_negative_delta = Evilution::Result::MutationResult.new(
-        mutation: mutation, status: :killed, duration: 0.1, memory_delta_kb: -1200
+        mutation: mutation, status: :killed, duration: 0.1,
+        memory: Evilution::Result::MemoryStats.new(memory_delta_kb: -1200)
       )
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).and_return(result_with_negative_delta)
@@ -161,13 +164,15 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
         mutation: mutation,
         status: :error,
         duration: 0.1,
-        error_message: "syntax error in mutated source: unexpected ')'",
-        error_class: "SyntaxError",
-        error_backtrace: [
-          "lib/foo.rb:10:in `bar'",
-          "lib/foo.rb:20:in `baz'",
-          "lib/foo.rb:30:in `qux'"
-        ]
+        error: Evilution::Result::ErrorInfo.new(
+          message: "syntax error in mutated source: unexpected ')'",
+          klass: "SyntaxError",
+          backtrace: [
+            "lib/foo.rb:10:in `bar'",
+            "lib/foo.rb:20:in `baz'",
+            "lib/foo.rb:30:in `qux'"
+          ]
+        )
       )
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).and_return(error_result)
@@ -187,9 +192,11 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
         mutation: mutation,
         status: :error,
         duration: 0.1,
-        error_message: "boom",
-        error_class: "RuntimeError",
-        error_backtrace: long_backtrace
+        error: Evilution::Result::ErrorInfo.new(
+          message: "boom",
+          klass: "RuntimeError",
+          backtrace: long_backtrace
+        )
       )
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).and_return(error_result)

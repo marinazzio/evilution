@@ -11,7 +11,9 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
   def result(status:, error_class: nil, error_message: nil, error_backtrace: nil)
     Evilution::Result::MutationResult.new(
       mutation: mutation, status: status, duration: 0.01,
-      error_class: error_class, error_message: error_message, error_backtrace: error_backtrace
+      error: Evilution::Result::ErrorInfo.new(
+        klass: error_class, message: error_message, backtrace: error_backtrace
+      )
     )
   end
 

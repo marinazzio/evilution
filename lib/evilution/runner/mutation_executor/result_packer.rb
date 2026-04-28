@@ -28,12 +28,16 @@ class Evilution::Runner::MutationExecutor::ResultPacker
       duration: data[:duration],
       killing_test: data[:killing_test],
       test_command: data[:test_command],
-      child_rss_kb: data[:child_rss_kb],
-      memory_delta_kb: data[:memory_delta_kb],
-      parent_rss_kb: data[:parent_rss_kb],
-      error_message: data[:error_message],
-      error_class: data[:error_class],
-      error_backtrace: data[:error_backtrace]
+      memory: Evilution::Result::MemoryStats.from_fields(
+        child_rss_kb: data[:child_rss_kb],
+        memory_delta_kb: data[:memory_delta_kb],
+        parent_rss_kb: data[:parent_rss_kb]
+      ),
+      error: Evilution::Result::ErrorInfo.from_fields(
+        message: data[:error_message],
+        klass: data[:error_class],
+        backtrace: data[:error_backtrace]
+      )
     )
   end
 end

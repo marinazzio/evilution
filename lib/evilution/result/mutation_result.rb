@@ -1,20 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "../result"
+require_relative "error_info"
+require_relative "memory_stats"
 
 class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
 
-  attr_reader :mutation, :status, :duration, :killing_test, :test_command,
-              :child_rss_kb, :memory_delta_kb, :parent_rss_kb,
-              :error_message, :error_class, :error_backtrace
+  attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error
 
-  # rubocop:disable Metrics/ParameterLists
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
-                 test_command: nil, child_rss_kb: nil, memory_delta_kb: nil,
-                 parent_rss_kb: nil, error_message: nil, error_class: nil,
-                 error_backtrace: nil)
-    # rubocop:enable Metrics/ParameterLists
+                 test_command: nil, memory: nil, error: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -22,13 +18,33 @@ class Evilution::Result::MutationResult
     @duration = duration
     @killing_test = killing_test
     @test_command = test_command
-    @child_rss_kb = child_rss_kb
-    @memory_delta_kb = memory_delta_kb
-    @parent_rss_kb = parent_rss_kb
-    @error_message = error_message
-    @error_class = error_class
-    @error_backtrace = error_backtrace.nil? ? nil : error_backtrace.dup.freeze
+    @memory = memory
+    @error = error
     freeze
+  end
+
+  def child_rss_kb
+    @memory.nil? ? nil : @memory.child_rss_kb
+  end
+
+  def memory_delta_kb
+    @memory.nil? ? nil : @memory.memory_delta_kb
+  end
+
+  def parent_rss_kb
+    @memory.nil? ? nil : @memory.parent_rss_kb
+  end
+
+  def error_message
+    @error.nil? ? nil : @error.message
+  end
+
+  def error_class
+    @error.nil? ? nil : @error.klass
+  end
+
+  def error_backtrace
+    @error.nil? ? nil : @error.backtrace
   end
 
   def killed?

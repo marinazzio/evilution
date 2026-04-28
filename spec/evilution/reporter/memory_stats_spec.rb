@@ -23,14 +23,14 @@ RSpec.describe "Reporter memory stats" do
   let(:result_with_rss) do
     Evilution::Result::MutationResult.new(
       mutation: mutation, status: :killed, duration: 0.1,
-      child_rss_kb: 51_200
+      memory: Evilution::Result::MemoryStats.new(child_rss_kb: 51_200)
     )
   end
 
   let(:result_with_delta) do
     Evilution::Result::MutationResult.new(
       mutation: mutation, status: :survived, duration: 0.2,
-      memory_delta_kb: 2400
+      memory: Evilution::Result::MemoryStats.new(memory_delta_kb: 2400)
     )
   end
 
