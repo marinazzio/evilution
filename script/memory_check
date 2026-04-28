@@ -88,7 +88,9 @@ if mutations.size >= 2
     batch.zip(compact_results).map do |mutation, data|
       Evilution::Result::MutationResult.new(
         mutation: mutation, status: data[:status], duration: data[:duration],
-        child_rss_kb: data[:child_rss_kb], memory_delta_kb: data[:memory_delta_kb]
+        memory: Evilution::Result::MemoryStats.new(
+          child_rss_kb: data[:child_rss_kb], memory_delta_kb: data[:memory_delta_kb]
+        )
       )
     end
   end
