@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "cgi"
-require_relative "namespace"
+require_relative "../html"
 
 module Evilution::Reporter::HTML::Escape
   module_function

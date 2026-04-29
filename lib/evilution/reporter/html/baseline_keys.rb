@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "namespace"
+require_relative "../html"
 
 class Evilution::Reporter::HTML::BaselineKeys
   def initialize(baseline)
