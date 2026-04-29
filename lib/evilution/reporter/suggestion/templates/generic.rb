@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../registry"
+require_relative "../templates"
 
 module Evilution::Reporter::Suggestion::Templates::Generic
   GENERIC_ENTRIES = {

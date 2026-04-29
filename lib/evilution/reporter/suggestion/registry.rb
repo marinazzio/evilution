@@ -1,13 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "../suggestion"
-
-# rubocop:disable Style/OneClassPerFile
-module Evilution::Reporter::Suggestion::Templates
-end
+require_relative "templates"
 
 class Evilution::Reporter::Suggestion::Registry
-  # rubocop:enable Style/OneClassPerFile
   def self.default
     return @default if @default
 
