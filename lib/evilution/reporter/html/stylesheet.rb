@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "namespace"
+require_relative "../html"
 
 module Evilution::Reporter::HTML::Stylesheet
   PATH = File.expand_path("assets/style.css", __dir__)

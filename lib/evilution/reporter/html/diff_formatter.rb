@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "namespace"
+require_relative "../html"
 require_relative "escape"
 
 module Evilution::Reporter::HTML::DiffFormatter

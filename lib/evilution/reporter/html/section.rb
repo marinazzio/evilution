@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "erb"
-require_relative "namespace"
+require_relative "../html"
 require_relative "escape"
 
 class Evilution::Reporter::HTML::Section

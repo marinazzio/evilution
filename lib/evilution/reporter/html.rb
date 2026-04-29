@@ -2,11 +2,16 @@
 
 require_relative "../reporter"
 require_relative "suggestion"
-require_relative "html/escape"
-require_relative "html/baseline_keys"
-require_relative "html/report"
 
 class Evilution::Reporter::HTML
+  autoload :Escape, "evilution/reporter/html/escape"
+  autoload :BaselineKeys, "evilution/reporter/html/baseline_keys"
+  autoload :Section, "evilution/reporter/html/section"
+  autoload :Sections, "evilution/reporter/html/sections"
+  autoload :Stylesheet, "evilution/reporter/html/stylesheet"
+  autoload :DiffFormatter, "evilution/reporter/html/diff_formatter"
+  autoload :Report, "evilution/reporter/html/report"
+
   def initialize(baseline: nil, integration: :rspec)
     @suggestion = Evilution::Reporter::Suggestion.new(integration: integration)
     @baseline = baseline
