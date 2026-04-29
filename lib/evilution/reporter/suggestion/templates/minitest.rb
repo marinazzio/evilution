@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../registry"
+require_relative "../templates"
 require_relative "../diff_helpers"
 
 module Evilution::Reporter::Suggestion::Templates::Minitest
