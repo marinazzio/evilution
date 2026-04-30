@@ -91,6 +91,18 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect(first[2]).to be_a(NoMemoryError)
     end
 
+    it "captures SecurityError from user block" do
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, :boom])
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)
+      cmd_write.close
+
+      described_class.run(cmd_read, res_write) { |_| raise SecurityError, "tainted" }
+
+      first = Evilution::Parallel::WorkQueue::Channel.read(res_read)
+      expect(first[1]).to eq(:error)
+      expect(first[2]).to be_a(SecurityError)
+    end
+
     it "propagates Interrupt (Ctrl-C) without shipping as :error" do
       Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, :item])
       cmd_write.close
@@ -98,6 +110,8 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect do
         described_class.run(cmd_read, res_write) { |_| raise Interrupt }
       end.to raise_error(Interrupt)
+
+      expect(Evilution::Parallel::WorkQueue::Channel.read(res_read)).to be_nil
     end
 
     it "propagates SystemExit without shipping as :error" do
@@ -107,6 +121,8 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect do
         described_class.run(cmd_read, res_write) { |_| raise SystemExit }
       end.to raise_error(SystemExit)
+
+      expect(Evilution::Parallel::WorkQueue::Channel.read(res_read)).to be_nil
     end
 
     it "propagates SignalException without shipping as :error" do
@@ -116,6 +132,8 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect do
         described_class.run(cmd_read, res_write) { |_| raise SignalException, "USR1" }
       end.to raise_error(SignalException)
+
+      expect(Evilution::Parallel::WorkQueue::Channel.read(res_read)).to be_nil
     end
 
     it "fires worker_process_start hook when hooks present" do
