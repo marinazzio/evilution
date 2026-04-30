@@ -10,15 +10,19 @@ module Evilution::MCP::MutateTool::ProgressStreamer
 
     suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: true, integration: integration)
     survivor_index = 0
+    disabled = false
 
     proc do |result|
       next unless result.survived?
+      next if disabled
 
       begin
         survivor_index += 1
         detail = build_suggestion_detail(result.mutation, suggestion)
         server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
-      rescue StandardError # rubocop:disable Lint/SuppressedException
+      rescue StandardError => e
+        warn "[evilution] progress stream disabled after error: #{e.class}: #{e.message}"
+        disabled = true
       end
     end
   end

@@ -51,7 +51,6 @@ class Evilution::MCP::SessionTool < MCP::Tool
   VALID_ACTIONS = %w[list show diff].freeze
 
   class << self
-    # rubocop:disable Lint/UnusedMethodArgument
     def call(server_context:, action: nil, results_dir: nil, limit: nil, path: nil, base: nil, head: nil)
       return error_response("config_error", "action is required") unless action
       return error_response("config_error", "unknown action: #{action}") unless VALID_ACTIONS.include?(action)
@@ -62,7 +61,6 @@ class Evilution::MCP::SessionTool < MCP::Tool
       when "diff" then diff_action(base: base, head: head, results_dir: results_dir)
       end
     end
-    # rubocop:enable Lint/UnusedMethodArgument
 
     private
 

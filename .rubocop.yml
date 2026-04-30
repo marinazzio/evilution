@@ -72,6 +72,9 @@ Lint/MissingSuper:
 Lint/IneffectiveAccessModifier:
   Enabled: false
 
+Lint/UnusedMethodArgument:
+  AllowUnusedKeywordArguments: true
+
 Lint/FloatComparison:
   Exclude:
     - "lib/evilution/mutator/operator/float_literal.rb"

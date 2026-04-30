@@ -70,7 +70,6 @@ class Evilution::MCP::InfoTool < MCP::Tool
   )
 
   class << self
-    # rubocop:disable Lint/UnusedMethodArgument
     def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil, skip_config: nil)
       return ResponseFormatter.error("config_error", "action is required") unless action
       return ResponseFormatter.error("config_error", "unknown action: #{action}") unless ACTIONS.key?(action)
@@ -84,7 +83,6 @@ class Evilution::MCP::InfoTool < MCP::Tool
     rescue Evilution::Error => e
       ResponseFormatter.error_for(e)
     end
-    # rubocop:enable Lint/UnusedMethodArgument
   end
 end
 
