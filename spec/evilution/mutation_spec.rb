@@ -3,19 +3,21 @@
 RSpec.describe Evilution::Mutation do
   let(:subject_double) { double("Subject", name: "User#adult?") }
 
-  let(:mutation) do
+  def build_mutation(**overrides)
     described_class.new(
       subject: subject_double,
       operator_name: "comparison_replacement",
-      original_source: "def adult?\n  @age >= 18\nend",
-      mutated_source: "def adult?\n  @age > 18\nend",
-      original_slice: "  @age >= 18\n",
-      mutated_slice: "  @age > 18\n",
-      file_path: "lib/user.rb",
-      line: 9,
-      column: 7
+      sources: described_class::Sources.new(
+        original: "def adult?\n  @age >= 18\nend",
+        mutated: "def adult?\n  @age > 18\nend"
+      ),
+      location: described_class::Location.new(file_path: "lib/user.rb", line: 9, column: 7),
+      slice: described_class::Slice.new(original: "  @age >= 18\n", mutated: "  @age > 18\n"),
+      **overrides
     )
   end
+
+  let(:mutation) { build_mutation }
 
   it "exposes subject" do
     expect(mutation.subject).to eq(subject_double)
@@ -41,15 +43,8 @@ RSpec.describe Evilution::Mutation do
     expect(mutation.mutated_slice).to eq("  @age > 18\n")
   end
 
-  it "defaults slices to nil when not provided" do
-    m = described_class.new(
-      subject: subject_double,
-      operator_name: "test",
-      original_source: "a",
-      mutated_source: "b",
-      file_path: "x.rb",
-      line: 1
-    )
+  it "defaults slices to nil when slice is not provided" do
+    m = build_mutation(slice: nil)
 
     expect(m.original_slice).to be_nil
     expect(m.mutated_slice).to be_nil
@@ -57,44 +52,18 @@ RSpec.describe Evilution::Mutation do
 
   describe "#parse_status" do
     it "defaults to :ok" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "test",
-        original_source: "a",
-        mutated_source: "b",
-        file_path: "x.rb",
-        line: 1
-      )
-
-      expect(m.parse_status).to eq(:ok)
+      expect(mutation.parse_status).to eq(:ok)
     end
 
     it "accepts :unparseable" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "test",
-        original_source: "a",
-        mutated_source: "b",
-        file_path: "x.rb",
-        line: 1,
-        parse_status: :unparseable
-      )
+      m = build_mutation(parse_status: :unparseable)
 
       expect(m.parse_status).to eq(:unparseable)
       expect(m).to be_unparseable
     end
 
     it "reports #unparseable? false when :ok" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "test",
-        original_source: "a",
-        mutated_source: "b",
-        file_path: "x.rb",
-        line: 1
-      )
-
-      expect(m).not_to be_unparseable
+      expect(mutation).not_to be_unparseable
     end
   end
 
@@ -110,19 +79,6 @@ RSpec.describe Evilution::Mutation do
     expect(mutation.column).to eq(7)
   end
 
-  it "defaults column to 0" do
-    m = described_class.new(
-      subject: subject_double,
-      operator_name: "test",
-      original_source: "a",
-      mutated_source: "b",
-      file_path: "x.rb",
-      line: 1
-    )
-
-    expect(m.column).to eq(0)
-  end
-
   describe "#diff" do
     it "returns a unified diff of the change" do
       result = mutation.diff
@@ -132,13 +88,8 @@ RSpec.describe Evilution::Mutation do
     end
 
     it "returns empty string when sources are identical" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "noop",
-        original_source: "x = 1",
-        mutated_source: "x = 1",
-        file_path: "x.rb",
-        line: 1
+      m = build_mutation(
+        sources: described_class::Sources.new(original: "x = 1", mutated: "x = 1")
       )
 
       expect(m.diff).to eq("")
@@ -156,29 +107,17 @@ RSpec.describe Evilution::Mutation do
       expect(result).to include("+  @age > 18")
     end
 
-    it "returns nil when slices are missing" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "test",
-        original_source: "a",
-        mutated_source: "b",
-        file_path: "x.rb",
-        line: 1
-      )
+    it "returns nil when slice is missing" do
+      m = build_mutation(slice: nil)
 
       expect(m.unified_diff).to be_nil
     end
 
     it "renders multi-line slices with correct line counts" do
-      m = described_class.new(
-        subject: subject_double,
-        operator_name: "test",
-        original_source: "a",
-        mutated_source: "b",
-        original_slice: "  a\n  b\n",
-        mutated_slice: "  a\n  c\n",
-        file_path: "x.rb",
-        line: 3
+      m = build_mutation(
+        sources: described_class::Sources.new(original: "a", mutated: "b"),
+        location: described_class::Location.new(file_path: "x.rb", line: 3, column: 0),
+        slice: described_class::Slice.new(original: "  a\n  b\n", mutated: "  a\n  c\n")
       )
 
       result = m.unified_diff

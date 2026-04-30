@@ -14,13 +14,12 @@ RSpec.describe "Survived mutant unified diff (integration)" do
     Evilution::Mutation.new(
       subject: subject_double,
       operator_name: "comparison_replacement",
-      original_source: "def adult?\n  @age >= 18\nend\n",
-      mutated_source: "def adult?\n  @age > 18\nend\n",
-      original_slice: "  @age >= 18\n",
-      mutated_slice: "  @age > 18\n",
-      file_path: "lib/user.rb",
-      line: 2,
-      column: 7
+      sources: Evilution::Mutation::Sources.new(
+        original: "def adult?\n  @age >= 18\nend\n",
+        mutated: "def adult?\n  @age > 18\nend\n"
+      ),
+      slice: Evilution::Mutation::Slice.new(original: "  @age >= 18\n", mutated: "  @age > 18\n"),
+      location: Evilution::Mutation::Location.new(file_path: "lib/user.rb", line: 2, column: 7)
     )
   end
 
@@ -82,10 +81,11 @@ RSpec.describe "Survived mutant unified diff (integration)" do
       Evilution::Mutation.new(
         subject: subject_double,
         operator_name: "comparison_replacement",
-        original_source: "def adult?\n  @age >= 18\nend\n",
-        mutated_source: "def adult?\n  @age > 18\nend\n",
-        file_path: "lib/user.rb",
-        line: 2
+        sources: Evilution::Mutation::Sources.new(
+          original: "def adult?\n  @age >= 18\nend\n",
+          mutated: "def adult?\n  @age > 18\nend\n"
+        ),
+        location: Evilution::Mutation::Location.new(file_path: "lib/user.rb", line: 2, column: 0)
       )
     end
 
