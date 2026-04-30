@@ -200,28 +200,37 @@ class Evilution::Config
     )
   end
 
+  SIMPLE_ATTR_TRANSFORMS = {
+    target_files: ->(v) { Array(v) },
+    timeout: nil,
+    format: :to_sym.to_proc,
+    target: nil,
+    min_score: :to_f.to_proc,
+    verbose: nil,
+    quiet: nil,
+    baseline: nil,
+    incremental: nil,
+    suggest_tests: nil,
+    progress: nil,
+    save_session: nil,
+    line_ranges: ->(v) { v || {} },
+    spec_files: ->(v) { Array(v) },
+    show_disabled: nil,
+    baseline_session: nil,
+    skip_heredoc_literals: nil,
+    related_specs_heuristic: nil,
+    fallback_to_full_suite: nil,
+    quiet_children: nil,
+    quiet_children_dir: nil
+  }.freeze
+  private_constant :SIMPLE_ATTR_TRANSFORMS
+
   def assign_simple_attributes(merged)
-    @target_files            = Array(merged[:target_files])
-    @timeout                 = merged[:timeout]
-    @format                  = merged[:format].to_sym
-    @target                  = merged[:target]
-    @min_score               = merged[:min_score].to_f
-    @verbose                 = merged[:verbose]
-    @quiet                   = merged[:quiet]
-    @baseline                = merged[:baseline]
-    @incremental             = merged[:incremental]
-    @suggest_tests           = merged[:suggest_tests]
-    @progress                = merged[:progress]
-    @save_session            = merged[:save_session]
-    @line_ranges             = merged[:line_ranges] || {}
-    @spec_files              = Array(merged[:spec_files])
-    @show_disabled           = merged[:show_disabled]
-    @baseline_session        = merged[:baseline_session]
-    @skip_heredoc_literals   = merged[:skip_heredoc_literals]
-    @related_specs_heuristic = merged[:related_specs_heuristic]
-    @fallback_to_full_suite  = merged[:fallback_to_full_suite]
-    @quiet_children          = merged[:quiet_children]
-    @quiet_children_dir      = merged[:quiet_children_dir]
+    SIMPLE_ATTR_TRANSFORMS.each do |key, transform|
+      value = merged[key]
+      value = transform.call(value) if transform
+      instance_variable_set(:"@#{key}", value)
+    end
   end
 
   def assign_validated_attributes(merged)
