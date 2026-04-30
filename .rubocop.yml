@@ -87,6 +87,17 @@ Lint/UselessMethodDefinition:
   Exclude:
     - "spec/fixtures/**/*"
 
+# Marshal.load here deserializes IPC frames over a fork pipe between the parent
+# process and its own child workers. Both ends are trusted (we forked the
+# children), the pipe is private to our process tree, and no external/untrusted
+# input is ever placed on it. Marshal is required for speed (no per-object
+# encoder) and reliability (preserves Mutation, MutationResult, and exception
+# instances with backtraces — JSON/MessagePack would lose all of these).
+# Intentional and permanent — not technical debt.
+Security/MarshalLoad:
+  Exclude:
+    - "lib/evilution/parallel/work_queue/channel/frame.rb"
+
 Naming/PredicateMethod:
   Enabled: false
 
