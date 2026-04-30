@@ -18,7 +18,8 @@ module Evilution::MCP::MutateTool::ProgressStreamer
         survivor_index += 1
         detail = build_suggestion_detail(result.mutation, suggestion)
         server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
-      rescue StandardError # rubocop:disable Lint/SuppressedException
+      rescue StandardError => e
+        warn "[evilution] progress stream error: #{e.class}: #{e.message}"
       end
     end
   end
