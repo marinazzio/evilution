@@ -36,7 +36,7 @@ module Evilution::Parallel::WorkQueue::Worker::Loop
       result = block.call(item)
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Evilution::Parallel::WorkQueue::Channel.write(res_io, [index, :ok, result])
-    rescue Exception => e # rubocop:disable Lint/RescueException
+    rescue StandardError, ScriptError, SystemStackError, NoMemoryError, SecurityError => e
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Evilution::Parallel::WorkQueue::Channel.write(res_io, [index, :error, e])
     end
