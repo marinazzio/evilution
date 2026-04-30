@@ -5,6 +5,7 @@ require "tmpdir"
 require_relative "../memory"
 require_relative "../temp_dir_tracker"
 require_relative "../child_output"
+require_relative "../process_cleanup"
 
 require_relative "../isolation"
 
@@ -113,7 +114,7 @@ class Evilution::Isolation::Fork
   end
 
   def terminate_child(pid)
-    ::Process.kill("TERM", pid) rescue nil # rubocop:disable Style/RescueModifier
+    Evilution::ProcessCleanup.safe_kill("TERM", pid)
     _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
     return if status
 
@@ -121,8 +122,8 @@ class Evilution::Isolation::Fork
     _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
     return if status
 
-    ::Process.kill("KILL", pid) rescue nil # rubocop:disable Style/RescueModifier
-    ::Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
+    Evilution::ProcessCleanup.safe_kill("KILL", pid)
+    Evilution::ProcessCleanup.safe_wait(pid)
   end
 
   def classify_status(result)

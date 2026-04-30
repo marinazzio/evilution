@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "spec_resolver"
+require_relative "process_cleanup"
 
 class Evilution::Baseline
   Result = Struct.new(:failed_spec_files, :duration) do
@@ -81,7 +82,7 @@ class Evilution::Baseline
   end
 
   def terminate_child(pid)
-    Process.kill("TERM", pid) rescue nil # rubocop:disable Style/RescueModifier
+    Evilution::ProcessCleanup.safe_kill("TERM", pid)
     _, status = Process.waitpid2(pid, Process::WNOHANG)
     return if status
 
@@ -89,8 +90,8 @@ class Evilution::Baseline
     _, status = Process.waitpid2(pid, Process::WNOHANG)
     return if status
 
-    Process.kill("KILL", pid) rescue nil # rubocop:disable Style/RescueModifier
-    Process.wait(pid) rescue nil # rubocop:disable Style/RescueModifier
+    Evilution::ProcessCleanup.safe_kill("KILL", pid)
+    Evilution::ProcessCleanup.safe_wait(pid)
   end
 
   private
