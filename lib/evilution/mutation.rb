@@ -1,28 +1,51 @@
 # frozen_string_literal: true
 
 require "diff/lcs"
+require_relative "../evilution"
 
 class Evilution::Mutation
-  attr_reader :subject, :operator_name, :original_source,
-              :mutated_source, :original_slice, :mutated_slice,
-              :file_path, :line, :column, :parse_status
+  Sources = Data.define(:original, :mutated)
+  Slice = Data.define(:original, :mutated)
+  Location = Data.define(:file_path, :line, :column)
 
-  # rubocop:disable Metrics/ParameterLists
-  def initialize(subject:, operator_name:, original_source:, mutated_source:,
-                 file_path:, line:, column: 0, original_slice: nil, mutated_slice: nil,
-                 parse_status: :ok)
-    # rubocop:enable Metrics/ParameterLists
+  attr_reader :subject, :operator_name, :parse_status, :location
+
+  def initialize(subject:, operator_name:, sources:, location:, slice: nil, parse_status: :ok)
     @subject = subject
     @operator_name = operator_name
-    @original_source = original_source
-    @mutated_source = mutated_source
-    @original_slice = original_slice
-    @mutated_slice = mutated_slice
-    @file_path = file_path
-    @line = line
-    @column = column
+    @sources = sources
+    @location = location
+    @slice = slice
     @parse_status = parse_status
     @diff = nil
+  end
+
+  def original_source
+    @sources&.original
+  end
+
+  def mutated_source
+    @sources&.mutated
+  end
+
+  def original_slice
+    @slice&.original
+  end
+
+  def mutated_slice
+    @slice&.mutated
+  end
+
+  def file_path
+    @location.file_path
+  end
+
+  def line
+    @location.line
+  end
+
+  def column
+    @location.column
   end
 
   def unparseable?
@@ -41,8 +64,11 @@ class Evilution::Mutation
 
   def strip_sources!
     diff # ensure diff is cached before clearing sources
-    @original_source = nil
-    @mutated_source = nil
+    @sources = nil
+  end
+
+  def to_s
+    "#{operator_name}: #{file_path}:#{line}"
   end
 
   private
@@ -67,10 +93,10 @@ class Evilution::Mutation
   end
 
   def compute_unified_diff
-    return nil if @original_slice.nil? || @mutated_slice.nil?
+    return nil if @slice.nil?
 
-    original_lines = @original_slice.lines
-    mutated_lines = @mutated_slice.lines
+    original_lines = @slice.original.lines
+    mutated_lines = @slice.mutated.lines
     body = ::Diff::LCS.sdiff(original_lines, mutated_lines).map { |c| format_sdiff_change(c) }.join("\n")
     [
       "--- a/#{file_path}",
@@ -87,11 +113,5 @@ class Evilution::Mutation
     when "+" then "+#{change.new_element.chomp}"
     when "!" then "-#{change.old_element.chomp}\n+#{change.new_element.chomp}"
     end
-  end
-
-  public
-
-  def to_s
-    "#{operator_name}: #{file_path}:#{line}"
   end
 end

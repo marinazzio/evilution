@@ -45,14 +45,14 @@ class Evilution::Mutator::Base < Prism::Visitor
     @mutations << Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
-      original_source: @file_source,
-      mutated_source: mutated_source,
-      original_slice: original_slice,
-      mutated_slice: mutated_slice,
-      parse_status: surgery.status,
-      file_path: @subject.file_path,
-      line: node.location.start_line,
-      column: node.location.start_column
+      sources: Evilution::Mutation::Sources.new(original: @file_source, mutated: mutated_source),
+      slice: Evilution::Mutation::Slice.new(original: original_slice, mutated: mutated_slice),
+      location: Evilution::Mutation::Location.new(
+        file_path: @subject.file_path,
+        line: node.location.start_line,
+        column: node.location.start_column
+      ),
+      parse_status: surgery.status
     )
   end
 
