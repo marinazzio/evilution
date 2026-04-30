@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "diff/lcs"
+require_relative "../evilution"
 
 class Evilution::Mutation
   Sources = Data.define(:original, :mutated)
