@@ -43,7 +43,7 @@ RSpec.describe Evilution::MCP::MutateTool::ProgressStreamer do
       expect(ctx).to have_received(:report_progress).with(1, message: kind_of(String))
     end
 
-    it "swallows errors raised inside the callback and warns" do
+    it "swallows errors raised inside the callback and warns once" do
       ctx = double
       allow(ctx).to receive(:respond_to?).with(:report_progress).and_return(true)
       allow(ctx).to receive(:report_progress).and_raise(RuntimeError, "boom")
@@ -57,11 +57,15 @@ RSpec.describe Evilution::MCP::MutateTool::ProgressStreamer do
         diff: "diff"
       )
       allow_any_instance_of(Evilution::Reporter::Suggestion).to receive(:suggestion_for).and_return("sugg")
+      result = double(survived?: true, mutation: mutation)
 
-      expect { callback.call(double(survived?: true, mutation: mutation)) }
-        .not_to raise_error
-      expect { callback.call(double(survived?: true, mutation: mutation)) }
-        .to output(/progress stream error: RuntimeError: boom/).to_stderr
+      expect do
+        callback.call(result)
+        callback.call(result)
+        callback.call(result)
+      end.to output(/progress stream disabled after error: RuntimeError: boom/).to_stderr
+
+      expect(ctx).to have_received(:report_progress).once
     end
   end
 end
