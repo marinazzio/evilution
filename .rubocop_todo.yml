@@ -3,5 +3,4 @@
 
 Metrics/AbcSize:
   Exclude:
-    - "lib/evilution/config.rb"
     - "lib/evilution/runner.rb"
