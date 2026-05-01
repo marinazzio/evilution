@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../neutralizer"
 require_relative "../../../result/mutation_result"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
-class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
-module Evilution::Runner::MutationExecutor::Neutralizer; end unless defined?(Evilution::Runner::MutationExecutor::Neutralizer)
 
 class Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed
   def initialize(config:, spec_resolver:, fallback_dir:)

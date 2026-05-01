@@ -253,3 +253,4 @@
 {"id":"int-7b15a1b0","kind":"field_change","created_at":"2026-04-30T09:30:21.057039785Z","actor":"Denis Kiselev","issue_id":"EV-7rov","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged via PR #914"}}
 {"id":"int-71c9f98d","kind":"field_change","created_at":"2026-04-30T12:30:36.528587334Z","actor":"Denis Kiselev","issue_id":"EV-318q","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged"}}
 {"id":"int-42eadbdc","kind":"field_change","created_at":"2026-04-30T16:09:00.539400752Z","actor":"Denis Kiselev","issue_id":"EV-voay","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged"}}
+{"id":"int-cb4c0ebf","kind":"field_change","created_at":"2026-05-01T02:38:05.091612839Z","actor":"Denis Kiselev","issue_id":"EV-t918","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"merged via PR #918"}}

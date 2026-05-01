@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
-class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::MutationExecutor::MutationRunner
   def initialize(config:, cache:, isolator:)

@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
+require_relative "../runner"
 require_relative "../ast/inheritance_scanner"
 require_relative "../git/changed_files"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::SubjectPipeline
   def initialize(config, parser:)

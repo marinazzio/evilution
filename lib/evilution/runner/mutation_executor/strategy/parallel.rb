@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
-class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
-module Evilution::Runner::MutationExecutor::Strategy; end unless defined?(Evilution::Runner::MutationExecutor::Strategy)
+require_relative "../strategy"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil)

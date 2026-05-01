@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
+require_relative "../runner"
 require_relative "../memory"
 require_relative "../parallel/pool"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::Diagnostics
   def initialize(config, stderr: $stderr)

@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
+require_relative "../runner"
 require_relative "../disable_comment"
 require_relative "../ast/sorbet_sig_detector"
 require_relative "../ast/pattern/filter"
 require_relative "../equivalent/detector"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::MutationPlanner
   Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, keyword_init: true)
