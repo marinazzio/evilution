@@ -34,11 +34,11 @@ class Evilution::Integration::MinitestCrashDetector
     end
   end
 
-  def has_assertion_failure? # rubocop:disable Naming/PredicatePrefix
+  def assertion_failure?
     @assertion_failures.positive?
   end
 
-  def has_crash? # rubocop:disable Naming/PredicatePrefix
+  def crashed?
     @crashes.any?
   end
 
