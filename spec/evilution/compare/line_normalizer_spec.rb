@@ -34,5 +34,12 @@ RSpec.describe Evilution::Compare::LineNormalizer do
       normalizer.call("first  call")
       expect(normalizer.call("second   call")).to eq("second call")
     end
+
+    it "releases references to processed line after returning" do
+      normalizer.call("a   b")
+
+      expect(normalizer.instance_variable_get(:@chars)).to be_nil
+      expect(normalizer.instance_variable_get(:@out)).to be_nil
+    end
   end
 end

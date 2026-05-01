@@ -24,7 +24,10 @@ class Evilution::Compare::LineNormalizer
     @last_was_space = false
 
     @i += step while @i < @chars.length
-    @out.rstrip
+    result = @out.rstrip
+    @chars = nil
+    @out = nil
+    result
   end
 
   private
