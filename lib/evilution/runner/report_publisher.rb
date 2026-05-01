@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
+require_relative "../runner"
 require_relative "../reporter/json"
 require_relative "../reporter/cli"
 require_relative "../reporter/html"
 require_relative "../session/store"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::ReportPublisher
   def initialize(config)

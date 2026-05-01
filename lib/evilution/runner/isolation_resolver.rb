@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
+require_relative "../runner"
 require_relative "../isolation/fork"
 require_relative "../isolation/in_process"
 require_relative "../rails_detector"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
 
 class Evilution::Runner::IsolationResolver
   PRELOAD_CANDIDATES = [

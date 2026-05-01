@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
-class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
+require_relative "../mutation_executor"
 
 class Evilution::Runner::MutationExecutor::NeutralizationPipeline
   def initialize(neutralizers)

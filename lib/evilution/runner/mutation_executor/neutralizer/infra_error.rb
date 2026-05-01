@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../neutralizer"
 require_relative "../../../result/mutation_result"
-
-class Evilution::Runner; end unless defined?(Evilution::Runner) # rubocop:disable Lint/EmptyClass
-class Evilution::Runner::MutationExecutor; end unless defined?(Evilution::Runner::MutationExecutor) # rubocop:disable Lint/EmptyClass
-module Evilution::Runner::MutationExecutor::Neutralizer; end unless defined?(Evilution::Runner::MutationExecutor::Neutralizer)
 
 # Reclassify results as :neutral when the failure was caused by test
 # infrastructure rather than by the mutation. Two independent paths:

@@ -98,6 +98,7 @@ Security/MarshalLoad:
   Exclude:
     - "lib/evilution/parallel/work_queue/channel/frame.rb"
 
+
 Naming/PredicateMethod:
   Enabled: false
 
