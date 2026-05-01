@@ -3,6 +3,14 @@
 require_relative "../runner"
 
 class Evilution::Runner::MutationExecutor
+  autoload :ResultCache, File.expand_path("mutation_executor/result_cache", __dir__)
+  autoload :ResultPacker, File.expand_path("mutation_executor/result_packer", __dir__)
+  autoload :ResultNotifier, File.expand_path("mutation_executor/result_notifier", __dir__)
+  autoload :MutationRunner, File.expand_path("mutation_executor/mutation_runner", __dir__)
+  autoload :NeutralizationPipeline, File.expand_path("mutation_executor/neutralization_pipeline", __dir__)
+  autoload :Strategy, File.expand_path("mutation_executor/strategy", __dir__)
+  autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
+
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config
     @isolator = isolator
