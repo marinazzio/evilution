@@ -19,8 +19,8 @@ RSpec.describe Evilution::Integration::CrashDetector do
 
       detector.example_failed(notification)
 
-      expect(detector).to have_assertion_failure
-      expect(detector).not_to have_crash
+      expect(detector).to be_assertion_failure
+      expect(detector).not_to be_crashed
     end
 
     it "records runtime crashes" do
@@ -28,8 +28,8 @@ RSpec.describe Evilution::Integration::CrashDetector do
 
       detector.example_failed(notification)
 
-      expect(detector).to have_crash
-      expect(detector).not_to have_assertion_failure
+      expect(detector).to be_crashed
+      expect(detector).not_to be_assertion_failure
     end
 
     it "records both assertion failures and crashes separately" do
@@ -38,8 +38,8 @@ RSpec.describe Evilution::Integration::CrashDetector do
                               ))
       detector.example_failed(make_notification(NoMethodError.new("crash")))
 
-      expect(detector).to have_assertion_failure
-      expect(detector).to have_crash
+      expect(detector).to be_assertion_failure
+      expect(detector).to be_crashed
     end
 
     it "treats RSpec::Core::MultipleExceptionError as crash" do
@@ -48,13 +48,13 @@ RSpec.describe Evilution::Integration::CrashDetector do
       )
       detector.example_failed(make_notification(multi_error))
 
-      expect(detector).to have_crash
+      expect(detector).to be_crashed
     end
 
     it "treats SystemStackError as crash" do
       detector.example_failed(make_notification(SystemStackError.new("stack overflow")))
 
-      expect(detector).to have_crash
+      expect(detector).to be_crashed
     end
   end
 

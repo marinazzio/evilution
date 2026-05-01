@@ -13,8 +13,8 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
       detector.record(result)
 
-      expect(detector).to have_assertion_failure
-      expect(detector).not_to have_crash
+      expect(detector).to be_assertion_failure
+      expect(detector).not_to be_crashed
     end
 
     it "tracks unexpected errors as crashes" do
@@ -23,8 +23,8 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
       detector.record(result)
 
-      expect(detector).to have_crash
-      expect(detector).not_to have_assertion_failure
+      expect(detector).to be_crashed
+      expect(detector).not_to be_assertion_failure
     end
 
     it "ignores passing results" do
@@ -32,8 +32,8 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
       detector.record(result)
 
-      expect(detector).not_to have_crash
-      expect(detector).not_to have_assertion_failure
+      expect(detector).not_to be_crashed
+      expect(detector).not_to be_assertion_failure
     end
   end
 
@@ -130,8 +130,8 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
       detector.reset
 
-      expect(detector).not_to have_crash
-      expect(detector).not_to have_assertion_failure
+      expect(detector).not_to be_crashed
+      expect(detector).not_to be_assertion_failure
       expect(detector.crash_summary).to be_nil
     end
   end
