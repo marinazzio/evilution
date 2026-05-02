@@ -94,9 +94,14 @@ Lint/UselessMethodDefinition:
 # encoder) and reliability (preserves Mutation, MutationResult, and exception
 # instances with backtraces — JSON/MessagePack would lose all of these).
 # Intentional and permanent — not technical debt.
+#
+# baseline.rb uses the same parent-forked-child pipe pattern: the parent reads
+# a tiny `{ passed: bool }` payload back from a child it just forked to run a
+# spec file. Same trust boundary, same rationale.
 Security/MarshalLoad:
   Exclude:
     - "lib/evilution/parallel/work_queue/channel/frame.rb"
+    - "lib/evilution/baseline.rb"
 
 # eval here loads mutated source under the original __FILE__ so __dir__ and
 # require_relative resolve against the real source tree. The string is never
