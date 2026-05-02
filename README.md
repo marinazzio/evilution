@@ -118,6 +118,17 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `--fallback-full-suite`      | Boolean | false        | When no matching spec/test resolves for a mutation, run the whole test suite instead of marking it `:unresolved` and skipping. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
 | `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
+| `--profile NAME`             | String  | `default`    | Operator profile: `default` or `strict`. `strict` adds aggressive truthiness mutators (e.g. replaces `x.predicate?` with `nil`) intended for pre-merge audits. |
+| `--strict`                   | Boolean | false        | Shortcut for `--profile=strict`.                    |
+
+### Operator Profiles
+
+Two profiles ship out of the box:
+
+- **`default`** — the 72 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
+
+Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
 
 ### Exit Codes
 

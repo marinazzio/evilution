@@ -94,6 +94,31 @@ RSpec.describe Evilution::Mutator::Registry do
     end
   end
 
+  describe ".for_profile" do
+    it "returns the default operator set for :default" do
+      registry = described_class.for_profile(:default)
+
+      expect(registry.operator_count).to eq(described_class.default.operator_count)
+    end
+
+    it "returns default + truthiness operators for :strict" do
+      registry = described_class.for_profile(:strict)
+
+      expect(registry.operator_count).to eq(described_class.default.operator_count + 1)
+      expect(registry.operators).to include(Evilution::Mutator::Operator::PredicateToNil)
+    end
+
+    it "raises ArgumentError on unknown profile" do
+      expect { described_class.for_profile(:bogus) }.to raise_error(ArgumentError, /unknown profile/)
+    end
+
+    it "accepts string profile names" do
+      expect(described_class.for_profile("strict").operator_count).to(
+        eq(described_class.default.operator_count + 1)
+      )
+    end
+  end
+
   describe "#register" do
     it "adds an operator class" do
       dummy_operator = Class.new(Evilution::Mutator::Base)

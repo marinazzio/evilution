@@ -11,7 +11,7 @@ class Evilution::Runner
     @on_result = on_result
     @hooks = hooks
     @parser = Evilution::AST::Parser.new
-    @registry = Evilution::Mutator::Registry.default
+    @registry = Evilution::Mutator::Registry.for_profile(config.profile)
     @cache = config.incremental? ? Evilution::Cache.new : nil
   end
 
