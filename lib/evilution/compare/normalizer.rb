@@ -3,6 +3,9 @@
 require_relative "../compare"
 require_relative "record"
 require_relative "fingerprint"
+require_relative "line_normalizer"
+require_relative "diff_extractor/evilution"
+require_relative "diff_extractor/mutant"
 
 class Evilution::Compare::Normalizer
   EVILUTION_BUCKETS = %w[killed survived timed_out errors neutral equivalent unresolved unparseable].freeze
@@ -16,6 +19,18 @@ class Evilution::Compare::Normalizer
     "unresolved" => :unresolved,
     "unparseable" => :unparseable
   }.freeze
+
+  def initialize
+    line_normalizer = Evilution::Compare::LineNormalizer.new
+    @evilution_fingerprint = Evilution::Compare::Fingerprint.new(
+      extractor: Evilution::Compare::DiffExtractor::Evilution.new,
+      normalizer: line_normalizer
+    )
+    @mutant_fingerprint = Evilution::Compare::Fingerprint.new(
+      extractor: Evilution::Compare::DiffExtractor::Mutant.new,
+      normalizer: line_normalizer
+    )
+  end
 
   def from_evilution(json)
     records = []
@@ -47,13 +62,12 @@ class Evilution::Compare::Normalizer
     diff = entry["diff"].to_s
     status = EVILUTION_STATUS_MAP[entry["status"]] ||
              raise(Evilution::Compare::InvalidInput.new("unknown status #{entry["status"].inspect}", index: index))
-    body = Evilution::Compare::Fingerprint.extract_from_evilution_diff(diff)
     Evilution::Compare::Record.new(
       source: :evilution,
       file_path: file_path,
       line: line,
       status: status,
-      fingerprint: Evilution::Compare::Fingerprint.compute(file_path: file_path, line: line, body: body),
+      fingerprint: @evilution_fingerprint.call(diff: diff, file_path: file_path, line: line),
       operator: entry["operator"],
       diff_body: diff,
       raw: entry
@@ -67,13 +81,12 @@ class Evilution::Compare::Normalizer
     line = parse_mutant_line(ident, index)
     diff = mr["mutation_diff"].to_s
     status = derive_mutant_status(mr, cr, index)
-    body = Evilution::Compare::Fingerprint.extract_from_mutant_diff(diff)
     Evilution::Compare::Record.new(
       source: :mutant,
       file_path: source_path,
       line: line,
       status: status,
-      fingerprint: Evilution::Compare::Fingerprint.compute(file_path: source_path, line: line, body: body),
+      fingerprint: @mutant_fingerprint.call(diff: diff, file_path: source_path, line: line),
       operator: nil,
       diff_body: diff,
       raw: { "mutation_result" => mr, "criteria_result" => cr, "source_path" => source_path }
