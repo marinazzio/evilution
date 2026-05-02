@@ -618,19 +618,49 @@ RSpec.describe Evilution::Runner do
                         line_number: 5, release_node!: nil)
     end
 
+    def build_mutation_for(subject_obj)
+      double(
+        "Mutation",
+        subject: subject_obj,
+        operator_name: "comparison_replacement",
+        original_source: "a >= b",
+        mutated_source: "a > b",
+        file_path: subject_obj.file_path,
+        line: subject_obj.line_number,
+        column: 4,
+        diff: "- a >= b\n+ a > b",
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
+      )
+    end
+
+    def build_result_for(mutation_obj)
+      Evilution::Result::MutationResult.new(mutation: mutation_obj, status: :killed, duration: 0.1)
+    end
+
     before do
       parser = instance_double(Evilution::AST::Parser)
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/models/user.rb").and_return([user_subject])
       allow(parser).to receive(:call).with("lib/models/account.rb").and_return([account_subject])
 
+      user_mutation = build_mutation_for(user_subject)
+      account_mutation = build_mutation_for(account_subject)
+      @mutations_by_file = {
+        "lib/models/user.rb" => user_mutation,
+        "lib/models/account.rb" => account_mutation
+      }
+
       registry = instance_double(Evilution::Mutator::Registry)
       allow(Evilution::Mutator::Registry).to receive(:for_profile).and_return(registry)
-      allow(registry).to receive(:mutations_for).and_return([mutation])
+      allow(registry).to receive(:mutations_for) do |subject_arg|
+        [@mutations_by_file.fetch(subject_arg.file_path)]
+      end
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      allow(isolator).to receive(:call).and_return(mutation_result)
+      allow(isolator).to receive(:call) { |mutation:, **| build_result_for(mutation) }
     end
 
     it "parses every positional file path in a single Runner invocation" do
@@ -653,7 +683,7 @@ RSpec.describe Evilution::Runner do
       expect(summary.results.length).to eq(2)
     end
 
-    it "produces a single aggregated summary across all files" do
+    it "aggregates per-file mutation paths into one summary" do
       config = Evilution::Config.new(
         target_files: ["lib/models/user.rb", "lib/models/account.rb"],
         format: :json,
@@ -666,10 +696,8 @@ RSpec.describe Evilution::Runner do
 
       summary = described_class.new(config: config).call
 
-      file_paths = summary.results.map { |r| r.mutation.file_path }.uniq
-      expect(file_paths).to contain_exactly("lib/example.rb")
-      # mutation double's file_path is "lib/example.rb"; verify summary still aggregates
-      # both subjects through to one results array (length == 2 = one mutation per file)
+      file_paths = summary.results.map { |r| r.mutation.file_path }
+      expect(file_paths).to contain_exactly("lib/models/user.rb", "lib/models/account.rb")
       expect(summary.total).to eq(2)
       expect(summary.killed).to eq(2)
     end

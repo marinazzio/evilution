@@ -501,7 +501,7 @@ Use when you know which file was modified and want to verify its test coverage.
 bundle exec evilution run lib/models/user.rb lib/models/account.rb lib/models/order.rb
 ```
 
-Pass multiple file paths on a single invocation to amortise startup cost. The framework (Rails, Sorbet, etc.) and the `preload` chain (`spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`) load **once** in the parent process, then every mutation across all files forks from that warmed parent. Materially faster than scripting a `for f in ...; do bundle exec evilution run "$f"; done` loop, which pays the bootstrap per file. Per-file paths and line numbers are preserved in the report (`survived[].file`, HTML grouping by source file).
+Pass multiple file paths on a single invocation to amortise startup cost. The framework (Rails, Sorbet, etc.) and the `preload` chain (`spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`) load **once** in the parent process. When `--isolation=fork` is selected (the default `--isolation=auto` resolves to `fork` on Rails projects), every subsequent mutation across all files forks from that warmed parent — materially faster than scripting a `for f in ...; do bundle exec evilution run "$f"; done` loop, which pays the bootstrap per file. With `--isolation=in_process` (default for non-Rails projects under `auto`), there is no per-mutation fork, but the parent-process boot still runs once instead of N times. Per-file paths and line numbers are preserved in the report (`survived[].file`, HTML grouping by source file).
 
 ### 6. Fixing surviving mutants
 
