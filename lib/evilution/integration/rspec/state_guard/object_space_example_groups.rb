@@ -9,7 +9,10 @@ class Evilution::Integration::RSpec::StateGuard::ObjectSpaceExampleGroups
     groups = Set.new
     ObjectSpace.each_object(Class) do |klass|
       groups << klass.object_id if klass < ::RSpec::Core::ExampleGroup
-    rescue TypeError # rubocop:disable Lint/SuppressedException
+    rescue TypeError
+      # ObjectSpace iteration may surface partially-initialized or anonymous
+      # classes whose `<` comparison raises. Skipping them is safe — they
+      # cannot be ExampleGroup descendants we need to track.
     end
     groups
   end
@@ -23,13 +26,18 @@ class Evilution::Integration::RSpec::StateGuard::ObjectSpaceExampleGroups
 
       klass.constants(false).each do |const|
         klass.send(:remove_const, const)
-      rescue NameError # rubocop:disable Lint/SuppressedException
+      rescue NameError
+        # Constant may have been removed concurrently (e.g. via autoload
+        # reload) between #constants(false) and #remove_const. Best-effort
+        # cleanup — nothing to do if it's already gone.
       end
 
       klass.instance_variables.each do |ivar|
         klass.remove_instance_variable(ivar)
       end
-    rescue TypeError # rubocop:disable Lint/SuppressedException
+    rescue TypeError
+      # Same defensive case as #snapshot: skip classes whose `<` raises
+      # mid-iteration.
     end
   end
 end
