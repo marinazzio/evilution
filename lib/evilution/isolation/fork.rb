@@ -50,13 +50,13 @@ class Evilution::Isolation::Fork
     read_io&.close
     write_io&.close
     ensure_reaped(pid)
-    restore_original_source(mutation)
+    restore_original_source
     FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
 
   private
 
-  def restore_original_source(mutation) # rubocop:disable Lint/UnusedMethodArgument
+  def restore_original_source
     Evilution::TempDirTracker.cleanup_all
   end
 
