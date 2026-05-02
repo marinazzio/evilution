@@ -607,6 +607,102 @@ RSpec.describe Evilution::Runner do
     end
   end
 
+  describe "#call with multiple positional target_files" do
+    let(:user_subject) do
+      double("Subject", name: "User#save", file_path: "lib/models/user.rb",
+                        line_number: 3, release_node!: nil)
+    end
+
+    let(:account_subject) do
+      double("Subject", name: "Account#balance", file_path: "lib/models/account.rb",
+                        line_number: 5, release_node!: nil)
+    end
+
+    def build_mutation_for(subject_obj)
+      double(
+        "Mutation",
+        subject: subject_obj,
+        operator_name: "comparison_replacement",
+        original_source: "a >= b",
+        mutated_source: "a > b",
+        file_path: subject_obj.file_path,
+        line: subject_obj.line_number,
+        column: 4,
+        diff: "- a >= b\n+ a > b",
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
+      )
+    end
+
+    def build_result_for(mutation_obj)
+      Evilution::Result::MutationResult.new(mutation: mutation_obj, status: :killed, duration: 0.1)
+    end
+
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/models/user.rb").and_return([user_subject])
+      allow(parser).to receive(:call).with("lib/models/account.rb").and_return([account_subject])
+
+      user_mutation = build_mutation_for(user_subject)
+      account_mutation = build_mutation_for(account_subject)
+      @mutations_by_file = {
+        "lib/models/user.rb" => user_mutation,
+        "lib/models/account.rb" => account_mutation
+      }
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:for_profile).and_return(registry)
+      allow(registry).to receive(:mutations_for) do |subject_arg|
+        [@mutations_by_file.fetch(subject_arg.file_path)]
+      end
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| build_result_for(mutation) }
+    end
+
+    it "parses every positional file path in a single Runner invocation" do
+      config = Evilution::Config.new(
+        target_files: ["lib/models/user.rb", "lib/models/account.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+      runner = described_class.new(config: config)
+
+      parser = Evilution::AST::Parser.new
+      expect(parser).to receive(:call).with("lib/models/user.rb").and_return([user_subject])
+      expect(parser).to receive(:call).with("lib/models/account.rb").and_return([account_subject])
+
+      summary = runner.call
+      expect(summary.results.length).to eq(2)
+    end
+
+    it "aggregates per-file mutation paths into one summary" do
+      config = Evilution::Config.new(
+        target_files: ["lib/models/user.rb", "lib/models/account.rb"],
+        format: :json,
+        timeout: 5,
+        quiet: true,
+        baseline: false,
+        isolation: :fork,
+        skip_config_file: true
+      )
+
+      summary = described_class.new(config: config).call
+
+      file_paths = summary.results.map { |r| r.mutation.file_path }
+      expect(file_paths).to contain_exactly("lib/models/user.rb", "lib/models/account.rb")
+      expect(summary.total).to eq(2)
+      expect(summary.killed).to eq(2)
+    end
+  end
+
   describe "#call with namespace wildcard target" do
     let(:bar_subject) do
       double("Subject", name: "Foo::Bar#run", file_path: "lib/foo/bar.rb",

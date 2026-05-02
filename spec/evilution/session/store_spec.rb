@@ -236,6 +236,20 @@ RSpec.describe Evilution::Session::Store do
       data = read_saved_session
       expect(data["summary"]["duration"]).to eq(1.2346)
     end
+
+    it "preserves per-file paths when results span multiple target files" do
+      a = build_result(build_mutation(file: "lib/models/user.rb", line: 3), status: :survived)
+      b = build_result(build_mutation(file: "lib/models/account.rb", line: 7), status: :survived)
+      c = build_result(build_mutation(file: "lib/models/user.rb", line: 9), status: :killed)
+      summary = build_summary(results: [a, b, c])
+
+      store.save(summary)
+
+      data = read_saved_session
+      survived_files = data["survived"].map { |entry| entry["file"] }
+      expect(survived_files).to contain_exactly("lib/models/user.rb", "lib/models/account.rb")
+      expect(data["summary"]["total"]).to eq(3)
+    end
   end
 
   describe "#list" do
