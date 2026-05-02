@@ -73,7 +73,7 @@ class Evilution::Baseline
       Process.wait(pid)
       return false if data.empty?
 
-      result = Marshal.load(data) # rubocop:disable Security/MarshalLoad
+      result = Marshal.load(data)
       result[:passed]
     else
       terminate_child(pid)
