@@ -98,6 +98,16 @@ Security/MarshalLoad:
   Exclude:
     - "lib/evilution/parallel/work_queue/channel/frame.rb"
 
+# eval here loads mutated source under the original __FILE__ so __dir__ and
+# require_relative resolve against the real source tree. The string is never
+# user-supplied — it is the original on-disk source produced by AST::SourceSurgeon
+# applied to a file the user already chose to mutate. There is no trust gain
+# from refusing to eval here: the same code would otherwise execute via
+# `require` of the file. Intentional and permanent — not technical debt.
+Security/Eval:
+  Exclude:
+    - "lib/evilution/integration/loading/source_evaluator.rb"
+
 
 Naming/PredicateMethod:
   Enabled: false
