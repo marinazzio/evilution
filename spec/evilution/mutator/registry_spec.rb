@@ -112,6 +112,14 @@ RSpec.describe Evilution::Mutator::Registry do
       expect { described_class.for_profile(:bogus) }.to raise_error(ArgumentError, /unknown profile/)
     end
 
+    it "raises ArgumentError on nil" do
+      expect { described_class.for_profile(nil) }.to raise_error(ArgumentError, /unknown profile/)
+    end
+
+    it "raises ArgumentError on Integer (not NoMethodError)" do
+      expect { described_class.for_profile(1) }.to raise_error(ArgumentError, /unknown profile/)
+    end
+
     it "accepts string profile names" do
       expect(described_class.for_profile("strict").operator_count).to(
         eq(described_class.default.operator_count + 1)

@@ -8,6 +8,10 @@ class Evilution::Mutator::Registry
   ].freeze
 
   def self.for_profile(profile)
+    unless profile.is_a?(Symbol) || profile.is_a?(String)
+      raise ArgumentError, "unknown profile: #{profile.inspect} (expected :default or :strict)"
+    end
+
     case profile.to_sym
     when :default then default
     when :strict
