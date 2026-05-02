@@ -102,6 +102,7 @@ Security/MarshalLoad:
   Exclude:
     - "lib/evilution/parallel/work_queue/channel/frame.rb"
     - "lib/evilution/baseline.rb"
+    - "lib/evilution/isolation/fork.rb"
 
 # eval here loads mutated source under the original __FILE__ so __dir__ and
 # require_relative resolve against the real source tree. The string is never

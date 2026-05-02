@@ -89,7 +89,7 @@ class Evilution::Isolation::Fork
       if data.empty?
         { timeout: false, passed: false, error: "empty result from child" }
       else
-        { timeout: false }.merge(Marshal.load(data)) # rubocop:disable Security/MarshalLoad
+        { timeout: false }.merge(Marshal.load(data))
       end
     else
       terminate_child(pid)
