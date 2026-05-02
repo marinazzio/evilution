@@ -134,4 +134,14 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     options, = parse(["--current=curr.json"])
     expect(options[:current]).to eq("curr.json")
   end
+
+  it "parses --profile as a string" do
+    options, = parse(["--profile", "strict"])
+    expect(options[:profile]).to eq("strict")
+  end
+
+  it "parses --strict as shortcut for --profile=strict" do
+    options, = parse(["--strict"])
+    expect(options[:profile]).to eq("strict")
+  end
 end

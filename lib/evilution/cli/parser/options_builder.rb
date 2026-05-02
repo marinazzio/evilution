@@ -21,6 +21,7 @@ class Evilution::CLI::Parser::OptionsBuilder
       add_core_options(opts)
       add_filter_options(opts)
       add_flag_options(opts)
+      add_profile_options(opts)
       add_extra_flag_options(opts)
       add_session_options(opts)
       add_compare_options(opts)
@@ -93,6 +94,12 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Directory for --quiet-children per-pid log files (default: tmp/evilution_children)") do |d|
       @options[:quiet_children_dir] = d
     end
+  end
+
+  def add_profile_options(opts)
+    opts.on("--profile NAME", "Operator profile: default, strict (default: default). " \
+                              "strict adds aggressive truthiness mutators for pre-merge audits.") { |p| @options[:profile] = p }
+    opts.on("--strict", "Shortcut for --profile=strict") { @options[:profile] = "strict" }
   end
 
   def add_extra_flag_options(opts)

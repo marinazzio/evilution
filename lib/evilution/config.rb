@@ -17,7 +17,8 @@ class Evilution::Config
     spec_mappings: {}, spec_pattern: nil, example_targeting: true,
     example_targeting_fallback: :full_file,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
-    quiet_children: false, quiet_children_dir: "tmp/evilution_children"
+    quiet_children: false, quiet_children_dir: "tmp/evilution_children",
+    profile: :default
   }.freeze
 
   attr_reader :target_files, :timeout, :format,
@@ -28,7 +29,7 @@ class Evilution::Config
               :skip_heredoc_literals, :related_specs_heuristic,
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
               :example_targeting, :example_targeting_fallback, :example_targeting_cache,
-              :spec_selector, :quiet_children, :quiet_children_dir
+              :spec_selector, :quiet_children, :quiet_children_dir, :profile
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -183,6 +184,11 @@ class Evilution::Config
       # ignore_patterns:
       #   - "call{name=info, receiver=call{name=logger}}"
       #   - "call{name=debug|warn}"
+
+      # Operator profile: default or strict (default: default).
+      # strict adds aggressive truthiness mutators (e.g. replaces
+      # `x.predicate?` with `nil`) intended for pre-merge audits.
+      # profile: default
     YAML
   end
 
@@ -243,6 +249,7 @@ class Evilution::Config
     @preload         = Validators::Preload.call(merged[:preload])
     @spec_mappings   = Validators::SpecMappings.call(merged[:spec_mappings])
     @spec_pattern    = Validators::SpecPattern.call(merged[:spec_pattern])
+    @profile         = Validators::Profile.call(merged[:profile])
   end
 
   def assign_example_targeting(merged)
@@ -268,6 +275,7 @@ require_relative "config/validators/spec_pattern"
 require_relative "config/validators/spec_mappings"
 require_relative "config/validators/example_targeting_fallback"
 require_relative "config/validators/example_targeting_cache"
+require_relative "config/validators/profile"
 require_relative "config/builders"
 require_relative "config/builders/spec_resolver"
 require_relative "config/builders/spec_selector"

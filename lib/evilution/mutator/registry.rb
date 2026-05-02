@@ -3,6 +3,26 @@
 require_relative "../mutator"
 
 class Evilution::Mutator::Registry
+  STRICT_EXTRA_OPERATORS = [
+    Evilution::Mutator::Operator::PredicateToNil
+  ].freeze
+
+  def self.for_profile(profile)
+    unless profile.is_a?(Symbol) || profile.is_a?(String)
+      raise ArgumentError, "unknown profile: #{profile.inspect} (expected :default or :strict)"
+    end
+
+    case profile.to_sym
+    when :default then default
+    when :strict
+      registry = default
+      STRICT_EXTRA_OPERATORS.each { |op| registry.register(op) }
+      registry
+    else
+      raise ArgumentError, "unknown profile: #{profile.inspect} (expected :default or :strict)"
+    end
+  end
+
   def self.default
     registry = new
     [
