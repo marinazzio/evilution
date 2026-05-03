@@ -2,49 +2,24 @@
 
 require "digest"
 require_relative "../compare"
-require_relative "line_normalizer"
 
-module Evilution::Compare::Fingerprint
-  module_function
-
-  def extract_from_evilution_diff(diff)
-    minus = []
-    plus = []
-    diff.to_s.each_line do |line|
-      line = line.chomp
-      if line.start_with?("- ")
-        minus << line[2..]
-      elsif line.start_with?("+ ")
-        plus << line[2..]
-      end
-    end
-    { minus: minus, plus: plus }
+# Composes a stable SHA256 fingerprint from a mutation diff for cross-tool
+# matching (Evilution vs Mutant). Orchestrates two collaborators along
+# distinct change axes:
+#
+#   - extractor: parses a tool-specific diff format into {minus:, plus:}
+#   - normalizer: collapses whitespace per line so cosmetic differences
+#                 don't perturb the hash
+class Evilution::Compare::Fingerprint
+  def initialize(extractor:, normalizer:)
+    @extractor = extractor
+    @normalizer = normalizer
   end
 
-  def extract_from_mutant_diff(diff)
-    minus = []
-    plus = []
-    diff.to_s.each_line do |line|
-      line = line.chomp
-      next if line.start_with?("---", "+++", "@@")
-
-      if line.start_with?("-")
-        minus << line[1..]
-      elsif line.start_with?("+")
-        plus << line[1..]
-      end
-    end
-    { minus: minus, plus: plus }
-  end
-
-  def normalize_line(line)
-    Evilution::Compare::LineNormalizer.new.call(line)
-  end
-
-  def compute(file_path:, line:, body:)
-    normalizer = Evilution::Compare::LineNormalizer.new
-    minus = body[:minus].map { |l| normalizer.call(l) }
-    plus  = body[:plus].map  { |l| normalizer.call(l) }
+  def call(diff:, file_path:, line:)
+    body = @extractor.call(diff)
+    minus = body[:minus].map { |l| @normalizer.call(l) }
+    plus  = body[:plus].map  { |l| @normalizer.call(l) }
     payload = [file_path, line.to_s, minus.join("\n"), plus.join("\n")].join("\x00")
     Digest::SHA256.hexdigest(payload)
   end
