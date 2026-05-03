@@ -3,15 +3,21 @@
 require_relative "../diff_extractor"
 
 # Extracts {minus:, plus:} payload arrays from Mutant unified-diff format.
-# Strips the "---", "+++", and "@@" header/hunk lines and preserves a single
-# leading "-" / "+" character without a trailing space (mutant style).
+# Skips the "--- <name>", "+++ <name>", and "@@ ... @@" header lines and
+# returns each remaining payload line with its single leading "-" or "+"
+# marker stripped.
+#
+# Header detection requires a trailing space after "---"/"+++" so that a
+# payload line whose mutated source starts with "--" (emitted as "---var")
+# or "++" (emitted as "+++var") is preserved rather than misclassified as
+# a header.
 class Evilution::Compare::DiffExtractor::Mutant
   def call(diff)
     minus = []
     plus = []
     diff.to_s.each_line do |line|
       line = line.chomp
-      next if line.start_with?("---", "+++", "@@")
+      next if line.start_with?("--- ", "+++ ", "@@")
 
       if line.start_with?("-")
         minus << line[1..]

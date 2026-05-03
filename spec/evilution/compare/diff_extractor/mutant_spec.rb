@@ -44,5 +44,16 @@ RSpec.describe Evilution::Compare::DiffExtractor::Mutant do
     it "tolerates a nil diff" do
       expect(extractor.call(nil)).to eq(minus: [], plus: [])
     end
+
+    it "preserves payload lines whose content starts with '--'" do
+      diff = <<~DIFF
+        --- a
+        +++ b
+        @@ -1 +1 @@
+        ---flag
+        +++flag
+      DIFF
+      expect(extractor.call(diff)).to eq(minus: ["--flag"], plus: ["++flag"])
+    end
   end
 end
