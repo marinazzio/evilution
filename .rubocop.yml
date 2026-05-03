@@ -35,7 +35,6 @@ Metrics/ModuleLength:
     - hash
     - heredoc
 
-# target 20
 Metrics/MethodLength:
   Max: 20
   CountAsOne:
@@ -47,9 +46,8 @@ Metrics/MethodLength:
 Metrics/AbcSize:
   Max: 30
 
-# target 7
 Metrics/CyclomaticComplexity:
-  Max: 12
+  Max: 8
 
 # target 8
 Metrics/PerceivedComplexity:

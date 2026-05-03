@@ -17,18 +17,35 @@ class Evilution::AST::ConstantNames
   private
 
   def collect(node, nesting = [])
-    names = []
     case node
-    when Prism::ModuleNode, Prism::ClassNode
-      const = node.constant_path.full_name
-      qualified = nesting.any? && !const.include?("::") ? "#{nesting.join("::")}::#{const}" : const
-      names << qualified
-      names.concat(collect(node.body, nesting + [const])) if node.body
-    when Prism::ProgramNode
-      names.concat(collect(node.statements, nesting)) if node.statements
-    when Prism::StatementsNode
-      node.body.each { |child| names.concat(collect(child, nesting)) }
+    when Prism::ModuleNode, Prism::ClassNode then collect_class(node, nesting)
+    when Prism::ProgramNode then collect_program(node, nesting)
+    when Prism::StatementsNode then collect_statements(node, nesting)
+    else []
     end
-    names
+  end
+
+  def collect_class(node, nesting)
+    const = node.constant_path.full_name
+    qualified = qualify(const, nesting)
+    return [qualified] if node.body.nil?
+
+    [qualified] + collect(node.body, nesting + [const])
+  end
+
+  def collect_program(node, nesting)
+    return [] if node.statements.nil?
+
+    collect(node.statements, nesting)
+  end
+
+  def collect_statements(node, nesting)
+    node.body.flat_map { |child| collect(child, nesting) }
+  end
+
+  def qualify(const, nesting)
+    return const if nesting.empty? || const.include?("::")
+
+    "#{nesting.join("::")}::#{const}"
   end
 end
