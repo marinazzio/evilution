@@ -21,6 +21,8 @@ class Evilution::CLI::Parser::OptionsBuilder
       add_core_options(opts)
       add_filter_options(opts)
       add_flag_options(opts)
+      add_runner_mode_options(opts)
+      add_output_options(opts)
       add_profile_options(opts)
       add_extra_flag_options(opts)
       add_session_options(opts)
@@ -76,13 +78,19 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Use --no-incremental to override `incremental: true` from the config file for one run.") do |v|
       @options[:incremental] = v
     end
+    opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
+  end
+
+  def add_runner_mode_options(opts)
     opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
     opts.on("--preload FILE", "Preload FILE in the parent process before forking " \
                               "(default: auto-detect spec/rails_helper.rb -> spec/spec_helper.rb -> " \
                               "test/test_helper.rb for Rails projects)") { |f| @options[:preload] = f }
     opts.on("--no-preload", "Disable parent-process preload even for Rails projects") { @options[:preload] = false }
-    opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
+  end
+
+  def add_output_options(opts)
     opts.on("--suggest-tests", "Generate concrete test code in suggestions (RSpec or Minitest)") { @options[:suggest_tests] = true }
     opts.on("--no-progress", "Disable progress bar") { @options[:progress] = false }
     opts.on("--quiet-children",

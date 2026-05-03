@@ -37,27 +37,23 @@ class Evilution::CLI::Parser
   def preprocess_flags
     result = []
     i = 0
-    while i < @argv.length
-      arg = @argv[i]
-      if arg == "--fail-fast"
-        next_arg = @argv[i + 1]
-
-        if next_arg && next_arg.match?(/\A-?\d+\z/)
-          @options[:fail_fast] = next_arg
-          i += 2
-        else
-          result << arg
-          i += 1
-        end
-      elsif arg.start_with?("--fail-fast=")
-        @options[:fail_fast] = arg.delete_prefix("--fail-fast=")
-        i += 1
-      else
-        result << arg
-        i += 1
-      end
-    end
+    i = consume_token(i, result) while i < @argv.length
     @argv = result
+  end
+
+  def consume_token(i, result)
+    arg = @argv[i]
+    next_arg = @argv[i + 1]
+    if arg == "--fail-fast" && !next_arg.nil? && next_arg.match?(/\A-?\d+\z/)
+      @options[:fail_fast] = next_arg
+      return i + 2
+    end
+    if arg.start_with?("--fail-fast=")
+      @options[:fail_fast] = arg.delete_prefix("--fail-fast=")
+      return i + 1
+    end
+    result << arg
+    i + 1
   end
 
   def read_stdin_files

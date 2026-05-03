@@ -19,31 +19,21 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
   private
 
   def remove_quantifiers(node, content, content_offset)
-    i = 0
-    while i < content.length
-      if content[i] == "\\"
-        i += 2
-        next
-      end
-
-      if content[i] == "["
-        i = skip_character_class(content, i)
-        next
-      end
-
-      match = match_quantifier(content, i)
-      if match
-        add_mutation(
-          offset: content_offset + i,
-          length: match.length,
-          replacement: "",
-          node: node
-        )
-        i += match.length
-      else
-        i += 1
+    scan_regex_positions(content) do |kind, i|
+      case kind
+      when :backslash then 2
+      when :class_open then class_skip(content, i)
+      when :char then emit_quantifier_at(node, content, content_offset, i)
       end
     end
+  end
+
+  def emit_quantifier_at(node, content, content_offset, i)
+    match = match_quantifier(content, i)
+    return 1 if match.nil?
+
+    add_mutation(offset: content_offset + i, length: match.length, replacement: "", node: node)
+    match.length
   end
 
   def match_quantifier(content, pos)
@@ -58,40 +48,29 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
   end
 
   def remove_anchors(node, content, content_offset)
-    i = 0
-    while i < content.length
-      if content[i] == "\\"
-        anchor = match_backslash_anchor(content, i)
-        if anchor
-          add_mutation(
-            offset: content_offset + i,
-            length: anchor.length,
-            replacement: "",
-            node: node
-          )
-          i += anchor.length
-        else
-          i += 2
-        end
-        next
+    scan_regex_positions(content) do |kind, i|
+      case kind
+      when :backslash then try_emit_backslash_anchor(node, content, content_offset, i)
+      when :class_open then class_skip(content, i)
+      when :char
+        try_emit_caret_dollar(node, content, content_offset, i)
+        1
       end
-
-      if content[i] == "["
-        i = skip_character_class(content, i)
-        next
-      end
-
-      if %w[^ $].include?(content[i])
-        add_mutation(
-          offset: content_offset + i,
-          length: 1,
-          replacement: "",
-          node: node
-        )
-      end
-
-      i += 1
     end
+  end
+
+  def try_emit_backslash_anchor(node, content, content_offset, i)
+    anchor = match_backslash_anchor(content, i)
+    return 2 if anchor.nil?
+
+    add_mutation(offset: content_offset + i, length: anchor.length, replacement: "", node: node)
+    anchor.length
+  end
+
+  def try_emit_caret_dollar(node, content, content_offset, i)
+    return unless %w[^ $].include?(content[i])
+
+    add_mutation(offset: content_offset + i, length: 1, replacement: "", node: node)
   end
 
   def match_backslash_anchor(content, pos)
@@ -104,18 +83,13 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
   end
 
   def remove_character_class_ranges(node, content, content_offset)
-    i = 0
-    while i < content.length
-      if content[i] == "\\"
-        i += 2
-        next
-      end
-
-      if content[i] == "["
+    scan_regex_positions(content) do |kind, i|
+      case kind
+      when :backslash then 2
+      when :class_open
         scan_ranges_in_class(node, content, content_offset, i)
-        i = skip_character_class(content, i)
-      else
-        i += 1
+        class_skip(content, i)
+      when :char then 1
       end
     end
   end
@@ -151,6 +125,27 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
       replacement: "",
       node: node
     )
+  end
+
+  # Walks `content` yielding (kind, position) for each significant token:
+  # :backslash for an escape sequence, :class_open for `[`, :char for any
+  # other byte. The block returns the number of characters to advance from
+  # `position` — callers decide how to handle each case (skip, emit a
+  # mutation, descend into a character class, etc.).
+  def scan_regex_positions(content)
+    i = 0
+    while i < content.length
+      advance = case content[i]
+                when "\\" then yield(:backslash, i)
+                when "[" then yield(:class_open, i)
+                else yield(:char, i)
+                end
+      i += advance
+    end
+  end
+
+  def class_skip(content, pos)
+    skip_character_class(content, pos) - pos
   end
 
   def skip_character_class(content, pos)

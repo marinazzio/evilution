@@ -37,7 +37,7 @@ Metrics/ModuleLength:
 
 # target 20
 Metrics/MethodLength:
-  Max: 30
+  Max: 20
   CountAsOne:
     - array
     - hash

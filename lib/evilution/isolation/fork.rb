@@ -21,40 +21,50 @@ class Evilution::Isolation::Fork
     sandbox_dir = Dir.mktmpdir("evilution-run")
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     parent_rss = Evilution::Memory.rss_kb
+    read_io, write_io = binary_pipe
+    pid = fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
+    write_io.close
+    result = wait_for_result(pid, read_io, timeout)
+    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+    build_mutation_result(mutation, result, duration, parent_rss)
+  ensure
+    cleanup_resources(read_io, write_io, pid, sandbox_dir)
+  end
+
+  private
+
+  # Marshal result payload is ASCII-8BIT; pipes default to text mode and may
+  # transcode according to their external/internal encodings (influenced by
+  # Encoding.default_external and/or Encoding.default_internal — Rails sets
+  # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
+  # both ends.
+  def binary_pipe
     read_io, write_io = IO.pipe
-    # Marshal result payload is ASCII-8BIT; pipes default to text mode and may
-    # transcode according to their external/internal encodings (influenced by
-    # Encoding.default_external and/or Encoding.default_internal — Rails sets
-    # the latter to UTF-8), failing on bytes with no mapping. Force binmode on
-    # both ends.
     read_io.binmode
     write_io.binmode
+    [read_io, write_io]
+  end
 
-    pid = ::Process.fork do
+  def fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
+    ::Process.fork do
       ENV["TMPDIR"] = sandbox_dir
       read_io.close
       suppress_child_output
-      @hooks.fire(:worker_process_start, mutation: mutation) if @hooks
+      @hooks.fire(:worker_process_start, mutation:) if @hooks
       result = execute_in_child(mutation, test_command)
       Marshal.dump(result, write_io)
       write_io.close
       exit!(result[:passed] ? 0 : 1)
     end
+  end
 
-    write_io.close
-    result = wait_for_result(pid, read_io, timeout)
-    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-
-    build_mutation_result(mutation, result, duration, parent_rss)
-  ensure
-    read_io&.close
-    write_io&.close
+  def cleanup_resources(read_io, write_io, pid, sandbox_dir)
+    read_io.close unless read_io.nil?
+    write_io.close unless write_io.nil?
     ensure_reaped(pid)
     restore_original_source
     FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
-
-  private
 
   def restore_original_source
     Evilution::TempDirTracker.cleanup_all
