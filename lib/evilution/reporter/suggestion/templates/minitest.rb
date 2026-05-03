@@ -2,6 +2,7 @@
 
 require_relative "../templates"
 require_relative "../diff_helpers"
+require_relative "../diff_lines"
 
 module Evilution::Reporter::Suggestion::Templates::Minitest
   H = Evilution::Reporter::Suggestion::DiffHelpers
@@ -20,12 +21,12 @@ module Evilution::Reporter::Suggestion::Templates::Minitest
     lambda do |mutation|
       method_name = H.parse_method_name(mutation.subject.name)
       safe_name = H.sanitize_method_name(method_name)
-      original_line, mutated_line = H.extract_diff_lines(mutation.diff)
+      diff_lines = Evilution::Reporter::Suggestion::DiffLines.from_diff(mutation.diff)
       body = body_block.call(method_name)
       indented = body.lines.map { |l| "  #{l}" }.join.chomp
 
       <<~MINITEST.strip
-        # Mutation: #{format_header(action, original_line, mutated_line, mutation.subject.name)}
+        # Mutation: #{format_header(action, diff_lines.original, diff_lines.mutated, mutation.subject.name)}
         # #{mutation.file_path}:#{mutation.line}
         def test_#{test_name}_#{safe_name}
         #{indented}
