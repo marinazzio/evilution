@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.28.0] - 2026-05-03
+
+### Added
+
+- **Operator profiles: `default` (current 72-operator set) and `strict` (adds aggressive truthiness mutators)** — pre-merge audits can opt into a more sensitive operator mix. The `strict` profile registers `PredicateToNil`, which replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values. Wired through CLI (`--profile=strict`, `--strict` shortcut), `.evilution.yml` (`profile: strict`), and a new `Evilution::Mutator::Registry.for_profile(:default | :strict)` factory. `default` is unchanged, so existing CI runs are not affected (#920, PR #926)
+- **Multi-file batch invocation documented** — `evilution path/a.rb path/b.rb path/c.rb` runs every file in a single Runner invocation so the framework (Rails, Sorbet, etc.) and the `preload` chain load **once** in the parent process. With `--isolation=fork` (default for Rails projects under `auto`), every per-mutation fork branches off the warmed parent — materially faster than `for f in ...; do bundle exec evilution run "$f"; done`. README now has a "5a. Multi-file batch scan" workflow section and an end-to-end runner spec covers two positional file paths; session save/load preserves per-file paths in `survived[].file` (#922, PR #927)
+
+### Fixed
+
+- **`Compare::Normalizer` mis-classified Mutant payload lines whose mutated source started with `--` or `++` as unified-diff headers** — pre-existing bug in `extract_from_mutant_diff` that would, for example, drop a removed line `--flag` (emitted as `---flag` in the diff). The new `DiffExtractor::Mutant` requires a trailing space after `---`/`+++` to match a header, preserving real payload. Equivalent Evilution/Mutant mutations on such lines now hash identically and `compare` no longer reports false additions/removals (#917, PR #934)
+
+### Changed
+
+- **Internal `Evilution::Compare::Fingerprint` SOLID refactor** — module-function form replaced with a class taking injectable `(extractor:, normalizer:)` collaborators and a `#call(diff:, file_path:, line:)` interface. Diff parsing extracted into `Evilution::Compare::DiffExtractor::{Evilution,Mutant}` strategy classes (one per format, common duck-typed interface), enabling open/closed extension for future tools without touching the orchestrator. `Compare::Normalizer` constructs both fingerprints once and reuses them across records (#917, PR #934)
+- **`Evilution::Mutation` migrated to value-object composition** — sources, slice, parse status now Data.define-backed value objects (#822, PR #907)
+- **`Evilution::Result::MutationResult` encapsulates memory and error state in dedicated Data.define value objects** — `MemoryStats` and `ErrorInfo` instead of flat positional fields (#823, PR #907)
+- **`Reporter::Suggestion` registry/templates and the RSpec/Minitest template builders unified** — single `build` entrypoint per format (#824, PR #908; #849, PR #905; #850, PR #904)
+- **`Reporter::HTML` namespace inlined into `report.rb`** — separate `namespace.rb` removed, autoload pattern adopted for sub-templates (#826, PR #909)
+- **`Compare::LineNormalizer` extracted into its own class** — whitespace collapse separated from fingerprint orchestration (#829, PR #832)
+- **`Evilution::Config` attribute assignment migrated to a transformation map** — single source of truth for type coercion across simple attributes (#830)
+- **`Runner` `require` chain consolidated** — sub-component loading now centralized; circular-require pitfalls in `MutationExecutor` resolved with `Module#autoload` for child strategy/neutralizer files (#831)
+- **Process cleanup helpers extracted into `Evilution::ProcessCleanup`** — `safe_kill(sig, pid)` and `safe_wait(pid)` shared by `Baseline`, `Isolation::Fork`, and `WorkQueue::Worker`, replacing scattered inline `rescue` modifiers swallowing `Errno::ESRCH`/`ECHILD` (#838)
+- **`ProgressStreamer` and `Loop` error handling tightened** — generic `StandardError` rescues replaced with specific `Errno::EPIPE`/`Errno::EBADF`/etc.; once-only warning suppression added so a flood of failures cannot drown stderr (#827, #840)
+- **Crash detector predicate methods renamed** — `has_*?` → `*?` per Ruby/RSpec conventions (`have_X` matcher calls `has_X?`; the renamed methods are still picked up by `be_X` matchers used in specs) (#839)
+- **Rubocop hygiene sweep across 6 sites** — `Style/RescueModifier`, `Lint/UnusedMethodArgument`, `Lint/SuppressedException` (3 instances), `Security/Eval`, and `Security/MarshalLoad` (3 instances) inline disable comments removed in favor of either narrowed code, explanatory rescue-body comments, or main-`.rubocop.yml` per-file Excludes documented with the underlying trust boundary (#832, #833, #834, #835, #836, #837)
+
+### Documentation
+
+- **README "Operator Profiles" subsection** — explains the `default` vs `strict` profiles, how to opt in (CLI, config, shortcut), and what `strict` adds today (#920, PR #926)
+- **README "5a. Multi-file batch scan" workflow** — documents Rails-loads-once amortisation and qualifies the speed claim by isolation mode (`fork` vs `in_process`) (#922, PR #927)
+- **`.evilution.yml` template gained a `profile:` block** — generated by `evilution init` (#920, PR #926)
+
 ## [0.27.0] - 2026-04-26
 
 ### Added
