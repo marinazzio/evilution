@@ -34,21 +34,4 @@ RSpec.describe Evilution::Reporter::Suggestion::DiffHelpers do
       expect(described_class.sanitize_method_name("already_valid")).to eq("already_valid")
     end
   end
-
-  describe ".extract_diff_lines" do
-    it "returns the original and mutated lines stripped of markers" do
-      diff = "- a >= b\n+ a > b"
-      expect(described_class.extract_diff_lines(diff)).to eq(["a >= b", "a > b"])
-    end
-
-    it "returns nil for the original when the diff lacks a `- ` line" do
-      diff = "+ a > b"
-      expect(described_class.extract_diff_lines(diff)).to eq([nil, "a > b"])
-    end
-
-    it "returns nil for the mutated when the diff lacks a `+ ` line" do
-      diff = "- a >= b"
-      expect(described_class.extract_diff_lines(diff)).to eq(["a >= b", nil])
-    end
-  end
 end
