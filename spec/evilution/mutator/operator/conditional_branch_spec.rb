@@ -44,6 +44,22 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalBranch do
       expect(muts.first.mutated_source).to match(/if x > 0\s+nil\s+end/)
     end
 
+    it "generates 3 mutations for if/elsif/else (one per branch body, no duplicates)" do
+      muts = mutations_for("with_elsif")
+
+      expect(muts.length).to eq(3)
+      expect(muts.map(&:mutated_source).uniq.length).to eq(3)
+    end
+
+    it "nil-ifies each branch body in if/elsif/else" do
+      muts = mutations_for("with_elsif")
+      sources = muts.map(&:mutated_source)
+
+      expect(sources).to include(a_string_matching(/if x > 0\s+nil\s+elsif/))
+      expect(sources).to include(a_string_matching(/elsif x < 0\s+nil\s+else/))
+      expect(sources).to include(a_string_matching(/else\s+nil\s+end/))
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
