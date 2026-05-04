@@ -83,6 +83,64 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(stats["score"]).to eq(0.5)
     end
 
+    it "includes rounded metric fields in summary" do
+      parsed = JSON.parse(reporter.call(summary))
+      stats = parsed["summary"]
+
+      expect(stats["duration"]).to eq(0.6)
+      expect(stats["killtime"]).to eq(0.579)
+      expect(stats["efficiency"]).to eq(0.965)
+      expect(stats["mutations_per_second"]).to eq(3.33)
+    end
+
+    it "includes count fields for all statuses in summary" do
+      parsed = JSON.parse(reporter.call(summary))
+      stats = parsed["summary"]
+
+      expect(stats).to include(
+        "timed_out" => 0,
+        "errors" => 0,
+        "neutral" => 0,
+        "equivalent" => 0,
+        "unresolved" => 0,
+        "unparseable" => 0
+      )
+    end
+
+    it "includes truncated flag when summary is truncated" do
+      truncated_summary = Evilution::Result::Summary.new(
+        results: [killed_result], duration: 0.4, truncated: true
+      )
+      parsed = JSON.parse(reporter.call(truncated_summary))
+
+      expect(parsed["summary"]["truncated"]).to be(true)
+    end
+
+    it "omits truncated flag when summary is not truncated" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["summary"]).not_to have_key("truncated")
+    end
+
+    it "includes rounded peak_memory_mb when any result has child_rss_kb" do
+      result_with_rss = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation,
+        status: :killed,
+        duration: 0.1,
+        memory: Evilution::Result::MemoryStats.new(child_rss_kb: 51_300)
+      )
+      mem_summary = Evilution::Result::Summary.new(results: [result_with_rss], duration: 0.2)
+      parsed = JSON.parse(reporter.call(mem_summary))
+
+      expect(parsed["summary"]["peak_memory_mb"]).to eq(50.1)
+    end
+
+    it "omits peak_memory_mb when no result has child_rss_kb" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["summary"]).not_to have_key("peak_memory_mb")
+    end
+
     it "includes survived mutations with details" do
       parsed = JSON.parse(reporter.call(summary))
       survived = parsed["survived"]

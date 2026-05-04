@@ -47,7 +47,13 @@ class Evilution::Reporter::JSON
   end
 
   def build_summary(summary)
-    data = {
+    data = build_core_summary(summary).merge(build_metrics_summary(summary))
+    append_optional_summary_fields(data, summary)
+    data
+  end
+
+  def build_core_summary(summary)
+    {
       total: summary.total,
       killed: summary.killed,
       survived: summary.survived,
@@ -56,18 +62,25 @@ class Evilution::Reporter::JSON
       neutral: summary.neutral,
       equivalent: summary.equivalent,
       unresolved: summary.unresolved,
-      unparseable: summary.unparseable,
+      unparseable: summary.unparseable
+    }
+  end
+
+  def build_metrics_summary(summary)
+    {
       score: summary.score.round(4),
       duration: summary.duration.round(4),
       killtime: summary.killtime.round(4),
       efficiency: summary.efficiency.round(4),
       mutations_per_second: summary.mutations_per_second.round(2)
     }
+  end
+
+  def append_optional_summary_fields(data, summary)
     data[:truncated] = true if summary.truncated?
     data[:skipped] = summary.skipped if summary.skipped.positive?
     peak = summary.peak_memory_mb
     data[:peak_memory_mb] = peak.round(1) if peak
-    data
   end
 
   def build_mutation_detail(result)
