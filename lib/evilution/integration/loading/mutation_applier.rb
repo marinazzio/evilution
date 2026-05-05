@@ -28,25 +28,30 @@ class Evilution::Integration::Loading::MutationApplier
     syntax_error = @syntax_validator.call(mutation.mutated_source)
     return syntax_error if syntax_error
 
+    apply(mutation)
+    nil
+  rescue SyntaxError => e
+    failure_result(e, "syntax error in mutated source: #{e.message}")
+  rescue ScriptError, StandardError => e
+    failure_result(e, "#{e.class}: #{e.message}")
+  end
+
+  private
+
+  def apply(mutation)
     @constant_pinner.call(mutation.original_source)
     @concern_state_cleaner.call(mutation.file_path)
     @redefinition_recovery.call(mutation.original_source) do
       @source_evaluator.call(mutation.mutated_source, mutation.file_path)
     end
-    nil
-  rescue SyntaxError => e
+  end
+
+  def failure_result(error, message)
     {
       passed: false,
-      error: "syntax error in mutated source: #{e.message}",
-      error_class: e.class.name,
-      error_backtrace: Array(e.backtrace).first(5)
-    }
-  rescue ScriptError, StandardError => e
-    {
-      passed: false,
-      error: "#{e.class}: #{e.message}",
-      error_class: e.class.name,
-      error_backtrace: Array(e.backtrace).first(5)
+      error: message,
+      error_class: error.class.name,
+      error_backtrace: Array(error.backtrace).first(5)
     }
   end
 end
