@@ -108,16 +108,18 @@ class Evilution::Runner::IsolationResolver
   end
 
   def resolve_preload_path
-    if config.preload.is_a?(String)
-      unless File.file?(config.preload)
-        raise Evilution::ConfigError.new(
-          "preload file not found: #{config.preload.inspect}",
-          file: config.preload
-        )
-      end
-      return config.preload
-    end
+    return resolve_explicit_preload(config.preload) if config.preload.is_a?(String)
 
+    resolve_autodetected_preload
+  end
+
+  def resolve_explicit_preload(path)
+    return path if File.file?(path)
+
+    raise Evilution::ConfigError.new("preload file not found: #{path.inspect}", file: path)
+  end
+
+  def resolve_autodetected_preload
     root = detected_rails_root
     return nil unless root
 
