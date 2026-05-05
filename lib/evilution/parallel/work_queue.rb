@@ -31,10 +31,11 @@ class Evilution::Parallel::WorkQueue
 
     retired = []
     begin
-      results, retired = dispatcher.run
+      run_result = dispatcher.run
+      retired = run_result.retired
       raise dispatcher.first_error if dispatcher.first_error
 
-      results
+      run_result.results
     ensure
       cleanup_workers(workers, retired)
     end

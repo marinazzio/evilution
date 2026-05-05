@@ -4,6 +4,8 @@ require_relative "../work_queue"
 require_relative "collection_state"
 
 class Evilution::Parallel::WorkQueue::Dispatcher
+  RunResult = Data.define(:results, :retired)
+
   attr_reader :first_error
 
   def initialize(workers:, items:, prefetch:, item_timeout:, worker_max_items:, recycle_factory:)
@@ -21,7 +23,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     seed
     collect
     @first_error = @state.first_error
-    [@state.results, @retired]
+    RunResult.new(results: @state.results, retired: @retired)
   end
 
   private
