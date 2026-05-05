@@ -42,18 +42,23 @@ class Evilution::Parallel::WorkQueue::Dispatcher
 
     while @state.in_flight.positive?
       readable, = IO.select(result_ios, nil, nil, @item_timeout)
-
       if readable.nil?
-        terminate_stuck
-        @state.first_error ||= Evilution::Error.new("worker timed out after #{@item_timeout}s")
+        record_timeout
         break
       end
 
-      readable.each do |io|
-        alive = handle(io_to_worker[io], io_to_worker, result_ios)
-        result_ios.delete(io) unless alive
-      end
+      readable.each { |io| process_readable(io, io_to_worker, result_ios) }
     end
+  end
+
+  def record_timeout
+    terminate_stuck
+    @state.first_error ||= Evilution::Error.new("worker timed out after #{@item_timeout}s")
+  end
+
+  def process_readable(io, io_to_worker, result_ios)
+    alive = handle(io_to_worker[io], io_to_worker, result_ios)
+    result_ios.delete(io) unless alive
   end
 
   def handle(worker, io_to_worker, result_ios)
