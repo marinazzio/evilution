@@ -104,17 +104,27 @@ class Evilution::Runner::SubjectPipeline
 
   def target_matcher
     target = config.target
-    if target.end_with?("*")
-      prefix = target.chomp("*")
-      ->(s) { s.name.split(/[#.]/).first.start_with?(prefix) }
-    elsif target.end_with?("#", ".")
-      prefix = target
-      ->(s) { s.name.start_with?(prefix) }
-    elsif target.include?("#") || target.include?(".")
-      ->(s) { s.name == target }
-    else
-      ->(s) { s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
-    end
+    return wildcard_matcher(target.chomp("*")) if target.end_with?("*")
+    return prefix_matcher(target) if target.end_with?("#", ".")
+    return exact_matcher(target) if target.include?("#") || target.include?(".")
+
+    class_matcher(target)
+  end
+
+  def wildcard_matcher(prefix)
+    ->(s) { s.name.split(/[#.]/).first.start_with?(prefix) }
+  end
+
+  def prefix_matcher(prefix)
+    ->(s) { s.name.start_with?(prefix) }
+  end
+
+  def exact_matcher(target)
+    ->(s) { s.name == target }
+  end
+
+  def class_matcher(target)
+    ->(s) { s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
   end
 
   def filter_by_line_ranges(subjects)
