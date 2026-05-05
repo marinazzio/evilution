@@ -5,9 +5,8 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::EqualityToIdentity < Evilution::Mutator::Base
   def visit_call_node(node)
     if node.name == :== && node.receiver && node.arguments
-      receiver_text = @file_source.byteslice(node.receiver.location.start_offset, node.receiver.location.length)
-      arg = node.arguments.arguments.first
-      arg_text = @file_source.byteslice(arg.location.start_offset, arg.location.length)
+      receiver_text = loc_text(node.receiver.location)
+      arg_text = loc_text(node.arguments.arguments.first.location)
 
       add_mutation(
         offset: node.location.start_offset,
@@ -18,5 +17,11 @@ class Evilution::Mutator::Operator::EqualityToIdentity < Evilution::Mutator::Bas
     end
 
     super
+  end
+
+  private
+
+  def loc_text(loc)
+    @file_source.byteslice(loc.start_offset, loc.length)
   end
 end
