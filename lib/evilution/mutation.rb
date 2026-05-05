@@ -74,22 +74,17 @@ class Evilution::Mutation
   private
 
   def compute_diff
-    original_lines = original_source.lines
-    mutated_lines = mutated_source.lines
-    diffs = ::Diff::LCS.diff(original_lines, mutated_lines)
-
+    diffs = ::Diff::LCS.diff(original_source.lines, mutated_source.lines)
     return "" if diffs.empty?
 
-    result = []
-    diffs.flatten(1).each do |change|
-      case change.action
-      when "-"
-        result << "- #{change.element.chomp}"
-      when "+"
-        result << "+ #{change.element.chomp}"
-      end
+    diffs.flatten(1).filter_map { |change| format_diff_change(change) }.join("\n")
+  end
+
+  def format_diff_change(change)
+    case change.action
+    when "-" then "- #{change.element.chomp}"
+    when "+" then "+ #{change.element.chomp}"
     end
-    result.join("\n")
   end
 
   def compute_unified_diff
