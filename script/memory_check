@@ -30,14 +30,20 @@ end
 
 def report(name, result)
   status = result[:passed] ? "PASS" : "FAIL"
-  growth = result[:growth_mb] ? format("%.1f MB", result[:growth_mb]) : "N/A"
-  max = format("%.1f MB", result[:max_growth_kb] / 1024.0)
-  samples = result[:samples].map { |s| s ? format("%.1f", s / 1024.0) : "N/A" }.join(" -> ")
+  metrics = format_metrics(result)
 
   puts "[#{status}] #{name}"
-  puts "  Growth: #{growth} (max: #{max})"
-  puts "  Samples (MB): #{samples}"
+  puts "  Growth: #{metrics[:growth]} (max: #{metrics[:max]})"
+  puts "  Samples (MB): #{metrics[:samples]}"
   puts
+end
+
+def format_metrics(result)
+  {
+    growth: result[:growth_mb] ? format("%.1f MB", result[:growth_mb]) : "N/A",
+    max: format("%.1f MB", result[:max_growth_kb] / 1024.0),
+    samples: result[:samples].map { |s| s ? format("%.1f", s / 1024.0) : "N/A" }.join(" -> ")
+  }
 end
 
 abort("RSS measurement unavailable (requires /proc filesystem)") unless Evilution::Memory.rss_kb
