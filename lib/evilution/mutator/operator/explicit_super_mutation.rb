@@ -23,25 +23,29 @@ class Evilution::Mutator::Operator::ExplicitSuperMutation < Evilution::Mutator::
   end
 
   def mutate_arguments(node, args)
-    # Remove all arguments: super(a, b) -> super()
+    emit_remove_all_args(node)
+    return unless args.length >= 2
+
+    args.each_index { |i| emit_remove_arg_at(node, args, i) }
+  end
+
+  # super(a, b) -> super()
+  def emit_remove_all_args(node)
     add_mutation(
       offset: node.arguments.location.start_offset,
       length: node.arguments.location.length,
       replacement: "",
       node: node
     )
+  end
 
-    return unless args.length >= 2
-
-    # Remove individual arguments
-    args.each_index do |i|
-      remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
-      add_mutation(
-        offset: node.arguments.location.start_offset,
-        length: node.arguments.location.length,
-        replacement: remaining.join(", "),
-        node: node
-      )
-    end
+  def emit_remove_arg_at(node, args, i)
+    remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
+    add_mutation(
+      offset: node.arguments.location.start_offset,
+      length: node.arguments.location.length,
+      replacement: remaining.join(", "),
+      node: node
+    )
   end
 end
