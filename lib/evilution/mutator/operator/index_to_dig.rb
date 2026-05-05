@@ -3,6 +3,9 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
+  Chain = Data.define(:root, :args)
+  private_constant :Chain
+
   def initialize(**options)
     super
     @consumed = Set.new
@@ -10,11 +13,11 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
 
   def visit_call_node(node)
     if chain_head?(node)
-      root, args = collect_chain(node)
+      chain = collect_chain(node)
       add_mutation(
         offset: node.location.start_offset,
         length: node.location.length,
-        replacement: dig_replacement(root, args),
+        replacement: dig_replacement(chain),
         node: node
       )
     end
@@ -24,9 +27,9 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
 
   private
 
-  def dig_replacement(root, args)
-    root_source = byteslice_source(root.location.start_offset, root.location.length)
-    arg_sources = args.map { |a| byteslice_source(a.location.start_offset, a.location.length) }
+  def dig_replacement(chain)
+    root_source = byteslice_source(chain.root.location.start_offset, chain.root.location.length)
+    arg_sources = chain.args.map { |a| byteslice_source(a.location.start_offset, a.location.length) }
     "#{root_source}.dig(#{arg_sources.join(", ")})"
   end
 
@@ -56,6 +59,6 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
       current = current.receiver
     end
 
-    [current, args]
+    Chain.new(root: current, args: args)
   end
 end
