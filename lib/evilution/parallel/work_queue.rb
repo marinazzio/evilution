@@ -27,11 +27,7 @@ class Evilution::Parallel::WorkQueue
     return [] if items.empty?
 
     workers = (0...[@size, items.length].min).map { |i| spawn_one(i, &block) }
-    dispatcher = Dispatcher.new(
-      workers: workers, items: items, prefetch: @prefetch,
-      item_timeout: @item_timeout, worker_max_items: @worker_max_items,
-      recycle_factory: ->(old) { spawn_one(old.worker_index, &block) }
-    )
+    dispatcher = build_dispatcher(workers, items, &block)
 
     retired = []
     begin
@@ -40,11 +36,7 @@ class Evilution::Parallel::WorkQueue
 
       results
     ensure
-      workers.each(&:shutdown)
-      collect_final_timings(workers)
-      workers.each(&:close_pipes)
-      workers.each(&:reap)
-      @worker_stats = retired + workers.map(&:to_stat)
+      cleanup_workers(workers, retired)
     end
   end
 
@@ -56,6 +48,22 @@ class Evilution::Parallel::WorkQueue
 
   def spawn_one(worker_index, &)
     Worker.spawn(worker_index: worker_index, hooks: @hooks, &)
+  end
+
+  def build_dispatcher(workers, items, &block)
+    Dispatcher.new(
+      workers: workers, items: items, prefetch: @prefetch,
+      item_timeout: @item_timeout, worker_max_items: @worker_max_items,
+      recycle_factory: ->(old) { spawn_one(old.worker_index, &block) }
+    )
+  end
+
+  def cleanup_workers(workers, retired)
+    workers.each(&:shutdown)
+    collect_final_timings(workers)
+    workers.each(&:close_pipes)
+    workers.each(&:reap)
+    @worker_stats = retired + workers.map(&:to_stat)
   end
 
   def collect_final_timings(workers)
