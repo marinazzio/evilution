@@ -239,17 +239,17 @@ class Evilution::Config
     end
   end
 
+  VALIDATED_ATTRS = %i[
+    integration jobs fail_fast isolation ignore_patterns
+    hooks preload spec_mappings spec_pattern profile
+  ].freeze
+  private_constant :VALIDATED_ATTRS
+
   def assign_validated_attributes(merged)
-    @integration     = Validators::Integration.call(merged[:integration])
-    @jobs            = Validators::Jobs.call(merged[:jobs])
-    @fail_fast       = Validators::FailFast.call(merged[:fail_fast])
-    @isolation       = Validators::Isolation.call(merged[:isolation])
-    @ignore_patterns = Validators::IgnorePatterns.call(merged[:ignore_patterns])
-    @hooks           = Validators::Hooks.call(merged[:hooks])
-    @preload         = Validators::Preload.call(merged[:preload])
-    @spec_mappings   = Validators::SpecMappings.call(merged[:spec_mappings])
-    @spec_pattern    = Validators::SpecPattern.call(merged[:spec_pattern])
-    @profile         = Validators::Profile.call(merged[:profile])
+    VALIDATED_ATTRS.each do |key|
+      validator = Validators.const_get(key.to_s.split("_").map(&:capitalize).join)
+      instance_variable_set(:"@#{key}", validator.call(merged[key]))
+    end
   end
 
   def assign_example_targeting(merged)
