@@ -14,16 +14,18 @@ class Evilution::CLI::Commands::SessionDiff < Evilution::CLI::Command
   def perform
     raise Evilution::ConfigError, "two session file paths required" unless @files.length == 2
 
-    store = Evilution::Session::Store.new
-    base_data = store.load(@files[0])
-    head_data = store.load(@files[1])
-    result = Evilution::Session::Diff.new.call(base_data, head_data)
+    result = compute_diff(@files)
     Evilution::CLI::Printers::SessionDiff.new(result, format: @options[:format]).render(@stdout)
     0
   rescue ::JSON::ParserError => e
     raise Evilution::Error, "invalid session file: #{e.message}"
   rescue SystemCallError => e
     raise Evilution::Error, e.message
+  end
+
+  def compute_diff(files)
+    store = Evilution::Session::Store.new
+    Evilution::Session::Diff.new.call(store.load(files[0]), store.load(files[1]))
   end
 end
 
