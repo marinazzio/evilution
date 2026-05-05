@@ -343,20 +343,24 @@ module CompareMutations
 
     def compare_file(path, _reference_target, reporter)
       full_path = File.join(@config.project_root, path)
-      ev_data = @evilution.collect(path)
-      ref_data = @reference.collect(full_path)
-
-      ev_set = MutationSet.from_json(ev_data)
-      ref_set = MutationSet.from_json(ref_data)
+      ev_set = MutationSet.from_json(@evilution.collect(path))
+      ref_set = MutationSet.from_json(@reference.collect(full_path))
       comparison = Comparison.new(evilution: ev_set, reference: ref_set)
       catalog = Catalog.new(comparison.extra_in_reference)
 
       reporter.write_file_report(path, comparison, catalog)
+      build_file_result(path, comparison, catalog)
+    end
 
-      { file: path, evilution_count: ev_set.size, reference_count: ref_set.size,
+    def build_file_result(path, comparison, catalog)
+      {
+        file: path,
+        evilution_count: comparison.evilution_set.size,
+        reference_count: comparison.reference_set.size,
         density_ratio: comparison.density_ratio.round(2),
         extra_count: comparison.extra_in_reference.size,
-        operator_summary: catalog.summary }
+        operator_summary: catalog.summary
+      }
     end
 
     def print_summary(file_results)
