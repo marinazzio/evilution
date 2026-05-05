@@ -20,6 +20,13 @@ class Evilution::CLI::Parser::CommandExtractor
   ENVIRONMENT_SUBCOMMANDS = { "show" => :environment_show }.freeze
   UTIL_SUBCOMMANDS = { "mutation" => :util_mutation }.freeze
 
+  SUBCOMMAND_FAMILIES = {
+    "session" => [SESSION_SUBCOMMANDS, "session", "list, show, diff, gc"],
+    "tests" => [TESTS_SUBCOMMANDS, "tests", "list"],
+    "environment" => [ENVIRONMENT_SUBCOMMANDS, "environment", "show"],
+    "util" => [UTIL_SUBCOMMANDS, "util", "mutation"]
+  }.freeze
+
   Result = Struct.new(:command, :remaining_argv, :parse_error)
 
   def self.call(argv)
@@ -46,18 +53,9 @@ class Evilution::CLI::Parser::CommandExtractor
       @argv.shift
     elsif first == "run"
       @argv.shift
-    elsif first == "session"
+    elsif SUBCOMMAND_FAMILIES.key?(first)
       @argv.shift
-      extract_subcommand(SESSION_SUBCOMMANDS, "session", "list, show, diff, gc")
-    elsif first == "tests"
-      @argv.shift
-      extract_subcommand(TESTS_SUBCOMMANDS, "tests", "list")
-    elsif first == "environment"
-      @argv.shift
-      extract_subcommand(ENVIRONMENT_SUBCOMMANDS, "environment", "show")
-    elsif first == "util"
-      @argv.shift
-      extract_subcommand(UTIL_SUBCOMMANDS, "util", "mutation")
+      extract_subcommand(*SUBCOMMAND_FAMILIES[first])
     end
   end
 
