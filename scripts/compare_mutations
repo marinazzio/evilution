@@ -360,17 +360,22 @@ module CompareMutations
     end
 
     def print_summary(file_results)
-      ev_total = file_results.sum { |r| r[:evilution_count] }
-      ref_total = file_results.sum { |r| r[:reference_count] }
-      extra_total = file_results.sum { |r| r[:extra_count] }
-      ratio = ev_total.positive? ? (ref_total.to_f / ev_total).round(2) : 0.0
+      totals = compute_totals(file_results)
 
       puts "Comparison complete. Results in #{@config.output_dir}/"
       puts "  Files: #{file_results.size}"
-      puts "  Evilution: #{ev_total} mutations"
-      puts "  Reference: #{ref_total} mutations"
-      puts "  Ratio: #{ratio}x"
-      puts "  Extra in reference: #{extra_total}"
+      puts "  Evilution: #{totals[:ev]} mutations"
+      puts "  Reference: #{totals[:ref]} mutations"
+      puts "  Ratio: #{totals[:ratio]}x"
+      puts "  Extra in reference: #{totals[:extra]}"
+    end
+
+    def compute_totals(file_results)
+      ev = file_results.sum { |r| r[:evilution_count] }
+      ref = file_results.sum { |r| r[:reference_count] }
+      extra = file_results.sum { |r| r[:extra_count] }
+      { ev: ev, ref: ref, extra: extra,
+        ratio: ev.positive? ? (ref.to_f / ev).round(2) : 0.0 }
     end
   end
 end
