@@ -18,19 +18,18 @@ class Evilution::Mutator::Operator::MultipleAssignment < Evilution::Mutator::Bas
   private
 
   def mutate_target_removal(node, lefts, values)
-    lefts.each_index do |i|
-      remaining_lefts = lefts.each_with_index.filter_map { |l, j| l.slice if j != i }
-      remaining_values = values.each_with_index.filter_map { |v, j| v.slice if j != i }
+    lefts.each_index { |i| emit_target_removal_at(node, lefts, values, i) }
+  end
 
-      replacement = "#{remaining_lefts.join(", ")} = #{remaining_values.join(", ")}"
-
-      add_mutation(
-        offset: node.location.start_offset,
-        length: node.location.length,
-        replacement: replacement,
-        node: node
-      )
-    end
+  def emit_target_removal_at(node, lefts, values, i)
+    remaining_lefts = lefts.each_with_index.filter_map { |l, j| l.slice if j != i }
+    remaining_values = values.each_with_index.filter_map { |v, j| v.slice if j != i }
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "#{remaining_lefts.join(", ")} = #{remaining_values.join(", ")}",
+      node: node
+    )
   end
 
   def mutate_swap(node, lefts, values)
