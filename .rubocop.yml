@@ -43,7 +43,7 @@ Metrics/MethodLength:
 
 # target 17
 Metrics/AbcSize:
-  Max: 26
+  Max: 25
 
 Metrics/CyclomaticComplexity:
   Max: 8
