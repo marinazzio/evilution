@@ -9,23 +9,33 @@ module Evilution::MCP::MutateTool::SurvivedEnricher
     entries = data["survived"]
     return unless entries.is_a?(Array)
 
-    explicit_spec = explicit_spec_override(config)
-    resolver = explicit_spec ? nil : resolver_for_integration(config.integration)
+    explicit_spec, resolver = build_resolver(config)
     cache = {}
 
     entries.each_with_index do |entry, index|
       result = survived_results[index]
       next unless result
 
-      mutation = result.mutation
-      entry["subject"] = mutation.subject.name
-      spec_file = explicit_spec || cache.fetch(mutation.file_path) do
-        cache[mutation.file_path] = resolver.call(mutation.file_path)
-      end
-      entry["spec_file"] = spec_file if spec_file
-      entry["next_step"] = build_next_step(mutation, spec_file)
+      enrich_entry(entry, result.mutation, explicit_spec, resolver, cache)
     end
   end
+
+  def self.build_resolver(config)
+    explicit_spec = explicit_spec_override(config)
+    resolver = explicit_spec ? nil : resolver_for_integration(config.integration)
+    [explicit_spec, resolver]
+  end
+  private_class_method :build_resolver
+
+  def self.enrich_entry(entry, mutation, explicit_spec, resolver, cache)
+    entry["subject"] = mutation.subject.name
+    spec_file = explicit_spec || cache.fetch(mutation.file_path) do
+      cache[mutation.file_path] = resolver.call(mutation.file_path)
+    end
+    entry["spec_file"] = spec_file if spec_file
+    entry["next_step"] = build_next_step(mutation, spec_file)
+  end
+  private_class_method :enrich_entry
 
   def self.explicit_spec_override(config)
     return nil unless config.respond_to?(:spec_files)
