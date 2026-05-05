@@ -142,16 +142,21 @@ class Evilution::SpecAstCache
     def strip_comments(slice, base_offset)
       return slice if @comment_ranges.empty?
 
-      ranges = comment_ranges_within(base_offset, base_offset + slice.bytesize)
+      end_offset = base_offset + slice.bytesize
+      ranges = comment_ranges_within(base_offset, end_offset)
       return slice if ranges.empty?
 
+      splice_excluding_ranges(base_offset, end_offset, ranges)
+    end
+
+    def splice_excluding_ranges(start_off, end_off, ranges)
       result = +""
-      cursor = base_offset
+      cursor = start_off
       ranges.each do |range|
         result << @source.byteslice(cursor, range.begin - cursor)
         cursor = range.end
       end
-      result << @source.byteslice(cursor, base_offset + slice.bytesize - cursor)
+      result << @source.byteslice(cursor, end_off - cursor)
       result
     end
 
