@@ -107,19 +107,11 @@ class Evilution::MCP::SessionTool < MCP::Tool
     end
 
     def diff_action(base:, head:, results_dir:)
-      return error_response("config_error", "base is required") unless base
-      return error_response("config_error", "head is required") unless head
-
       dir = results_dir || Evilution::Session::Store::DEFAULT_DIR
-      return error_response("config_error", "base must be under results directory") unless within?(base, dir)
-      return error_response("config_error", "head must be under results directory") unless within?(head, dir)
+      validation = validate_diff_args(base, head, dir)
+      return validation if validation
 
-      store = Evilution::Session::Store.new(results_dir: dir)
-      base_data = store.load(base)
-      head_data = store.load(head)
-
-      diff = Evilution::Session::Diff.new
-      result = diff.call(base_data, head_data)
+      result = load_and_diff(base, head, dir)
       success_response(result.to_h)
     rescue Evilution::Error => e
       error_response("not_found", e.message)
@@ -127,6 +119,20 @@ class Evilution::MCP::SessionTool < MCP::Tool
       error_response("parse_error", e.message)
     rescue SystemCallError => e
       error_response("runtime_error", e.message)
+    end
+
+    def validate_diff_args(base, head, dir)
+      return error_response("config_error", "base is required") unless base
+      return error_response("config_error", "head is required") unless head
+      return error_response("config_error", "base must be under results directory") unless within?(base, dir)
+      return error_response("config_error", "head must be under results directory") unless within?(head, dir)
+
+      nil
+    end
+
+    def load_and_diff(base, head, dir)
+      store = Evilution::Session::Store.new(results_dir: dir)
+      Evilution::Session::Diff.new.call(store.load(base), store.load(head))
     end
 
     def within?(path, results_dir)
