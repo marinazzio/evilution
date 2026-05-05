@@ -105,37 +105,50 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
   class << self
     def call(server_context:, files: [], verbosity: nil, **opts)
-      Evilution::MCP::MutateTool::OptionParser.validate!(opts)
-      parsed_files, line_ranges = Evilution::MCP::MutateTool::OptionParser.parse_files(Array(files))
-      config = Evilution::MCP::MutateTool::ConfigBuilder.build(
-        files: parsed_files,
-        line_ranges: line_ranges,
-        params: opts
-      )
-      on_result = Evilution::MCP::MutateTool::ProgressStreamer.build(
-        server_context: server_context,
-        suggest_tests: opts[:suggest_tests],
-        integration: config.integration
-      )
+      config = build_config(files, opts)
+      on_result = build_progress_streamer(server_context, opts, config)
       summary = Evilution::Runner.new(config: config, on_result: on_result).call
-      report = Evilution::Reporter::JSON.new(
-        suggest_tests: opts[:suggest_tests] == true,
-        integration: config.integration
-      ).call(summary)
-      normalized_verbosity = Evilution::MCP::MutateTool::OptionParser.normalize_verbosity(verbosity)
-      compact = Evilution::MCP::MutateTool::ReportTrimmer.call(
-        report,
-        verbosity: normalized_verbosity,
-        survived_results: summary.survived_results,
-        config: config,
-        enricher: Evilution::MCP::MutateTool::SurvivedEnricher,
-        summary: summary
-      )
+      compact = build_compact_report(summary, verbosity, opts, config)
 
       ::MCP::Tool::Response.new([{ type: "text", text: compact }])
     rescue Evilution::Error => e
       payload = Evilution::MCP::MutateTool::ErrorPayload.build(e)
       ::MCP::Tool::Response.new([{ type: "text", text: ::JSON.generate(payload) }], error: true)
+    end
+
+    private
+
+    def build_config(files, opts)
+      Evilution::MCP::MutateTool::OptionParser.validate!(opts)
+      parsed_files, line_ranges = Evilution::MCP::MutateTool::OptionParser.parse_files(Array(files))
+      Evilution::MCP::MutateTool::ConfigBuilder.build(
+        files: parsed_files,
+        line_ranges: line_ranges,
+        params: opts
+      )
+    end
+
+    def build_progress_streamer(server_context, opts, config)
+      Evilution::MCP::MutateTool::ProgressStreamer.build(
+        server_context: server_context,
+        suggest_tests: opts[:suggest_tests],
+        integration: config.integration
+      )
+    end
+
+    def build_compact_report(summary, verbosity, opts, config)
+      report = Evilution::Reporter::JSON.new(
+        suggest_tests: opts[:suggest_tests] == true,
+        integration: config.integration
+      ).call(summary)
+      Evilution::MCP::MutateTool::ReportTrimmer.call(
+        report,
+        verbosity: Evilution::MCP::MutateTool::OptionParser.normalize_verbosity(verbosity),
+        survived_results: summary.survived_results,
+        config: config,
+        enricher: Evilution::MCP::MutateTool::SurvivedEnricher,
+        summary: summary
+      )
     end
   end
 end
