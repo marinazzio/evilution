@@ -40,16 +40,18 @@ class Evilution::Mutator::Operator::CaseWhen < Evilution::Mutator::Base
   end
 
   def remove_else_branch(node)
-    return if node.else_clause.nil?
-    return if node.else_clause.statements.nil?
+    else_clause = node.else_clause
+    return if else_clause.nil? || else_clause.statements.nil?
 
-    start_offset = node.else_clause.else_keyword_loc.start_offset
-    end_offset = node.else_clause.statements.location.start_offset + node.else_clause.statements.location.length
+    start_offset = else_clause.else_keyword_loc.start_offset
+    stmts_loc = else_clause.statements.location
+    end_offset = stmts_loc.start_offset + stmts_loc.length
+
     add_mutation(
       offset: start_offset,
       length: end_offset - start_offset,
       replacement: "",
-      node: node.else_clause
+      node: else_clause
     )
   end
 end
