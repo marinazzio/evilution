@@ -74,6 +74,10 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     command = "rspec #{args.join(" ")}"
 
     reset_examples
+    execute_run(args, command)
+  end
+
+  def execute_run(args, command)
     detector = @crash_detector_lifecycle.current
     snapshot = @state_guard.snapshot
     begin
