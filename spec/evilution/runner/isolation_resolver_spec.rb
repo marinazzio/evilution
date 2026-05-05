@@ -181,17 +181,18 @@ RSpec.describe Evilution::Runner::IsolationResolver do
     describe "autodetect fallback chain (Rails detected, no explicit preload)" do
       def with_rails_root_having(file_paths)
         Dir.mktmpdir do |dir|
-          markers = {}
-          file_paths.each do |rel|
-            abs = File.join(dir, rel)
-            FileUtils.mkdir_p(File.dirname(abs))
-            marker = File.join(dir, "marker_#{File.basename(rel, ".rb")}")
-            markers[rel] = marker
-            File.write(abs, "File.write(#{marker.inspect}, #{rel.inspect})\n")
-          end
+          markers = file_paths.to_h { |rel| [rel, write_marker_file(dir, rel)] }
           allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
           yield(dir, markers)
         end
+      end
+
+      def write_marker_file(dir, rel)
+        abs = File.join(dir, rel)
+        FileUtils.mkdir_p(File.dirname(abs))
+        marker = File.join(dir, "marker_#{File.basename(rel, ".rb")}")
+        File.write(abs, "File.write(#{marker.inspect}, #{rel.inspect})\n")
+        marker
       end
 
       it "loads spec/rails_helper.rb when present" do
