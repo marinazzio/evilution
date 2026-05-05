@@ -221,14 +221,22 @@ module CompareMutations
       lines = ["## Extra in reference (#{extra.size})", ""]
 
       catalog.summary.each do |entry|
-        lines << "### #{entry[:operator]} (#{entry[:count]})"
-        catalog.by_operator[entry[:operator]].each do |m|
-          lines << "  Line #{m["line"]}:"
-          m["diff"].to_s.each_line { |l| lines << "    #{l.chomp}" }
-          lines << ""
-        end
+        lines.concat(format_operator_group(entry, catalog.by_operator[entry[:operator]]))
       end
 
+      lines
+    end
+
+    def format_operator_group(entry, mutations)
+      lines = ["### #{entry[:operator]} (#{entry[:count]})"]
+      mutations.each { |m| lines.concat(format_extra_mutation(m)) }
+      lines
+    end
+
+    def format_extra_mutation(mutation)
+      lines = ["  Line #{mutation["line"]}:"]
+      mutation["diff"].to_s.each_line { |l| lines << "    #{l.chomp}" }
+      lines << ""
       lines
     end
 
