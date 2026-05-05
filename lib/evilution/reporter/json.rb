@@ -22,18 +22,33 @@ class Evilution::Reporter::JSON
       version: Evilution::VERSION,
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),
-      survived: map_details(summary.survived_results),
       coverage_gaps: build_coverage_gaps(summary),
+      **result_categories(summary)
+    }
+    append_disabled_to_report(report, summary)
+    report
+  end
+
+  def result_categories(summary)
+    direct_categories(summary).merge(derived_categories(summary))
+  end
+
+  def direct_categories(summary)
+    {
+      survived: map_details(summary.survived_results),
       killed: map_details(summary.killed_results),
       neutral: map_details(summary.neutral_results),
-      timed_out: map_details(summary.results.select(&:timeout?)),
-      errors: map_details(summary.results.select(&:error?)),
       equivalent: map_details(summary.equivalent_results),
       unresolved: map_details(summary.unresolved_results),
       unparseable: map_details(summary.unparseable_results)
     }
-    append_disabled_to_report(report, summary)
-    report
+  end
+
+  def derived_categories(summary)
+    {
+      timed_out: map_details(summary.results.select(&:timeout?)),
+      errors: map_details(summary.results.select(&:error?))
+    }
   end
 
   def map_details(results)
