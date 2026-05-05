@@ -30,18 +30,25 @@ class Evilution::Runner::BaselineRunner
 
   def build_integration
     klass = integration_class
-    test_files = config.spec_files.empty? ? nil : config.spec_files
-    kwargs = {
-      test_files: test_files,
+    kwargs = base_integration_kwargs
+    kwargs.merge!(rspec_integration_kwargs) if klass == Evilution::Integration::RSpec
+    klass.new(**kwargs)
+  end
+
+  def base_integration_kwargs
+    {
+      test_files: config.spec_files.empty? ? nil : config.spec_files,
       hooks: hooks,
       fallback_to_full_suite: config.fallback_to_full_suite?,
       spec_selector: config.spec_selector
     }
-    if klass == Evilution::Integration::RSpec
-      kwargs[:related_specs_heuristic] = config.related_specs_heuristic?
-      kwargs[:example_filter] = build_example_filter
-    end
-    klass.new(**kwargs)
+  end
+
+  def rspec_integration_kwargs
+    {
+      related_specs_heuristic: config.related_specs_heuristic?,
+      example_filter: build_example_filter
+    }
   end
 
   def call(subjects)
