@@ -32,19 +32,23 @@ class Evilution::Runner::Diagnostics
   def log_mutation_diagnostics(result)
     return unless verbose?
 
-    parts = []
-    parts << format("child_rss: %<mb>.1f MB", mb: result.child_rss_kb / 1024.0) if result.child_rss_kb
-
-    if result.memory_delta_kb
-      sign = result.memory_delta_kb.negative? ? "" : "+"
-      parts << format("delta: %<sign>s%<mb>.1f MB", sign: sign, mb: result.memory_delta_kb / 1024.0)
-    end
-
-    parts << gc_stats_string
-
+    parts = mutation_metric_parts(result)
     stderr.write("[verbose] #{result.mutation}: #{parts.join(", ")}\n") unless parts.empty?
 
     log_mutation_error(result) if result.error?
+  end
+
+  def mutation_metric_parts(result)
+    parts = []
+    parts << format("child_rss: %<mb>.1f MB", mb: result.child_rss_kb / 1024.0) if result.child_rss_kb
+    parts << format_memory_delta(result.memory_delta_kb) if result.memory_delta_kb
+    parts << gc_stats_string
+    parts
+  end
+
+  def format_memory_delta(delta_kb)
+    sign = delta_kb.negative? ? "" : "+"
+    format("delta: %<sign>s%<mb>.1f MB", sign: sign, mb: delta_kb / 1024.0)
   end
 
   def log_worker_stats(stats)
