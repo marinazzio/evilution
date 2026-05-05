@@ -38,19 +38,28 @@ class Evilution::Session::Diff
   def call(base_data, head_data)
     base_survivors = base_data["survived"] || []
     head_survivors = head_data["survived"] || []
-
-    base_keys = base_survivors.to_set { |m| mutation_key(m) }
-    head_keys = head_survivors.to_set { |m| mutation_key(m) }
+    fixed, new_survivors, persistent = partition_survivors(base_survivors, head_survivors)
 
     Result.new(
       summary: build_summary_diff(base_data, head_data),
-      fixed: base_survivors.reject { |m| head_keys.include?(mutation_key(m)) },
-      new_survivors: head_survivors.reject { |m| base_keys.include?(mutation_key(m)) },
-      persistent: head_survivors.select { |m| base_keys.include?(mutation_key(m)) }
+      fixed: fixed,
+      new_survivors: new_survivors,
+      persistent: persistent
     )
   end
 
   private
+
+  def partition_survivors(base_survivors, head_survivors)
+    base_keys = base_survivors.to_set { |m| mutation_key(m) }
+    head_keys = head_survivors.to_set { |m| mutation_key(m) }
+
+    [
+      base_survivors.reject { |m| head_keys.include?(mutation_key(m)) },
+      head_survivors.reject { |m| base_keys.include?(mutation_key(m)) },
+      head_survivors.select { |m| base_keys.include?(mutation_key(m)) }
+    ]
+  end
 
   def build_summary_diff(base_data, head_data)
     base = extract_summary_values(base_data)
