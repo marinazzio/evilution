@@ -10,22 +10,31 @@ require_relative "../integration"
 
 class Evilution::Integration::Minitest < Evilution::Integration::Base
   def self.baseline_runner
-    lambda { |test_file|
-      require "minitest"
-      require "stringio"
-      ::Minitest::Runnable.runnables.clear
-      files = File.directory?(test_file) ? Dir.glob(File.join(test_file, "**/*_test.rb")) : [test_file]
-      files.each { |f| load(File.expand_path(f)) }
-      out = StringIO.new
-      options = ::Minitest.process_args(["--seed", "0"])
-      options[:io] = out
-      reporter = ::Minitest::CompositeReporter.new
-      reporter << ::Minitest::SummaryReporter.new(out, options)
-      reporter.start
-      ::Minitest.__run(reporter, options)
-      reporter.report
-      reporter.passed?
-    }
+    ->(test_file) { run_baseline_test_file(test_file) }
+  end
+
+  def self.run_baseline_test_file(test_file)
+    require "minitest"
+    require "stringio"
+    ::Minitest::Runnable.runnables.clear
+    baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
+    run_baseline_minitest
+  end
+
+  def self.baseline_test_files(test_file)
+    File.directory?(test_file) ? Dir.glob(File.join(test_file, "**/*_test.rb")) : [test_file]
+  end
+
+  def self.run_baseline_minitest
+    out = StringIO.new
+    options = ::Minitest.process_args(["--seed", "0"])
+    options[:io] = out
+    reporter = ::Minitest::CompositeReporter.new
+    reporter << ::Minitest::SummaryReporter.new(out, options)
+    reporter.start
+    ::Minitest.__run(reporter, options)
+    reporter.report
+    reporter.passed?
   end
 
   def self.baseline_options
