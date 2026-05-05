@@ -72,14 +72,15 @@ class Evilution::Mutator::Operator::RescueBodyReplacement < Evilution::Mutator::
   end
 
   def rescue_line_end(node)
-    if node.reference
-      node.reference.location.start_offset + node.reference.location.length
-    elsif node.exceptions.any?
-      last_exc = node.exceptions.last
-      last_exc.location.start_offset + last_exc.location.length
-    else
-      node.keyword_loc.start_offset + node.keyword_loc.length
-    end
+    loc = if node.reference
+            node.reference.location
+          elsif node.exceptions.any?
+            node.exceptions.last.location
+          else
+            node.keyword_loc
+          end
+
+    loc.start_offset + loc.length
   end
 
   def indentation_of(offset)
