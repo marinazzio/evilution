@@ -97,13 +97,16 @@ class Evilution::Mutation
 
     original_lines = @slice.original.lines
     mutated_lines = @slice.mutated.lines
-    body = ::Diff::LCS.sdiff(original_lines, mutated_lines).map { |c| format_sdiff_change(c) }.join("\n")
     [
       "--- a/#{file_path}",
       "+++ b/#{file_path}",
       "@@ -#{line},#{original_lines.length} +#{line},#{mutated_lines.length} @@",
-      body
+      unified_diff_body(original_lines, mutated_lines)
     ].reject(&:empty?).join("\n")
+  end
+
+  def unified_diff_body(original_lines, mutated_lines)
+    ::Diff::LCS.sdiff(original_lines, mutated_lines).map { |c| format_sdiff_change(c) }.join("\n")
   end
 
   def format_sdiff_change(change)
