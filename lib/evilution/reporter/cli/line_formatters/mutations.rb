@@ -3,14 +3,23 @@
 require_relative "../line_formatters"
 
 class Evilution::Reporter::CLI::LineFormatters::Mutations
+  OPTIONAL_FIELDS = %i[neutral equivalent unresolved unparseable skipped].freeze
+
   def format(summary)
-    parts = "Mutations: #{summary.total} total, #{summary.killed} killed, " \
-            "#{summary.survived} survived, #{summary.timed_out} timed out"
-    parts += ", #{summary.neutral} neutral" if summary.neutral.positive?
-    parts += ", #{summary.equivalent} equivalent" if summary.equivalent.positive?
-    parts += ", #{summary.unresolved} unresolved" if summary.unresolved.positive?
-    parts += ", #{summary.unparseable} unparseable" if summary.unparseable.positive?
-    parts += ", #{summary.skipped} skipped" if summary.skipped.positive?
-    parts
+    base_line(summary) + optional_sections(summary)
+  end
+
+  private
+
+  def base_line(summary)
+    "Mutations: #{summary.total} total, #{summary.killed} killed, " \
+      "#{summary.survived} survived, #{summary.timed_out} timed out"
+  end
+
+  def optional_sections(summary)
+    OPTIONAL_FIELDS.filter_map do |field|
+      count = summary.public_send(field)
+      ", #{count} #{field}" if count.positive?
+    end.join
   end
 end
