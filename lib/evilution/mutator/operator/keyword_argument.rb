@@ -56,25 +56,30 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
     return unless kr.is_a?(Prism::KeywordRestParameterNode)
 
     all_params = collect_all_params(params)
-
     if all_params.length < 2
-      add_mutation(
-        offset: kr.location.start_offset,
-        length: kr.location.length,
-        replacement: "",
-        node: kr
-      )
+      emit_remove_only_kr(kr)
     else
-      remaining = all_params.reject { |p| p.equal?(kr) }
-      replacement = remaining.map(&:slice).join(", ")
-
-      add_mutation(
-        offset: params.location.start_offset,
-        length: params.location.length,
-        replacement: replacement,
-        node: kr
-      )
+      emit_remove_kr_with_remaining(params, all_params, kr)
     end
+  end
+
+  def emit_remove_only_kr(kr)
+    add_mutation(
+      offset: kr.location.start_offset,
+      length: kr.location.length,
+      replacement: "",
+      node: kr
+    )
+  end
+
+  def emit_remove_kr_with_remaining(params, all_params, kr)
+    remaining = all_params.reject { |p| p.equal?(kr) }
+    add_mutation(
+      offset: params.location.start_offset,
+      length: params.location.length,
+      replacement: remaining.map(&:slice).join(", "),
+      node: kr
+    )
   end
 
   def collect_all_params(params)
