@@ -11,28 +11,34 @@ class Evilution::Mutator::Operator::SuperclassRemoval < Evilution::Mutator::Base
     @mutations = []
     @filter = filter
 
-    tree = self.class.parsed_tree_for(subject.file_path, @file_source)
-    enclosing = find_enclosing_class(tree, subject.line_number)
+    enclosing = find_target_class(subject)
     return @mutations unless enclosing
-    return @mutations unless enclosing.superclass
 
-    first_method_line = find_first_method_line(enclosing)
-    return @mutations unless first_method_line == subject.line_number
-
-    name_end = enclosing.constant_path.location.start_offset + enclosing.constant_path.location.length
-    superclass_end = enclosing.superclass.location.start_offset + enclosing.superclass.location.length
-
-    add_mutation(
-      offset: name_end,
-      length: superclass_end - name_end,
-      replacement: "",
-      node: enclosing
-    )
+    offset, length = superclass_range(enclosing)
+    add_mutation(offset: offset, length: length, replacement: "", node: enclosing)
 
     @mutations
   end
 
   private
+
+  def find_target_class(subject)
+    tree = self.class.parsed_tree_for(subject.file_path, @file_source)
+    enclosing = find_enclosing_class(tree, subject.line_number)
+    return nil unless enclosing && enclosing.superclass
+    return nil unless find_first_method_line(enclosing) == subject.line_number
+
+    enclosing
+  end
+
+  def superclass_range(class_node)
+    name_loc = class_node.constant_path.location
+    superclass_loc = class_node.superclass.location
+    name_end = name_loc.start_offset + name_loc.length
+    superclass_end = superclass_loc.start_offset + superclass_loc.length
+
+    [name_end, superclass_end - name_end]
+  end
 
   def find_enclosing_class(tree, target_line)
     finder = ClassFinder.new(target_line)
