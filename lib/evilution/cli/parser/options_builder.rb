@@ -49,11 +49,19 @@ class Evilution::CLI::Parser::OptionsBuilder
   end
 
   def add_filter_options(opts)
+    add_spec_filter_options(opts)
+    add_targeting_options(opts)
+  end
+
+  def add_spec_filter_options(opts)
     opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
     opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
     opts.on("--spec-dir DIR", "Include all specs in DIR") { |d| expand_spec_dir(d) }
     opts.on("--spec-pattern GLOB",
             "Restrict resolved spec candidates to files matching GLOB") { |p| @options[:spec_pattern] = p }
+  end
+
+  def add_targeting_options(opts)
     opts.on("--no-example-targeting",
             "Disable per-mutation example targeting (run all examples in resolved spec files)") do
       @options[:example_targeting] = false
