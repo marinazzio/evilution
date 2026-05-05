@@ -149,16 +149,16 @@ class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Ba
   end
 
   def skip_character_class(content, pos)
-    i = pos + 1
-    i += 1 if i < content.length && content[i] == "^"
-    i += 1 if i < content.length && content[i] == "]"
+    scan_to_class_close(content, skip_class_prefix(content, pos))
+  end
 
+  def scan_to_class_close(content, start)
+    i = start
     while i < content.length
       return i + 1 if content[i] == "]"
 
       i += content[i] == "\\" ? 2 : 1
     end
-
     i
   end
 end
