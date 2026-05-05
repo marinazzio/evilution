@@ -60,17 +60,25 @@ class Evilution::Parallel::WorkQueue
 
   def collect_final_timings(workers)
     io_to_worker = workers.reject { |w| w.res_io.closed? }.to_h { |w| [w.res_io, w] }
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + TIMING_GRACE_PERIOD
+    deadline = monotonic_now + TIMING_GRACE_PERIOD
 
     until io_to_worker.empty?
-      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      remaining = deadline - monotonic_now
       break if remaining <= 0
-
-      readable, = IO.select(io_to_worker.keys, nil, nil, remaining)
-      break unless readable
-
-      readable.each { |io| apply_final_timing(io_to_worker.delete(io), io) }
+      break unless poll_and_apply(io_to_worker, remaining)
     end
+  end
+
+  def poll_and_apply(io_to_worker, remaining)
+    readable, = IO.select(io_to_worker.keys, nil, nil, remaining)
+    return false unless readable
+
+    readable.each { |io| apply_final_timing(io_to_worker.delete(io), io) }
+    true
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
   def apply_final_timing(worker, io)
