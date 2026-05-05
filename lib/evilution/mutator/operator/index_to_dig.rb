@@ -11,13 +11,10 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
   def visit_call_node(node)
     if chain_head?(node)
       root, args = collect_chain(node)
-      root_source = byteslice_source(root.location.start_offset, root.location.length)
-      arg_sources = args.map { |a| byteslice_source(a.location.start_offset, a.location.length) }
-
       add_mutation(
         offset: node.location.start_offset,
         length: node.location.length,
-        replacement: "#{root_source}.dig(#{arg_sources.join(", ")})",
+        replacement: dig_replacement(root, args),
         node: node
       )
     end
@@ -26,6 +23,12 @@ class Evilution::Mutator::Operator::IndexToDig < Evilution::Mutator::Base
   end
 
   private
+
+  def dig_replacement(root, args)
+    root_source = byteslice_source(root.location.start_offset, root.location.length)
+    arg_sources = args.map { |a| byteslice_source(a.location.start_offset, a.location.length) }
+    "#{root_source}.dig(#{arg_sources.join(", ")})"
+  end
 
   def chain_head?(node)
     return false if @consumed.include?(node.object_id)
