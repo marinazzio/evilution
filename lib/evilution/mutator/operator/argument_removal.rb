@@ -12,25 +12,22 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
 
   def visit_call_node(node)
     args = node.arguments&.arguments
-
-    if mutable?(node, args)
-      args.each_index do |i|
-        remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
-        replacement = remaining.join(", ")
-
-        add_mutation(
-          offset: node.arguments.location.start_offset,
-          length: node.arguments.location.length,
-          replacement:,
-          node:
-        )
-      end
-    end
+    args.each_index { |i| emit_argument_removal(node, args, i) } if mutable?(node, args)
 
     super
   end
 
   private
+
+  def emit_argument_removal(node, args, i)
+    remaining = args.each_with_index.filter_map { |a, j| a.slice if j != i }
+    add_mutation(
+      offset: node.arguments.location.start_offset,
+      length: node.arguments.location.length,
+      replacement: remaining.join(", "),
+      node: node
+    )
+  end
 
   def mutable?(node, args)
     args && args.length >= 2 && positional_only?(args) && node.name != :[]=
