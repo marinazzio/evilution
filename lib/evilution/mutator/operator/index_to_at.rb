@@ -5,13 +5,10 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::IndexToAt < Evilution::Mutator::Base
   def visit_call_node(node)
     if indexable?(node)
-      receiver_source = @file_source.byteslice(node.receiver.location.start_offset, node.receiver.location.length)
-      arg_source = @file_source.byteslice(node.arguments.location.start_offset, node.arguments.location.length)
-
       add_mutation(
         offset: node.location.start_offset,
         length: node.location.length,
-        replacement: "#{receiver_source}.at(#{arg_source})",
+        replacement: "#{loc_text(node.receiver.location)}.at(#{loc_text(node.arguments.location)})",
         node: node
       )
     end
@@ -20,6 +17,10 @@ class Evilution::Mutator::Operator::IndexToAt < Evilution::Mutator::Base
   end
 
   private
+
+  def loc_text(loc)
+    @file_source.byteslice(loc.start_offset, loc.length)
+  end
 
   def indexable?(node)
     node.name == :[] &&
