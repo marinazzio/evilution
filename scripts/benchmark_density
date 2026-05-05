@@ -155,16 +155,17 @@ module BenchmarkDensity
     def print_table(results)
       puts format(HEADER_FMT, file: "File", evilution: "Evilution", reference: "Reference", ratio: "Ratio")
       puts "-" * 75
-
-      results.each do |r|
-        ratio = compute_ratio(r[:evilution], r[:reference])
-        ratio_str = ratio ? format("%.2fx", ratio) : "N/A"
-        ev_str = r[:evilution]&.to_s || "ERR"
-        ref_str = r[:reference]&.to_s || "ERR"
-        puts format(ROW_FMT, file: r[:path], evilution: ev_str, reference: ref_str, ratio: ratio_str)
-      end
-
+      results.each { |r| puts format_result_row(r) }
       puts "-" * 75
+    end
+
+    def format_result_row(result)
+      ratio = compute_ratio(result[:evilution], result[:reference])
+      format(ROW_FMT,
+             file: result[:path],
+             evilution: result[:evilution]&.to_s || "ERR",
+             reference: result[:reference]&.to_s || "ERR",
+             ratio: ratio ? format("%.2fx", ratio) : "N/A")
     end
 
     def print_summary(results)
