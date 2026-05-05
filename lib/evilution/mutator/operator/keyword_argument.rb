@@ -83,14 +83,14 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
   end
 
   def collect_all_params(params)
-    result = []
-    result.concat(params.requireds)
-    result.concat(params.optionals)
-    result << params.rest if params.rest
-    result.concat(params.posts)
-    result.concat(params.keywords)
-    result << params.keyword_rest if params.keyword_rest
-    result << params.block if params.block
-    result
+    [
+      *params.requireds,
+      *params.optionals,
+      params.rest,
+      *params.posts,
+      *params.keywords,
+      params.keyword_rest,
+      params.block
+    ].compact
   end
 end
