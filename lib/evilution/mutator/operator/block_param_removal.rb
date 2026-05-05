@@ -52,10 +52,16 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
   def block_param_removal_range(node)
     params_loc = node.parameters.location
     block_loc = node.parameters.block.location
-    params_text = @file_source.byteslice(params_loc.start_offset, params_loc.length)
-    block_rel = block_loc.start_offset - params_loc.start_offset
-    comma_pos = params_text.rindex(",", block_rel - 1)
+    comma_pos = params_text(params_loc).rindex(",", block_loc.start_offset - params_loc.start_offset - 1)
 
-    [params_loc.start_offset + comma_pos, block_loc.start_offset + block_loc.length]
+    [params_loc.start_offset + comma_pos, end_offset(block_loc)]
+  end
+
+  def params_text(params_loc)
+    @file_source.byteslice(params_loc.start_offset, params_loc.length)
+  end
+
+  def end_offset(loc)
+    loc.start_offset + loc.length
   end
 end
