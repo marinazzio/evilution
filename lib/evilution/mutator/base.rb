@@ -28,24 +28,23 @@ class Evilution::Mutator::Base < Prism::Visitor
     return if @filter && @filter.skip?(node)
 
     surgery = Evilution::AST::SourceSurgeon.apply(
-      @file_source,
-      offset: offset,
-      length: length,
-      replacement: replacement
+      @file_source, offset: offset, length: length, replacement: replacement
     )
-    mutated_source = surgery.source
-
     original_slice, mutated_slice = slice_affected_lines(
-      mutated_source: mutated_source,
+      mutated_source: surgery.source,
       offset: offset,
       length: length,
       replacement_bytesize: replacement.bytesize
     )
 
-    @mutations << Evilution::Mutation.new(
+    @mutations << build_mutation_record(node, surgery, original_slice, mutated_slice)
+  end
+
+  def build_mutation_record(node, surgery, original_slice, mutated_slice)
+    Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
-      sources: Evilution::Mutation::Sources.new(original: @file_source, mutated: mutated_source),
+      sources: Evilution::Mutation::Sources.new(original: @file_source, mutated: surgery.source),
       slice: Evilution::Mutation::Slice.new(original: original_slice, mutated: mutated_slice),
       location: Evilution::Mutation::Location.new(
         file_path: @subject.file_path,
