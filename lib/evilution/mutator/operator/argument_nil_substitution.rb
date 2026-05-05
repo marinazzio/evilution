@@ -12,25 +12,22 @@ class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator
 
   def visit_call_node(node)
     args = node.arguments&.arguments
-
-    if mutable?(node, args)
-      args.each_index do |i|
-        parts = args.each_with_index.map { |a, j| j == i ? "nil" : a.slice }
-        replacement = parts.join(", ")
-
-        add_mutation(
-          offset: node.arguments.location.start_offset,
-          length: node.arguments.location.length,
-          replacement: replacement,
-          node: node
-        )
-      end
-    end
+    args.each_index { |i| emit_nil_substitution(node, args, i) } if mutable?(node, args)
 
     super
   end
 
   private
+
+  def emit_nil_substitution(node, args, i)
+    parts = args.each_with_index.map { |a, j| j == i ? "nil" : a.slice }
+    add_mutation(
+      offset: node.arguments.location.start_offset,
+      length: node.arguments.location.length,
+      replacement: parts.join(", "),
+      node: node
+    )
+  end
 
   def mutable?(node, args)
     args && args.length >= 1 && positional_only?(args) && node.name != :[]=
