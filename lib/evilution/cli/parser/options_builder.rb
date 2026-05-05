@@ -119,6 +119,12 @@ class Evilution::CLI::Parser::OptionsBuilder
   end
 
   def add_extra_flag_options(opts)
+    add_mutation_behavior_options(opts)
+    add_session_persistence_options(opts)
+    add_misc_extra_options(opts)
+  end
+
+  def add_mutation_behavior_options(opts)
     opts.on("--skip-heredoc-literals", "Skip all string literal mutations inside heredocs") { @options[:skip_heredoc_literals] = true }
     opts.on("--related-specs-heuristic", "Append related request/integration/feature/system specs for includes() mutations") do
       @options[:related_specs_heuristic] = true
@@ -128,8 +134,14 @@ class Evilution::CLI::Parser::OptionsBuilder
       @options[:fallback_to_full_suite] = true
     end
     opts.on("--show-disabled", "Report mutations skipped by # evilution:disable") { @options[:show_disabled] = true }
+  end
+
+  def add_session_persistence_options(opts)
     opts.on("--baseline-session PATH", "Compare against a baseline session in HTML report") { |p| @options[:baseline_session] = p }
     opts.on("--save-session", "Save session results to .evilution/results/") { @options[:save_session] = true }
+  end
+
+  def add_misc_extra_options(opts)
     opts.on("-e", "--eval CODE", "Evaluate code snippet (for util mutation)") { |c| @options[:eval] = c }
     opts.on("-v", "--verbose", "Verbose output") { @options[:verbose] = true }
     opts.on("-q", "--quiet", "Suppress output") { @options[:quiet] = true }
