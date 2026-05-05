@@ -20,19 +20,28 @@ class Evilution::DisableComment
   private
 
   def classify_comments(parse_result, source)
-    parse_result.comments.filter_map do |comment|
-      loc = comment.location
-      text = source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
-                   .force_encoding(source.encoding)
+    parse_result.comments.filter_map { |comment| classify_comment(comment, source) }
+  end
 
-      if text.match?(DISABLE_MARKER)
-        line = source.lines[loc.start_line - 1]
-        standalone = line.strip == text.strip
-        { type: :disable, line: loc.start_line, standalone: standalone }
-      elsif text.match?(ENABLE_MARKER)
-        { type: :enable, line: loc.start_line }
-      end
+  def classify_comment(comment, source)
+    loc = comment.location
+    text = comment_text(loc, source)
+
+    if text.match?(DISABLE_MARKER)
+      disable_entry(loc, text, source)
+    elsif text.match?(ENABLE_MARKER)
+      { type: :enable, line: loc.start_line }
     end
+  end
+
+  def comment_text(loc, source)
+    source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
+          .force_encoding(source.encoding)
+  end
+
+  def disable_entry(loc, text, source)
+    standalone = source.lines[loc.start_line - 1].strip == text.strip
+    { type: :disable, line: loc.start_line, standalone: standalone }
   end
 
   def scan_comments(comments, method_ranges, total_lines)
