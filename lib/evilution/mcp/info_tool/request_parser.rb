@@ -3,6 +3,8 @@
 require_relative "../info_tool"
 
 module Evilution::MCP::InfoTool::RequestParser
+  ParsedPaths = Data.define(:files, :ranges)
+
   module_function
 
   def parse_files(raw_files)
@@ -15,7 +17,7 @@ module Evilution::MCP::InfoTool::RequestParser
       ranges[file] = parse_line_range(range_str) if range_str
     end
 
-    [files, ranges]
+    ParsedPaths.new(files: files, ranges: ranges)
   end
 
   def parse_line_range(str)

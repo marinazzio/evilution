@@ -84,7 +84,8 @@ RSpec.describe Evilution::MCP::InfoTool do
 
     it "invokes RequestParser.parse_files when files is present" do
       expect(Evilution::MCP::InfoTool::RequestParser).to receive(:parse_files)
-        .with(["lib/foo.rb"]).and_return([["lib/foo.rb"], {}])
+        .with(["lib/foo.rb"])
+        .and_return(Evilution::MCP::InfoTool::RequestParser::ParsedPaths.new(files: ["lib/foo.rb"], ranges: {}))
       call(action: "subjects", files: ["lib/foo.rb"])
     end
 

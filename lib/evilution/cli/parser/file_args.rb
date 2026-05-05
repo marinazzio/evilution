@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 module Evilution::CLI::Parser::FileArgs
+  ParsedPaths = Data.define(:files, :ranges)
+
   module_function
 
   def parse(raw_args)
@@ -15,7 +17,7 @@ module Evilution::CLI::Parser::FileArgs
       ranges[file] = parse_line_range(range_str)
     end
 
-    [files, ranges]
+    ParsedPaths.new(files: files, ranges: ranges)
   end
 
   def expand_spec_dir(dir)

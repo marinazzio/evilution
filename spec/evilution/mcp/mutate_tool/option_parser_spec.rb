@@ -5,23 +5,25 @@ require "evilution/mcp/mutate_tool"
 RSpec.describe Evilution::MCP::MutateTool::OptionParser do
   describe ".parse_files" do
     it "returns plain files and empty ranges when no colon" do
-      expect(described_class.parse_files(%w[lib/a.rb lib/b.rb])).to eq([%w[lib/a.rb lib/b.rb], {}])
+      parsed = described_class.parse_files(%w[lib/a.rb lib/b.rb])
+      expect(parsed.files).to eq(%w[lib/a.rb lib/b.rb])
+      expect(parsed.ranges).to eq({})
     end
 
     it "extracts a single-line range" do
-      files, ranges = described_class.parse_files(["lib/a.rb:42"])
-      expect(files).to eq(["lib/a.rb"])
-      expect(ranges).to eq("lib/a.rb" => (42..42))
+      parsed = described_class.parse_files(["lib/a.rb:42"])
+      expect(parsed.files).to eq(["lib/a.rb"])
+      expect(parsed.ranges).to eq("lib/a.rb" => (42..42))
     end
 
     it "extracts a bounded range" do
-      _, ranges = described_class.parse_files(["lib/a.rb:10-20"])
-      expect(ranges).to eq("lib/a.rb" => (10..20))
+      parsed = described_class.parse_files(["lib/a.rb:10-20"])
+      expect(parsed.ranges).to eq("lib/a.rb" => (10..20))
     end
 
     it "treats an open upper bound as infinity" do
-      _, ranges = described_class.parse_files(["lib/a.rb:10-"])
-      expect(ranges["lib/a.rb"]).to eq(10..Float::INFINITY)
+      parsed = described_class.parse_files(["lib/a.rb:10-"])
+      expect(parsed.ranges["lib/a.rb"]).to eq(10..Float::INFINITY)
     end
 
     it "raises ParseError for non-numeric range" do
