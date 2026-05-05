@@ -32,16 +32,16 @@ class Evilution::CLI::Printers::SessionDiff
   end
 
   def print_summary(io, summary)
-    delta_str = format("%+.2f%%", summary.score_delta * 100)
     io.puts("Session Diff")
     io.puts("=" * 40)
-    io.puts(format("Base score:  %<score>6.2f%%  (%<killed>d/%<total>d killed)",
-                   score: summary.base_score * 100, killed: summary.base_killed,
-                   total: summary.base_total))
-    io.puts(format("Head score:  %<score>6.2f%%  (%<killed>d/%<total>d killed)",
-                   score: summary.head_score * 100, killed: summary.head_killed,
-                   total: summary.head_total))
-    io.puts("Delta:       #{delta_str}")
+    io.puts(score_line("Base", summary.base_score, summary.base_killed, summary.base_total))
+    io.puts(score_line("Head", summary.head_score, summary.head_killed, summary.head_total))
+    io.puts("Delta:       #{format("%+.2f%%", summary.score_delta * 100)}")
+  end
+
+  def score_line(label, score, killed, total)
+    format("%<label>s score:  %<score>6.2f%%  (%<killed>d/%<total>d killed)",
+           label: label, score: score * 100, killed: killed, total: total)
   end
 
   def print_section(io, title, mutations, color)
