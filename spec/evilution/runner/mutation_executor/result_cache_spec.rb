@@ -85,12 +85,12 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       allow(backend).to receive(:fetch).with(m2).and_return(status: :killed, duration: 0.3, killing_test: "k", test_command: "c")
 
       cache = described_class.new(backend)
-      uncached_indices, cached_results = cache.partition([m1, m2, m3], packer: packer)
+      partition = cache.partition([m1, m2, m3], packer: packer)
 
-      expect(uncached_indices).to eq([0])
-      expect(cached_results.keys).to contain_exactly(1, 2)
-      expect(cached_results[1][:status]).to eq(:killed)
-      expect(cached_results[2][:status]).to eq(:unparseable)
+      expect(partition.uncached_indices).to eq([0])
+      expect(partition.cached_results.keys).to contain_exactly(1, 2)
+      expect(partition.cached_results[1][:status]).to eq(:killed)
+      expect(partition.cached_results[2][:status]).to eq(:unparseable)
     end
   end
 end
