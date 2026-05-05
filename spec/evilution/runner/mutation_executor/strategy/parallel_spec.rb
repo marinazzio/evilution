@@ -59,10 +59,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       config: cfg
     )
 
-    results, truncated = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+    execution = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
 
-    expect(results.map(&:status)).to eq(%i[killed killed])
-    expect(truncated).to be false
+    expect(execution.results.map(&:status)).to eq(%i[killed killed])
+    expect(execution.truncated).to be false
   end
 
   it "uses cached results in place of pool execution and preserves batch order" do
@@ -88,7 +88,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       config: cfg
     )
 
-    results, = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+    execution = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+    results = execution.results
 
     expect(results[0].status).to eq(:killed)
     expect(results[0].duration).to eq(0.1)
@@ -123,10 +124,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       config: cfg_ff
     )
 
-    results, truncated = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+    execution = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
 
-    expect(results.length).to eq(1)
-    expect(truncated).to be true
+    expect(execution.results.length).to eq(1)
+    expect(execution.truncated).to be true
     expect(isolator).to have_received(:call).once
   end
 

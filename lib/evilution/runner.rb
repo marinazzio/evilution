@@ -32,13 +32,13 @@ class Evilution::Runner
     plan = mutation_planner.call(subjects)
     release_subject_nodes(subjects)
     clear_operator_caches
-    results, truncated = run_mutations(plan.enabled, baseline_result)
-    results += equivalent_results(plan.equivalent)
+    execution = run_mutations(plan.enabled, baseline_result)
+    results = execution.results + equivalent_results(plan.equivalent)
     log_memory("after run_mutations", "#{results.length} results")
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
-    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: truncated,
+    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: execution.truncated,
                                              skipped: plan.skipped_count,
                                              disabled_mutations: plan.disabled_mutations)
     output_report(summary)
