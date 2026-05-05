@@ -13,26 +13,32 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
     @mutations = []
     @filter = filter
 
-    tree = self.class.parsed_tree_for(subject.file_path, @file_source)
-    enclosing = find_enclosing_scope(tree, subject.line_number)
+    enclosing = find_target_scope(subject)
     return @mutations unless enclosing
 
-    first_method_line = find_first_method_line(enclosing)
-    return @mutations unless first_method_line == subject.line_number
-
-    find_mixin_calls(enclosing).each do |call_node|
-      add_mutation(
-        offset: call_node.location.start_offset,
-        length: call_node.location.length,
-        replacement: "",
-        node: call_node
-      )
-    end
-
+    find_mixin_calls(enclosing).each { |call_node| emit_mixin_removal(call_node) }
     @mutations
   end
 
   private
+
+  def find_target_scope(subject)
+    tree = self.class.parsed_tree_for(subject.file_path, @file_source)
+    enclosing = find_enclosing_scope(tree, subject.line_number)
+    return nil unless enclosing
+    return nil unless find_first_method_line(enclosing) == subject.line_number
+
+    enclosing
+  end
+
+  def emit_mixin_removal(call_node)
+    add_mutation(
+      offset: call_node.location.start_offset,
+      length: call_node.location.length,
+      replacement: "",
+      node: call_node
+    )
+  end
 
   def find_enclosing_scope(tree, target_line)
     finder = ScopeFinder.new(target_line)
