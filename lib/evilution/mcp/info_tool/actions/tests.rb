@@ -9,23 +9,30 @@ class Evilution::MCP::InfoTool::Actions::Tests < Evilution::MCP::InfoTool::Actio
   def self.call(files: nil, spec: nil, integration: nil, skip_config: nil, **)
     return config_error("files is required") if files.nil? || files.empty?
 
-    config = Evilution::MCP::InfoTool::ConfigFactory.tests(
-      files: files, spec: spec, integration: integration, skip_config: skip_config
-    )
+    config = build_config(files, spec, integration, skip_config)
     return explicit_specs_response(files, config.spec_files) if config.spec_files.any?
 
-    resolver = resolver_for(config.integration)
-    resolved, unresolved = resolve_specs(files, resolver)
-    success(
-      "specs" => resolved,
-      "unresolved" => unresolved,
-      "total_sources" => files.length,
-      "total_specs" => resolved.map { |r| r["spec"] }.uniq.length
-    )
+    resolved_specs_response(files, resolver_for(config.integration))
   end
 
   class << self
     private
+
+    def build_config(files, spec, integration, skip_config)
+      Evilution::MCP::InfoTool::ConfigFactory.tests(
+        files: files, spec: spec, integration: integration, skip_config: skip_config
+      )
+    end
+
+    def resolved_specs_response(files, resolver)
+      resolved, unresolved = resolve_specs(files, resolver)
+      success(
+        "specs" => resolved,
+        "unresolved" => unresolved,
+        "total_sources" => files.length,
+        "total_specs" => resolved.map { |r| r["spec"] }.uniq.length
+      )
+    end
 
     def resolver_for(integration)
       integration_class = Evilution::Runner::INTEGRATIONS[integration.to_sym]
