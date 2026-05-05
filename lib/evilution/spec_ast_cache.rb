@@ -62,18 +62,27 @@ class Evilution::SpecAstCache
     raise Evilution::ParseError.new("file not found: #{path}", file: path) unless File.exist?(path)
 
     source = read_source(path)
+    result = parse_source(path, source)
+    collect_blocks(source, result, extract_comment_ranges(result))
+  end
+
+  def parse_source(path, source)
     result = Prism.parse(source)
+    return result unless result.failure?
 
-    if result.failure?
-      raise Evilution::ParseError.new(
-        "failed to parse #{path}: #{result.errors.map(&:message).join(", ")}",
-        file: path
-      )
-    end
+    raise Evilution::ParseError.new(
+      "failed to parse #{path}: #{result.errors.map(&:message).join(", ")}",
+      file: path
+    )
+  end
 
-    comment_ranges = result.comments
-                           .map { |c| c.location.start_offset...c.location.end_offset }
-                           .sort_by(&:begin)
+  def extract_comment_ranges(result)
+    result.comments
+          .map { |c| c.location.start_offset...c.location.end_offset }
+          .sort_by(&:begin)
+  end
+
+  def collect_blocks(source, result, comment_ranges)
     collector = BlockCollector.new(source, comment_ranges)
     collector.visit(result.value)
     collector.blocks
