@@ -57,11 +57,7 @@ class Evilution::Compare::Normalizer
   private
 
   def build_evilution_record(entry, index:)
-    file_path = entry["file"] or raise Evilution::Compare::InvalidInput.new("missing 'file' in record", index: index)
-    line = entry["line"] or raise Evilution::Compare::InvalidInput.new("missing 'line' in record", index: index)
-    diff = entry["diff"].to_s
-    status = EVILUTION_STATUS_MAP[entry["status"]] ||
-             raise(Evilution::Compare::InvalidInput.new("unknown status #{entry["status"].inspect}", index: index))
+    file_path, line, diff, status = extract_evilution_fields(entry, index)
     Evilution::Compare::Record.new(
       source: :evilution,
       file_path: file_path,
@@ -72,6 +68,15 @@ class Evilution::Compare::Normalizer
       diff_body: diff,
       raw: entry
     )
+  end
+
+  def extract_evilution_fields(entry, index)
+    file_path = entry["file"] or raise Evilution::Compare::InvalidInput.new("missing 'file' in record", index: index)
+    line = entry["line"] or raise Evilution::Compare::InvalidInput.new("missing 'line' in record", index: index)
+    diff = entry["diff"].to_s
+    status = EVILUTION_STATUS_MAP[entry["status"]] ||
+             raise(Evilution::Compare::InvalidInput.new("unknown status #{entry["status"].inspect}", index: index))
+    [file_path, line, diff, status]
   end
 
   def build_mutant_record(cov, source_path:, index:)
