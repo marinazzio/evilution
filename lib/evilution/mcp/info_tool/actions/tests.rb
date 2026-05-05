@@ -6,6 +6,9 @@ require_relative "../../../runner"
 require_relative "../../../spec_resolver"
 
 class Evilution::MCP::InfoTool::Actions::Tests < Evilution::MCP::InfoTool::Actions::Base
+  ResolveResult = Data.define(:resolved, :unresolved)
+  private_constant :ResolveResult
+
   def self.call(files: nil, spec: nil, integration: nil, skip_config: nil, **)
     return config_error("files is required") if files.nil? || files.empty?
 
@@ -25,12 +28,12 @@ class Evilution::MCP::InfoTool::Actions::Tests < Evilution::MCP::InfoTool::Actio
     end
 
     def resolved_specs_response(files, resolver)
-      resolved, unresolved = resolve_specs(files, resolver)
+      result = resolve_specs(files, resolver)
       success(
-        "specs" => resolved,
-        "unresolved" => unresolved,
+        "specs" => result.resolved,
+        "unresolved" => result.unresolved,
         "total_sources" => files.length,
-        "total_specs" => resolved.map { |r| r["spec"] }.uniq.length
+        "total_specs" => result.resolved.map { |r| r["spec"] }.uniq.length
       )
     end
 
@@ -61,7 +64,7 @@ class Evilution::MCP::InfoTool::Actions::Tests < Evilution::MCP::InfoTool::Actio
           unresolved << source
         end
       end
-      [resolved, unresolved]
+      ResolveResult.new(resolved: resolved, unresolved: unresolved)
     end
   end
 end

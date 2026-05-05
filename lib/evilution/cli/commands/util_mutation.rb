@@ -11,11 +11,14 @@ require_relative "../../mutator/registry"
 require_relative "../../ast/parser"
 
 class Evilution::CLI::Commands::UtilMutation < Evilution::CLI::Command
+  SourceInput = Data.define(:source, :file_path)
+  private_constant :SourceInput
+
   private
 
   def perform
-    source, file_path = resolve_util_mutation_source
-    subjects = parse_source_to_subjects(source, file_path)
+    input = resolve_util_mutation_source
+    subjects = parse_source_to_subjects(input.source, input.file_path)
     config = Evilution::Config.new(**@options)
     registry = Evilution::Mutator::Registry.default
     operator_options = build_operator_options(config)
@@ -38,13 +41,13 @@ class Evilution::CLI::Commands::UtilMutation < Evilution::CLI::Command
       tmpfile.write(@options[:eval])
       tmpfile.flush
       @util_tmpfile = tmpfile
-      [@options[:eval], tmpfile.path]
+      SourceInput.new(source: @options[:eval], file_path: tmpfile.path)
     elsif @files.first
       path = @files.first
       raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
 
       begin
-        [File.read(path), path]
+        SourceInput.new(source: File.read(path), file_path: path)
       rescue SystemCallError => e
         raise Evilution::Error, e.message
       end
