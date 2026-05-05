@@ -38,14 +38,7 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
   end
 
   def remove_block_param(node)
-    block_loc = node.parameters.block.location
-    params_text = @file_source.byteslice(node.parameters.location.start_offset, node.parameters.location.length)
-    block_rel = block_loc.start_offset - node.parameters.location.start_offset
-
-    # Find the comma before the block param and remove ", &block"
-    comma_pos = params_text.rindex(",", block_rel - 1)
-    remove_start = node.parameters.location.start_offset + comma_pos
-    remove_end = block_loc.start_offset + block_loc.length
+    remove_start, remove_end = block_param_removal_range(node)
 
     add_mutation(
       offset: remove_start,
@@ -53,5 +46,16 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
       replacement: "",
       node: node
     )
+  end
+
+  # Range covering ", &block" — from the comma before the block param to the end of the block param.
+  def block_param_removal_range(node)
+    params_loc = node.parameters.location
+    block_loc = node.parameters.block.location
+    params_text = @file_source.byteslice(params_loc.start_offset, params_loc.length)
+    block_rel = block_loc.start_offset - params_loc.start_offset
+    comma_pos = params_text.rindex(",", block_rel - 1)
+
+    [params_loc.start_offset + comma_pos, block_loc.start_offset + block_loc.length]
   end
 end
