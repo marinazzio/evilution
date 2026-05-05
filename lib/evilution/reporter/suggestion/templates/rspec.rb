@@ -18,20 +18,25 @@ module Evilution::Reporter::Suggestion::Templates::Rspec
   end
 
   def self.build(it_desc:, action: :changed, &body_block)
-    lambda do |mutation|
-      method_name = H.parse_method_name(mutation.subject.name)
-      diff_lines = Evilution::Reporter::Suggestion::DiffLines.from_diff(mutation.diff)
-      body = body_block.call(method_name)
-      indented = body.lines.map { |l| "  #{l}" }.join.chomp
+    ->(mutation) { render(it_desc, action, body_block, mutation) }
+  end
 
-      <<~RSPEC.strip
-        # Mutation: #{format_header(action, diff_lines.original, diff_lines.mutated, mutation.subject.name)}
-        # #{mutation.file_path}:#{mutation.line}
-        it '#{it_desc} ##{method_name}' do
-        #{indented}
-        end
-      RSPEC
-    end
+  def self.render(it_desc, action, body_block, mutation)
+    method_name = H.parse_method_name(mutation.subject.name)
+    diff_lines = Evilution::Reporter::Suggestion::DiffLines.from_diff(mutation.diff)
+    indented = indent_body(body_block.call(method_name))
+
+    <<~RSPEC.strip
+      # Mutation: #{format_header(action, diff_lines.original, diff_lines.mutated, mutation.subject.name)}
+      # #{mutation.file_path}:#{mutation.line}
+      it '#{it_desc} ##{method_name}' do
+      #{indented}
+      end
+    RSPEC
+  end
+
+  def self.indent_body(body)
+    body.lines.map { |l| "  #{l}" }.join.chomp
   end
 
   RSPEC_ENTRIES = {
