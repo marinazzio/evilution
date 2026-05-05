@@ -128,12 +128,15 @@ module MutantJsonAdapter
     end
 
     def infer_operator(diff_lines)
-      removed = diff_lines.select { |l| l.start_with?("-") && !l.start_with?("---") }
-                          .map { |l| l[1..].strip }
-      added = diff_lines.select { |l| l.start_with?("+") && !l.start_with?("+++") }
-                        .map { |l| l[1..].strip }
+      removed = extract_diff_side(diff_lines, "-", "---")
+      added = extract_diff_side(diff_lines, "+", "+++")
 
       categorize_mutation(removed, added)
+    end
+
+    def extract_diff_side(diff_lines, prefix, header)
+      diff_lines.select { |l| l.start_with?(prefix) && !l.start_with?(header) }
+                .map { |l| l[1..].strip }
     end
 
     def categorize_mutation(removed, added)
