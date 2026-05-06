@@ -7,6 +7,8 @@ class Evilution::Runner::MutationExecutor::ResultCache
   CACHEABLE_STATUSES = %i[killed timeout].freeze
   private_constant :CACHEABLE_STATUSES
 
+  Partition = Data.define(:uncached_indices, :cached_results)
+
   def initialize(backend)
     @backend = backend
   end
@@ -56,7 +58,7 @@ class Evilution::Runner::MutationExecutor::ResultCache
       end
     end
 
-    [uncached_indices, cached_results]
+    Partition.new(uncached_indices: uncached_indices, cached_results: cached_results)
   end
 
   private
