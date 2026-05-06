@@ -9,6 +9,12 @@ require_relative "../equivalent/detector"
 class Evilution::Runner::MutationPlanner
   Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, keyword_init: true)
 
+  GenerationResult = Data.define(:mutations, :skipped)
+  DisabledFilterResult = Data.define(:enabled, :disabled)
+  SigFilterResult = Data.define(:enabled, :skipped)
+  EquivalentFilterResult = Data.define(:equivalent, :enabled)
+  private_constant :GenerationResult, :DisabledFilterResult, :SigFilterResult, :EquivalentFilterResult
+
   def initialize(config, registry:, disable_detector: Evilution::DisableComment.new,
                  sig_detector: Evilution::AST::SorbetSigDetector.new)
     @config = config
@@ -20,18 +26,18 @@ class Evilution::Runner::MutationPlanner
   end
 
   def call(subjects)
-    mutations, generation_skipped = generate(subjects)
-    mutations, disabled = filter_disabled(mutations)
-    disabled.each(&:strip_sources!) if config.show_disabled?
-    disabled_mutations = config.show_disabled? ? disabled : []
+    generation = generate(subjects)
+    disabled_filter = filter_disabled(generation.mutations)
+    disabled_filter.disabled.each(&:strip_sources!) if config.show_disabled?
+    disabled_mutations = config.show_disabled? ? disabled_filter.disabled : []
 
-    mutations, sig_skipped = filter_sig_blocks(mutations)
-    equivalent, enabled = filter_equivalent(mutations)
+    sig_filter = filter_sig_blocks(disabled_filter.enabled)
+    equivalent_filter = filter_equivalent(sig_filter.enabled)
 
     Plan.new(
-      enabled: enabled,
-      equivalent: equivalent,
-      skipped_count: generation_skipped + disabled.length + sig_skipped,
+      enabled: equivalent_filter.enabled,
+      equivalent: equivalent_filter.equivalent,
+      skipped_count: generation.skipped + disabled_filter.disabled.length + sig_filter.skipped,
       disabled_mutations: disabled_mutations
     )
   end
@@ -47,7 +53,7 @@ class Evilution::Runner::MutationPlanner
       registry.mutations_for(subject, filter: filter, operator_options: operator_options)
     end
     skipped = filter ? filter.skipped_count : 0
-    [mutations, skipped]
+    GenerationResult.new(mutations: mutations, skipped: skipped)
   end
 
   def build_operator_options
@@ -73,7 +79,7 @@ class Evilution::Runner::MutationPlanner
       end
     end
 
-    [enabled, disabled]
+    DisabledFilterResult.new(enabled: enabled, disabled: disabled)
   end
 
   def mutation_disabled?(mutation)
@@ -102,7 +108,7 @@ class Evilution::Runner::MutationPlanner
       end
     end
 
-    [enabled, skipped]
+    SigFilterResult.new(enabled: enabled, skipped: skipped)
   end
 
   def mutation_in_sig_block?(mutation)
@@ -120,6 +126,7 @@ class Evilution::Runner::MutationPlanner
   end
 
   def filter_equivalent(mutations)
-    Evilution::Equivalent::Detector.new.call(mutations)
+    equivalent, enabled = Evilution::Equivalent::Detector.new.call(mutations)
+    EquivalentFilterResult.new(equivalent: equivalent, enabled: enabled)
   end
 end
