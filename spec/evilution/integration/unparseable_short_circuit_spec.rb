@@ -42,10 +42,10 @@ RSpec.describe "Unparseable mutation short-circuit" do
     executor = executor_with_spy_isolator(isolator)
 
     start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    results, = executor.call(unparseable, nil)
+    execution = executor.call(unparseable, nil)
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
-    expect(results.map(&:status)).to all(eq(:unparseable))
+    expect(execution.results.map(&:status)).to all(eq(:unparseable))
     expect(isolator).not_to have_received(:call)
     expect(elapsed).to be < 1.0
   end
