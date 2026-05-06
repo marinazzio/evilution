@@ -20,7 +20,9 @@ class Evilution::CLI::Parser
 
     preprocess_flags
     remaining = OptionsBuilder.build(@options).parse!(@argv)
-    @files, @line_ranges = FileArgs.parse(remaining)
+    parsed_paths = FileArgs.parse(remaining)
+    @files = parsed_paths.files
+    @line_ranges = parsed_paths.ranges
     read_stdin_files if @options.delete(:stdin) && %i[run subjects].include?(@command)
     build_parsed_args
   end

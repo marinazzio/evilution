@@ -8,6 +8,8 @@ module Evilution::MCP::MutateTool::OptionParser
                         isolation baseline save_session].freeze
   ALLOWED_OPT_KEYS = (PASSTHROUGH_KEYS + %i[spec skip_config]).freeze
 
+  ParsedPaths = Data.define(:files, :ranges)
+
   def self.parse_files(raw_files)
     files = []
     ranges = {}
@@ -20,7 +22,7 @@ module Evilution::MCP::MutateTool::OptionParser
       ranges[file] = parse_line_range(range_str)
     end
 
-    [files, ranges]
+    ParsedPaths.new(files: files, ranges: ranges)
   end
 
   def self.parse_line_range(str)

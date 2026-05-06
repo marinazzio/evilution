@@ -120,10 +120,10 @@ class Evilution::MCP::MutateTool < MCP::Tool
 
     def build_config(files, opts)
       Evilution::MCP::MutateTool::OptionParser.validate!(opts)
-      parsed_files, line_ranges = Evilution::MCP::MutateTool::OptionParser.parse_files(Array(files))
+      parsed = Evilution::MCP::MutateTool::OptionParser.parse_files(Array(files))
       Evilution::MCP::MutateTool::ConfigBuilder.build(
-        files: parsed_files,
-        line_ranges: line_ranges,
+        files: parsed.files,
+        line_ranges: parsed.ranges,
         params: opts
       )
     end

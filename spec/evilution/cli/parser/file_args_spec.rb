@@ -6,34 +6,36 @@ require "evilution/cli/parser/file_args"
 RSpec.describe Evilution::CLI::Parser::FileArgs do
   describe ".parse" do
     it "returns empty files and ranges for empty input" do
-      expect(described_class.parse([])).to eq([[], {}])
+      parsed = described_class.parse([])
+      expect(parsed.files).to eq([])
+      expect(parsed.ranges).to eq({})
     end
 
     it "collects positional files" do
-      files, ranges = described_class.parse(%w[lib/a.rb lib/b.rb])
-      expect(files).to eq(%w[lib/a.rb lib/b.rb])
-      expect(ranges).to eq({})
+      parsed = described_class.parse(%w[lib/a.rb lib/b.rb])
+      expect(parsed.files).to eq(%w[lib/a.rb lib/b.rb])
+      expect(parsed.ranges).to eq({})
     end
 
     it "parses a single line" do
-      _files, ranges = described_class.parse(["lib/a.rb:10"])
-      expect(ranges["lib/a.rb"]).to eq(10..10)
+      parsed = described_class.parse(["lib/a.rb:10"])
+      expect(parsed.ranges["lib/a.rb"]).to eq(10..10)
     end
 
     it "parses a bounded range" do
-      _files, ranges = described_class.parse(["lib/a.rb:15-30"])
-      expect(ranges["lib/a.rb"]).to eq(15..30)
+      parsed = described_class.parse(["lib/a.rb:15-30"])
+      expect(parsed.ranges["lib/a.rb"]).to eq(15..30)
     end
 
     it "parses an open-ended range" do
-      _files, ranges = described_class.parse(["lib/a.rb:15-"])
-      expect(ranges["lib/a.rb"]).to eq(15..Float::INFINITY)
+      parsed = described_class.parse(["lib/a.rb:15-"])
+      expect(parsed.ranges["lib/a.rb"]).to eq(15..Float::INFINITY)
     end
 
     it "combines files with and without ranges" do
-      files, ranges = described_class.parse(["lib/a.rb", "lib/b.rb:5-10"])
-      expect(files).to eq(%w[lib/a.rb lib/b.rb])
-      expect(ranges).to eq("lib/b.rb" => (5..10))
+      parsed = described_class.parse(["lib/a.rb", "lib/b.rb:5-10"])
+      expect(parsed.files).to eq(%w[lib/a.rb lib/b.rb])
+      expect(parsed.ranges).to eq("lib/b.rb" => (5..10))
     end
   end
 

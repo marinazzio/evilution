@@ -22,7 +22,7 @@ class Evilution::CLI::Parser::StdinReader
       line = line.strip
       lines << line unless line.empty?
     end
-    files, ranges = Evilution::CLI::Parser::FileArgs.parse(lines)
-    Result.new(files, ranges, nil)
+    parsed_paths = Evilution::CLI::Parser::FileArgs.parse(lines)
+    Result.new(parsed_paths.files, parsed_paths.ranges, nil)
   end
 end

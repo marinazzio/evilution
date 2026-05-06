@@ -74,7 +74,13 @@ class Evilution::MCP::InfoTool < MCP::Tool
       return ResponseFormatter.error("config_error", "action is required") unless action
       return ResponseFormatter.error("config_error", "unknown action: #{action}") unless ACTIONS.key?(action)
 
-      parsed_files, line_ranges = RequestParser.parse_files(Array(files)) if files
+      parsed_files = nil
+      line_ranges = nil
+      if files
+        parsed = RequestParser.parse_files(Array(files))
+        parsed_files = parsed.files
+        line_ranges = parsed.ranges
+      end
 
       ACTIONS[action].call(
         files: parsed_files, line_ranges: line_ranges, target: target, spec: spec,
