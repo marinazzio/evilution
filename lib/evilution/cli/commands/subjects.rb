@@ -9,6 +9,9 @@ require_relative "../../runner"
 require_relative "../../mutator"
 
 class Evilution::CLI::Commands::Subjects < Evilution::CLI::Command
+  EntriesResult = Data.define(:entries, :total)
+  private_constant :EntriesResult
+
   private
 
   def perform
@@ -23,8 +26,8 @@ class Evilution::CLI::Commands::Subjects < Evilution::CLI::Command
       return 0
     end
 
-    entries, total = collect_entries(subjects, config)
-    Evilution::CLI::Printers::Subjects.new(entries, total_mutations: total).render(@stdout)
+    result = collect_entries(subjects, config)
+    Evilution::CLI::Printers::Subjects.new(result.entries, total_mutations: result.total).render(@stdout)
     0
   end
 
@@ -43,7 +46,7 @@ class Evilution::CLI::Commands::Subjects < Evilution::CLI::Command
       subj.release_node!
     end
 
-    [entries, total]
+    EntriesResult.new(entries: entries, total: total)
   end
 end
 
