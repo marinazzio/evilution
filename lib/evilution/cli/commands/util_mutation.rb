@@ -36,24 +36,26 @@ class Evilution::CLI::Commands::UtilMutation < Evilution::CLI::Command
   end
 
   def resolve_util_mutation_source
-    if @options[:eval]
-      tmpfile = Tempfile.new(["evilution_eval", ".rb"])
-      tmpfile.write(@options[:eval])
-      tmpfile.flush
-      @util_tmpfile = tmpfile
-      SourceInput.new(source: @options[:eval], file_path: tmpfile.path)
-    elsif @files.first
-      path = @files.first
-      raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
+    return build_eval_source(@options[:eval]) if @options[:eval]
+    return build_file_source(@files.first) if @files.first
 
-      begin
-        SourceInput.new(source: File.read(path), file_path: path)
-      rescue SystemCallError => e
-        raise Evilution::Error, e.message
-      end
-    else
-      raise Evilution::Error, "source required: use -e 'code' or provide a file path"
-    end
+    raise Evilution::Error, "source required: use -e 'code' or provide a file path"
+  end
+
+  def build_eval_source(code)
+    tmpfile = Tempfile.new(["evilution_eval", ".rb"])
+    tmpfile.write(code)
+    tmpfile.flush
+    @util_tmpfile = tmpfile
+    SourceInput.new(source: code, file_path: tmpfile.path)
+  end
+
+  def build_file_source(path)
+    raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
+
+    SourceInput.new(source: File.read(path), file_path: path)
+  rescue SystemCallError => e
+    raise Evilution::Error, e.message
   end
 
   def parse_source_to_subjects(source, file_label)
