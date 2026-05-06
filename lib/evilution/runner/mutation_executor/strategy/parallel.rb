@@ -18,8 +18,17 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @notifier.start(mutations.length)
     pool = @pool_factory.call
     state = { results: [], truncated: false, completed: 0 }
-    all_worker_stats = []
+    all_worker_stats = run_batches(mutations, pool, baseline_result, integration, state)
 
+    log_worker_diagnostics(all_worker_stats)
+    @notifier.finish
+    build_result(state)
+  end
+
+  private
+
+  def run_batches(mutations, pool, baseline_result, integration, state)
+    all_worker_stats = []
     mutations.each_slice(@config.jobs) do |batch|
       break if state[:truncated]
 
@@ -27,22 +36,35 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
       all_worker_stats.concat(pool.worker_stats)
       process_batch(batch_results, baseline_result, state)
     end
-
-    @diagnostics.log_worker_stats(@diagnostics.aggregate_worker_stats(all_worker_stats)) if @diagnostics
-    @notifier.finish
-    Evilution::Runner::MutationExecutor::ExecutionResult.new(results: state[:results], truncated: state[:truncated])
+    all_worker_stats
   end
 
-  private
+  def log_worker_diagnostics(all_worker_stats)
+    return unless @diagnostics
+
+    @diagnostics.log_worker_stats(@diagnostics.aggregate_worker_stats(all_worker_stats))
+  end
+
+  def build_result(state)
+    Evilution::Runner::MutationExecutor::ExecutionResult.new(results: state[:results], truncated: state[:truncated])
+  end
 
   def run_batch(batch, pool, integration)
     partition = @cache.partition(batch, packer: @packer)
     worker_results = run_uncached(batch, partition.uncached_indices, pool, integration)
     compact_results = merge(batch, partition.uncached_indices, partition.cached_results, worker_results)
-    batch_results = batch.zip(compact_results).map { |m, h| @packer.rebuild(m, h) }
-    partition.uncached_indices.each { |i| @cache.store(batch_results[i].mutation, batch_results[i]) }
+    batch_results = rebuild_results(batch, compact_results)
+    cache_results(batch_results, partition.uncached_indices)
     batch.each(&:strip_sources!)
     batch_results
+  end
+
+  def rebuild_results(batch, compact_results)
+    batch.zip(compact_results).map { |m, h| @packer.rebuild(m, h) }
+  end
+
+  def cache_results(batch_results, uncached_indices)
+    uncached_indices.each { |i| @cache.store(batch_results[i].mutation, batch_results[i]) }
   end
 
   def run_uncached(batch, uncached_indices, pool, integration)
