@@ -44,7 +44,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
     )
   end
 
-  it "iterates mutations, calls strip_sources! per mutation, and returns [results, false]" do
+  it "iterates mutations, calls strip_sources! per mutation, and returns ExecutionResult with truncated=false" do
     m1 = mutation("m1")
     m2 = mutation("m2")
     expect(m1).to receive(:strip_sources!)
@@ -57,10 +57,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
     )
 
     integration = ->(_) { "cmd" }
-    results, truncated = strategy.call([m1, m2], baseline_result: nil, integration: integration)
+    execution = strategy.call([m1, m2], baseline_result: nil, integration: integration)
 
-    expect(results.map(&:status)).to eq(%i[killed killed])
-    expect(truncated).to be false
+    expect(execution.results.map(&:status)).to eq(%i[killed killed])
+    expect(execution.truncated).to be false
   end
 
   it "stops early and returns truncated=true when notifier signals :truncate" do
@@ -74,10 +74,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
       notifier: notifier(config: Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, fail_fast: 2))
     )
 
-    results, truncated = strategy.call([m1, m2, m3], baseline_result: nil, integration: ->(_) { "cmd" })
+    execution = strategy.call([m1, m2, m3], baseline_result: nil, integration: ->(_) { "cmd" })
 
-    expect(results.length).to eq(2)
-    expect(truncated).to be true
+    expect(execution.results.length).to eq(2)
+    expect(execution.truncated).to be true
   end
 
   it "applies the pipeline to each result" do
@@ -92,9 +92,9 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
       notifier: notifier
     )
 
-    results, = strategy.call([m1], baseline_result: :baseline, integration: ->(_) { "cmd" })
+    execution = strategy.call([m1], baseline_result: :baseline, integration: ->(_) { "cmd" })
 
-    expect(results.first.status).to eq(:killed)
+    expect(execution.results.first.status).to eq(:killed)
     expect(nz).to have_received(:call).with(an_instance_of(Evilution::Result::MutationResult), baseline_result: :baseline)
   end
 end

@@ -3,6 +3,8 @@
 require_relative "../runner"
 
 class Evilution::Runner::MutationExecutor
+  ExecutionResult = Data.define(:results, :truncated)
+
   autoload :ResultCache, File.expand_path("mutation_executor/result_cache", __dir__)
   autoload :ResultPacker, File.expand_path("mutation_executor/result_packer", __dir__)
   autoload :ResultNotifier, File.expand_path("mutation_executor/result_notifier", __dir__)

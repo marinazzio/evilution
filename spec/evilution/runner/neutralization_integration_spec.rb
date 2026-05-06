@@ -80,9 +80,9 @@ RSpec.describe "let_it_be collision neutralization end-to-end" do
     isolator = instance_double(Evilution::Isolation::Fork)
     allow(isolator).to receive(:call).and_return(error_result(m, backtrace: let_it_be_backtrace))
 
-    results, = build_executor(cfg, isolator: isolator).call([m], nil)
+    execution = build_executor(cfg, isolator: isolator).call([m], nil)
 
-    expect(results.first.status).to eq(:neutral)
+    expect(execution.results.first.status).to eq(:neutral)
   end
 
   it "excludes the let_it_be-collision neutral from Summary#score_denominator" do
@@ -94,8 +94,8 @@ RSpec.describe "let_it_be collision neutralization end-to-end" do
       mutation.to_s == "Foo#bar:1" ? killed_result(mutation) : error_result(mutation, backtrace: let_it_be_backtrace)
     end
 
-    results, = build_executor(cfg, isolator: isolator).call([killed_mut, infra_mut], nil)
-    summary = Evilution::Result::Summary.new(results: results)
+    execution = build_executor(cfg, isolator: isolator).call([killed_mut, infra_mut], nil)
+    summary = Evilution::Result::Summary.new(results: execution.results)
 
     expect(summary.neutral).to eq(1)
     expect(summary.score_denominator).to eq(1)
@@ -110,8 +110,8 @@ RSpec.describe "let_it_be collision neutralization end-to-end" do
       error_result(mutation, backtrace: let_it_be_backtrace)
     end
 
-    results, = build_executor(cfg, isolator: isolator).call(mutations, nil)
-    summary = Evilution::Result::Summary.new(results: results)
+    execution = build_executor(cfg, isolator: isolator).call(mutations, nil)
+    summary = Evilution::Result::Summary.new(results: execution.results)
 
     expect(summary.neutral).to eq(2)
     expect(summary.errors).to eq(0)

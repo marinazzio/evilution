@@ -30,7 +30,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
 
     @diagnostics.log_worker_stats(@diagnostics.aggregate_worker_stats(all_worker_stats)) if @diagnostics
     @notifier.finish
-    [state[:results], state[:truncated]]
+    Evilution::Runner::MutationExecutor::ExecutionResult.new(results: state[:results], truncated: state[:truncated])
   end
 
   private

@@ -27,6 +27,6 @@ class Evilution::Runner::MutationExecutor::Strategy::Sequential
     end
 
     @notifier.finish
-    [results, truncated]
+    Evilution::Runner::MutationExecutor::ExecutionResult.new(results: results, truncated: truncated)
   end
 end
