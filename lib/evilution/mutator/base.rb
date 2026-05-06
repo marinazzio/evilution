@@ -5,6 +5,9 @@ require "prism"
 require_relative "../mutator"
 
 class Evilution::Mutator::Base < Prism::Visitor
+  AffectedSlices = Data.define(:original, :mutated)
+  private_constant :AffectedSlices
+
   attr_reader :mutations
 
   def initialize(**_options)
@@ -30,22 +33,22 @@ class Evilution::Mutator::Base < Prism::Visitor
     surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source, offset: offset, length: length, replacement: replacement
     )
-    original_slice, mutated_slice = slice_affected_lines(
+    slices = slice_affected_lines(
       mutated_source: surgery.source,
       offset: offset,
       length: length,
       replacement_bytesize: replacement.bytesize
     )
 
-    @mutations << build_mutation_record(node, surgery, original_slice, mutated_slice)
+    @mutations << build_mutation_record(node, surgery, slices)
   end
 
-  def build_mutation_record(node, surgery, original_slice, mutated_slice)
+  def build_mutation_record(node, surgery, slices)
     Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
       sources: Evilution::Mutation::Sources.new(original: @file_source, mutated: surgery.source),
-      slice: Evilution::Mutation::Slice.new(original: original_slice, mutated: mutated_slice),
+      slice: Evilution::Mutation::Slice.new(original: slices.original, mutated: slices.mutated),
       location: Evilution::Mutation::Location.new(
         file_path: @subject.file_path,
         line: node.location.start_line,
@@ -63,10 +66,10 @@ class Evilution::Mutator::Base < Prism::Visitor
     orig_line_end = line_end_byte(@file_source, [offset + length - 1, line_start].max)
     mut_line_end = line_end_byte(mutated_source, [offset + replacement_bytesize - 1, line_start].max)
 
-    [
-      @file_source.byteslice(line_start, orig_line_end - line_start),
-      mutated_source.byteslice(line_start, mut_line_end - line_start)
-    ]
+    AffectedSlices.new(
+      original: @file_source.byteslice(line_start, orig_line_end - line_start),
+      mutated: mutated_source.byteslice(line_start, mut_line_end - line_start)
+    )
   end
 
   def line_start_byte(source, offset)
