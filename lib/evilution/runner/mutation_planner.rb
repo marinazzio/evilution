@@ -28,23 +28,36 @@ class Evilution::Runner::MutationPlanner
   def call(subjects)
     generation = generate(subjects)
     disabled_filter = filter_disabled(generation.mutations)
-    disabled_filter.disabled.each(&:strip_sources!) if config.show_disabled?
-    disabled_mutations = config.show_disabled? ? disabled_filter.disabled : []
-
+    disabled_mutations = compute_disabled_mutations(disabled_filter)
     sig_filter = filter_sig_blocks(disabled_filter.enabled)
     equivalent_filter = filter_equivalent(sig_filter.enabled)
 
-    Plan.new(
-      enabled: equivalent_filter.enabled,
-      equivalent: equivalent_filter.equivalent,
-      skipped_count: generation.skipped + disabled_filter.disabled.length + sig_filter.skipped,
-      disabled_mutations: disabled_mutations
-    )
+    build_plan(equivalent_filter, disabled_mutations, total_skipped(generation, disabled_filter, sig_filter))
   end
 
   private
 
   attr_reader :config, :registry
+
+  def compute_disabled_mutations(disabled_filter)
+    return [] unless config.show_disabled?
+
+    disabled_filter.disabled.each(&:strip_sources!)
+    disabled_filter.disabled
+  end
+
+  def total_skipped(generation, disabled_filter, sig_filter)
+    generation.skipped + disabled_filter.disabled.length + sig_filter.skipped
+  end
+
+  def build_plan(equivalent_filter, disabled_mutations, skipped_count)
+    Plan.new(
+      enabled: equivalent_filter.enabled,
+      equivalent: equivalent_filter.equivalent,
+      skipped_count: skipped_count,
+      disabled_mutations: disabled_mutations
+    )
+  end
 
   def generate(subjects)
     filter = build_ignore_filter
