@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0] - 2026-05-06
+
+### Changed
+
+- **Internal codebase hygiene sweep — `Metrics/AbcSize` ceiling tightened from `25` → `17`** — every method exceeding the new threshold was refactored via pure extract-method (no behavior change). ~48 sites across `lib/evilution/{ast,cli,compare,config,disable_comment,integration,mcp,mutation,mutator,parallel,reporter,runner,session,spec_ast_cache}` plus supporting `scripts/` utilities. No public API, CLI flag, or output changes; mutation operators and report emission are bit-identical. The upper bound on per-method ABC is now strictly enforced repo-wide — only `lib/evilution/runner.rb` remains in `.rubocop_todo.yml` (#371, PR #1160 + per-file sub-PRs)
+- **Tuple-return methods across the runner pipeline migrated to named `Data.define` value objects** — internal-only refactor introducing typed return shapes for `Runner::MutationExecutor#call` (→`ExecutionResult`), `Runner::MutationPlanner#call` (→`Plan` plus internal `GenerationResult` / `DisabledFilterResult` / `SigFilterResult` / `EquivalentFilterResult`), `Parallel::WorkQueue` outputs, `Cache#partition` (→`Partition`), `Config.normalize_limit` (→`LimitResult`), `Mutation::Slicer.collect_chain` (→`Chain`), `slice_affected_lines` (→`AffectedSlices`), `CLI::Parser::FilesAndRanges` (→`ParsedPaths`), and assorted CLI command helpers. Improves call-site readability without affecting external behavior (#948, PR #1094; #949, PR #1095; #950, PR #1096; #951, PR #1097; #952, PR #1098; #953, PR #1099; #954, PR #1100; #955, PR #1101; #956, PR #1102)
+
 ## [0.28.0] - 2026-05-03
 
 ### Added
