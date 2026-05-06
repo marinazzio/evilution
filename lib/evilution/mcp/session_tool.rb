@@ -50,6 +50,9 @@ class Evilution::MCP::SessionTool < MCP::Tool
 
   VALID_ACTIONS = %w[list show diff].freeze
 
+  LimitResult = Data.define(:limit, :error)
+  private_constant :LimitResult
+
   class << self
     def call(server_context:, action: nil, results_dir: nil, limit: nil, path: nil, base: nil, head: nil)
       return error_response("config_error", "action is required") unless action
@@ -65,28 +68,28 @@ class Evilution::MCP::SessionTool < MCP::Tool
     private
 
     def list_action(results_dir:, limit:)
-      normalized_limit, limit_error = normalize_limit(limit)
-      return error_response("config_error", limit_error) if limit_error
+      result = normalize_limit(limit)
+      return error_response("config_error", result.error) if result.error
 
       store_opts = {}
       store_opts[:results_dir] = results_dir if results_dir
       store = Evilution::Session::Store.new(**store_opts)
       entries = store.list
-      entries = entries.first(normalized_limit) unless normalized_limit.nil?
+      entries = entries.first(result.limit) unless result.limit.nil?
 
       payload = entries.map { |e| e.transform_keys(&:to_s) }
       success_response(payload)
     end
 
     def normalize_limit(limit)
-      return [nil, nil] if limit.nil?
+      return LimitResult.new(limit: nil, error: nil) if limit.nil?
 
       coerced = Integer(limit)
-      return [nil, "limit must be a non-negative integer"] if coerced.negative?
+      return LimitResult.new(limit: nil, error: "limit must be a non-negative integer") if coerced.negative?
 
-      [coerced, nil]
+      LimitResult.new(limit: coerced, error: nil)
     rescue ArgumentError, TypeError
-      [nil, "limit must be a non-negative integer"]
+      LimitResult.new(limit: nil, error: "limit must be a non-negative integer")
     end
 
     def show_action(path:, results_dir:)
