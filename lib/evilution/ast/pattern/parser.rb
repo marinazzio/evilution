@@ -75,24 +75,36 @@ class Evilution::AST::Pattern::Parser
 
   def parse_value
     skip_whitespace
+    parse_negation || parse_deep_wildcard || parse_single_wildcard || parse_any_node || parse_value_or_nested
+  end
 
-    if current_char == "!"
-      advance(1)
-      skip_whitespace
-      inner = parse_value
-      Evilution::AST::Pattern::NegationMatcher.new(inner)
-    elsif current_char == "*" && !peek_string("**")
-      advance(1)
-      Evilution::AST::Pattern::WildcardValueMatcher.new
-    elsif peek_string("**")
-      advance(2)
-      Evilution::AST::Pattern::DeepWildcardMatcher.new
-    elsif current_char == "_" && !identifier_continues?(1)
-      advance(1)
-      Evilution::AST::Pattern::AnyNodeMatcher.new
-    else
-      parse_value_or_nested
-    end
+  def parse_negation
+    return nil unless current_char == "!"
+
+    advance(1)
+    skip_whitespace
+    Evilution::AST::Pattern::NegationMatcher.new(parse_value)
+  end
+
+  def parse_deep_wildcard
+    return nil unless peek_string("**")
+
+    advance(2)
+    Evilution::AST::Pattern::DeepWildcardMatcher.new
+  end
+
+  def parse_single_wildcard
+    return nil unless current_char == "*"
+
+    advance(1)
+    Evilution::AST::Pattern::WildcardValueMatcher.new
+  end
+
+  def parse_any_node
+    return nil unless current_char == "_" && !identifier_continues?(1)
+
+    advance(1)
+    Evilution::AST::Pattern::AnyNodeMatcher.new
   end
 
   def parse_value_or_nested
