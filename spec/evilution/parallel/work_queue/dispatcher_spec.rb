@@ -14,9 +14,9 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
         item_timeout: 5, worker_max_items: nil,
         recycle_factory: ->(_) { raise "should not recycle" }
       )
-      results, retired = dispatcher.run
-      expect(results).to eq([11])
-      expect(retired).to be_empty
+      run_result = dispatcher.run
+      expect(run_result.results).to eq([11])
+      expect(run_result.retired).to be_empty
       expect(dispatcher.first_error).to be_nil
 
       worker.shutdown
@@ -40,11 +40,11 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
         item_timeout: 5, worker_max_items: 2,
         recycle_factory: factory
       )
-      results, retired = dispatcher.run
+      run_result = dispatcher.run
 
-      expect(results).to eq([1, 2, 3])
-      expect(retired.length).to eq(1)
-      expect(retired.first.items_completed).to eq(2)
+      expect(run_result.results).to eq([1, 2, 3])
+      expect(run_result.retired.length).to eq(1)
+      expect(run_result.retired.first.items_completed).to eq(2)
 
       replacement.shutdown if replacement
       replacement.close_pipes if replacement
@@ -60,7 +60,7 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
         item_timeout: 5, worker_max_items: nil,
         recycle_factory: ->(_) { raise "no recycle" }
       )
-      _results, _retired = dispatcher.run
+      dispatcher.run
       expect(dispatcher.first_error).to be_a(StandardError)
       expect(dispatcher.first_error.message).to eq("boom")
 
@@ -78,7 +78,7 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
         item_timeout: 0.2, worker_max_items: nil,
         recycle_factory: ->(_) { raise "no recycle" }
       )
-      _results, _retired = dispatcher.run
+      dispatcher.run
       expect(dispatcher.first_error).to be_a(Evilution::Error)
       expect(dispatcher.first_error.message).to match(/worker timed out/)
 

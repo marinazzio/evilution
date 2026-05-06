@@ -6,6 +6,8 @@ require_relative "channel"
 require_relative "channel/frame"
 
 class Evilution::Parallel::WorkQueue::Worker
+  Timing = Data.define(:busy, :wall)
+
   attr_reader :pid, :worker_index
   attr_accessor :items_completed, :pending, :busy_time, :wall_time
 
@@ -84,11 +86,11 @@ class Evilution::Parallel::WorkQueue::Worker
 
   def retire
     shutdown
-    busy, wall = drain_stats
+    timing = drain_stats
     close_pipes
     reap
-    @busy_time = busy
-    @wall_time = wall
+    @busy_time = timing.busy
+    @wall_time = timing.wall
     to_stat
   end
 
@@ -101,14 +103,15 @@ class Evilution::Parallel::WorkQueue::Worker
   private
 
   def drain_stats
-    return [0.0, 0.0] unless @res_read.wait_readable(Evilution::Parallel::WorkQueue::TIMING_GRACE_PERIOD)
+    zero = Timing.new(busy: 0.0, wall: 0.0)
+    return zero unless @res_read.wait_readable(Evilution::Parallel::WorkQueue::TIMING_GRACE_PERIOD)
 
     message = read_result
-    return [0.0, 0.0] if message.nil?
+    return zero if message.nil?
 
     tag, busy, wall = message
-    return [0.0, 0.0] unless tag == Evilution::Parallel::WorkQueue::STATS
+    return zero unless tag == Evilution::Parallel::WorkQueue::STATS
 
-    [busy, wall]
+    Timing.new(busy: busy, wall: wall)
   end
 end
