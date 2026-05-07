@@ -15,7 +15,9 @@ class Evilution::MCP::SessionTool < MCP::Tool
               "'show' returns the full report for a session (summary, survived mutations with diffs, git context), " \
               "'diff' compares two sessions and surfaces new regressions, fixed mutations, persistent survivors, and score delta. " \
               "Prefer this over the CLI when auditing mutation score trends, triaging survivors, " \
-              "or verifying that a fix killed the right mutant."
+              "or verifying that a fix killed the right mutant. " \
+              "Contract: input schema, action enum, and output payloads are stable for the 1.x line; " \
+              "see README \"MCP Server\" section for the full deprecation policy."
   input_schema(
     properties: {
       action: {
@@ -77,8 +79,8 @@ class Evilution::MCP::SessionTool < MCP::Tool
       entries = store.list
       entries = entries.first(result.limit) unless result.limit.nil?
 
-      payload = entries.map { |e| e.transform_keys(&:to_s) }
-      success_response(payload)
+      sessions = entries.map { |e| e.transform_keys(&:to_s) }
+      success_response("schema_version" => Evilution::MCP::CONTRACT_VERSION, "sessions" => sessions)
     end
 
     def normalize_limit(limit)
@@ -115,7 +117,8 @@ class Evilution::MCP::SessionTool < MCP::Tool
       return validation if validation
 
       result = load_and_diff(base, head, dir)
-      success_response(result.to_h)
+      payload = { "schema_version" => Evilution::MCP::CONTRACT_VERSION }.merge(result.to_h)
+      success_response(payload)
     rescue Evilution::Error => e
       error_response("not_found", e.message)
     rescue ::JSON::ParserError => e

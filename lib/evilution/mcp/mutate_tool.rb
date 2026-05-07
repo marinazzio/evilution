@@ -28,7 +28,9 @@ class Evilution::MCP::MutateTool < MCP::Tool
               "Prefer this over shelling out to 'evilution' — the response is machine-readable " \
               "and already trimmed for survived-mutant triage. " \
               "Hitting errors, friction, or missing capabilities? See evilution-info action=feedback for the " \
-              "public feedback channel — ask the user before posting anything."
+              "public feedback channel — ask the user before posting anything. " \
+              "Contract: input schema and output payload are stable for the 1.x line; " \
+              "see README \"MCP Server\" section for the full deprecation policy."
   input_schema(
     properties: {
       files: {

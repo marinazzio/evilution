@@ -27,7 +27,9 @@ class Evilution::MCP::InfoTool < MCP::Tool
               "'feedback' returns the public discussion URL plus consent and privacy guidance for posting " \
               "feedback on errors, usage problems, friction, or missing capabilities. " \
               "Use this instead of shelling out to 'evilution subjects', 'evilution tests list', or 'evilution environment show' — " \
-              "the response is structured JSON so you can plan the next mutation run without parsing CLI text."
+              "the response is structured JSON so you can plan the next mutation run without parsing CLI text. " \
+              "Contract: input schema, action enum, and per-action output shapes are stable for the 1.x line; " \
+              "see README \"MCP Server\" section for the full deprecation policy."
   input_schema(
     properties: {
       action: {

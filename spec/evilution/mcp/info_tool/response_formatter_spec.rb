@@ -13,12 +13,28 @@ RSpec.describe Evilution::MCP::InfoTool::ResponseFormatter do
     it "wraps payload as a single text-content MCP response" do
       response = described_class.success("ok" => true)
       expect(response).to be_a(MCP::Tool::Response)
-      expect(parse_body(response)).to eq("ok" => true)
+      expect(parse_body(response)).to include("ok" => true)
     end
 
     it "does not mark the response as an error" do
       response = described_class.success("x" => 1)
       expect(response.error?).to be_falsey
+    end
+
+    it "injects schema_version equal to MCP::CONTRACT_VERSION" do
+      response = described_class.success("ok" => true)
+      expect(parse_body(response)["schema_version"]).to eq(Evilution::MCP::CONTRACT_VERSION)
+    end
+
+    it "places schema_version first in the JSON output for discoverability" do
+      response = described_class.success("ok" => true, "extra" => 1)
+      keys = parse_body(response).keys
+      expect(keys.first).to eq("schema_version")
+    end
+
+    it "does not overwrite an existing schema_version key in the payload" do
+      response = described_class.success("schema_version" => 99, "ok" => true)
+      expect(parse_body(response)["schema_version"]).to eq(99)
     end
   end
 
