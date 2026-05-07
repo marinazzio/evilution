@@ -67,6 +67,8 @@ evilution [command] [options] [files...]
 
 The shorter alias `evil` ships alongside `evilution` and accepts identical arguments (handy with `alias be='bundle exec'` → `be evil run ...`).
 
+Every command, subcommand, and flag listed in this section is part of evilution's public CLI contract; see [docs/versioning.md](docs/versioning.md) for stability and deprecation rules.
+
 ### Commands
 
 | Command              | Description                                        | Default |
@@ -116,10 +118,27 @@ The shorter alias `evil` ships alongside `evilution` and accepts identical argum
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
 | `--fallback-full-suite`      | Boolean | false        | When no matching spec/test resolves for a mutation, run the whole test suite instead of marking it `:unresolved` and skipping. |
+| `--related-specs-heuristic`  | Boolean | false        | When a mutation removes an `includes(...)` call, also run matching specs from `spec/{requests,integration,features,system}` (Rails-style domain match on the source file's basename). Trades extra spec runs for higher kill rate on ORM mutations. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
 | `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
 | `--profile NAME`             | String  | `default`    | Operator profile: `default` or `strict`. `strict` adds aggressive truthiness mutators (e.g. replaces `x.predicate?` with `nil`) intended for pre-merge audits. |
 | `--strict`                   | Boolean | false        | Shortcut for `--profile=strict`.                    |
+
+### Options (for `session` subcommands)
+
+| Flag                | Type    | Default              | Description                                                                                  |
+|---------------------|---------|----------------------|----------------------------------------------------------------------------------------------|
+| `--results-dir DIR` | String  | `.evilution/results` | Directory containing session result JSON files. Honored by `session list` and `session gc`.  |
+| `--limit N`         | Integer | _(none)_             | (`session list`) Show only the N most recent sessions.                                       |
+| `--since DATE`      | String  | _(none)_             | (`session list`) Show only sessions created on or after `DATE` (`YYYY-MM-DD`).               |
+| `--older-than D`    | String  | _(required)_         | (`session gc`) Delete sessions older than `D` (e.g. `30d`, `24h`, `1w`).                     |
+
+### Options (for `compare` command)
+
+| Flag             | Type   | Default   | Description                                                                                          |
+|------------------|--------|-----------|------------------------------------------------------------------------------------------------------|
+| `--against PATH` | String | _(none)_  | Prior (older) session JSON to diff against. Positional first argument is accepted as a fallback.     |
+| `--current PATH` | String | _(none)_  | Current (newer) session JSON. Positional second argument is accepted as a fallback.                  |
 
 ### Operator Profiles
 
