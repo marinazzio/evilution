@@ -160,6 +160,23 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(0)
     end
 
+    it "validates schema_version before tool detection so unknown shapes still surface upgrade message" do
+      # Future writer might rearrange the JSON shape enough that Detector cannot
+      # classify it. The user must still see "Upgrade the evilution gem", not
+      # "cannot detect tool from JSON shape".
+      future_unknown_shape = { "schema_version" => 99 } # no `summary`, no `subject_results`
+      Tempfile.create(["future_unknown", ".json"]) do |f|
+        f.write(JSON.generate(future_unknown_shape))
+        f.flush
+
+        result = run_with(files: [f.path, evilution_path])
+        expect(result.exit_code).to eq(2)
+        expect(result.error).to be_a(Evilution::Error)
+        expect(result.error.message).to match(/Upgrade the evilution gem/)
+        expect(result.error.message).not_to match(/cannot detect tool/)
+      end
+    end
+
     it "returns exit 2 with ConfigError for unsupported --format" do
       result = run_with(
         files: [mutant_path, evilution_path],

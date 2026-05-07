@@ -355,7 +355,13 @@ RSpec.describe Evilution::Session::Store do
 
     it "loads a session with schema_version equal to CURRENT_VERSION" do
       compatible_path = File.join(results_dir, "20260102T000000-bbbb0000.json")
-      File.write(compatible_path, JSON.generate("schema_version" => 1, "summary" => { "total" => 0 }))
+      File.write(
+        compatible_path,
+        JSON.generate(
+          "schema_version" => Evilution::Session::Schema::CURRENT_VERSION,
+          "summary" => { "total" => 0 }
+        )
+      )
 
       expect { store.load(compatible_path) }.not_to raise_error
     end

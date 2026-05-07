@@ -14,6 +14,11 @@ RSpec.describe Evilution::Session::Schema do
       expect { described_class.validate!({}) }.not_to raise_error
     end
 
+    it "raises when schema_version is explicitly null (corrupted file vs missing key)" do
+      expect { described_class.validate!({ "schema_version" => nil }) }
+        .to raise_error(Evilution::Error, /invalid schema_version nil.*positive Integer/)
+    end
+
     it "does not raise when schema_version is the current version" do
       expect { described_class.validate!({ "schema_version" => 1 }) }.not_to raise_error
     end

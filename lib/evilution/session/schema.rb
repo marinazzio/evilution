@@ -9,15 +9,17 @@ module Evilution::Session::Schema
 
   # Validates the schema_version of a parsed session JSON Hash.
   #
-  # Sessions written before schema_version was introduced are treated as
-  # CURRENT_VERSION (the JSON shape that defined version 1). A session with a
-  # schema_version newer than this gem supports raises Evilution::Error with
-  # an explicit "upgrade the gem" message — silent misreads would corrupt
-  # compare/diff output.
+  # Sessions written before schema_version was introduced (key absent
+  # entirely) are treated as CURRENT_VERSION — the JSON shape that defined
+  # version 1. A key that is explicitly present but null/non-positive/non-
+  # integer is rejected as invalid; "missing" and "corrupted" must not
+  # collapse into the same lenient bucket. A schema_version newer than this
+  # gem supports raises Evilution::Error with an explicit "upgrade the gem"
+  # message so future writers cannot be silently misread.
   def validate!(data, source: nil)
-    raw = data["schema_version"] || data[:schema_version]
-    return if raw.nil?
+    return unless data.key?("schema_version") || data.key?(:schema_version)
 
+    raw = data.fetch("schema_version") { data[:schema_version] }
     raise_invalid!(raw, source) unless raw.is_a?(Integer) && raw.positive?
     return if raw <= CURRENT_VERSION
 
