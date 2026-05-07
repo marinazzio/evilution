@@ -557,21 +557,24 @@ The three MCP tools (`evilution-mutate`, `evilution-session`, `evilution-info`) 
 - **Input schemas**: every parameter listed in each tool's `input_schema` (name, type, enum values, `required`).
 - **Action enumerations**: the action enum on `evilution-session` (`list`, `show`, `diff`) and `evilution-info` (`subjects`, `tests`, `environment`, `statuses`, `feedback`).
 - **Output payload top-level shape**: the keys and value types documented per action below.
-- **Error envelope**: an error response is a single text content with body `{ "error": { "type": <string>, "message": <string> } }` and the response's `error` flag set to true. The error type strings (`config_error`, `parse_error`, `not_found`, `runtime_error`, `validation_error`, `tool_error`) are part of the contract.
+- **Error envelope**: an error response is a single text content with the response's `error` flag set to true. The body is a JSON object with at minimum an `error` key shaped `{ "type": <string>, "message": <string> }`; tools may add additional top-level keys (e.g. `evilution-mutate` includes `feedback_url` and `feedback_hint` to point agents at the public Discussions channel). Consumers must read the `error.type` discriminator and ignore unknown extras. The error type strings — currently `config_error`, `parse_error`, `not_found`, and `runtime_error` — are part of the contract; new types may be added in MINOR releases (additive).
 
 #### Output `schema_version`
 
-Each MCP tool emits a `schema_version` integer scoped to the **MCP contract** (`Evilution::MCP::CONTRACT_VERSION`, currently `1`):
+Successful MCP responses carry a top-level `schema_version` integer. Two distinct version spaces are in play; both happen to be `1` today and either may be bumped independently at the next MAJOR release:
 
-| Tool / action                  | Where `schema_version` lives                                                                                                                                           |
-|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `evilution-mutate`             | Top-level of the mutation report JSON. (Note: this field is governed by `Evilution::Session::Schema::CURRENT_VERSION` — the report shape is shared with session JSON.) |
-| `evilution-session` `list`     | Top-level of the envelope: `{ "schema_version": 1, "sessions": [...] }`.                                                                                               |
-| `evilution-session` `show`     | Inside the returned session JSON document (governed by `Evilution::Session::Schema::CURRENT_VERSION`).                                                                 |
-| `evilution-session` `diff`     | Top-level of the diff payload, alongside `summary` / `fixed` / `new_survivors` / `persistent`.                                                                         |
-| `evilution-info` (all actions) | Top-level of every successful response, injected by the action response formatter.                                                                                     |
+- **MCP contract `schema_version`** — `Evilution::MCP::CONTRACT_VERSION` (currently `1`). Stamped on envelopes that exist solely to wrap MCP tool output: `evilution-info` action responses, `evilution-session list`, `evilution-session diff`. Bumped only when the MCP envelope shape itself changes incompatibly.
+- **Session JSON `schema_version`** — `Evilution::Session::Schema::CURRENT_VERSION` (currently `1`). Embedded inside payloads whose shape is also written to disk and consumed elsewhere: `evilution-mutate` (returns a mutation report) and `evilution-session show` (returns a session JSON document). Bumped only when the report/session shape itself changes incompatibly.
 
-The MCP contract version (`Evilution::MCP::CONTRACT_VERSION`) is **independent** of the session JSON schema version (`Evilution::Session::Schema::CURRENT_VERSION`). They happen to both be `1` today; either may be bumped independently at the next MAJOR release if its surface gains an incompatible change.
+Per-tool placement:
+
+| Tool / action                  | `schema_version` source                  | Location in payload                                                                                  |
+|--------------------------------|------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `evilution-mutate`             | `Session::Schema::CURRENT_VERSION`       | Top-level of the mutation report JSON (same shape as `--save-session` output).                      |
+| `evilution-session` `list`     | `MCP::CONTRACT_VERSION`                  | Top-level of envelope: `{ "schema_version": 1, "sessions": [...] }`.                                 |
+| `evilution-session` `show`     | `Session::Schema::CURRENT_VERSION`       | Inside the returned session JSON document.                                                           |
+| `evilution-session` `diff`     | `MCP::CONTRACT_VERSION`                  | Top-level alongside `summary` / `fixed` / `new_survivors` / `persistent`.                            |
+| `evilution-info` (all actions) | `MCP::CONTRACT_VERSION`                  | Top-level of every successful response, injected by the action response formatter.                   |
 
 #### Per-tool output shapes
 
