@@ -70,21 +70,24 @@ RSpec.describe Evilution::MCP::SessionTool do
   end
 
   describe "action: list" do
-    it "returns an array of sessions" do
+    it "returns an envelope containing schema_version and a sessions array" do
       write_session("20260320T100000-aabb0000.json",
                     session_summary(timestamp: "2026-03-20T10:00:00+00:00"))
 
       data = parse_response(call(action: "list", results_dir: results_dir))
 
-      expect(data).to be_an(Array)
-      expect(data.length).to eq(1)
-      expect(data.first["timestamp"]).to eq("2026-03-20T10:00:00+00:00")
+      expect(data).to be_a(Hash)
+      expect(data["schema_version"]).to eq(Evilution::MCP::CONTRACT_VERSION)
+      expect(data["sessions"]).to be_an(Array)
+      expect(data["sessions"].length).to eq(1)
+      expect(data["sessions"].first["timestamp"]).to eq("2026-03-20T10:00:00+00:00")
     end
 
-    it "returns empty array when no sessions exist" do
+    it "returns an empty sessions array (still wrapped in envelope) when no sessions exist" do
       data = parse_response(call(action: "list", results_dir: results_dir))
 
-      expect(data).to eq([])
+      expect(data["schema_version"]).to eq(Evilution::MCP::CONTRACT_VERSION)
+      expect(data["sessions"]).to eq([])
     end
 
     it "returns sessions in reverse chronological order" do
@@ -95,7 +98,7 @@ RSpec.describe Evilution::MCP::SessionTool do
 
       data = parse_response(call(action: "list", results_dir: results_dir))
 
-      expect(data.first["timestamp"]).to eq("2026-03-21T10:00:00+00:00")
+      expect(data["sessions"].first["timestamp"]).to eq("2026-03-21T10:00:00+00:00")
     end
 
     it "respects limit parameter" do
@@ -108,8 +111,8 @@ RSpec.describe Evilution::MCP::SessionTool do
 
       data = parse_response(call(action: "list", results_dir: results_dir, limit: 2))
 
-      expect(data.length).to eq(2)
-      expect(data.first["timestamp"]).to eq("2026-03-22T10:00:00+00:00")
+      expect(data["sessions"].length).to eq(2)
+      expect(data["sessions"].first["timestamp"]).to eq("2026-03-22T10:00:00+00:00")
     end
 
     it "uses default results directory when results_dir is not specified" do
@@ -142,7 +145,7 @@ RSpec.describe Evilution::MCP::SessionTool do
 
       data = parse_response(call(action: "list", results_dir: results_dir, limit: 0))
 
-      expect(data).to eq([])
+      expect(data["sessions"]).to eq([])
     end
 
     it "coerces integer-like string limit" do
@@ -153,7 +156,7 @@ RSpec.describe Evilution::MCP::SessionTool do
 
       data = parse_response(call(action: "list", results_dir: results_dir, limit: "1"))
 
-      expect(data.length).to eq(1)
+      expect(data["sessions"].length).to eq(1)
     end
   end
 
@@ -291,6 +294,15 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(data["fixed"].first["subject"]).to eq("Foo#baz")
       expect(data["persistent"].length).to eq(1)
       expect(data["new_survivors"]).to eq([])
+    end
+
+    it "includes the MCP contract schema_version on the diff output" do
+      base_path = write_session("base.json", diff_session(score: 0.8, survivors: []))
+      head_path = write_session("head.json", diff_session(score: 0.9, survivors: []))
+
+      data = parse_response(call(action: "diff", base: base_path, head: head_path, results_dir: results_dir))
+
+      expect(data["schema_version"]).to eq(Evilution::MCP::CONTRACT_VERSION)
     end
 
     it "returns error when base is not provided" do

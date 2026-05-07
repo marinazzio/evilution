@@ -549,6 +549,59 @@ When evilution causes friction (errors, usage problems, missing capabilities you
 
 Discussion URL: <https://github.com/marinazzio/evilution/discussions>
 
+### Contract stability
+
+The three MCP tools (`evilution-mutate`, `evilution-session`, `evilution-info`) form evilution's public contract for AI agents. From `1.0.0` onwards the following are governed by the gem's [SemVer policy](docs/versioning.md):
+
+- **Tool names**: `evilution-mutate`, `evilution-session`, `evilution-info`.
+- **Input schemas**: every parameter listed in each tool's `input_schema` (name, type, enum values, `required`).
+- **Action enumerations**: the action enum on `evilution-session` (`list`, `show`, `diff`) and `evilution-info` (`subjects`, `tests`, `environment`, `statuses`, `feedback`).
+- **Output payload top-level shape**: the keys and value types documented per action below.
+- **Error envelope**: an error response is a single text content with body `{ "error": { "type": <string>, "message": <string> } }` and the response's `error` flag set to true. The error type strings (`config_error`, `parse_error`, `not_found`, `runtime_error`, `validation_error`, `tool_error`) are part of the contract.
+
+#### Output `schema_version`
+
+Each MCP tool emits a `schema_version` integer scoped to the **MCP contract** (`Evilution::MCP::CONTRACT_VERSION`, currently `1`):
+
+| Tool / action                  | Where `schema_version` lives                                                                                                                                           |
+|--------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `evilution-mutate`             | Top-level of the mutation report JSON. (Note: this field is governed by `Evilution::Session::Schema::CURRENT_VERSION` — the report shape is shared with session JSON.) |
+| `evilution-session` `list`     | Top-level of the envelope: `{ "schema_version": 1, "sessions": [...] }`.                                                                                               |
+| `evilution-session` `show`     | Inside the returned session JSON document (governed by `Evilution::Session::Schema::CURRENT_VERSION`).                                                                 |
+| `evilution-session` `diff`     | Top-level of the diff payload, alongside `summary` / `fixed` / `new_survivors` / `persistent`.                                                                         |
+| `evilution-info` (all actions) | Top-level of every successful response, injected by the action response formatter.                                                                                     |
+
+The MCP contract version (`Evilution::MCP::CONTRACT_VERSION`) is **independent** of the session JSON schema version (`Evilution::Session::Schema::CURRENT_VERSION`). They happen to both be `1` today; either may be bumped independently at the next MAJOR release if its surface gains an incompatible change.
+
+#### Per-tool output shapes
+
+- **`evilution-mutate`** — full schema in the [JSON Output Schema](#json-output-schema) section. MCP-specific additions to each `survived` entry are documented in [Enriched Survived Entries](#enriched-survived-entries).
+- **`evilution-session` `list`** — `{ "schema_version": Integer, "sessions": Array<{ file, timestamp, total, killed, survived, score, duration }> }`. Sessions are reverse-chronological; the array is filtered by `limit` when provided.
+- **`evilution-session` `show`** — the parsed session JSON document, exactly as written under `.evilution/results/*.json`. Field reference: see [Session JSON files](#session-json-files).
+- **`evilution-session` `diff`** — `{ "schema_version": Integer, "summary": { base_score, head_score, score_delta, base_survived, head_survived, base_total, head_total, base_killed, head_killed }, "fixed": Array, "new_survivors": Array, "persistent": Array }`. The mutation arrays carry the same per-mutation fields the session `survived` list uses (`operator`, `file`, `line`, `subject`, `diff`).
+- **`evilution-info` `subjects`** — `{ "schema_version": Integer, "subjects": Array<{ name, file, line, mutations }>, "total_subjects": Integer, "total_mutations": Integer }`.
+- **`evilution-info` `tests`** — `{ "schema_version": Integer, "specs": Array<{ source, spec }>, "unresolved": Array<String>, "total_sources": Integer, "total_specs": Integer }`.
+- **`evilution-info` `environment`** — `{ "schema_version": Integer, "version": String, "ruby": String, "config_file": String|null, ... }` mirroring the effective `Evilution::Config`.
+- **`evilution-info` `statuses`** — `{ "schema_version": Integer, "statuses": Array<{ name, meaning, in_score }> }`.
+- **`evilution-info` `feedback`** — `{ "schema_version": Integer, "discussion_url": String, "consent": String, "privacy": String }`.
+
+#### Deprecation cycle
+
+When a parameter, action, or output field on the public MCP contract is deprecated:
+
+1. The deprecation is announced in the CHANGELOG and the tool's `description` text gains a deprecation note.
+2. The deprecated form remains functional for the entire `1.x` line — a deprecation introduced in `1.X` continues to work in every subsequent `1.X+N` release.
+3. The earliest release that may remove the deprecated form is `2.0`. Removals are listed in the major-release migration guide.
+4. Adding new parameters, new actions, or new top-level output fields is additive and ships in MINOR releases (existing consumers continue to work).
+
+#### Not covered by the contract
+
+- The exact wording of error `message` strings (the `type` is contract; the message is a hint that may be reworded).
+- The exact ordering of arrays whose contract calls only for membership (e.g. `unresolved` source files).
+- Progress-stream notification payloads sent through `server_context.notifications` — these are best-effort UI signals, not a stable API.
+- Performance characteristics (request latency, memory, parallelism) — improvements ship in any release; regressions are bugs but not contract violations.
+- Default values that are part of the gem's user-facing semantics (timeout, integration default, etc.) — these follow the umbrella SemVer policy and may be tuned.
+
 ## Recommended Workflows for AI Agents
 
 ### 1. Full project scan
