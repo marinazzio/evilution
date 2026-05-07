@@ -137,6 +137,29 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       end
     end
 
+    it "returns exit 2 with upgrade-the-gem message when an evilution session has a future schema_version" do
+      future = {
+        "schema_version" => 99,
+        "summary" => { "total" => 1, "killed" => 0, "survived" => 1, "score" => 0.0 },
+        "survived" => []
+      }
+      Tempfile.create(["future_session", ".json"]) do |f|
+        f.write(JSON.generate(future))
+        f.flush
+
+        result = run_with(files: [f.path, evilution_path])
+        expect(result.exit_code).to eq(2)
+        expect(result.error).to be_a(Evilution::Error)
+        expect(result.error.message).to include(f.path)
+        expect(result.error.message).to match(/schema_version 99.*Upgrade the evilution gem/m)
+      end
+    end
+
+    it "still accepts an evilution session that omits schema_version (legacy)" do
+      result = run_with(files: [evilution_path, evilution_path])
+      expect(result.exit_code).to eq(0)
+    end
+
     it "returns exit 2 with ConfigError for unsupported --format" do
       result = run_with(
         files: [mutant_path, evilution_path],

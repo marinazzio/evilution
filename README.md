@@ -266,10 +266,13 @@ Use `--show-disabled` to see which mutations were skipped.
 
 ## JSON Output Schema
 
-Use `--format json` for machine-readable output. Schema:
+Use `--format json` for machine-readable output. The same shape is used for both stdout reports (`--format json`) and saved session files (`--save-session` → `.evilution/results/*.json`); session files add a small set of extra top-level fields described under [Session JSON files](#session-json-files) below.
+
+Schema:
 
 ```json
 {
+  "schema_version": "integer — schema version of this JSON document (current: 1)",
   "version": "string   — gem version",
   "timestamp": "string — ISO 8601 timestamp of the report",
   "summary": {
@@ -326,6 +329,36 @@ Use `--format json` for machine-readable output. Schema:
 ```
 
 **Key metric**: `summary.score` — the mutation score. Higher is better. 1.0 means all mutations were caught.
+
+### Session JSON files
+
+Sessions saved by `--save-session` (under `.evilution/results/*.json`) and consumed by `evilution session show`, `evilution session diff`, `evilution compare`, and the HTML reporter share the schema above with these additions:
+
+| Field                | Type    | Description                                                                                       |
+|----------------------|---------|---------------------------------------------------------------------------------------------------|
+| `git`                | Object  | `{ "sha": "<full SHA or null>", "branch": "<branch name or null>" }` captured at run time.        |
+| `killed_count`       | Integer | Top-level convenience counter; mirrors `summary.killed`.                                          |
+| `timed_out_count`    | Integer | Mirrors `summary.timed_out`.                                                                      |
+| `error_count`        | Integer | Mirrors `summary.errors`.                                                                         |
+| `neutral_count`      | Integer | Mirrors `summary.neutral`.                                                                        |
+| `equivalent_count`   | Integer | Mirrors `summary.equivalent`.                                                                     |
+| `skipped_count`      | Integer | Mutations skipped by `# evilution:disable` (omitted from `summary` unless positive).              |
+
+Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent`, `unresolved`, `unparseable`, `timed_out`, `errors`) — only `survived` and `coverage_gaps` are persisted. The score, totals, and timestamps are stable for diff/compare consumers.
+
+#### Schema versioning
+
+Every session and stdout JSON document carries a top-level `schema_version` integer (currently `1`). On read:
+
+- **`schema_version` matches what this gem supports** — proceed normally.
+- **`schema_version` is omitted** — treated as version `1` (the JSON shape that defined version 1). Sessions written before this field existed continue to load.
+- **`schema_version` is greater than what this gem supports** — `Evilution::Session::Store#load`, `evilution compare`, `evilution session show`, `evilution session diff`, and the HTML reporter raise `Evilution::Error` with the offending file path and a "Upgrade the evilution gem" message. We refuse to silently misread a newer document.
+
+Compatibility policy for the `1.x` gem line:
+
+- New top-level fields are added in MINOR releases (additive only). Consumers that ignore unknown fields keep working without changes.
+- Existing fields are not removed, renamed, or have their semantics changed in any `1.x` release.
+- `schema_version` is bumped only on incompatible changes — i.e. only at the next MAJOR release. `schema_version: 2` will ship with `evilution 2.0`. See [docs/versioning.md](docs/versioning.md) for the umbrella SemVer policy.
 
 ### Mutation Statuses
 

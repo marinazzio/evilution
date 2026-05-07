@@ -9,6 +9,7 @@ require_relative "../../compare"
 require_relative "../../compare/categorizer"
 require_relative "../../compare/detector"
 require_relative "../../compare/normalizer"
+require_relative "../../session/schema"
 
 class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
   SUPPORTED_FORMATS = %i[json text].freeze
@@ -47,6 +48,7 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
 
     json = JSON.parse(File.read(path))
     tool = Evilution::Compare::Detector.call(json)
+    Evilution::Session::Schema.validate!(json, source: path) if tool == :evilution
     normalize(json, tool)
   rescue ::JSON::ParserError => e
     raise Evilution::Error, "invalid JSON in #{path}: #{e.message}"
