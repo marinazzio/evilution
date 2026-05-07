@@ -1,5 +1,7 @@
 # Changelog
 
+Versioning policy: see [docs/versioning.md](docs/versioning.md).
+
 ## [0.29.0] - 2026-05-06
 
 ### Changed

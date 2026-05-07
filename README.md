@@ -594,6 +594,10 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
 
+## Versioning
+
+`evilution` follows [Semantic Versioning](https://semver.org). The full policy — what counts as the public contract, what triggers a major bump, how deprecations work — is documented in [docs/versioning.md](docs/versioning.md).
+
 ## Repository
 
 https://github.com/marinazzio/evilution
