@@ -6,8 +6,10 @@ require_relative "spec_selector"
 
 class Evilution::Config
   CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
+  CURRENT_SCHEMA_VERSION = 1
 
   DEFAULTS = {
+    schema_version: CURRENT_SCHEMA_VERSION,
     timeout: 30, format: :text, target: nil, min_score: 0.0, integration: :rspec,
     verbose: false, quiet: false, jobs: 1, fail_fast: nil, baseline: true,
     isolation: :auto, incremental: false, suggest_tests: false, progress: true,
@@ -21,7 +23,7 @@ class Evilution::Config
     profile: :default
   }.freeze
 
-  attr_reader :target_files, :timeout, :format,
+  attr_reader :target_files, :schema_version, :timeout, :format,
               :target, :min_score, :integration, :verbose, :quiet,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
@@ -111,6 +113,13 @@ class Evilution::Config
     <<~YAML
       # Evilution configuration
       # See: https://github.com/marinazzio/evilution
+
+      # Schema version for this config file (current: #{CURRENT_SCHEMA_VERSION}).
+      # Declaring schema_version opts the file into strict validation:
+      # unknown keys raise ConfigError, and a future schema_version is
+      # rejected so an old gem cannot silently misread a newer config.
+      # Omit to keep the legacy lenient behavior (unknown keys ignored).
+      schema_version: #{CURRENT_SCHEMA_VERSION}
 
       # Per-mutation timeout in seconds (default: 30)
       # timeout: 30
@@ -208,6 +217,7 @@ class Evilution::Config
 
   SIMPLE_ATTR_TRANSFORMS = {
     target_files: ->(v) { Array(v) },
+    schema_version: nil,
     timeout: nil,
     format: :to_sym.to_proc,
     target: nil,

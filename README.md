@@ -164,6 +164,7 @@ Generate default config: `bundle exec evilution init`
 Creates `.evilution.yml`:
 
 ```yaml
+schema_version: 1            # opts into strict validation (rejects unknown keys, refuses future versions)
 # timeout: 30              # seconds per mutation
 # format: text             # text | json | html
 # min_score: 0.0           # 0.0–1.0
@@ -183,6 +184,62 @@ Creates `.evilution.yml`:
 ```
 
 **Precedence**: CLI flags override `.evilution.yml` values.
+
+### Schema versioning
+
+`.evilution.yml` may declare an integer `schema_version` (currently `1`). Behavior:
+
+- **When declared** — strict mode. Unknown top-level keys raise `Evilution::ConfigError`. A `schema_version` greater than the installed gem supports is rejected so an old gem cannot silently misread a newer config.
+- **When omitted** — legacy lenient mode. Unknown keys are ignored.
+
+Compatibility policy for the `1.x` gem line:
+
+- New configuration keys are added in MINOR releases (additive only). Each new key takes a default that preserves prior behavior.
+- Existing keys are not removed, renamed, or have their semantics changed in any `1.x` release. Deprecated keys keep working through the entire `1.x` line; see [docs/versioning.md](docs/versioning.md).
+- `schema_version` is bumped only on incompatible changes — i.e. only at the next MAJOR release. `schema_version: 2` will ship with `evilution 2.0`.
+
+A JSON Schema covering every supported key lives at [`schema/evilution.config.schema.json`](schema/evilution.config.schema.json). Point editor / IDE YAML extensions at it for autocomplete and inline validation (e.g. VS Code `yaml.schemas`, JetBrains "Custom JSON Schema").
+
+### Configuration reference
+
+All keys recognised under `schema_version: 1`:
+
+| Key                          | Type                          | Default                                | Description                                                                                                                              |
+|------------------------------|-------------------------------|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| `schema_version`             | Integer                       | `1`                                    | Config schema version. Declaring it enables strict validation; omit for lenient mode.                                                    |
+| `timeout`                    | Integer                       | `30`                                   | Per-mutation timeout in seconds.                                                                                                         |
+| `format`                     | String                        | `text`                                 | Output format: `text`, `json`, `html`.                                                                                                   |
+| `target`                     | String / null                 | `null`                                 | Filter expression: method (`Foo#bar`), class (`Foo`), namespace (`Foo*`), descendants (`descendants:Foo`), source glob (`source:**/*.rb`). |
+| `min_score`                  | Float                         | `0.0`                                  | Minimum mutation score (0.0–1.0) for exit code 0.                                                                                        |
+| `integration`                | String                        | `rspec`                                | Test framework: `rspec` or `minitest`.                                                                                                   |
+| `verbose`                    | Boolean                       | `false`                                | Verbose output (RSS/GC stats per phase, error details for errored mutations).                                                            |
+| `quiet`                      | Boolean                       | `false`                                | Suppress output.                                                                                                                         |
+| `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
+| `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
+| `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (marked `:neutral`).                                                             |
+| `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects.                                              |
+| `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
+| `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
+| `progress`                   | Boolean                       | `true`                                 | TTY progress bar.                                                                                                                        |
+| `save_session`               | Boolean                       | `false`                                | Save session JSON under `.evilution/results/`.                                                                                           |
+| `line_ranges`                | Hash                          | `{}`                                   | Per-file line-range constraints. Typically set via CLI; rare in YAML.                                                                    |
+| `spec_files`                 | Array&lt;String&gt;           | `[]`                                   | Explicit spec files to run. Bypasses auto-detection when non-empty.                                                                      |
+| `ignore_patterns`            | Array&lt;String&gt;           | `[]`                                   | AST patterns to skip during mutation generation. See [docs/ast_pattern_syntax.md](docs/ast_pattern_syntax.md).                           |
+| `show_disabled`              | Boolean                       | `false`                                | Report mutations skipped by `# evilution:disable` comments.                                                                              |
+| `baseline_session`           | String / null                 | `null`                                 | Saved session file path for HTML report comparison.                                                                                      |
+| `skip_heredoc_literals`      | Boolean                       | `false`                                | Skip string literal mutations inside heredocs.                                                                                           |
+| `related_specs_heuristic`    | Boolean                       | `false`                                | Append related request/integration/feature/system specs for `includes(...)` mutations.                                                   |
+| `fallback_to_full_suite`     | Boolean                       | `false`                                | When no matching spec resolves, run the entire suite instead of marking the mutation `:unresolved`.                                      |
+| `preload`                    | String / Boolean / null       | `null`                                 | File to preload in parent before forking. `false` to disable. `null` to auto-detect for Rails.                                           |
+| `spec_mappings`              | Hash&lt;String, String/Array&gt; | `{}`                                | Custom mapping from source path to spec path(s).                                                                                         |
+| `spec_pattern`               | String / null                 | `null`                                 | Glob restricting resolved spec candidates.                                                                                               |
+| `example_targeting`          | Boolean                       | `true`                                 | Per-mutation example-level targeting.                                                                                                    |
+| `example_targeting_fallback` | String                        | `full_file`                            | When targeting finds no example: `full_file` or `unresolved`.                                                                            |
+| `example_targeting_cache`    | Hash                          | `{ max_files: 50, max_blocks: 10000 }` | LRU cache bounds for the example-targeting AST parser.                                                                                   |
+| `quiet_children`             | Boolean                       | `false`                                | Redirect each worker's stdout/stderr to per-pid files under `quiet_children_dir`.                                                        |
+| `quiet_children_dir`         | String                        | `tmp/evilution_children`               | Directory for `--quiet-children` per-pid log files.                                                                                      |
+| `profile`                    | String                        | `default`                              | Operator profile: `default` or `strict`.                                                                                                 |
+| `hooks`                      | Hash&lt;String, String&gt;    | `{}`                                   | Lifecycle hooks: event name → path to a Ruby file returning a `Proc`.                                                                    |
 
 ## Disable Comments
 

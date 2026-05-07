@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/marinazzio/evilution/blob/master/schema/evilution.config.schema.json",
+  "title": "Evilution Configuration",
+  "description": "Schema for .evilution.yml / config/evilution.yml. Declaring `schema_version` opts the file into strict validation at load time.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Config schema version. Currently must be 1. Declaring it enables strict validation: unknown keys are rejected and a future schema_version is refused."
+    },
+    "timeout": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30,
+      "description": "Per-mutation timeout in seconds."
+    },
+    "format": {
+      "type": "string",
+      "enum": ["text", "json", "html"],
+      "default": "text",
+      "description": "Output format."
+    },
+    "target": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Filter expression: method (Foo#bar), class (Foo), namespace wildcard (Foo*), method-type selector (Foo# / Foo.), descendants (descendants:Foo), or source glob (source:**/*.rb)."
+    },
+    "min_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "default": 0.0,
+      "description": "Minimum mutation score (0.0–1.0) for exit code 0."
+    },
+    "integration": {
+      "type": "string",
+      "enum": ["rspec", "minitest"],
+      "default": "rspec",
+      "description": "Test framework integration."
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false,
+      "description": "Verbose output (RSS/GC stats per phase, error details for errored mutations)."
+    },
+    "quiet": {
+      "type": "boolean",
+      "default": false,
+      "description": "Suppress output."
+    },
+    "jobs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Number of parallel workers."
+    },
+    "fail_fast": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "default": null,
+      "description": "Stop after N surviving mutants. null or omitted = disabled."
+    },
+    "baseline": {
+      "type": "boolean",
+      "default": true,
+      "description": "Run baseline test suite first to detect pre-existing failures and mark those mutations :neutral."
+    },
+    "isolation": {
+      "type": "string",
+      "enum": ["auto", "fork", "in_process"],
+      "default": "auto",
+      "description": "Isolation strategy. auto selects fork for Rails projects."
+    },
+    "incremental": {
+      "type": "boolean",
+      "default": false,
+      "description": "Cache killed/timeout results across runs and skip them when source is unchanged."
+    },
+    "suggest_tests": {
+      "type": "boolean",
+      "default": false,
+      "description": "Generate concrete test code in survivor suggestions (RSpec or Minitest, matching integration)."
+    },
+    "progress": {
+      "type": "boolean",
+      "default": true,
+      "description": "TTY progress bar."
+    },
+    "save_session": {
+      "type": "boolean",
+      "default": false,
+      "description": "Save session JSON under .evilution/results/."
+    },
+    "line_ranges": {
+      "type": "object",
+      "default": {},
+      "description": "Per-file line-range constraints. Typically set via CLI; rare in YAML.",
+      "additionalProperties": true
+    },
+    "spec_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Explicit spec files to run. Bypasses auto-detection when non-empty."
+    },
+    "ignore_patterns": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "AST patterns to skip during mutation generation. See docs/ast_pattern_syntax.md."
+    },
+    "show_disabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Report mutations skipped by `# evilution:disable` comments."
+    },
+    "baseline_session": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Saved session file path for HTML report comparison."
+    },
+    "skip_heredoc_literals": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip all string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have coverage)."
+    },
+    "related_specs_heuristic": {
+      "type": "boolean",
+      "default": false,
+      "description": "When a mutation removes an `includes(...)` call, also run matching specs from spec/{requests,integration,features,system}."
+    },
+    "fallback_to_full_suite": {
+      "type": "boolean",
+      "default": false,
+      "description": "When no matching spec resolves, run the entire suite instead of marking the mutation :unresolved."
+    },
+    "preload": {
+      "type": ["string", "boolean", "null"],
+      "default": null,
+      "description": "Path to preload before forking workers. false to disable. null to auto-detect spec/rails_helper.rb -> spec/spec_helper.rb -> test/test_helper.rb for Rails projects."
+    },
+    "spec_mappings": {
+      "type": "object",
+      "default": {},
+      "description": "Custom mapping from source file to spec file(s). Keys are source paths; values are spec path strings or arrays of spec paths.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+    "spec_pattern": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Glob restricting resolved spec candidates to files matching this pattern."
+    },
+    "example_targeting": {
+      "type": "boolean",
+      "default": true,
+      "description": "Per-mutation example-level targeting via body-token scan."
+    },
+    "example_targeting_fallback": {
+      "type": "string",
+      "enum": ["full_file", "unresolved"],
+      "default": "full_file",
+      "description": "Behavior when targeting finds no matching example."
+    },
+    "example_targeting_cache": {
+      "type": "object",
+      "default": { "max_files": 50, "max_blocks": 10000 },
+      "additionalProperties": false,
+      "description": "LRU cache bounds for the spec AST parser that powers example targeting.",
+      "properties": {
+        "max_files": { "type": "integer", "minimum": 1 },
+        "max_blocks": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "quiet_children": {
+      "type": "boolean",
+      "default": false,
+      "description": "Redirect each worker's stdout/stderr to per-pid files under quiet_children_dir."
+    },
+    "quiet_children_dir": {
+      "type": "string",
+      "default": "tmp/evilution_children",
+      "description": "Directory for --quiet-children per-pid log files."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["default", "strict"],
+      "default": "default",
+      "description": "Operator profile. strict adds aggressive truthiness mutators on top of default."
+    },
+    "hooks": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": { "type": "string" },
+      "description": "Lifecycle hooks: keys are event names (e.g. worker_process_start, mutation_insert_pre); values are paths to Ruby files returning a Proc."
+    }
+  }
+}
