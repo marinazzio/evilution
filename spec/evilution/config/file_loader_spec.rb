@@ -63,5 +63,60 @@ RSpec.describe Evilution::Config::FileLoader do
         /cannot read config file \.evilution\.yml/
       )
     end
+
+    context "with schema_version declared (strict mode)" do
+      it "returns the parsed Hash including schema_version when valid" do
+        File.write(".evilution.yml", "schema_version: 1\ntimeout: 42\n")
+        expect(described_class.load).to eq(schema_version: 1, timeout: 42)
+      end
+
+      it "raises ConfigError on an unknown top-level key" do
+        File.write(".evilution.yml", "schema_version: 1\nunknown_key: value\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /unknown_key/)
+      end
+
+      it "raises ConfigError when schema_version exceeds CURRENT_SCHEMA_VERSION" do
+        File.write(".evilution.yml", "schema_version: 99\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /schema_version 99.*newer than this evilution gem/)
+      end
+
+      it "raises ConfigError when schema_version is 0" do
+        File.write(".evilution.yml", "schema_version: 0\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /invalid schema_version 0.*positive Integer/)
+      end
+
+      it "raises ConfigError when schema_version is a negative integer" do
+        File.write(".evilution.yml", "schema_version: -1\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /invalid schema_version -1.*positive Integer/)
+      end
+
+      it "raises ConfigError when schema_version is a String" do
+        File.write(".evilution.yml", "schema_version: 'one'\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /invalid schema_version "one".*positive Integer/)
+      end
+
+      it "rejects target_files in YAML (CLI-positional only)" do
+        File.write(".evilution.yml", "schema_version: 1\ntarget_files:\n  - lib/foo.rb\n")
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /target_files/)
+      end
+    end
+
+    context "without schema_version (lenient mode)" do
+      it "returns the parsed Hash without raising" do
+        File.write(".evilution.yml", "timeout: 42\n")
+        expect(described_class.load).to eq(timeout: 42)
+      end
+
+      it "returns Hash including unknown keys (no validation applied)" do
+        File.write(".evilution.yml", "timeout: 42\nunknown_key: value\n")
+        expect(described_class.load).to eq(timeout: 42, unknown_key: "value")
+      end
+    end
   end
 end

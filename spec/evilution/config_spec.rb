@@ -602,4 +602,132 @@ RSpec.describe Evilution::Config do
       expect(config).to be_frozen
     end
   end
+
+  describe "schema versioning" do
+    it "exposes CURRENT_SCHEMA_VERSION constant" do
+      expect(described_class::CURRENT_SCHEMA_VERSION).to eq(1)
+    end
+
+    it "defaults schema_version to CURRENT_SCHEMA_VERSION when no config file exists" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.schema_version).to eq(described_class::CURRENT_SCHEMA_VERSION)
+    end
+
+    it "loads explicit schema_version from YAML" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "schema_version: 1\ntimeout: 60\n")
+
+          config = described_class.new
+
+          expect(config.schema_version).to eq(1)
+          expect(config.timeout).to eq(60)
+        end
+      end
+    end
+
+    context "when schema_version is declared in the file (strict mode)" do
+      it "raises ConfigError on an unknown top-level key" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nunknown_key: value\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /unknown_key/)
+          end
+        end
+      end
+
+      it "rejects target_files in YAML (CLI-positional only)" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\ntarget_files:\n  - lib/foo.rb\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /target_files/)
+          end
+        end
+      end
+
+      it "raises ConfigError when schema_version exceeds CURRENT_SCHEMA_VERSION" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 99\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /schema_version/)
+          end
+        end
+      end
+
+      it "raises ConfigError when schema_version is 0 or negative" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 0\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /schema_version/)
+          end
+        end
+      end
+
+      it "raises ConfigError when schema_version is not an integer" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 'one'\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /schema_version/)
+          end
+        end
+      end
+
+      it "accepts a typical config that uses many DEFAULTS keys plus :hooks" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", <<~YAML)
+              schema_version: 1
+              timeout: 60
+              format: json
+              integration: rspec
+              jobs: 4
+              isolation: auto
+              profile: default
+              hooks:
+                worker_process_start: config/hooks/worker.rb
+            YAML
+
+            expect { described_class.new }.not_to raise_error
+          end
+        end
+      end
+    end
+
+    context "when schema_version is absent (lenient mode)" do
+      it "ignores unknown top-level keys without raising" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "unknown_key: value\ntimeout: 60\n")
+
+            config = described_class.new
+
+            expect(config.timeout).to eq(60)
+          end
+        end
+      end
+
+      it "still defaults schema_version to CURRENT_SCHEMA_VERSION" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "timeout: 42\n")
+
+            config = described_class.new
+
+            expect(config.schema_version).to eq(described_class::CURRENT_SCHEMA_VERSION)
+          end
+        end
+      end
+    end
+  end
 end
