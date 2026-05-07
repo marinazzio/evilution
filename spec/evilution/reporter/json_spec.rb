@@ -73,6 +73,12 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["version"]).to eq(Evilution::VERSION)
     end
 
+    it "includes the current schema_version" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["schema_version"]).to eq(Evilution::Session::Schema::CURRENT_VERSION)
+    end
+
     it "includes summary stats" do
       parsed = JSON.parse(reporter.call(summary))
       stats = parsed["summary"]

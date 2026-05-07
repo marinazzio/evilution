@@ -9,6 +9,7 @@ require_relative "../../compare"
 require_relative "../../compare/categorizer"
 require_relative "../../compare/detector"
 require_relative "../../compare/normalizer"
+require_relative "../../session/schema"
 
 class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
   SUPPORTED_FORMATS = %i[json text].freeze
@@ -46,6 +47,7 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
     raise Evilution::Error, "file not found: #{path}" unless File.exist?(path)
 
     json = JSON.parse(File.read(path))
+    validate_session_schema(json, path)
     tool = Evilution::Compare::Detector.call(json)
     normalize(json, tool)
   rescue ::JSON::ParserError => e
@@ -54,6 +56,17 @@ class Evilution::CLI::Commands::Compare < Evilution::CLI::Command
     raise Evilution::Error, "#{path}: #{e.message}"
   rescue SystemCallError => e
     raise Evilution::Error, e.message
+  end
+
+  # Validate before detection: schema_version is an evilution-only marker. A
+  # future schema may rearrange the shape enough that Detector cannot classify
+  # it; in that case the user must still see "Upgrade the evilution gem", not
+  # "cannot detect tool".
+  def validate_session_schema(json, path)
+    return unless json.is_a?(Hash)
+    return unless json.key?("schema_version") || json.key?(:schema_version)
+
+    Evilution::Session::Schema.validate!(json, source: path)
   end
 
   def normalize(json, tool)

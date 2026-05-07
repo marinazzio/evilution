@@ -237,6 +237,15 @@ RSpec.describe Evilution::Session::Store do
       expect(data["summary"]["duration"]).to eq(1.2346)
     end
 
+    it "writes the current schema_version at the top level" do
+      summary = build_summary
+
+      store.save(summary)
+
+      data = read_saved_session
+      expect(data["schema_version"]).to eq(Evilution::Session::Schema::CURRENT_VERSION)
+    end
+
     it "preserves per-file paths when results span multiple target files" do
       a = build_result(build_mutation(file: "lib/models/user.rb", line: 3), status: :survived)
       b = build_result(build_mutation(file: "lib/models/account.rb", line: 7), status: :survived)
@@ -335,6 +344,42 @@ RSpec.describe Evilution::Session::Store do
       expect { store.load("/nonexistent/path.json") }.to raise_error(
         Evilution::Error, "session file not found: /nonexistent/path.json"
       )
+    end
+
+    it "loads a session that omits schema_version (legacy session)" do
+      legacy_path = File.join(results_dir, "20260101T000000-aaaa0000.json")
+      File.write(legacy_path, JSON.generate("version" => "0.27.0", "summary" => { "total" => 0 }))
+
+      expect { store.load(legacy_path) }.not_to raise_error
+    end
+
+    it "loads a session with schema_version equal to CURRENT_VERSION" do
+      compatible_path = File.join(results_dir, "20260102T000000-bbbb0000.json")
+      File.write(
+        compatible_path,
+        JSON.generate(
+          "schema_version" => Evilution::Session::Schema::CURRENT_VERSION,
+          "summary" => { "total" => 0 }
+        )
+      )
+
+      expect { store.load(compatible_path) }.not_to raise_error
+    end
+
+    it "raises with an upgrade-the-gem message when schema_version is newer than supported" do
+      future_path = File.join(results_dir, "20260103T000000-cccc0000.json")
+      File.write(future_path, JSON.generate("schema_version" => 99, "summary" => { "total" => 0 }))
+
+      expect { store.load(future_path) }.to raise_error(
+        Evilution::Error, /schema_version 99.*Upgrade the evilution gem/m
+      )
+    end
+
+    it "includes the file path in the schema-version error message" do
+      future_path = File.join(results_dir, "20260104T000000-dddd0000.json")
+      File.write(future_path, JSON.generate("schema_version" => 99))
+
+      expect { store.load(future_path) }.to raise_error(Evilution::Error, /#{Regexp.escape(future_path)}/)
     end
   end
 

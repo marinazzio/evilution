@@ -5,6 +5,7 @@ require "time"
 require_relative "suggestion"
 
 require_relative "../reporter"
+require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
   def initialize(suggest_tests: false, integration: :rspec)
@@ -19,6 +20,7 @@ class Evilution::Reporter::JSON
 
   def build_report(summary)
     report = {
+      schema_version: Evilution::Session::Schema::CURRENT_VERSION,
       version: Evilution::VERSION,
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),

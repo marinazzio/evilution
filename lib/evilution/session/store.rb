@@ -6,6 +6,7 @@ require "time"
 require "fileutils"
 
 require_relative "../session"
+require_relative "schema"
 
 class Evilution::Session::Store
   DEFAULT_DIR = ".evilution/results"
@@ -38,7 +39,9 @@ class Evilution::Session::Store
   def load(path)
     raise Evilution::Error, "session file not found: #{path}" unless File.exist?(path)
 
-    JSON.parse(File.read(path))
+    data = JSON.parse(File.read(path))
+    Evilution::Session::Schema.validate!(data, source: path) if data.is_a?(Hash)
+    data
   end
 
   def gc(older_than:)
@@ -60,6 +63,7 @@ class Evilution::Session::Store
 
   def build_session_data(summary, now)
     {
+      schema_version: Evilution::Session::Schema::CURRENT_VERSION,
       version: Evilution::VERSION,
       timestamp: now.iso8601,
       git: git_context,
