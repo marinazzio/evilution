@@ -639,6 +639,17 @@ RSpec.describe Evilution::Config do
         end
       end
 
+      it "rejects target_files in YAML (CLI-positional only)" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\ntarget_files:\n  - lib/foo.rb\n")
+
+            expect { described_class.new }
+              .to raise_error(Evilution::ConfigError, /target_files/)
+          end
+        end
+      end
+
       it "raises ConfigError when schema_version exceeds CURRENT_SCHEMA_VERSION" do
         Dir.mktmpdir do |dir|
           Dir.chdir(dir) do

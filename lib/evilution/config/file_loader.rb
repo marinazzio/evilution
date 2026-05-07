@@ -5,7 +5,9 @@ require "yaml"
 module Evilution::Config::FileLoader
   module_function
 
-  KNOWN_KEYS = (Evilution::Config::DEFAULTS.keys + %i[hooks target_files]).uniq.freeze
+  # Keys recognised in YAML config files. `target_files` is intentionally excluded
+  # because it is CLI-positional (the file paths after `evilution run`).
+  KNOWN_KEYS = (Evilution::Config::DEFAULTS.keys + %i[hooks]).uniq.freeze
 
   def load
     Evilution::Config::CONFIG_FILES.each do |path|
