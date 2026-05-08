@@ -52,7 +52,9 @@ class Evilution::Isolation::Fork
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks
       result = execute_in_child(mutation, test_command)
-      Marshal.dump(result, write_io)
+      payload = Marshal.dump(result)
+      write_io.write([payload.bytesize].pack("N"))
+      write_io.write(payload)
       write_io.close
       exit!(result[:passed] ? 0 : 1)
     end
@@ -91,20 +93,51 @@ class Evilution::Isolation::Fork
     }
   end
 
+  # Length-prefixed read with waitpid polling. Subject specs that exercise
+  # Process.fork inside test_command leave a grandchild that inherits write_io
+  # via fork — if the grandchild outlives the child, a plain `read_io.read`
+  # never sees EOF and hangs forever. The length prefix makes payload reads
+  # bounded; the waitpid-WNOHANG check inside the poll loop lets us exit
+  # promptly when the child died without writing anything.
   def wait_for_result(pid, read_io, timeout)
-    if read_io.wait_readable(timeout)
-      data = read_io.read
-      ::Process.wait(pid)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return timeout_result(pid) if remaining <= 0
 
-      if data.empty?
-        { timeout: false, passed: false, error: "empty result from child" }
-      else
-        { timeout: false }.merge(Marshal.load(data))
+      if read_io.wait_readable([remaining, 0.5].min)
+        payload = read_payload(read_io)
+        if payload
+          ::Process.wait(pid)
+          return decode_payload(payload)
+        end
       end
-    else
-      terminate_child(pid)
-      { timeout: true }
+
+      return empty_result if ::Process.waitpid(pid, ::Process::WNOHANG)
     end
+  end
+
+  def read_payload(read_io)
+    header = read_io.read(4)
+    return nil unless header && header.bytesize == 4
+
+    size = header.unpack1("N")
+    read_io.read(size).to_s
+  end
+
+  def decode_payload(data)
+    return empty_result if data.empty?
+
+    { timeout: false }.merge(Marshal.load(data))
+  end
+
+  def empty_result
+    { timeout: false, passed: false, error: "empty result from child" }
+  end
+
+  def timeout_result(pid)
+    terminate_child(pid)
+    { timeout: true }
   end
 
   # Defensive reap: if normal control flow raised before wait_for_result
