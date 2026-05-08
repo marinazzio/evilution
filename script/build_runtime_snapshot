@@ -1,0 +1,157 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Builds tmp/evilution-runtime/ — a renamed copy of lib/ + exe/ where the
+# Evilution module is rebranded to EvilutionRuntime. Used by bin/evilution-self
+# so the mutation harness stays out of the namespace that subject `eval` clobbers.
+# Throwaway dogfood infrastructure (EV-yyd8). No tests.
+
+require "fileutils"
+
+ROOT       = File.expand_path("..", __dir__)
+SNAPSHOT   = File.join(ROOT, "tmp", "evilution-runtime")
+SUBJECT_LIB = File.join(ROOT, "lib")
+SUBJECT_EXE = File.join(ROOT, "exe")
+
+def main
+  prepare_destination
+  copy_sources
+  rename_entrypoints
+  rewrite_sources
+  patch_runtime_protocol
+  write_snapshot_sha
+  print_summary
+end
+
+def prepare_destination
+  FileUtils.rm_rf(SNAPSHOT)
+  FileUtils.mkdir_p(SNAPSHOT)
+end
+
+def copy_sources
+  FileUtils.cp_r(SUBJECT_LIB, SNAPSHOT)
+  FileUtils.cp_r(SUBJECT_EXE, SNAPSHOT)
+end
+
+def rename_entrypoints
+  File.rename(
+    File.join(SNAPSHOT, "lib", "evilution.rb"),
+    File.join(SNAPSHOT, "lib", "evilution_runtime.rb")
+  )
+  File.rename(
+    File.join(SNAPSHOT, "lib", "evilution"),
+    File.join(SNAPSHOT, "lib", "evilution_runtime")
+  )
+  File.rename(
+    File.join(SNAPSHOT, "exe", "evilution"),
+    File.join(SNAPSHOT, "exe", "evilution_runtime")
+  )
+  # exe/evil alias not needed in snapshot
+  evil_alias = File.join(SNAPSHOT, "exe", "evil")
+  FileUtils.rm_f(evil_alias)
+end
+
+def rewrite_sources
+  files = Dir.glob(File.join(SNAPSHOT, "**", "*.rb")) +
+          [File.join(SNAPSHOT, "exe", "evilution_runtime")]
+  files.uniq!
+  rewritten = 0
+  files.each do |path|
+    next unless File.file?(path)
+
+    original = File.read(path)
+    updated  = rewrite(original)
+    next if updated == original
+
+    File.write(path, updated)
+    rewritten += 1
+  end
+  @rewritten_count = rewritten
+end
+
+def rewrite(source)
+  source
+    .gsub(/\bEvilution\b/, "EvilutionRuntime")
+    .gsub(/(require\s+)(["'])evilution(["'\/])/,                       '\1\2evilution_runtime\3')
+    .gsub(/(require_relative\s+)(["'])((?:\.\.\/)*)evilution(["'\/])/, '\1\2\3evilution_runtime\4')
+end
+
+# Subject specs that exercise Evilution::Isolation::Fork (or any other lib code
+# that calls Process.fork) cause grandchildren to inherit the runtime's marshal
+# pipe write-end. If the grandchild outlives the runtime's child, the pipe
+# never EOFs and the runtime parent hangs in `read_io.read`. Patch the runtime
+# to use a length-prefixed protocol so the parent reads exactly N bytes and
+# never depends on EOF.
+def patch_runtime_protocol
+  path = File.join(SNAPSHOT, "lib", "evilution_runtime", "isolation", "fork.rb")
+  source = File.read(path)
+
+  source.sub!(
+    "Marshal.dump(result, write_io)",
+    "payload = Marshal.dump(result)\n      write_io.write([payload.bytesize].pack(\"N\"))\n      write_io.write(payload)"
+  ) || abort("patch_runtime_protocol: Marshal.dump anchor not found")
+
+  # Replace the whole wait_for_result body so we can wrap it in Timeout (the
+  # subject's grandchild keeps write_io open via fork inheritance, so EOF never
+  # arrives and a plain read hangs forever even with the length prefix).
+  old_wait = <<~OLD.gsub(/^(?=.)/, "  ").chomp
+    def wait_for_result(pid, read_io, timeout)
+      if read_io.wait_readable(timeout)
+        data = read_io.read
+        ::Process.wait(pid)
+
+        if data.empty?
+          { timeout: false, passed: false, error: "empty result from child" }
+        else
+          { timeout: false }.merge(Marshal.load(data))
+        end
+      else
+        terminate_child(pid)
+        { timeout: true }
+      end
+    end
+  OLD
+
+  new_wait = <<~NEW.gsub(/^(?=.)/, "  ").chomp
+    def wait_for_result(pid, read_io, timeout)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        if remaining <= 0
+          terminate_child(pid)
+          return { timeout: true }
+        end
+
+        if read_io.wait_readable([remaining, 0.5].min)
+          header = read_io.read(4)
+          if header && header.bytesize == 4
+            size = header.unpack1("N")
+            data = read_io.read(size).to_s
+            ::Process.wait(pid)
+            return data.empty? ? { timeout: false, passed: false, error: "empty result from child" } : { timeout: false }.merge(Marshal.load(data))
+          end
+        end
+
+        if ::Process.waitpid(pid, ::Process::WNOHANG)
+          return { timeout: false, passed: false, error: "child exited without result" }
+        end
+      end
+    end
+  NEW
+
+  source.sub!(old_wait, new_wait) || abort("patch_runtime_protocol: wait_for_result anchor not found")
+
+  File.write(path, source)
+end
+
+def write_snapshot_sha
+  sha = `git -C #{ROOT} rev-parse HEAD`.strip
+  File.write(File.join(SNAPSHOT, ".snapshot_sha"), "#{sha}\n")
+end
+
+def print_summary
+  puts "snapshot built at #{SNAPSHOT}"
+  puts "files rewritten: #{@rewritten_count}"
+end
+
+main

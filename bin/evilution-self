@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Throwaway dogfood entrypoint (EV-yyd8). Boots the renamed snapshot runtime
+# (tmp/evilution-runtime/) against the subject lib/, so mutation `eval` only
+# clobbers Evilution::* (subject) while EvilutionRuntime::* drives the run.
+
+$stdout.sync = true
+$stderr.sync = true
+
+snapshot = File.expand_path("../tmp/evilution-runtime", __dir__)
+unless File.directory?(File.join(snapshot, "lib"))
+  abort "snapshot missing — run script/build_runtime_snapshot"
+end
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))   # subject Evilution::*
+$LOAD_PATH.unshift(File.join(snapshot, "lib"))             # runtime EvilutionRuntime::* (first)
+
+require "evilution_runtime"
+# Pre-load subject namespace so mutation `eval` in fork children can reopen
+# Evilution::* classes (the eval expects them to exist). Children inherit this
+# load via fork; eval rewrites methods on the subject side only — runtime stays
+# in EvilutionRuntime::*.
+require "evilution"
+
+exit EvilutionRuntime::CLI.new(ARGV).call
