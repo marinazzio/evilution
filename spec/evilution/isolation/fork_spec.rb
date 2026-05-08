@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "tempfile"
+require "timeout"
 
 RSpec.describe Evilution::Isolation::Fork do
   subject(:isolator) { described_class.new }
@@ -145,6 +147,43 @@ RSpec.describe Evilution::Isolation::Fork do
 
       expect(result).to be_error
       expect(result.error_message).to eq("empty result from child")
+    end
+
+    # Regression for EV-9qh1 / GH #1176:
+    # When the test command forks a grandchild process, the grandchild
+    # inherits the marshal pipe's write-end via fork. If the grandchild
+    # outlives the child, the pipe never EOFs and a plain `read_io.read`
+    # in the parent hangs forever. The protocol must use a length-prefixed
+    # payload so the parent reads exactly N bytes without depending on EOF.
+    it "completes promptly when test command leaves a grandchild that keeps the pipe write-end open" do
+      pid_file = Tempfile.new("grandchild_pid")
+      pid_path = pid_file.path
+      pid_file.close
+
+      test_command = lambda { |_m|
+        grandchild_pid = Process.fork do
+          # Outlive any reasonable test bound. The grandchild inherits the
+          # runtime's marshal write_io but never writes to it.
+          sleep 60
+        end
+        File.write(pid_path, grandchild_pid.to_s)
+        { passed: true }
+      }
+
+      result = nil
+      Timeout.timeout(5) do
+        result = isolator.call(mutation: mutation, test_command: test_command, timeout: 30)
+      end
+
+      expect(result).to be_survived
+    ensure
+      begin
+        pid_str = File.read(pid_path).strip if pid_path && File.exist?(pid_path)
+        Process.kill("KILL", pid_str.to_i) if pid_str && !pid_str.empty?
+      rescue Errno::ESRCH, Errno::ENOENT
+        nil
+      end
+      pid_file&.unlink
     end
 
     it "returns error when test command raises" do

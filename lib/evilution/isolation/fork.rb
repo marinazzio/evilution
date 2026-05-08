@@ -52,7 +52,9 @@ class Evilution::Isolation::Fork
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks
       result = execute_in_child(mutation, test_command)
-      Marshal.dump(result, write_io)
+      payload = Marshal.dump(result)
+      write_io.write([payload.bytesize].pack("N"))
+      write_io.write(payload)
       write_io.close
       exit!(result[:passed] ? 0 : 1)
     end
@@ -91,20 +93,85 @@ class Evilution::Isolation::Fork
     }
   end
 
+  # Length-prefixed read with waitpid polling. Subject specs that exercise
+  # Process.fork inside test_command leave a grandchild that inherits write_io
+  # via fork — if the grandchild outlives the child, a plain `read_io.read`
+  # never sees EOF and hangs forever. The length prefix makes payload reads
+  # bounded; the waitpid-WNOHANG check inside the poll loop lets us exit
+  # promptly when the child died without writing anything.
   def wait_for_result(pid, read_io, timeout)
-    if read_io.wait_readable(timeout)
-      data = read_io.read
-      ::Process.wait(pid)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return timeout_result(pid) if remaining <= 0
 
-      if data.empty?
-        { timeout: false, passed: false, error: "empty result from child" }
-      else
-        { timeout: false }.merge(Marshal.load(data))
+      if read_io.wait_readable([remaining, 0.5].min)
+        payload = read_payload(read_io, deadline)
+        return reap_and_decode(pid, payload) if payload
       end
-    else
-      terminate_child(pid)
-      { timeout: true }
+
+      next unless ::Process.waitpid(pid, ::Process::WNOHANG)
+
+      # Child exited. Drain any final payload that arrived between
+      # wait_readable timeout and waitpid (race) before declaring empty.
+      final = read_payload(read_io, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.1)
+      return decode_payload(final) if final
+
+      return empty_result
     end
+  end
+
+  def reap_and_decode(pid, payload)
+    ::Process.wait(pid)
+    decode_payload(payload)
+  end
+
+  def read_payload(read_io, deadline)
+    header = read_n_bytes(read_io, 4, deadline)
+    return nil unless header
+
+    size = header.unpack1("N")
+    read_n_bytes(read_io, size, deadline)
+  end
+
+  # Bounded non-blocking read. Returns `count` bytes or nil on EOF / deadline.
+  # Uses `read_nonblock` so a child that wrote a partial frame (e.g. wrote the
+  # header then died with a grandchild keeping write_io open) cannot extend
+  # past the polling deadline.
+  def read_n_bytes(read_io, count, deadline)
+    return "" if count.zero?
+
+    buf = +""
+    while buf.bytesize < count
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return nil if remaining <= 0
+
+      chunk = read_io.read_nonblock(count - buf.bytesize, exception: false)
+      case chunk
+      when :wait_readable
+        return nil unless read_io.wait_readable([remaining, 0.5].min)
+      when nil
+        return nil
+      else
+        buf << chunk
+      end
+    end
+    buf
+  end
+
+  def decode_payload(data)
+    return empty_result if data.nil? || data.empty?
+
+    { timeout: false }.merge(Marshal.load(data))
+  end
+
+  def empty_result
+    { timeout: false, passed: false, error: "empty result from child" }
+  end
+
+  def timeout_result(pid)
+    terminate_child(pid)
+    { timeout: true }
   end
 
   # Defensive reap: if normal control flow raised before wait_for_result
