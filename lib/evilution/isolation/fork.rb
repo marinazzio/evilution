@@ -106,27 +106,61 @@ class Evilution::Isolation::Fork
       return timeout_result(pid) if remaining <= 0
 
       if read_io.wait_readable([remaining, 0.5].min)
-        payload = read_payload(read_io)
-        if payload
-          ::Process.wait(pid)
-          return decode_payload(payload)
-        end
+        payload = read_payload(read_io, deadline)
+        return reap_and_decode(pid, payload) if payload
       end
 
-      return empty_result if ::Process.waitpid(pid, ::Process::WNOHANG)
+      next unless ::Process.waitpid(pid, ::Process::WNOHANG)
+
+      # Child exited. Drain any final payload that arrived between
+      # wait_readable timeout and waitpid (race) before declaring empty.
+      final = read_payload(read_io, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.1)
+      return decode_payload(final) if final
+
+      return empty_result
     end
   end
 
-  def read_payload(read_io)
-    header = read_io.read(4)
-    return nil unless header && header.bytesize == 4
+  def reap_and_decode(pid, payload)
+    ::Process.wait(pid)
+    decode_payload(payload)
+  end
+
+  def read_payload(read_io, deadline)
+    header = read_n_bytes(read_io, 4, deadline)
+    return nil unless header
 
     size = header.unpack1("N")
-    read_io.read(size).to_s
+    read_n_bytes(read_io, size, deadline)
+  end
+
+  # Bounded non-blocking read. Returns `count` bytes or nil on EOF / deadline.
+  # Uses `read_nonblock` so a child that wrote a partial frame (e.g. wrote the
+  # header then died with a grandchild keeping write_io open) cannot extend
+  # past the polling deadline.
+  def read_n_bytes(read_io, count, deadline)
+    return "" if count.zero?
+
+    buf = +""
+    while buf.bytesize < count
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return nil if remaining <= 0
+
+      chunk = read_io.read_nonblock(count - buf.bytesize, exception: false)
+      case chunk
+      when :wait_readable
+        return nil unless read_io.wait_readable([remaining, 0.5].min)
+      when nil
+        return nil
+      else
+        buf << chunk
+      end
+    end
+    buf
   end
 
   def decode_payload(data)
-    return empty_result if data.empty?
+    return empty_result if data.nil? || data.empty?
 
     { timeout: false }.merge(Marshal.load(data))
   end

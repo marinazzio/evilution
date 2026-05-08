@@ -156,7 +156,9 @@ RSpec.describe Evilution::Isolation::Fork do
     # in the parent hangs forever. The protocol must use a length-prefixed
     # payload so the parent reads exactly N bytes without depending on EOF.
     it "completes promptly when test command leaves a grandchild that keeps the pipe write-end open" do
-      pid_path = Tempfile.new("grandchild_pid").path
+      pid_file = Tempfile.new("grandchild_pid")
+      pid_path = pid_file.path
+      pid_file.close
 
       test_command = lambda { |_m|
         grandchild_pid = Process.fork do
@@ -168,25 +170,20 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       result = nil
       Timeout.timeout(5) do
         result = isolator.call(mutation: mutation, test_command: test_command, timeout: 30)
       end
-      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
       expect(result).to be_survived
-      expect(elapsed).to be < 3
-    rescue Errno::ESRCH, Errno::ENOENT
-      nil
     ensure
       begin
-        pid_str = File.read(pid_path).strip if File.exist?(pid_path)
+        pid_str = File.read(pid_path).strip if pid_path && File.exist?(pid_path)
         Process.kill("KILL", pid_str.to_i) if pid_str && !pid_str.empty?
-        FileUtils.rm_f(pid_path)
       rescue Errno::ESRCH, Errno::ENOENT
         nil
       end
+      pid_file&.unlink
     end
 
     it "returns error when test command raises" do

@@ -4,3 +4,8 @@
 Metrics/AbcSize:
   Exclude:
     - "lib/evilution/runner.rb"
+    - "lib/evilution/isolation/fork.rb"
+
+Metrics/ClassLength:
+  Exclude:
+    - "lib/evilution/isolation/fork.rb"
