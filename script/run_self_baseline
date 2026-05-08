@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Throwaway driver (EV-yyd8): runs bin/evilution-self against every lib/evilution
+# subdir to re-baseline self-mutation coverage. Per-dir logs go to
+# tmp/baseline_logs/<dir>.self.log. Aggregate summary printed to stdout.
+#
+# Skips files that fork at runtime (Process.fork): subject's grandchild fork
+# inherits the runtime's marshal pipe write-end, and even with the polling patch
+# in script/build_runtime_snapshot, mutations of these files segfault repeatedly
+# and pollute the log with Ruby [BUG] dumps. Documented as a known limitation.
+
+require "English"
+require "fileutils"
+require "shellwords"
+
+ROOT     = File.expand_path("..", __dir__)
+LOG_DIR  = File.join(ROOT, "tmp", "baseline_logs")
+WRAPPER  = File.join(ROOT, "bin", "evilution-self")
+
+SKIP_FILES = %w[
+  lib/evilution/isolation/fork.rb
+  lib/evilution/parallel/work_queue/worker.rb
+  lib/evilution/baseline.rb
+].map { |p| File.join(ROOT, p) }.freeze
+
+FileUtils.mkdir_p(LOG_DIR)
+
+dirs = Dir.children(File.join(ROOT, "lib", "evilution"))
+          .select { |entry| File.directory?(File.join(ROOT, "lib", "evilution", entry)) }
+          .sort
+
+results = []
+dirs.each do |dir|
+  files = Dir.glob(File.join(ROOT, "lib", "evilution", dir, "**", "*.rb"))
+  files.reject! { |f| SKIP_FILES.include?(f) }
+
+  if files.empty?
+    puts "==> #{dir} (skipped — only fork-using files)"
+    results << { dir: dir, exitstatus: nil, log: nil, skipped: true }
+    next
+  end
+
+  log = File.join(LOG_DIR, "#{dir}.self.log")
+  cmd = [WRAPPER, "--strict", "--jobs=1", "--timeout=15", "--quiet-children", *files]
+  puts "==> #{dir} (#{files.length} files)"
+  pid = spawn(*cmd, out: log, err: %i[child out])
+  Process.wait(pid)
+  status = $CHILD_STATUS
+  results << { dir: dir, exitstatus: status.exitstatus, log: log, skipped: false }
+  puts "    exit=#{status.exitstatus}  log=#{log}"
+end
+
+# Toplevel files (lib/evilution/*.rb directly under lib/evilution/ — those that
+# aren't in a subdir). EV-j2kz tagged this set as 'toplevel'.
+toplevel_files = Dir.glob(File.join(ROOT, "lib", "evilution", "*.rb"))
+toplevel_files.reject! { |f| SKIP_FILES.include?(f) }
+unless toplevel_files.empty?
+  log = File.join(LOG_DIR, "toplevel.self.log")
+  cmd = [WRAPPER, "--strict", "--jobs=1", "--timeout=15", "--quiet-children", *toplevel_files]
+  puts "==> toplevel (#{toplevel_files.length} files)"
+  pid = spawn(*cmd, out: log, err: %i[child out])
+  Process.wait(pid)
+  status = $CHILD_STATUS
+  results << { dir: "toplevel", exitstatus: status.exitstatus, log: log, skipped: false }
+  puts "    exit=#{status.exitstatus}  log=#{log}"
+end
+
+puts
+puts "=== summary ==="
+results.each do |r|
+  if r[:skipped]
+    puts format("%<dir>-15s SKIPPED", dir: r[:dir])
+    next
+  end
+  measurable = `grep -E '^Mutations: ' #{Shellwords.escape(r[:log])} 2>/dev/null | tail -1`.strip
+  measurable = "NO_SUMMARY" if measurable.empty?
+  puts format("%<dir>-15s exit=%<exit>s  %<measurable>s",
+              dir: r[:dir], exit: r[:exitstatus], measurable: measurable)
+end
+
+puts
+puts "skipped files (fork-bug workaround): #{SKIP_FILES.map { |p| p.sub("#{ROOT}/", "") }.join(", ")}"
