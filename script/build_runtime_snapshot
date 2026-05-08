@@ -72,8 +72,8 @@ end
 def rewrite(source)
   source
     .gsub(/\bEvilution\b/, "EvilutionRuntime")
-    .gsub(/(require\s+)(["'])evilution(["'\/])/,                       '\1\2evilution_runtime\3')
-    .gsub(/(require_relative\s+)(["'])((?:\.\.\/)*)evilution(["'\/])/, '\1\2\3evilution_runtime\4')
+    .gsub(%r{(require\s+)(["'])evilution(["'/])}, '\1\2evilution_runtime\3')
+    .gsub(%r{(require_relative\s+)(["'])((?:\.\./)*)evilution(["'/])}, '\1\2\3evilution_runtime\4')
 end
 
 # Subject specs that exercise Evilution::Isolation::Fork (or any other lib code

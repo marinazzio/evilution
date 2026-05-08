@@ -9,12 +9,10 @@ $stdout.sync = true
 $stderr.sync = true
 
 snapshot = File.expand_path("../tmp/evilution-runtime", __dir__)
-unless File.directory?(File.join(snapshot, "lib"))
-  abort "snapshot missing — run script/build_runtime_snapshot"
-end
+abort "snapshot missing — run script/build_runtime_snapshot" unless File.directory?(File.join(snapshot, "lib"))
 
-$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))   # subject Evilution::*
-$LOAD_PATH.unshift(File.join(snapshot, "lib"))             # runtime EvilutionRuntime::* (first)
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__)) # subject Evilution::*
+$LOAD_PATH.unshift(File.join(snapshot, "lib")) # runtime EvilutionRuntime::* (first)
 
 require "evilution_runtime"
 # Pre-load subject namespace so mutation `eval` in fork children can reopen

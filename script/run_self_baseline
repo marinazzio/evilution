@@ -10,6 +10,7 @@
 # in script/build_runtime_snapshot, mutations of these files segfault repeatedly
 # and pollute the log with Ruby [BUG] dumps. Documented as a known limitation.
 
+require "English"
 require "fileutils"
 require "shellwords"
 
@@ -26,12 +27,12 @@ SKIP_FILES = %w[
 FileUtils.mkdir_p(LOG_DIR)
 
 dirs = Dir.children(File.join(ROOT, "lib", "evilution"))
-        .select { |entry| File.directory?(File.join(ROOT, "lib", "evilution", entry)) }
-        .sort
+          .select { |entry| File.directory?(File.join(ROOT, "lib", "evilution", entry)) }
+          .sort
 
 results = []
 dirs.each do |dir|
-  files = Dir.glob(File.join(ROOT, "lib", "evilution", dir, "**", "*.rb")).sort
+  files = Dir.glob(File.join(ROOT, "lib", "evilution", dir, "**", "*.rb"))
   files.reject! { |f| SKIP_FILES.include?(f) }
 
   if files.empty?
@@ -43,24 +44,24 @@ dirs.each do |dir|
   log = File.join(LOG_DIR, "#{dir}.self.log")
   cmd = [WRAPPER, "--strict", "--jobs=1", "--timeout=15", "--quiet-children", *files]
   puts "==> #{dir} (#{files.length} files)"
-  pid = spawn(*cmd, out: log, err: [:child, :out])
+  pid = spawn(*cmd, out: log, err: %i[child out])
   Process.wait(pid)
-  status = $?
+  status = $CHILD_STATUS
   results << { dir: dir, exitstatus: status.exitstatus, log: log, skipped: false }
   puts "    exit=#{status.exitstatus}  log=#{log}"
 end
 
 # Toplevel files (lib/evilution/*.rb directly under lib/evilution/ — those that
 # aren't in a subdir). EV-j2kz tagged this set as 'toplevel'.
-toplevel_files = Dir.glob(File.join(ROOT, "lib", "evilution", "*.rb")).sort
+toplevel_files = Dir.glob(File.join(ROOT, "lib", "evilution", "*.rb"))
 toplevel_files.reject! { |f| SKIP_FILES.include?(f) }
 unless toplevel_files.empty?
   log = File.join(LOG_DIR, "toplevel.self.log")
   cmd = [WRAPPER, "--strict", "--jobs=1", "--timeout=15", "--quiet-children", *toplevel_files]
   puts "==> toplevel (#{toplevel_files.length} files)"
-  pid = spawn(*cmd, out: log, err: [:child, :out])
+  pid = spawn(*cmd, out: log, err: %i[child out])
   Process.wait(pid)
-  status = $?
+  status = $CHILD_STATUS
   results << { dir: "toplevel", exitstatus: status.exitstatus, log: log, skipped: false }
   puts "    exit=#{status.exitstatus}  log=#{log}"
 end
@@ -69,13 +70,14 @@ puts
 puts "=== summary ==="
 results.each do |r|
   if r[:skipped]
-    puts format("%-15s SKIPPED", r[:dir])
+    puts format("%<dir>-15s SKIPPED", dir: r[:dir])
     next
   end
   measurable = `grep -E '^Mutations: ' #{Shellwords.escape(r[:log])} 2>/dev/null | tail -1`.strip
   measurable = "NO_SUMMARY" if measurable.empty?
-  puts format("%-15s exit=%s  %s", r[:dir], r[:exitstatus], measurable)
+  puts format("%<dir>-15s exit=%<exit>s  %<measurable>s",
+              dir: r[:dir], exit: r[:exitstatus], measurable: measurable)
 end
 
 puts
-puts "skipped files (fork-bug workaround): #{SKIP_FILES.map { |p| p.sub("#{ROOT}/", '') }.join(', ')}"
+puts "skipped files (fork-bug workaround): #{SKIP_FILES.map { |p| p.sub("#{ROOT}/", "") }.join(", ")}"

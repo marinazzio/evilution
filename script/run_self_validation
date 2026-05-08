@@ -6,6 +6,7 @@
 # results. Demonstrates the dual-runtime harness lifts the parent-crash issue
 # for each previously-broken dir without requiring a multi-hour full re-run.
 
+require "English"
 require "fileutils"
 require "shellwords"
 
@@ -16,16 +17,16 @@ WRAPPER = File.join(ROOT, "bin", "evilution-self")
 # One representative file per originally-crashing dir from EV-j2kz baseline.
 # isolation/in_process.rb is the same file used in the spec verification step.
 TARGETS = {
-  "isolation"   => "lib/evilution/isolation/in_process.rb",
-  "result"      => "lib/evilution/result/error_info.rb",
-  "compare"     => "lib/evilution/compare/invalid_input.rb",
-  "parallel"    => "lib/evilution/parallel/work_queue/collection_state.rb",
-  "ast"         => "lib/evilution/ast/source_surgeon.rb",
+  "isolation" => "lib/evilution/isolation/in_process.rb",
+  "result" => "lib/evilution/result/error_info.rb",
+  "compare" => "lib/evilution/compare/invalid_input.rb",
+  "parallel" => "lib/evilution/parallel/work_queue/collection_state.rb",
+  "ast" => "lib/evilution/ast/source_surgeon.rb",
   "integration" => "lib/evilution/integration/loading.rb",
-  "runner"      => "lib/evilution/runner/mutation_executor/neutralizer.rb",
-  "cli"         => "lib/evilution/cli/result.rb",
-  "mutator"     => "lib/evilution/mutator/operator.rb",
-  "toplevel"    => "lib/evilution/memory.rb",
+  "runner" => "lib/evilution/runner/mutation_executor/neutralizer.rb",
+  "cli" => "lib/evilution/cli/result.rb",
+  "mutator" => "lib/evilution/mutator/operator.rb",
+  "toplevel" => "lib/evilution/memory.rb"
 }.freeze
 
 FileUtils.mkdir_p(LOG_DIR)
@@ -36,9 +37,9 @@ TARGETS.each do |dir, file|
   log  = File.join(LOG_DIR, "#{dir}.validation.log")
   cmd  = [WRAPPER, "--strict", "--jobs=1", "--timeout=15", "--quiet-children", full]
   puts "==> #{dir}: #{file}"
-  pid = spawn(*cmd, out: log, err: [:child, :out])
+  pid = spawn(*cmd, out: log, err: %i[child out])
   Process.wait(pid)
-  status = $?
+  status = $CHILD_STATUS
   results << { dir: dir, file: file, exitstatus: status.exitstatus, log: log }
   puts "    exit=#{status.exitstatus}  log=#{log}"
 end
@@ -48,5 +49,6 @@ puts "=== validation summary ==="
 results.each do |r|
   measurable = `grep -E '^Mutations: ' #{Shellwords.escape(r[:log])} 2>/dev/null | tail -1`.strip
   measurable = "NO_SUMMARY" if measurable.empty?
-  puts format("%-12s %-55s exit=%s  %s", r[:dir], r[:file], r[:exitstatus], measurable)
+  puts format("%<dir>-12s %<file>-55s exit=%<exit>s  %<measurable>s",
+              dir: r[:dir], file: r[:file], exit: r[:exitstatus], measurable: measurable)
 end
