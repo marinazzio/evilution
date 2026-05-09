@@ -4,11 +4,6 @@
 # Throwaway driver (EV-yyd8): runs bin/evilution-self against every lib/evilution
 # subdir to re-baseline self-mutation coverage. Per-dir logs go to
 # tmp/baseline_logs/<dir>.self.log. Aggregate summary printed to stdout.
-#
-# Skips files that fork at runtime (Process.fork): subject's grandchild fork
-# inherits the runtime's marshal pipe write-end, and even with the polling patch
-# in script/build_runtime_snapshot, mutations of these files segfault repeatedly
-# and pollute the log with Ruby [BUG] dumps. Documented as a known limitation.
 
 require "English"
 require "fileutils"
@@ -18,11 +13,12 @@ ROOT     = File.expand_path("..", __dir__)
 LOG_DIR  = File.join(ROOT, "tmp", "baseline_logs")
 WRAPPER  = File.join(ROOT, "bin", "evilution-self")
 
-SKIP_FILES = %w[
-  lib/evilution/isolation/fork.rb
-  lib/evilution/parallel/work_queue/worker.rb
-  lib/evilution/baseline.rb
-].map { |p| File.join(ROOT, p) }.freeze
+# Originally three Process.fork-using files (isolation/fork.rb,
+# parallel/work_queue/worker.rb, baseline.rb) were skipped because subject
+# grandchildren inherited the runtime marshal pipe write-end and hung the
+# parent. EV-9qh1 fixed the protocol (length-prefix + polling waitpid), so the
+# skip list is now empty.
+SKIP_FILES = [].freeze
 
 FileUtils.mkdir_p(LOG_DIR)
 
