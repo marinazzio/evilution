@@ -23,28 +23,34 @@ class Evilution::Result::MutationResult
     freeze
   end
 
+  # Positive type checks, not nil checks. EV-s5br / GH #1174: the
+  # nil_replacement mutator can swap a nil default into `false` (or some other
+  # non-typed value), and `nil?` then returns false, sending a missing method
+  # to the wrong receiver and crashing the parent worker. Asking the field
+  # explicitly whether it is the expected struct keeps the parent process
+  # alive and lets the mutation count as a measured (errored) result.
   def child_rss_kb
-    @memory.nil? ? nil : @memory.child_rss_kb
+    @memory.is_a?(Evilution::Result::MemoryStats) ? @memory.child_rss_kb : nil
   end
 
   def memory_delta_kb
-    @memory.nil? ? nil : @memory.memory_delta_kb
+    @memory.is_a?(Evilution::Result::MemoryStats) ? @memory.memory_delta_kb : nil
   end
 
   def parent_rss_kb
-    @memory.nil? ? nil : @memory.parent_rss_kb
+    @memory.is_a?(Evilution::Result::MemoryStats) ? @memory.parent_rss_kb : nil
   end
 
   def error_message
-    @error.nil? ? nil : @error.message
+    @error.is_a?(Evilution::Result::ErrorInfo) ? @error.message : nil
   end
 
   def error_class
-    @error.nil? ? nil : @error.klass
+    @error.is_a?(Evilution::Result::ErrorInfo) ? @error.klass : nil
   end
 
   def error_backtrace
-    @error.nil? ? nil : @error.backtrace
+    @error.is_a?(Evilution::Result::ErrorInfo) ? @error.backtrace : nil
   end
 
   def killed?
