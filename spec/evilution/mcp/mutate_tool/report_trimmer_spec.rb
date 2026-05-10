@@ -41,11 +41,12 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out).to have_key("timed_out")
   end
 
-  it "whitelists only summary + survived in minimal mode" do
+  it "whitelists summary + survived in minimal mode (and errors when present)" do
     out = JSON.parse(described_class.call(
                        json_input, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher
                      ))
-    expect(out.keys).to contain_exactly("summary", "survived")
+    # json_input includes one errors entry, so it surfaces a trimmed sample.
+    expect(out.keys).to contain_exactly("summary", "survived", "errors")
   end
 
   it "handles missing diff-bearing sections in full mode without raising" do
@@ -131,5 +132,42 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity pre
     expect(data).not_to have_key("feedback_url")
     expect(data).not_to have_key("feedback_hint")
     expect(data.keys).to contain_exactly("summary", "survived")
+  end
+end
+
+# EV-t7kh / GH #1170: at minimal verbosity, surface a trimmed sample of
+# errored mutations so agents are not stuck in a diagnose-vs-token-cap deadlock.
+RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity errors sample" do
+  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:long_backtrace) { (1..20).map { |i| "lib/foo.rb:#{i}:in 'bar'" } }
+
+  it "includes a trimmed errors sample when errors are present" do
+    json = JSON.generate({
+                           "summary" => { "total" => 5, "errors" => 5 },
+                           "survived" => [],
+                           "errors" => Array.new(5) do |i|
+                             {
+                               "operator" => "method_call_removal", "file" => "lib/foo.rb", "line" => i,
+                               "status" => "error", "duration" => 0.01, "diff" => "huge diff",
+                               "error_message" => "boom #{i}", "error_class" => "RuntimeError",
+                               "error_backtrace" => long_backtrace
+                             }
+                           end
+                         })
+    out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out["errors"].length).to eq(3)
+    out["errors"].each do |entry|
+      expect(entry).to have_key("error_message")
+      expect(entry["error_backtrace"].length).to eq(5)
+      expect(entry).not_to have_key("diff")
+    end
+  end
+
+  it "does not add an errors field when no errors are present" do
+    json = JSON.generate({ "summary" => { "total" => 1, "errors" => 0 }, "survived" => [], "errors" => [] })
+    out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out).not_to have_key("errors")
   end
 end
