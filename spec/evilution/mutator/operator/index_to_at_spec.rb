@@ -17,11 +17,19 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
   end
 
   describe "#call" do
-    it "replaces hash[:key] with hash.at(:key)" do
+    # EV-pn5y / GH #1173: Hash has no #at method, so symbol/string keys
+    # (the typical Hash-key shape) must NOT be rewritten — doing so produced
+    # NoMethodError crashes during self-mutation of in_process.rb.
+    it "skips symbol-keyed access (likely Hash, no #at method)" do
       muts = mutations_for("hash_access")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("h.at(:key)")
+      expect(muts).to be_empty
+    end
+
+    it "skips string-keyed access (likely Hash, no #at method)" do
+      muts = mutations_for("string_key_access")
+
+      expect(muts).to be_empty
     end
 
     it "replaces array[0] with array.at(0)" do
@@ -31,14 +39,7 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
       expect(muts.first.mutated_source).to include("a.at(0)")
     end
 
-    it "replaces hash[\"name\"] with hash.at(\"name\")" do
-      muts = mutations_for("string_key_access")
-
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include('h.at("name")')
-    end
-
-    it "replaces hash[k] with hash.at(k)" do
+    it "replaces hash[k] with hash.at(k) (variable key — could be array index)" do
       muts = mutations_for("variable_key_access")
 
       expect(muts.length).to eq(1)
@@ -67,7 +68,7 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
       muts = described_class.new.call(subj)
 
       expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("h.at(:key)")
+      expect(muts.first.mutated_source).to include("h.at(k)")
       result = Prism.parse(muts.first.mutated_source)
       expect(result.errors).to be_empty
     end
@@ -83,8 +84,9 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
     end
 
     it "sets correct operator_name" do
-      muts = mutations_for("hash_access")
+      muts = mutations_for("array_access")
 
+      expect(muts).not_to be_empty
       muts.each do |mutation|
         expect(mutation.operator_name).to eq("index_to_at")
       end

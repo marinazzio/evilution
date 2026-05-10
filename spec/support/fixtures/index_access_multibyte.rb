@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 class IndexAccessMultibyte
-  def multibyte_before_access(h)
+  def multibyte_before_access(h, k)
     label = "привет"
-    h[:key]
+    h[k]
   end
 end
