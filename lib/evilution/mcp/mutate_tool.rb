@@ -100,7 +100,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
         enum: %w[full summary minimal],
         description: "Response verbosity: full (all entries, diffs stripped from killed/neutral/equivalent), " \
                      "summary (omits killed/neutral/equivalent arrays; default), " \
-                     "minimal (only summary + survived)"
+                     "minimal (summary + survived; also includes a trimmed sample of up to 3 errored " \
+                     "entries with error_message and a 5-line backtrace head when errors > 0)"
       }
     }
   )

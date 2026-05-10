@@ -493,9 +493,9 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 |-------------|---------|--------------------------------------------------------------|
 | `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors`             |
 | `full`      |         | All entries (killed/neutral/equivalent diffs stripped)        |
-| `minimal`   |         | `summary` + `survived` only                                  |
+| `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 
-Use `minimal` when context window budget is tight and you only need to see what survived. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
+Use `minimal` when context window budget is tight and you only need to see what survived. The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
 
 ### Enriched Survived Entries
 
