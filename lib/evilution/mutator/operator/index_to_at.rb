@@ -22,12 +22,13 @@ class Evilution::Mutator::Operator::IndexToAt < Evilution::Mutator::Base
     @file_source.byteslice(loc.start_offset, loc.length)
   end
 
-  # EV-pn5y / GH #1173: Hash has no #at method, so symbol/string keys (the
-  # canonical Hash-key shape) must be skipped — otherwise the mutated source
-  # crashes with NoMethodError instead of yielding a measurable mutation. We
-  # still mutate integer literals and variable/expression keys (likely Array
-  # indices); a false positive there is at worst a survived mutation, not a
-  # runtime crash.
+  # EV-pn5y / GH #1173: Hash has no #at method, so the symbol/string keys that
+  # almost always indicate a Hash receiver are skipped here — otherwise the
+  # mutated source crashes with NoMethodError instead of yielding a measurable
+  # mutation. Integer literals and variable/expression keys are still mutated;
+  # if the receiver in those cases turns out to be a Hash the mutation will
+  # still raise NoMethodError at runtime, but those shapes are far rarer in
+  # practice and the AST gives no reliable receiver-type signal to filter on.
   def indexable?(node)
     node.name == :[] &&
       node.receiver &&

@@ -84,8 +84,9 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
     end
 
     it "sets correct operator_name" do
-      muts = mutations_for("hash_access")
+      muts = mutations_for("array_access")
 
+      expect(muts).not_to be_empty
       muts.each do |mutation|
         expect(mutation.operator_name).to eq("index_to_at")
       end
