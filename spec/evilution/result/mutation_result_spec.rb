@@ -191,7 +191,7 @@ RSpec.describe Evilution::Result::MutationResult do
     ].each do |accessor|
       it "returns nil from ##{accessor} when underlying field is `false`" do
         underlying = %i[child_rss_kb memory_delta_kb parent_rss_kb].include?(accessor) ? :memory : :error
-        result = described_class.new(mutation: mutation, status: :killed, underlying => false)
+        result = described_class.new(mutation: mutation, status: :killed, **{ underlying => false })
 
         expect(result.public_send(accessor)).to be_nil
       end
