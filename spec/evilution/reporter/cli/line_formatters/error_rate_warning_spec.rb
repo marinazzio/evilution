@@ -26,6 +26,7 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning do
 
       expect(formatted).to match(%r{^! High error rate: 16/19 \(84\.2%\) mutations errored})
       expect(formatted).to include("score may be unreliable")
+      expect(formatted).to include('"Errored mutations:" section')
     end
 
     it "respects a custom threshold" do
