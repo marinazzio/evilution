@@ -41,6 +41,16 @@ RSpec.describe Evilution::CLI::Parser::CommandExtractor do
       expect(extract(["run"]).command).to eq(:run)
     end
 
+    it "treats 'mutate' as an alias for :run" do
+      expect(extract(["mutate"]).command).to eq(:run)
+    end
+
+    it "shifts 'mutate' off remaining_argv (forwarding files/flags through)" do
+      result = extract(["mutate", "lib/foo.rb", "--format", "json"])
+      expect(result.command).to eq(:run)
+      expect(result.remaining_argv).to eq(["lib/foo.rb", "--format", "json"])
+    end
+
     it "shifts the simple command off remaining_argv" do
       expect(extract(["version", "--flag"]).remaining_argv).to eq(["--flag"])
     end

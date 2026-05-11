@@ -16,6 +16,8 @@ class Evilution::CLI::Parser::CommandExtractor
     "gc" => :session_gc
   }.freeze
 
+  RUN_ALIASES = %w[run mutate].freeze
+
   TESTS_SUBCOMMANDS = { "list" => :tests_list }.freeze
   ENVIRONMENT_SUBCOMMANDS = { "show" => :environment_show }.freeze
   UTIL_SUBCOMMANDS = { "mutation" => :util_mutation }.freeze
@@ -51,7 +53,7 @@ class Evilution::CLI::Parser::CommandExtractor
     if SIMPLE_COMMANDS.key?(first)
       @command = SIMPLE_COMMANDS[first]
       @argv.shift
-    elsif first == "run"
+    elsif RUN_ALIASES.include?(first)
       @argv.shift
     elsif SUBCOMMAND_FAMILIES.key?(first)
       @argv.shift
