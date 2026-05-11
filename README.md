@@ -73,7 +73,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 | Command              | Description                                        | Default |
 |----------------------|----------------------------------------------------|---------|
-| `run`                | Execute mutation testing against files              | Yes     |
+| `run` (alias `mutate`) | Execute mutation testing against files            | Yes     |
 | `init`               | Generate `.evilution.yml` config file               |         |
 | `version`            | Print version string                                |         |
 | `subjects [files]`   | List mutation subjects with locations and counts    |         |
