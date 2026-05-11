@@ -491,7 +491,7 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
-| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors`             |
+| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace` to bound payload size) |
 | `full`      |         | All entries (killed/neutral/equivalent diffs stripped)        |
 | `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 

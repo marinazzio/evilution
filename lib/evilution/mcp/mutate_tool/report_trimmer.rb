@@ -10,6 +10,12 @@ module Evilution::MCP::MutateTool::ReportTrimmer
   MINIMAL_KEYS = %w[summary survived].freeze
   FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved unparseable].freeze
   SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable].freeze
+  # EV-187j / GH #1169: at summary verbosity, non-survived entries that remain
+  # (timed_out, errors, unresolved) shed `diff` and `error_backtrace` payload —
+  # those two fields dominate response size at scale and aren't actionable for
+  # a scanning agent. Survived stays full-detail.
+  SUMMARY_HEAVY_FIELDS = %w[diff error_backtrace].freeze
+  SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved].freeze
 
   # EV-t7kh / GH #1170: at minimal verbosity we surface a small sample of any
   # errored mutations so agents are not stuck in a diagnose-vs-token-cap
@@ -25,6 +31,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
       FULL_DIFF_STRIP_KEYS.each { |key| strip_diffs(data, key) }
     when "summary"
       SUMMARY_DROP_KEYS.each { |key| data.delete(key) }
+      SUMMARY_TRIM_KEYS.each { |key| strip_heavy_fields(data, key) }
     when "minimal"
       apply_minimal(data)
     end
@@ -61,6 +68,15 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     data[key].each { |entry| entry.delete("diff") }
   end
   private_class_method :strip_diffs
+
+  def self.strip_heavy_fields(data, key)
+    return unless data[key].is_a?(Array)
+
+    data[key].each do |entry|
+      SUMMARY_HEAVY_FIELDS.each { |field| entry.delete(field) }
+    end
+  end
+  private_class_method :strip_heavy_fields
 
   def self.embed_feedback(data, summary)
     return unless Evilution::Feedback::Detector.friction?(summary)

@@ -41,6 +41,50 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out).to have_key("timed_out")
   end
 
+  # EV-187j / GH #1169: at summary verbosity, non-survived entries (timed_out,
+  # errors, unresolved) must shed `diff` + `error_backtrace` payload. Survived
+  # is the actionable list and keeps full detail.
+  it "strips diff + error_backtrace from non-survived entries in summary mode" do
+    json = JSON.generate({
+                           "summary" => { "total" => 4 },
+                           "survived" => [{ "operator" => "x", "file" => "f", "line" => 1, "diff" => "keep me" }],
+                           "timed_out" => [{ "operator" => "x", "file" => "f", "line" => 2, "diff" => "drop",
+                                             "error_backtrace" => ["bt"] }],
+                           "errors" => [{ "operator" => "x", "file" => "f", "line" => 3, "diff" => "drop", "error_backtrace" => ["bt"],
+                                          "error_message" => "boom" }],
+                           "unresolved" => [{ "operator" => "x", "file" => "f", "line" => 4, "diff" => "drop",
+                                              "error_backtrace" => ["bt"] }]
+                         })
+    out = JSON.parse(described_class.call(json, verbosity: "summary", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out["survived"].first).to have_key("diff")
+    %w[timed_out errors unresolved].each do |key|
+      out[key].each do |entry|
+        expect(entry).not_to have_key("diff"), "expected #{key} entry to drop diff"
+        expect(entry).not_to have_key("error_backtrace"), "expected #{key} entry to drop error_backtrace"
+      end
+    end
+    # error_message is preserved (1-line, diagnostic-critical, bounded).
+    expect(out["errors"].first).to have_key("error_message")
+  end
+
+  it "keeps a 100-error summary payload comfortably under 50 KB" do
+    long_bt = (1..40).map { |i| "lib/foo.rb:#{i}:in 'bar'" }
+    huge_diff = "+ added line\n- removed line\n" * 50
+    errors_arr = Array.new(100) do |i|
+      {
+        "operator" => "method_call_removal", "file" => "lib/foo.rb", "line" => i,
+        "status" => "error", "duration" => 0.01, "diff" => huge_diff,
+        "error_message" => "boom #{i}", "error_class" => "RuntimeError",
+        "error_backtrace" => long_bt
+      }
+    end
+    json = JSON.generate({ "summary" => { "total" => 100, "errors" => 100 }, "survived" => [], "errors" => errors_arr })
+    out = described_class.call(json, verbosity: "summary", survived_results: [], config: nil, enricher: noop_enricher)
+
+    expect(out.bytesize).to be < 50_000
+  end
+
   it "whitelists summary + survived in minimal mode (and errors when present)" do
     out = JSON.parse(described_class.call(
                        json_input, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher
