@@ -343,9 +343,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
           parent_rss_kb: nil,
-          error_message: nil,
-          error_class: nil,
-          error_backtrace: nil,
+          error_message: "execution timed out after 30s",
+          error_class: "Evilution::Error",
+          error_backtrace: ["lib/foo.rb:12:in 'compute'", "lib/foo.rb:34:in 'call'"],
           memory_delta_kb: nil
         )
         timed_out_summary = instance_double(
@@ -401,9 +401,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
           parent_rss_kb: nil,
-          error_message: nil,
-          error_class: nil,
-          error_backtrace: nil,
+          error_message: "undefined method 'foo' for nil",
+          error_class: "NoMethodError",
+          error_backtrace: ["lib/foo.rb:12:in 'compute'", "lib/foo.rb:34:in 'call'"],
           memory_delta_kb: nil
         )
         error_summary = instance_double(
@@ -442,6 +442,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         parsed = JSON.parse(response.content.first[:text])
         expect(parsed["errors"].first).not_to have_key("diff")
         expect(parsed["errors"].first).not_to have_key("error_backtrace")
+        # error_message is preserved (1-line, diagnostic-critical, bounded).
+        expect(parsed["errors"].first["error_message"]).to eq("undefined method 'foo' for nil")
         expect(parsed["errors"].first["operator"]).to eq("arithmetic_replacement")
       end
 
