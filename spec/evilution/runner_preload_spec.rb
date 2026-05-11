@@ -114,12 +114,35 @@ RSpec.describe Evilution::Runner, "preload" do
       expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
     end
 
-    it "raises ConfigError when an explicit preload path does not exist" do
+    it "warns and falls through to autodetect chain when explicit preload path does not exist" do
       write_rails_tree
+      missing = File.join(@tmp, "does_not_exist.rb")
       runner = described_class.new(
-        config: build_config(preload: File.join(@tmp, "does_not_exist.rb"))
+        config: build_config(preload: missing, quiet: false)
       )
-      expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError, /preload/)
+
+      expect { runner.send(:perform_preload) }.to output(
+        /configured preload .*does_not_exist\.rb.* not found; falling through to auto-detect chain/
+      ).to_stderr
+      expect(defined?(EvilutionPreloadFixture::LOADED)).to eq("constant")
+    ensure
+      Object.send(:remove_const, :EvilutionPreloadFixture) if defined?(EvilutionPreloadFixture)
+    end
+
+    it "raises combined ConfigError when explicit preload missing and autodetect chain empty" do
+      FileUtils.mkdir_p(File.join(@tmp, "config"))
+      File.write(File.join(@tmp, "config", "application.rb"), "# Rails\n")
+      FileUtils.mkdir_p(File.join(@tmp, "app", "models"))
+      File.write(File.join(@tmp, "app", "models", "user.rb"), "class User; end\n")
+      missing = File.join(@tmp, "does_not_exist.rb")
+      runner = described_class.new(
+        config: build_config(preload: missing)
+      )
+
+      expect { runner.send(:perform_preload) }.to raise_error(Evilution::ConfigError) do |e|
+        expect(e.message).to include("does_not_exist.rb")
+        expect(e.message).to include("spec/rails_helper.rb")
+      end
     end
 
     it "raises ConfigError when the preload file has a SyntaxError" do
