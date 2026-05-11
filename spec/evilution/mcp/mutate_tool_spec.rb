@@ -329,7 +329,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         expect(killed_entry["line"]).to eq(10)
       end
 
-      it "preserves timed_out entries with full details" do
+      it "strips diff + error_backtrace from timed_out entries (EV-187j)" do
         timed_out_result = instance_double(
           Evilution::Result::MutationResult,
           mutation: mutation,
@@ -343,9 +343,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
           parent_rss_kb: nil,
-          error_message: nil,
-          error_class: nil,
-          error_backtrace: nil,
+          error_message: "execution timed out after 30s",
+          error_class: "Evilution::Error",
+          error_backtrace: ["lib/foo.rb:12:in 'compute'", "lib/foo.rb:34:in 'call'"],
           memory_delta_kb: nil
         )
         timed_out_summary = instance_double(
@@ -382,10 +382,12 @@ RSpec.describe Evilution::MCP::MutateTool do
         response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
-        expect(parsed["timed_out"].first["diff"]).to eq("- a + b\n+ a - b")
+        expect(parsed["timed_out"].first).not_to have_key("diff")
+        expect(parsed["timed_out"].first).not_to have_key("error_backtrace")
+        expect(parsed["timed_out"].first["operator"]).to eq("arithmetic_replacement")
       end
 
-      it "preserves errors entries with full details" do
+      it "strips diff + error_backtrace from errors entries (EV-187j)" do
         error_result = instance_double(
           Evilution::Result::MutationResult,
           mutation: mutation,
@@ -399,9 +401,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           test_command: "rspec spec/foo_spec.rb",
           child_rss_kb: nil,
           parent_rss_kb: nil,
-          error_message: nil,
-          error_class: nil,
-          error_backtrace: nil,
+          error_message: "undefined method 'foo' for nil",
+          error_class: "NoMethodError",
+          error_backtrace: ["lib/foo.rb:12:in 'compute'", "lib/foo.rb:34:in 'call'"],
           memory_delta_kb: nil
         )
         error_summary = instance_double(
@@ -438,7 +440,11 @@ RSpec.describe Evilution::MCP::MutateTool do
         response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
 
         parsed = JSON.parse(response.content.first[:text])
-        expect(parsed["errors"].first["diff"]).to eq("- a + b\n+ a - b")
+        expect(parsed["errors"].first).not_to have_key("diff")
+        expect(parsed["errors"].first).not_to have_key("error_backtrace")
+        # error_message is preserved (1-line, diagnostic-critical, bounded).
+        expect(parsed["errors"].first["error_message"]).to eq("undefined method 'foo' for nil")
+        expect(parsed["errors"].first["operator"]).to eq("arithmetic_replacement")
       end
 
       it "strips diffs from neutral mutations" do
