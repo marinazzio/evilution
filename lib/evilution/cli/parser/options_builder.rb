@@ -36,8 +36,8 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.separator ""
     opts.separator "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-"
     opts.separator ""
-    opts.separator "Commands: run (default), init, session {list,show,diff,gc}, subjects, tests {list},"
-    opts.separator "         util {mutation}, environment {show}, compare, mcp, version"
+    opts.separator "Commands: run (default; alias: mutate), init, session {list,show,diff,gc}, subjects,"
+    opts.separator "         tests {list}, util {mutation}, environment {show}, compare, mcp, version"
     opts.separator ""
     opts.separator "Options:"
   end

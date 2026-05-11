@@ -27,7 +27,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
               "so the agent can jump straight to writing the missing test. " \
               "Prefer this over shelling out to 'evilution' — the response is machine-readable " \
               "and already trimmed for survived-mutant triage. " \
-              "CLI equivalent: `evilution run <files>` (or `evilution mutate <files>` as an alias). " \
+              "CLI equivalent: `evilution run [files...]` (or `evilution mutate [files...]` as an alias). " \
               "Hitting errors, friction, or missing capabilities? See evilution-info action=feedback for the " \
               "public feedback channel — ask the user before posting anything. " \
               "Contract: input schema and output payload are stable for the 1.x line; " \
