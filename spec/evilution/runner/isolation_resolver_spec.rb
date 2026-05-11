@@ -95,12 +95,12 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       expect { resolver.perform_preload }.not_to raise_error
     end
 
-    it "raises Evilution::ConfigError when an explicit preload path is missing" do
+    it "raises Evilution::ConfigError when an explicit preload path is missing under :fork with no rails root" do
       resolver = described_class.new(
         config(preload: "/nonexistent/helper.rb", isolation: :fork),
         target_files: -> { [] }, hooks: nil
       )
-      expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /preload file not found/)
+      expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /[Pp]reload file not found/)
     end
 
     it "loads a preload file when one is provided" do
@@ -241,6 +241,64 @@ RSpec.describe Evilution::Runner::IsolationResolver do
             config(isolation: :in_process), target_files: -> { [] }, hooks: nil
           )
           expect { resolver.perform_preload }.not_to raise_error
+        end
+      end
+    end
+
+    describe "missing explicit preload with autodetect fallback under :fork" do
+      it "warns to stderr and loads the autodetected fallback when one exists" do
+        Dir.mktmpdir do |dir|
+          spec_dir = File.join(dir, "spec")
+          FileUtils.mkdir_p(spec_dir)
+          rails_helper = File.join(spec_dir, "rails_helper.rb")
+          marker = File.join(dir, "marker")
+          File.write(rails_helper, "File.write(#{marker.inspect}, 'fallback')\n")
+
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          noisy_config = Evilution::Config.new(
+            preload: "/nonexistent/helper.rb",
+            isolation: :fork,
+            baseline: false,
+            skip_config_file: true
+          )
+          resolver = described_class.new(noisy_config, target_files: -> { [] }, hooks: nil)
+
+          expect { resolver.perform_preload }.to output(
+            %r{configured preload "/nonexistent/helper\.rb" not found; falling through to auto-detect chain}
+          ).to_stderr
+          expect(File.read(marker)).to eq("fallback")
+        end
+      end
+
+      it "raises a combined error naming both the missing explicit path and every chain entry" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(
+            config(preload: "/nonexistent/helper.rb", isolation: :fork),
+            target_files: -> { [] }, hooks: nil
+          )
+
+          expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError) do |e|
+            expect(e.message).to include("/nonexistent/helper.rb")
+            expect(e.message).to include("spec/rails_helper.rb")
+            expect(e.message).to include("spec/spec_helper.rb")
+            expect(e.message).to include("test/test_helper.rb")
+          end
+        end
+      end
+
+      it "suppresses the missing-preload warning when config.quiet is true" do
+        Dir.mktmpdir do |dir|
+          spec_dir = File.join(dir, "spec")
+          FileUtils.mkdir_p(spec_dir)
+          File.write(File.join(spec_dir, "rails_helper.rb"), "# preloaded\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(
+            config(preload: "/nonexistent/helper.rb", isolation: :fork),
+            target_files: -> { [] }, hooks: nil
+          )
+
+          expect { resolver.perform_preload }.not_to output.to_stderr
         end
       end
     end

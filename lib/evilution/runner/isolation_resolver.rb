@@ -108,18 +108,41 @@ class Evilution::Runner::IsolationResolver
   end
 
   def resolve_preload_path
-    return resolve_explicit_preload(config.preload) if config.preload.is_a?(String)
+    return resolve_explicit_with_fallback(config.preload) if config.preload.is_a?(String)
 
     resolve_autodetected_preload
   end
 
-  def resolve_explicit_preload(path)
-    return path if File.file?(path)
+  # Explicit preload path resolution with auto-detect fallthrough under :fork.
+  # When the user-configured path is missing, surface a stderr warning naming
+  # the missing path and try the auto-detect chain so a stale .evilution.yml
+  # entry doesn't silently disable preloading. Under :in_process the chain is
+  # never consulted, so a missing explicit path remains a hard error.
+  def resolve_explicit_with_fallback(explicit)
+    return explicit if File.file?(explicit)
 
-    raise Evilution::ConfigError.new("preload file not found: #{path.inspect}", file: path)
+    raise_explicit_preload_missing(explicit) if resolve_isolation != :fork
+
+    warn_missing_explicit_preload(explicit)
+    fallback = find_first_existing_candidate
+    return fallback if fallback
+
+    raise build_combined_missing_error(explicit)
   end
 
   def resolve_autodetected_preload
+    return nil unless detected_rails_root
+
+    fallback = find_first_existing_candidate
+    return fallback if fallback
+
+    raise Evilution::ConfigError,
+          "Preload file not found. Tried: [#{PRELOAD_CANDIDATES.join(", ")}]. " \
+          "Pass --preload <file> or set preload: in .evilution.yml. " \
+          "Use --no-preload (or preload: false) to disable preloading entirely."
+  end
+
+  def find_first_existing_candidate
     root = detected_rails_root
     return nil unless root
 
@@ -127,11 +150,30 @@ class Evilution::Runner::IsolationResolver
       abs = File.join(root, rel)
       return abs if File.file?(abs)
     end
+    nil
+  end
 
-    raise Evilution::ConfigError,
-          "Preload file not found. Tried: [#{PRELOAD_CANDIDATES.join(", ")}]. " \
-          "Pass --preload <file> or set preload: in .evilution.yml. " \
-          "Use --no-preload (or preload: false) to disable preloading entirely."
+  def build_combined_missing_error(explicit)
+    Evilution::ConfigError.new(
+      "Preload file not found. Configured preload #{explicit.inspect} does not exist, " \
+      "and no fallback found in auto-detect chain: [#{PRELOAD_CANDIDATES.join(", ")}]. " \
+      "Pass --preload <file> with an existing path, set preload: in .evilution.yml, " \
+      "or use --no-preload to disable preloading.",
+      file: explicit
+    )
+  end
+
+  def raise_explicit_preload_missing(path)
+    raise Evilution::ConfigError.new("preload file not found: #{path.inspect}", file: path)
+  end
+
+  def warn_missing_explicit_preload(path)
+    return if config.quiet
+
+    $stderr.write(
+      "[evilution] warning: configured preload #{path.inspect} not found; " \
+      "falling through to auto-detect chain.\n"
+    )
   end
 
   # When the user explicitly requests InProcess on a Rails project, warn once
