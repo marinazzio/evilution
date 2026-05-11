@@ -3,6 +3,7 @@
 require_relative "../cli"
 require_relative "line_formatters/mutations"
 require_relative "line_formatters/score"
+require_relative "line_formatters/error_rate_warning"
 require_relative "line_formatters/duration"
 require_relative "line_formatters/efficiency"
 require_relative "line_formatters/peak_memory"
@@ -11,6 +12,7 @@ class Evilution::Reporter::CLI::MetricsBlock
   DEFAULT_LINES = [
     Evilution::Reporter::CLI::LineFormatters::Mutations.new,
     Evilution::Reporter::CLI::LineFormatters::Score.new,
+    Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning.new,
     Evilution::Reporter::CLI::LineFormatters::Duration.new,
     Evilution::Reporter::CLI::LineFormatters::Efficiency.new,
     Evilution::Reporter::CLI::LineFormatters::PeakMemory.new
