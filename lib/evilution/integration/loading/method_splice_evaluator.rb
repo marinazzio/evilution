@@ -16,29 +16,41 @@ class Evilution::Integration::Loading::MethodSpliceEvaluator
   SINGLETON_SEP = "."
 
   def call(mutation)
-    return :not_applicable unless mutation.respond_to?(:subject)
+    target = resolve_splice_target(mutation)
+    return :not_applicable unless target
 
-    subject = mutation.subject
-    return :not_applicable if subject.nil?
-
-    owner_name, method_name = split_subject_name(subject.name)
-    return :not_applicable unless owner_name && method_name
-
-    owner = resolve_constant(owner_name)
-    return :not_applicable unless owner
-
-    def_node = locate_def_in_mutated(mutation.mutated_source, method_name, subject.line_number)
-    return :not_applicable unless def_node
-
-    def_source = mutation.mutated_source.byteslice(
-      def_node.location.start_offset,
-      def_node.location.end_offset - def_node.location.start_offset
-    )
-    owner.class_eval(def_source, mutation.file_path, def_node.location.start_line)
+    target.owner.class_eval(target.def_source, target.file_path, target.line)
     :spliced
   end
 
   private
+
+  SpliceTarget = Data.define(:owner, :def_source, :file_path, :line)
+  private_constant :SpliceTarget
+
+  def resolve_splice_target(mutation)
+    return nil unless mutation.respond_to?(:subject)
+
+    subject = mutation.subject
+    return nil if subject.nil?
+
+    owner_name, method_name = split_subject_name(subject.name)
+    return nil unless owner_name && method_name
+
+    owner = resolve_constant(owner_name)
+    return nil unless owner
+
+    def_node = locate_def_in_mutated(mutation.mutated_source, method_name, subject.line_number)
+    return nil unless def_node
+
+    build_splice_target(owner, def_node, mutation)
+  end
+
+  def build_splice_target(owner, def_node, mutation)
+    loc = def_node.location
+    def_source = mutation.mutated_source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
+    SpliceTarget.new(owner: owner, def_source: def_source, file_path: mutation.file_path, line: loc.start_line)
+  end
 
   def split_subject_name(name)
     if name.include?(INSTANCE_SEP)
@@ -54,6 +66,7 @@ class Evilution::Integration::Loading::MethodSpliceEvaluator
     qualified = qualified.sub(/\A::/, "")
     qualified.split("::").reduce(Object) do |mod, part|
       return nil unless mod.const_defined?(part, false)
+
       mod.const_get(part, false)
     end
   end
