@@ -302,5 +302,87 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         end
       end
     end
+
+    describe "autodetect fallback for Ruby gems (non-Rails)" do
+      it "preloads lib/<name>.rb when target lives under a gem with a gemspec and no Rails root" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          FileUtils.mkdir_p(lib_dir)
+          marker = File.join(dir, "marker")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{marker.inspect}, 'gem-entry')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          Evilution::GemDetector.reset_cache!
+
+          resolver = described_class.new(
+            config(isolation: :fork),
+            target_files: -> { [File.join(lib_dir, "mygem.rb")] },
+            hooks: nil
+          )
+          resolver.perform_preload
+
+          expect(File.read(marker)).to eq("gem-entry")
+        end
+      end
+
+      it "prefers Rails rails_helper over gem entry when both signals are present" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          spec_dir = File.join(dir, "spec")
+          FileUtils.mkdir_p(lib_dir)
+          FileUtils.mkdir_p(spec_dir)
+          rails_marker = File.join(dir, "marker_rails")
+          gem_marker = File.join(dir, "marker_gem")
+          File.write(File.join(spec_dir, "rails_helper.rb"), "File.write(#{rails_marker.inspect}, 'rails')\n")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{gem_marker.inspect}, 'gem')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          Evilution::GemDetector.reset_cache!
+
+          resolver = described_class.new(
+            config(isolation: :fork), target_files: -> { [] }, hooks: nil
+          )
+          resolver.perform_preload
+
+          expect(File.read(rails_marker)).to eq("rails")
+          expect(File.exist?(gem_marker)).to be(false)
+        end
+      end
+
+      it "is a no-op under :in_process even when gem entry is autodetected" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          FileUtils.mkdir_p(lib_dir)
+          marker = File.join(dir, "marker")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{marker.inspect}, 'gem-entry')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          Evilution::GemDetector.reset_cache!
+
+          resolver = described_class.new(
+            config(isolation: :in_process),
+            target_files: -> { [File.join(lib_dir, "mygem.rb")] },
+            hooks: nil
+          )
+          resolver.perform_preload
+
+          expect(File.exist?(marker)).to be(false)
+        end
+      end
+
+      it "is a silent no-op when neither Rails nor gem is detected under :fork" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          Evilution::GemDetector.reset_cache!
+          resolver = described_class.new(
+            config(isolation: :fork),
+            target_files: -> { [File.join(dir, "thing.rb")] },
+            hooks: nil
+          )
+
+          expect { resolver.perform_preload }.not_to raise_error
+        end
+      end
+    end
   end
 end
