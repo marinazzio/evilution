@@ -4,6 +4,7 @@ require_relative "../runner"
 require_relative "../isolation/fork"
 require_relative "../isolation/in_process"
 require_relative "../rails_detector"
+require_relative "../gem_detector"
 
 class Evilution::Runner::IsolationResolver
   PRELOAD_CANDIDATES = [
@@ -136,12 +137,21 @@ class Evilution::Runner::IsolationResolver
   end
 
   def resolve_autodetected_preload
-    return nil unless detected_rails_root
+    if detected_rails_root
+      fallback = find_first_existing_candidate
+      return fallback if fallback
 
-    fallback = find_first_existing_candidate
-    return fallback if fallback
+      raise Evilution::ConfigError, autodetect_missing_message
+    end
 
-    raise Evilution::ConfigError, autodetect_missing_message
+    detected_gem_entry
+  end
+
+  def detected_gem_entry
+    return @detected_gem_entry if defined?(@detected_gem_entry)
+
+    root = Evilution::GemDetector.gem_root_for_any(target_files)
+    @detected_gem_entry = root && Evilution::GemDetector.gem_entry_for(root)
   end
 
   def find_first_existing_candidate
