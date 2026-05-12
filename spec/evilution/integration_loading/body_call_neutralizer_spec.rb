@@ -163,5 +163,43 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(result).not_to include("register_inner :y")
       expect(result).to include("register_inside")
     end
+
+    it "produces parseable output when neutralized call has a heredoc argument" do
+      src = <<~SRC
+        module Foo
+          def_callback :send,
+                       :node_or_nil_child,
+                       :literal_child,
+                       body: <<~CODE
+                         node.children.each { |child| send(:on, child) }
+                       CODE
+        end
+      SRC
+
+      result = neutralize(src)
+
+      expect(Prism.parse(result).failure?).to eq(false),
+                                              -> { "neutralized source did not parse:\n#{result}" }
+      expect(result).not_to include("def_callback")
+      expect(result).not_to include("node.children.each")
+    end
+
+    it "handles multi-line heredoc body and trailing call args together" do
+      src = <<~SRC
+        class Plugin
+          register :foo, body: <<~CODE, name: "qux"
+            puts "should be neutralized"
+            puts "all of this"
+          CODE
+        end
+      SRC
+
+      result = neutralize(src)
+
+      expect(Prism.parse(result).failure?).to eq(false),
+                                              -> { "neutralized source did not parse:\n#{result}" }
+      expect(result).not_to include("register :foo")
+      expect(result).not_to include("should be neutralized")
+    end
   end
 end
