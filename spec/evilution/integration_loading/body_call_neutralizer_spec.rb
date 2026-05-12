@@ -177,9 +177,10 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       SRC
 
       result = neutralize(src)
+      parse = Prism.parse(result)
 
-      expect(Prism.parse(result).failure?).to eq(false),
-                                              -> { "neutralized source did not parse:\n#{result}" }
+      expect(parse.failure?).to eq(false),
+                                "neutralized source did not parse: #{parse.errors.map(&:message).join(", ")}\n#{result}"
       expect(result).not_to include("def_callback")
       expect(result).not_to include("node.children.each")
     end
@@ -195,9 +196,10 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       SRC
 
       result = neutralize(src)
+      parse = Prism.parse(result)
 
-      expect(Prism.parse(result).failure?).to eq(false),
-                                              -> { "neutralized source did not parse:\n#{result}" }
+      expect(parse.failure?).to eq(false),
+                                "neutralized source did not parse: #{parse.errors.map(&:message).join(", ")}\n#{result}"
       expect(result).not_to include("register :foo")
       expect(result).not_to include("should be neutralized")
     end
