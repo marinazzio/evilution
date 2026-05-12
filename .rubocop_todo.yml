@@ -9,3 +9,4 @@ Metrics/AbcSize:
 Metrics/ClassLength:
   Exclude:
     - "lib/evilution/isolation/fork.rb"
+    - "lib/evilution/integration/minitest.rb"
