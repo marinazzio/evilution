@@ -10,13 +10,15 @@ class Evilution::Mutation
 
   attr_reader :subject, :operator_name, :parse_status, :location
 
-  def initialize(subject:, operator_name:, sources:, location:, slice: nil, parse_status: :ok)
+  def initialize(subject:, operator_name:, sources:, location:,
+                 slice: nil, parse_status: :ok, eval_source: nil)
     @subject = subject
     @operator_name = operator_name
     @sources = sources
     @location = location
     @slice = slice
     @parse_status = parse_status
+    @eval_source = eval_source
     @diff = nil
   end
 
@@ -26,6 +28,15 @@ class Evilution::Mutation
 
   def mutated_source
     @sources&.mutated
+  end
+
+  # Source to feed to the load-time evaluator. Defaults to mutated_source
+  # when no pre-eval transform was applied at generation time. Mutator::Base
+  # populates this with the neutralized version (top-level idempotency-
+  # violating calls replaced with `nil`) so the worker eval doesn't re-run
+  # them and the worker doesn't pay per-iter Prism re-parse cost.
+  def eval_source
+    @eval_source || mutated_source
   end
 
   def original_slice

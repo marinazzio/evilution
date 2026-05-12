@@ -10,7 +10,13 @@ require_relative "redefinition_recovery"
 # Composes the load-time pipeline that applies a mutation's new source to the
 # running VM: syntax-validate -> pin top-level constants (beats Zeitwerk) ->
 # clear AS::Concern state -> eval inside a redefinition-recovery wrapper.
-# Returns nil on success or a failure-shaped hash on any error.
+# The eval target is mutation.eval_source, which Mutator::Base pre-populates
+# with the neutralized form (non-idempotent class-body calls replaced with
+# `nil`) so the worker pays no per-iter Prism re-parse cost. Falls back to
+# mutation.mutated_source when no pre-eval transform was attached.
+# RedefinitionRecovery stays as a safety net for cases the neutralizer's
+# allowlist heuristic misses. Returns nil on success or a failure-shaped
+# hash on any error.
 class Evilution::Integration::Loading::MutationApplier
   def initialize(syntax_validator: Evilution::Integration::Loading::SyntaxValidator.new,
                  constant_pinner: Evilution::Integration::Loading::ConstantPinner.new,
@@ -41,8 +47,9 @@ class Evilution::Integration::Loading::MutationApplier
   def apply(mutation)
     @constant_pinner.call(mutation.original_source)
     @concern_state_cleaner.call(mutation.file_path)
+    eval_target = mutation.respond_to?(:eval_source) ? mutation.eval_source : mutation.mutated_source
     @redefinition_recovery.call(mutation.original_source) do
-      @source_evaluator.call(mutation.mutated_source, mutation.file_path)
+      @source_evaluator.call(eval_target, mutation.file_path)
     end
   end
 
