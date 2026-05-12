@@ -68,5 +68,36 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
 
       expect(parent.autoload?(:Inner)).to eq("/nonexistent/path.rb")
     end
+
+    describe "idempotency violations beyond 'already defined'" do
+      it "swallows ArgumentError 'is already registered' without retry" do
+        attempts = 0
+        result = recovery.call(source) do
+          attempts += 1
+          raise ArgumentError, ":maybe is already registered" if attempts == 1
+
+          :ok
+        end
+
+        expect(attempts).to eq(1)
+        expect(result).to be_nil
+      end
+
+      it "swallows ArgumentError mentioning 'already initialized' without retry" do
+        attempts = 0
+        recovery.call(source) do
+          attempts += 1
+          raise ArgumentError, "Plugin already initialized" if attempts == 1
+        end
+
+        expect(attempts).to eq(1)
+      end
+
+      it "still re-raises ArgumentError unrelated to redefinition or registration" do
+        expect do
+          recovery.call(source) { raise ArgumentError, "bad operand for /" }
+        end.to raise_error(ArgumentError, /bad operand/)
+      end
+    end
   end
 end

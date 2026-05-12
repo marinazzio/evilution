@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 require "evilution/integration/loading/mutation_applier"
-require "evilution/subject"
 
 RSpec.describe Evilution::Integration::Loading::MutationApplier do
   let(:validator) { instance_double("validator", call: nil) }
   let(:pinner) { instance_double("pinner", call: []) }
   let(:cleaner) { instance_double("cleaner", call: nil) }
   let(:evaluator) { instance_double("evaluator", call: nil) }
-  let(:method_splicer) { instance_double("method_splicer", call: :not_applicable) }
   let(:recovery) { ->(_src, &blk) { blk.call } }
 
   subject(:applier) do
@@ -16,19 +14,8 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       syntax_validator: validator,
       constant_pinner: pinner,
       concern_state_cleaner: cleaner,
-      method_splice_evaluator: method_splicer,
       source_evaluator: evaluator,
       redefinition_recovery: recovery
-    )
-  end
-
-  let(:mutation_subject) do
-    Evilution::Subject.new(
-      name: "Foo",
-      file_path: "/tmp/foo.rb",
-      line_number: 1,
-      source: "class Foo; end\n",
-      node: nil
     )
   end
 
@@ -37,8 +24,7 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       "Mutation",
       file_path: "/tmp/foo.rb",
       original_source: "class Foo; end\n",
-      mutated_source: "class Bar; end\n",
-      subject: mutation_subject
+      mutated_source: "class Bar; end\n"
     )
   end
 
@@ -47,7 +33,7 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(applier.call(mutation)).to be_nil
     end
 
-    it "invokes collaborators in the documented order when splice is not applicable" do
+    it "invokes collaborators in the documented order" do
       calls = []
       v = Object.new
       v.define_singleton_method(:call) do |src|
@@ -61,11 +47,6 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       end
       c = Object.new
       c.define_singleton_method(:call) { |fp| calls << [:clean, fp] }
-      s = Object.new
-      s.define_singleton_method(:call) do |mu|
-        calls << [:splice, mu]
-        :not_applicable
-      end
       e = Object.new
       e.define_singleton_method(:call) { |src, fp| calls << [:eval, src, fp] }
       r = lambda do |src, &blk|
@@ -76,42 +57,10 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
 
       described_class.new(
         syntax_validator: v, constant_pinner: p, concern_state_cleaner: c,
-        method_splice_evaluator: s, source_evaluator: e, redefinition_recovery: r
+        source_evaluator: e, redefinition_recovery: r
       ).call(mutation)
 
-      expect(calls.map(&:first)).to eq(%i[validate pin clean splice recovery_open eval recovery_close])
-    end
-
-    it "skips source_evaluator and redefinition_recovery when method splice succeeds" do
-      splicer = Object.new
-      splicer.define_singleton_method(:call) { |_mu| :spliced }
-      expect(evaluator).not_to receive(:call)
-      recovery_calls = []
-      r = lambda do |_src, &blk|
-        recovery_calls << :open
-        blk.call
-      end
-
-      result = described_class.new(
-        syntax_validator: validator, constant_pinner: pinner, concern_state_cleaner: cleaner,
-        method_splice_evaluator: splicer, source_evaluator: evaluator, redefinition_recovery: r
-      ).call(mutation)
-
-      expect(result).to be_nil
-      expect(recovery_calls).to be_empty
-    end
-
-    it "wraps a splice-time failure with the unified failure shape" do
-      splicer = Object.new
-      splicer.define_singleton_method(:call) { |_mu| raise NameError, "Foo not loaded" }
-
-      result = described_class.new(
-        syntax_validator: validator, constant_pinner: pinner, concern_state_cleaner: cleaner,
-        method_splice_evaluator: splicer, source_evaluator: evaluator, redefinition_recovery: recovery
-      ).call(mutation)
-
-      expect(result[:passed]).to be false
-      expect(result[:error_class]).to eq("NameError")
+      expect(calls.map(&:first)).to eq(%i[validate pin clean recovery_open eval recovery_close])
     end
 
     it "returns validator's error hash and stops when source is invalid" do
