@@ -263,14 +263,12 @@ RSpec.describe Evilution::Integration::Minitest do
   end
 
   describe "Minitest version compatibility" do
-    it "runs against the installed Minitest without NoMethodError on __run" do
-      # Register a passing Minitest::Test to drive the real run.
-      stub_class = Class.new(Minitest::Test) do
-        def test_noop
-          assert true
-        end
-      end
-
+    it "completes the integration pipeline against the installed Minitest without NoMethodError" do
+      # End-to-end smoke: invoke the integration with no runnable tests
+      # registered. reset_state clears Runnable.runnables before dispatch, so
+      # the suite runner sees an empty list and returns cleanly. The point is
+      # that the version-dispatch helper resolves to a real Minitest method
+      # (run_all_suites on 6.x, __run on 5.x) without raising NoMethodError.
       integration_real = described_class.new(test_files: ["test/some_test.rb"])
       allow(integration_real).to receive(:load)
 
@@ -278,30 +276,53 @@ RSpec.describe Evilution::Integration::Minitest do
 
       expect(result[:passed]).to be true
       expect(result[:test_command]).to include("test/some_test.rb")
-    ensure
-      Minitest::Runnable.runnables.delete(stub_class) if stub_class
     end
 
-    it "passes the configured reporter through to Minitest's suite runner" do
+    it "passes the configured reporter into dispatch_minitest_suites" do
       reporter_observed = nil
+      options_observed = nil
       integration_obs = described_class.new(test_files: ["test/some_test.rb"])
       allow(integration_obs).to receive(:load)
-
-      stub_class = Class.new(Minitest::Test) do
-        define_method(:test_capture) { assert true }
-      end
-
-      allow(integration_obs).to receive(:dispatch_minitest_suites).and_wrap_original do |meth, reporter, options|
+      # Replace dispatch entirely (no call-through) so this spec only asserts
+      # what evilution hands the suite runner, not what Minitest does next.
+      allow(integration_obs).to receive(:dispatch_minitest_suites) do |reporter, options|
         reporter_observed = reporter
-        meth.call(reporter, options)
+        options_observed = options
       end
-      # No-op fallback so the actual suite isn't run (and_wrap_original above is enough).
 
       integration_obs.call(mutation)
 
       expect(reporter_observed).to be_a(Minitest::CompositeReporter)
-    ensure
-      Minitest::Runnable.runnables.delete(stub_class) if stub_class
+      expect(options_observed).to include(:seed)
+    end
+
+    describe ".dispatch_minitest_suites version branching" do
+      let(:reporter) { instance_double(Minitest::CompositeReporter) }
+      let(:options) { { seed: 0 } }
+
+      it "calls Minitest.run_all_suites when available (Minitest 6.x)" do
+        allow(Minitest).to receive(:respond_to?).with(:run_all_suites).and_return(true)
+        expect(Minitest).to receive(:run_all_suites).with(reporter, options)
+
+        described_class.dispatch_minitest_suites(reporter, options)
+      end
+
+      it "falls back to Minitest.__run when run_all_suites is missing (Minitest 5.x)" do
+        allow(Minitest).to receive(:respond_to?).with(:run_all_suites).and_return(false)
+        allow(Minitest).to receive(:respond_to?).with(:__run).and_return(true)
+        expect(Minitest).to receive(:__run).with(reporter, options)
+
+        described_class.dispatch_minitest_suites(reporter, options)
+      end
+
+      it "raises Evilution::Error when neither suite-runner method exists" do
+        allow(Minitest).to receive(:respond_to?).with(:run_all_suites).and_return(false)
+        allow(Minitest).to receive(:respond_to?).with(:__run).and_return(false)
+        stub_const("Minitest::VERSION", "99.0.0")
+
+        expect { described_class.dispatch_minitest_suites(reporter, options) }
+          .to raise_error(Evilution::Error, /99\.0\.0.*neither run_all_suites nor __run/)
+      end
     end
   end
 
