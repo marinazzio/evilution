@@ -9,20 +9,47 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
   end
 
   def visit_interpolated_string_node(node)
-    return super unless node.heredoc?
-    return if @skip_heredoc_literals
+    if node.heredoc?
+      return if @skip_heredoc_literals
 
-    node.parts.each do |part|
-      next if part.is_a?(Prism::StringNode)
+      node.parts.each do |part|
+        next if part.is_a?(Prism::StringNode)
 
-      visit(part)
+        visit(part)
+      end
+      return
     end
+
+    # Adjacent-string concatenation (`"foo" \\\n "bar"`) lands in an
+    # InterpolatedStringNode whose parts are all StringNodes. Mutating each
+    # chunk individually leaves `nil \\\n "rest"` — line-continuation onto a
+    # string literal, which is invalid syntax in this context. Replace the
+    # whole chain in one shot instead.
+    if backslash_chain?(node)
+      emit_string_mutations(node)
+      return
+    end
+
+    super
   end
 
   def visit_string_node(node)
     return super if node.heredoc?
 
-    replacement = node.content.empty? ? '"mutation"' : '""'
+    emit_string_mutations(node)
+
+    super
+  end
+
+  private
+
+  def backslash_chain?(node)
+    node.parts.length > 1 && node.parts.all?(Prism::StringNode)
+  end
+
+  def emit_string_mutations(node)
+    empty = node_content_empty?(node)
+    replacement = empty ? '"mutation"' : '""'
 
     add_mutation(
       offset: node.location.start_offset,
@@ -37,7 +64,11 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
       replacement: "nil",
       node: node
     )
+  end
 
-    super
+  def node_content_empty?(node)
+    return node.content.empty? if node.is_a?(Prism::StringNode)
+
+    node.parts.all? { |part| part.is_a?(Prism::StringNode) && part.content.empty? }
   end
 end

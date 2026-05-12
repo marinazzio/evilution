@@ -101,5 +101,38 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         expect(mutation.operator_name).to eq("string_literal")
       end
     end
+
+    describe "backslash-continued string concatenation" do
+      it "emits a single pair of mutations for the whole chain, not per chunk" do
+        muts = mutations_for("returns_backslash_chained")
+
+        # Chain has 3 chunks; per-chunk mutation would yield 6 mutations and
+        # each would be unparseable. Whole-chain replacement yields 2 mutations.
+        expect(muts.length).to eq(2)
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+      end
+
+      it "produces parseable code for a two-chunk chain" do
+        muts = mutations_for("returns_two_chunk_chain")
+
+        expect(muts.length).to eq(2)
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        mutated_sources = muts.map(&:mutated_source)
+        expect(mutated_sources).to include(
+          a_string_matching(/def returns_two_chunk_chain\s+""\s+end/),
+          a_string_matching(/def returns_two_chunk_chain\s+nil\s+end/)
+        )
+      end
+
+      it "replaces the whole chain with empty string or nil (not partial replacement)" do
+        muts = mutations_for("returns_backslash_chained")
+
+        mutated_sources = muts.map(&:mutated_source)
+        # No leftover string fragment should survive
+        expect(mutated_sources).to all(satisfy { |s| !s.include?('"alpha "') })
+        expect(mutated_sources).to all(satisfy { |s| !s.include?('"beta "') })
+        expect(mutated_sources).to all(satisfy { |s| !s.include?('"gamma"') })
+      end
+    end
   end
 end
