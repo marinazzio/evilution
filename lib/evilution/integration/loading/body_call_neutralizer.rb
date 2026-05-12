@@ -89,9 +89,69 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
         next if @allowlist.include?(stmt.name)
         next if stmt.receiver && !stmt.receiver.is_a?(Prism::SelfNode)
 
-        @edits << [stmt.location.start_offset, stmt.location.end_offset]
+        @edits << [stmt.location.start_offset, replacement_end_offset(stmt)]
       end
+    end
+
+    # Prism CallNode location ends at the close of the call syntax (e.g. the
+    # closing `)` or the `<<~MARKER` opener for a heredoc argument). It does
+    # NOT include the heredoc body lines or the trailing terminator. Replacing
+    # only the CallNode range leaves the heredoc body orphaned, producing a
+    # parse error. Extend the range to cover any heredoc terminators inside
+    # the call.
+    def replacement_end_offset(call)
+      collector = HeredocEndCollector.new
+      collector.visit(call)
+      [call.location.end_offset, *collector.end_offsets].max
     end
   end
   private_constant :Walker
+
+  class HeredocEndCollector < Prism::Visitor
+    attr_reader :end_offsets
+
+    def initialize
+      super
+      @end_offsets = []
+    end
+
+    def visit_string_node(node)
+      record_if_heredoc(node)
+      super
+    end
+
+    def visit_interpolated_string_node(node)
+      record_if_heredoc(node)
+      super
+    end
+
+    def visit_interpolated_x_string_node(node)
+      record_if_heredoc(node)
+      super
+    end
+
+    def visit_x_string_node(node)
+      record_if_heredoc(node)
+      super
+    end
+
+    private
+
+    def record_if_heredoc(node)
+      return unless node.respond_to?(:heredoc?) && node.heredoc?
+
+      closing = node.closing_loc
+      return unless closing
+
+      # Prism's heredoc closing_loc includes the leading whitespace and the
+      # trailing newline of the terminator line (e.g. "    CODE\n"). Excluding
+      # that newline preserves line structure so subsequent code lands on its
+      # own line after the replacement.
+      end_off = closing.end_offset
+      slice = closing.slice
+      end_off -= 1 if slice && slice.end_with?("\n")
+      @end_offsets << end_off
+    end
+  end
+  private_constant :HeredocEndCollector
 end
