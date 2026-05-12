@@ -12,7 +12,9 @@ require_relative "redefinition_recovery"
 # clear AS::Concern state -> eval inside a redefinition-recovery wrapper.
 # The eval target is mutation.eval_source, which Mutator::Base pre-populates
 # with the neutralized form (non-idempotent class-body calls replaced with
-# `nil`) so the worker pays no per-iter Prism re-parse cost. Falls back to
+# `nil`). The neutralization itself happens once at mutation-generation time
+# rather than per-iter — SyntaxValidator still runs Prism per mutation, but
+# the extra neutralizer parse stays out of the hot path. Falls back to
 # mutation.mutated_source when no pre-eval transform was attached.
 # RedefinitionRecovery stays as a safety net for cases the neutralizer's
 # allowlist heuristic misses. Returns nil on success or a failure-shaped
@@ -31,10 +33,11 @@ class Evilution::Integration::Loading::MutationApplier
   end
 
   def call(mutation)
-    syntax_error = @syntax_validator.call(mutation.mutated_source)
+    eval_target = resolve_eval_target(mutation)
+    syntax_error = @syntax_validator.call(eval_target)
     return syntax_error if syntax_error
 
-    apply(mutation)
+    apply(mutation, eval_target)
     nil
   rescue SyntaxError => e
     failure_result(e, "syntax error in mutated source: #{e.message}")
@@ -44,10 +47,15 @@ class Evilution::Integration::Loading::MutationApplier
 
   private
 
-  def apply(mutation)
+  def resolve_eval_target(mutation)
+    return mutation.eval_source if mutation.respond_to?(:eval_source)
+
+    mutation.mutated_source
+  end
+
+  def apply(mutation, eval_target)
     @constant_pinner.call(mutation.original_source)
     @concern_state_cleaner.call(mutation.file_path)
-    eval_target = mutation.respond_to?(:eval_source) ? mutation.eval_source : mutation.mutated_source
     @redefinition_recovery.call(mutation.original_source) do
       @source_evaluator.call(eval_target, mutation.file_path)
     end

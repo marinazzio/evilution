@@ -34,7 +34,8 @@ class Evilution::Mutation
   # when no pre-eval transform was applied at generation time. Mutator::Base
   # populates this with the neutralized version (top-level idempotency-
   # violating calls replaced with `nil`) so the worker eval doesn't re-run
-  # them and the worker doesn't pay per-iter Prism re-parse cost.
+  # them. The neutralization Prism parse happens once at generation time,
+  # not per worker iteration.
   def eval_source
     @eval_source || mutated_source
   end
