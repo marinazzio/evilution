@@ -31,10 +31,40 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options[:io] = out
     reporter = ::Minitest::CompositeReporter.new
     reporter << ::Minitest::SummaryReporter.new(out, options)
+    initialize_minitest_state(reporter, options)
     reporter.start
-    ::Minitest.__run(reporter, options)
+    dispatch_minitest_suites(reporter, options)
     reporter.report
     reporter.passed?
+  end
+
+  # Mirror Minitest.run's preamble: seed setup + plugin init. Without seeding
+  # Minitest.seed before dispatching suites, Minitest 5.x raises
+  # `TypeError: no implicit conversion of nil into Integer` from
+  # Minitest::Test.runnable_methods calling `srand(Minitest.seed)` on nil.
+  # init_plugins also needs Minitest.reporter set first because some plugins
+  # (pride) read it during init.
+  def self.initialize_minitest_state(reporter, options)
+    ::Minitest.seed = options[:seed]
+    srand(::Minitest.seed) if ::Minitest.seed
+
+    ::Minitest.reporter = reporter
+    ::Minitest.init_plugins(options) if ::Minitest.respond_to?(:init_plugins)
+    ::Minitest.reporter = nil
+  end
+
+  # Dispatch to the version-appropriate suite runner. Minitest 6 removed
+  # ::Minitest.__run; the equivalent public entry point is run_all_suites.
+  # Minitest 5.x still exposes __run.
+  def self.dispatch_minitest_suites(reporter, options)
+    if ::Minitest.respond_to?(:run_all_suites)
+      ::Minitest.run_all_suites(reporter, options)
+    elsif ::Minitest.respond_to?(:__run)
+      ::Minitest.__run(reporter, options)
+    else
+      raise Evilution::Error,
+            "Minitest #{::Minitest::VERSION} has neither run_all_suites nor __run"
+    end
   end
 
   def self.baseline_options
@@ -116,11 +146,16 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     reporter << ::Minitest::SummaryReporter.new(out, options)
     reporter << detector
 
+    self.class.initialize_minitest_state(reporter, options)
     reporter.start
-    ::Minitest.__run(reporter, options)
+    dispatch_minitest_suites(reporter, options)
     reporter.report
 
     reporter.passed?
+  end
+
+  def dispatch_minitest_suites(reporter, options)
+    self.class.dispatch_minitest_suites(reporter, options)
   end
 
   def reset_crash_detector

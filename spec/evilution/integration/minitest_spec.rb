@@ -31,14 +31,21 @@ RSpec.describe Evilution::Integration::Minitest do
 
   subject(:integration) { described_class.new(test_files: ["test/some_test.rb"]) }
 
+  # Stub the version-dispatch helper rather than ::Minitest.__run directly so
+  # the stubs work whether the installed Minitest is 5.x (has __run) or 6.x
+  # (uses run_all_suites). The dispatch method takes the same (reporter, options)
+  # signature regardless of underlying Minitest version.
+  #
+  # Block receives the call args only (no leading instance). RSpec's
+  # any_instance binds self to the instance via instance_exec.
   def stub_minitest_run(passed: true)
-    allow(Minitest).to receive(:__run) do |reporter, _options|
+    allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
       reporter.record(Minitest::Result.new("test_stub")) if passed
     end
   end
 
   def stub_minitest_run_failed
-    allow(Minitest).to receive(:__run) do |reporter, _options|
+    allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
       result = Minitest::Result.new("test_stub")
       result.failures << Minitest::Assertion.new("expected true")
       reporter.record(result)
@@ -66,7 +73,7 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "returns error result when run raises" do
-      allow(Minitest).to receive(:__run).and_raise("boom")
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites).and_raise("boom")
 
       result = integration.call(mutation)
 
@@ -75,7 +82,7 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "returns error info when minitest raises" do
-      allow(Minitest).to receive(:__run).and_raise("boom")
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites).and_raise("boom")
 
       result = integration.call(mutation)
 
@@ -89,11 +96,10 @@ RSpec.describe Evilution::Integration::Minitest do
       allow(integration).to receive(:load).with(File.expand_path("test/some_test.rb")) do
         test_file_loaded = true
       end
-      stub_minitest_run(passed: true)
 
-      allow(Minitest).to receive(:__run).and_wrap_original do |method, *args|
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
         expect(test_file_loaded).to be true
-        method.call(*args)
+        reporter.record(Minitest::Result.new("test_stub"))
       end
 
       integration.call(mutation)
@@ -108,10 +114,10 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "clears minitest runnables before each run" do
-      stub_minitest_run(passed: true)
-      allow(Minitest).to receive(:__run).and_wrap_original do |method, *args|
-        expect(Minitest::Runnable.runnables).to be_empty
-        method.call(*args)
+      observed_runnables = nil
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+        observed_runnables = Minitest::Runnable.runnables.dup
+        reporter.record(Minitest::Result.new("test_stub"))
       end
 
       # Simulate a pre-existing runnable
@@ -119,6 +125,8 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(Minitest::Runnable.runnables).to include(stub_class)
 
       integration.call(mutation)
+
+      expect(observed_runnables).to be_empty
     ensure
       Minitest::Runnable.runnables.delete(stub_class)
     end
@@ -220,7 +228,7 @@ RSpec.describe Evilution::Integration::Minitest do
     end
 
     it "flags test_crashed with error detail when all failures are crashes" do
-      allow(Minitest).to receive(:__run) do |reporter, _options|
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
         result = Minitest::Result.new("test_crash")
         result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
         reporter.record(result)
@@ -251,6 +259,49 @@ RSpec.describe Evilution::Integration::Minitest do
       allow(fresh).to receive(:require).with("minitest").and_raise(LoadError, "cannot load such file -- minitest")
 
       expect { fresh.call(mutation) }.to raise_error(Evilution::Error, /minitest is required/)
+    end
+  end
+
+  describe "Minitest version compatibility" do
+    it "runs against the installed Minitest without NoMethodError on __run" do
+      # Register a passing Minitest::Test to drive the real run.
+      stub_class = Class.new(Minitest::Test) do
+        def test_noop
+          assert true
+        end
+      end
+
+      integration_real = described_class.new(test_files: ["test/some_test.rb"])
+      allow(integration_real).to receive(:load)
+
+      result = integration_real.call(mutation)
+
+      expect(result[:passed]).to be true
+      expect(result[:test_command]).to include("test/some_test.rb")
+    ensure
+      Minitest::Runnable.runnables.delete(stub_class) if stub_class
+    end
+
+    it "passes the configured reporter through to Minitest's suite runner" do
+      reporter_observed = nil
+      integration_obs = described_class.new(test_files: ["test/some_test.rb"])
+      allow(integration_obs).to receive(:load)
+
+      stub_class = Class.new(Minitest::Test) do
+        define_method(:test_capture) { assert true }
+      end
+
+      allow(integration_obs).to receive(:dispatch_minitest_suites).and_wrap_original do |meth, reporter, options|
+        reporter_observed = reporter
+        meth.call(reporter, options)
+      end
+      # No-op fallback so the actual suite isn't run (and_wrap_original above is enough).
+
+      integration_obs.call(mutation)
+
+      expect(reporter_observed).to be_a(Minitest::CompositeReporter)
+    ensure
+      Minitest::Runnable.runnables.delete(stub_class) if stub_class
     end
   end
 
