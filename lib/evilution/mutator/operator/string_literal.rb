@@ -20,12 +20,14 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
       return
     end
 
-    # Adjacent-string concatenation (`"foo" \\\n "bar"`) lands in an
-    # InterpolatedStringNode whose parts are all StringNodes. Mutating each
-    # chunk individually leaves `nil \\\n "rest"` — line-continuation onto a
-    # string literal, which is invalid syntax in this context. Replace the
-    # whole chain in one shot instead.
-    if backslash_chain?(node)
+    # Adjacent-string concatenation — both `"foo" "bar"` and the line-continued
+    # form `"foo" \\\n "bar"` — lands in an InterpolatedStringNode whose parts
+    # are all StringNodes. Mutating chunks individually splices the wrong span:
+    # for the continued form Ruby treats `nil \\\n "rest"` as a confusing
+    # parse rather than a clean nil; for both forms the result is one StringNode
+    # plus an orphaned adjacent literal, not a meaningful mutation of the whole
+    # expression. Replace the entire concatenation in one shot instead.
+    if adjacent_string_concat?(node)
       emit_string_mutations(node)
       return
     end
@@ -43,7 +45,7 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
 
   private
 
-  def backslash_chain?(node)
+  def adjacent_string_concat?(node)
     node.parts.length > 1 && node.parts.all?(Prism::StringNode)
   end
 

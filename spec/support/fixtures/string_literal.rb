@@ -36,4 +36,8 @@ class StringChecker
     "left " \
       "right"
   end
+
+  def returns_same_line_adjacent
+    "foo " "bar"
+  end
 end
