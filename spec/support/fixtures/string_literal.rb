@@ -25,4 +25,19 @@ class StringChecker
       hello #{"literal"} world
     HEREDOC
   end
+
+  def returns_backslash_chained
+    "alpha " \
+      "beta " \
+      "gamma"
+  end
+
+  def returns_two_chunk_chain
+    "left " \
+      "right"
+  end
+
+  def returns_same_line_adjacent
+    "foo " "bar"
+  end
 end
