@@ -24,7 +24,8 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       "Mutation",
       file_path: "/tmp/foo.rb",
       original_source: "class Foo; end\n",
-      mutated_source: "class Bar; end\n"
+      mutated_source: "class Bar; end\n",
+      eval_source: "class Bar; end\n"
     )
   end
 
@@ -63,6 +64,28 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(calls.map(&:first)).to eq(%i[validate pin clean recovery_open eval recovery_close])
     end
 
+    it "feeds mutation.eval_source (the pre-neutralized form) to source_evaluator" do
+      pre_eval = "class Neutralized; end\n"
+      m = double(
+        "Mutation",
+        file_path: "/tmp/foo.rb",
+        original_source: "class Foo; end\n",
+        mutated_source: "class Bar; register :x; end\n",
+        eval_source: pre_eval
+      )
+
+      seen = nil
+      e = Object.new
+      e.define_singleton_method(:call) { |src, _fp| seen = src }
+
+      described_class.new(
+        syntax_validator: validator, constant_pinner: pinner, concern_state_cleaner: cleaner,
+        source_evaluator: e, redefinition_recovery: recovery
+      ).call(m)
+
+      expect(seen).to eq(pre_eval)
+    end
+
     it "returns validator's error hash and stops when source is invalid" do
       err = { passed: false, error: "mutated source has syntax errors" }
       v = ->(_src) { err }
@@ -82,7 +105,7 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     it "pins using original_source and cleans using file_path" do
       expect(pinner).to receive(:call).with(mutation.original_source)
       expect(cleaner).to receive(:call).with(mutation.file_path)
-      expect(evaluator).to receive(:call).with(mutation.mutated_source, mutation.file_path)
+      expect(evaluator).to receive(:call).with(mutation.eval_source, mutation.file_path)
 
       applier.call(mutation)
     end

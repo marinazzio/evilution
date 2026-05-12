@@ -3,6 +3,7 @@
 require "prism"
 
 require_relative "../mutator"
+require_relative "../integration/loading/body_call_neutralizer"
 
 class Evilution::Mutator::Base < Prism::Visitor
   AffectedSlices = Data.define(:original, :mutated)
@@ -14,6 +15,7 @@ class Evilution::Mutator::Base < Prism::Visitor
     @mutations = []
     @subject = nil
     @file_source = nil
+    @body_call_neutralizer = Evilution::Integration::Loading::BodyCallNeutralizer.new
   end
 
   def call(subject, filter: nil)
@@ -54,8 +56,20 @@ class Evilution::Mutator::Base < Prism::Visitor
         line: node.location.start_line,
         column: node.location.start_column
       ),
-      parse_status: surgery.status
+      parse_status: surgery.status,
+      eval_source: build_eval_source(surgery)
     )
+  end
+
+  # Pre-compute the worker's eval target so per-iter Prism re-parse cost
+  # stays out of the hot path. For parseable mutations we strip class/module
+  # body calls that are known to be non-idempotent (registries etc.); for
+  # unparseable bytes we fall through so the syntax validator can reject
+  # them at apply time.
+  def build_eval_source(surgery)
+    return surgery.source unless surgery.ok?
+
+    @body_call_neutralizer.call(surgery.source)
   end
 
   NEWLINE_BYTE = 10
