@@ -54,4 +54,15 @@ class StringChecker
   def ruby_version
     "4.0"
   end
+
+  def returns_plain_interpolated
+    name = "world"
+    "hello #{name}"
+  end
+
+  def returns_pure_interpolation
+    a = "1"
+    b = "2"
+    "#{a}#{b}"
+  end
 end
