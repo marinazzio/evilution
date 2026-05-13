@@ -6,6 +6,7 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
   def visit_def_node(node)
     return super unless node.parameters
     return super unless node.parameters.block
+    return super if anonymous_block_forwarded?(node)
 
     if only_block_param?(node.parameters)
       remove_entire_params(node)
@@ -24,6 +25,31 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
       params.keywords.empty? &&
       params.rest.nil? &&
       params.keyword_rest.nil?
+  end
+
+  # Skip the mutation when the def declares an anonymous `&` block parameter
+  # AND the body uses `&` to forward it. Ruby parses `def f(&) = g(&)` only
+  # because the signature declares the anonymous block; stripping `&` from the
+  # signature leaves the body's `&` orphaned and produces a parse error.
+  # Named block params (`&block`) are not affected here — removing those leaves
+  # body references like `block.call` as NameError at runtime, still parseable
+  # and still a useful (kill-able) mutation.
+  def anonymous_block_forwarded?(node)
+    return false unless node.parameters.block.name.nil?
+    return false if node.body.nil?
+
+    body_contains_anonymous_forward?(node.body)
+  end
+
+  def body_contains_anonymous_forward?(body)
+    queue = [body]
+    until queue.empty?
+      current = queue.shift
+      return true if current.is_a?(Prism::BlockArgumentNode) && current.expression.nil?
+
+      queue.concat(current.compact_child_nodes)
+    end
+    false
   end
 
   def remove_entire_params(node)

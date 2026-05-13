@@ -68,5 +68,36 @@ RSpec.describe Evilution::Mutator::Operator::BlockParamRemoval do
         expect(mutation.operator_name).to eq("block_param_removal")
       end
     end
+
+    describe "anonymous block-forward safety" do
+      it "skips def with anonymous `&` param when body forwards `&`" do
+        # def f(input, &) = helper(map(input), &)
+        # Removing the `&` from the signature would leave the orphan `&` in the body,
+        # producing unparseable Ruby.
+        muts = mutations_for("anon_block_forwarded")
+
+        expect(muts).to be_empty
+      end
+
+      it "still removes anonymous `&` param when body does not forward it" do
+        # def f(input, &) = input * 2
+        # Body has no `&` forward; the mutation is safe.
+        muts = mutations_for("anon_block_unused")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("def anon_block_unused(input)\n")
+        expect(muts.first.parse_status).to eq(:ok)
+      end
+
+      it "still removes named `&block` param even when body forwards it (NameError, not parse error)" do
+        # def f(input, &block) = helper(input, &block)
+        # Named block removal produces NameError at runtime but still parses.
+        # That is a useful (kill-able) mutation, so allow it.
+        muts = mutations_for("named_block_referenced")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.parse_status).to eq(:ok)
+      end
+    end
   end
 end

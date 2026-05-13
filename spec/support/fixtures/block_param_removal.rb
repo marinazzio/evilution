@@ -20,4 +20,16 @@ class BlockParamRemovalExample
   def no_params
     42
   end
+
+  def anon_block_forwarded(input, &)
+    helper(map(input), &)
+  end
+
+  def anon_block_unused(input, &)
+    input * 2
+  end
+
+  def named_block_referenced(input, &block)
+    helper(input, &block)
+  end
 end
