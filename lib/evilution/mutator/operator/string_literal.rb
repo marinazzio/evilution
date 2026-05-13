@@ -43,7 +43,34 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
     super
   end
 
+  # Inner StringNode chunks of an interpolated symbol (`:"visit_#{type}"`),
+  # interpolated regular expression (`/^#{needle}/`), or interpolated x-string
+  # (`` `echo #{cmd}` ``) are not free string literals — they are fragments of
+  # a different literal kind. Mutating them splices empty-string bytes into the
+  # middle of a `:"..."` / `/.../` / `` `...` `` token, producing unparseable
+  # code. Visit only the interpolation parts (which may contain mutatable
+  # expressions); skip the raw StringNode chunks.
+  def visit_interpolated_symbol_node(node)
+    visit_non_string_parts(node)
+  end
+
+  def visit_interpolated_regular_expression_node(node)
+    visit_non_string_parts(node)
+  end
+
+  def visit_interpolated_x_string_node(node)
+    visit_non_string_parts(node)
+  end
+
   private
+
+  def visit_non_string_parts(node)
+    node.parts.each do |part|
+      next if part.is_a?(Prism::StringNode)
+
+      visit(part)
+    end
+  end
 
   # Adjacent-string concatenation differs from a single interpolated string by
   # the shape of its parts: each adjacent chunk is a full quoted literal of its
