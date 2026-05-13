@@ -32,4 +32,13 @@ class BlockParamRemovalExample
   def named_block_referenced(input, &block)
     helper(input, &block)
   end
+
+  def anon_block_with_nested_def(input, &)
+    # Nested def has its own `&` param; the orphan `&` belongs to `inner`,
+    # not the outer. Removing the outer `&` is safe.
+    def inner(x, &)
+      helper(x, &)
+    end
+    inner(input)
+  end
 end

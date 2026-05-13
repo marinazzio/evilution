@@ -98,6 +98,21 @@ RSpec.describe Evilution::Mutator::Operator::BlockParamRemoval do
         expect(muts.length).to eq(1)
         expect(muts.first.parse_status).to eq(:ok)
       end
+
+      it "does not treat a nested def's `&` forward as the outer def's" do
+        # def outer(&)
+        #   def inner(&)
+        #     g(&)
+        #   end
+        # end
+        # The `&` in `g(&)` belongs to `inner`, not `outer`. Removing `outer`'s
+        # unused `&` remains parseable, so the mutation must NOT be skipped.
+        muts = mutations_for("anon_block_with_nested_def")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("def anon_block_with_nested_def(input)\n")
+        expect(muts.first.parse_status).to eq(:ok)
+      end
     end
   end
 end

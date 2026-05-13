@@ -47,6 +47,12 @@ class Evilution::Mutator::Operator::BlockParamRemoval < Evilution::Mutator::Base
       current = queue.shift
       return true if current.is_a?(Prism::BlockArgumentNode) && current.expression.nil?
 
+      # A nested def introduces a fresh method scope, so any `&` inside it
+      # forwards the inner method's own block parameter, not ours. Stop
+      # descent. Blocks and lambdas inherit the enclosing method scope, so
+      # we keep walking through them.
+      next if current.is_a?(Prism::DefNode)
+
       queue.concat(current.compact_child_nodes)
     end
     false
