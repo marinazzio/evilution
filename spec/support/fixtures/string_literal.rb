@@ -65,4 +65,23 @@ class StringChecker
     b = "2"
     "#{a}#{b}"
   end
+
+  def returns_interpolated_symbol
+    type = "node"
+    send(:"visit_#{type}")
+  end
+
+  def returns_interpolated_regex
+    needle = "foo"
+    "foobar".match?(/^#{needle}/)
+  end
+
+  def returns_interpolated_xstring
+    cmd = "ls"
+    `echo #{cmd}`
+  end
+
+  def returns_plain_symbol
+    :a_plain_symbol
+  end
 end

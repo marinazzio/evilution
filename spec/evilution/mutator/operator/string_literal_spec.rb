@@ -198,6 +198,48 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         end
       end
 
+      it "does not mutate StringNode chunks inside an interpolated symbol `:\"visit_\#{type}\"`" do
+        # send(:"visit_#{type}") — the inner StringNode "visit_" is a chunk of
+        # an InterpolatedSymbolNode, not a free string literal. Mutating it
+        # splices `""` between the `:"` and the `#{...}` opener, producing
+        # `:""\#{type}"` which Ruby cannot parse.
+        muts = mutations_for("returns_interpolated_symbol")
+        symbol_chunk_muts = muts.select { |m| m.diff.include?(":\"visit_") }
+        expect(symbol_chunk_muts).to be_empty,
+                                     "Expected no symbol-chunk mutations; got: #{symbol_chunk_muts.map(&:diff).inspect}"
+
+        # The free-string variable `type = "node"` on the prior line is still a
+        # legitimate target, so the overall mutation set is non-empty.
+        expect(muts).not_to be_empty
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+      end
+
+      it "does not mutate StringNode chunks inside an interpolated regex `/^\#{needle}/`" do
+        muts = mutations_for("returns_interpolated_regex")
+        # The regex literal must survive verbatim in every mutation's source.
+        # (Mutations targeting the sibling `"foobar"` string are fine; they
+        # leave the regex untouched.)
+        muts.each do |mutation|
+          expect(mutation.mutated_source).to include("/^\#{needle}/"),
+                                             "Regex chunk mutated; diff: #{mutation.diff.inspect}"
+        end
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+      end
+
+      it "does not mutate StringNode chunks inside an interpolated x-string `` `echo \#{cmd}` ``" do
+        muts = mutations_for("returns_interpolated_xstring")
+        muts.each do |mutation|
+          expect(mutation.mutated_source).to include("`echo \#{cmd}`"),
+                                             "X-string chunk mutated; diff: #{mutation.diff.inspect}"
+        end
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+      end
+
+      it "does not mutate plain symbol literals" do
+        muts = mutations_for("returns_plain_symbol")
+        expect(muts).to be_empty
+      end
+
       it "does not collapse a pure-interpolation string `\"\#{a}\#{b}\"`" do
         # Non-regression for Copilot review (PR #1221): EmbeddedStatementsNode
         # parts also carry an `opening_loc` (the `#{` delimiter), so a naive
