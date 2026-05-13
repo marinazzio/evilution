@@ -20,4 +20,25 @@ class BlockParamRemovalExample
   def no_params
     42
   end
+
+  def anon_block_forwarded(input, &)
+    helper(map(input), &)
+  end
+
+  def anon_block_unused(input, &)
+    input * 2
+  end
+
+  def named_block_referenced(input, &block)
+    helper(input, &block)
+  end
+
+  def anon_block_with_nested_def(input, &)
+    # Nested def has its own `&` param; the orphan `&` belongs to `inner`,
+    # not the outer. Removing the outer `&` is safe.
+    def inner(x, &)
+      helper(x, &)
+    end
+    inner(input)
+  end
 end
