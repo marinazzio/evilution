@@ -45,8 +45,18 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
 
   private
 
+  # Adjacent-string concatenation differs from a single interpolated string by
+  # the shape of its parts: each adjacent chunk carries its own opening quote
+  # (`opening_loc` on every part). A plain interpolated string `"a #{x} b"`
+  # decomposes into chunk StringNodes plus EmbeddedStatementsNode parts, none
+  # of which has its own `opening_loc` (the outer InterpolatedStringNode owns
+  # the only quote pair). So "every part is a quoted literal" is sufficient to
+  # distinguish adjacent concat — including the mixed plain+interpolated case
+  # `"foo" "bar #{x}"` and its line-continued cousin.
   def adjacent_string_concat?(node)
-    node.parts.length > 1 && node.parts.all?(Prism::StringNode)
+    return false unless node.parts.length > 1
+
+    node.parts.all? { |part| part.respond_to?(:opening_loc) && part.opening_loc }
   end
 
   def emit_string_mutations(node)

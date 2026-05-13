@@ -146,6 +146,42 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
           a_string_matching(/def returns_same_line_adjacent\s+nil\s+end/)
         )
       end
+
+      it "collapses plain-then-interpolated continued concat to two whole-expression mutations" do
+        muts = mutations_for("returns_plain_plus_interp_continued")
+
+        expect(muts.length).to eq(2)
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        mutated_sources = muts.map(&:mutated_source)
+        expect(mutated_sources).to include(
+          a_string_matching(/def returns_plain_plus_interp_continued\s+""\s+end/),
+          a_string_matching(/def returns_plain_plus_interp_continued\s+nil\s+end/)
+        )
+        expect(mutated_sources).to all(satisfy { |s| !s.include?("RuboCop supports target") })
+        expect(mutated_sources).to all(satisfy { |s| !s.include?("`parser`. Specified target") })
+      end
+
+      it "collapses interpolated-then-plain continued concat to two whole-expression mutations" do
+        muts = mutations_for("returns_interp_plus_plain_continued")
+
+        expect(muts.length).to eq(2)
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        mutated_sources = muts.map(&:mutated_source)
+        expect(mutated_sources).to include(
+          a_string_matching(/def returns_interp_plus_plain_continued\s+""\s+end/),
+          a_string_matching(/def returns_interp_plus_plain_continued\s+nil\s+end/)
+        )
+      end
+
+      it "does not collapse a plain interpolated string `\"hello #{name}\"`" do
+        # Sanity: when the InterpolatedStringNode has no adjacent literal —
+        # just a single quoted span containing interpolation — the existing
+        # per-StringNode behavior must be preserved (mutate the leading chunk
+        # only, not the whole expression).
+        muts = mutations_for("returns_heredoc_with_interpolation")
+        regular_string_muts = muts.reject { |m| m.mutated_source.include?("hello \"") }
+        expect(regular_string_muts).not_to be_empty
+      end
     end
   end
 end
