@@ -5,6 +5,7 @@ require_relative "../mutate_tool"
 require_relative "../../feedback"
 require_relative "../../feedback/detector"
 require_relative "../../feedback/messages"
+require_relative "../../feedback/setup_warning"
 
 module Evilution::MCP::MutateTool::ReportTrimmer
   MINIMAL_KEYS = %w[summary survived].freeze
@@ -37,6 +38,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     end
     enricher.call(data, survived_results, config)
     embed_feedback(data, summary) unless verbosity == "minimal"
+    embed_setup_warning(data, summary)
     ::JSON.generate(data)
   end
 
@@ -85,4 +87,14 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     data["feedback_hint"] = Evilution::Feedback::Messages.mcp_hint
   end
   private_class_method :embed_feedback
+
+  # Surface a clear pointer at the most common silent-failure: every mutation
+  # errored because the worker couldn't load the project (typically Rails
+  # autoload + MCP's preload-disabled-by-default). When detected, attach a
+  # `setup_warning` field so the agent doesn't trust a 0.0 score blindly.
+  def self.embed_setup_warning(data, summary)
+    warning = Evilution::Feedback::SetupWarning.call(summary)
+    data["setup_warning"] = warning if warning
+  end
+  private_class_method :embed_setup_warning
 end

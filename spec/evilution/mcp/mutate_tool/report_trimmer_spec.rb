@@ -117,8 +117,8 @@ require "evilution/feedback"
 require "evilution/feedback/messages"
 
 unless defined?(TrimmerFrictionSummary)
-  TrimmerFrictionSummary = Struct.new(:errors, :unparseable, :unresolved, keyword_init: true) do
-    def initialize(errors: 0, unparseable: 0, unresolved: 0)
+  TrimmerFrictionSummary = Struct.new(:errors, :unparseable, :unresolved, :total, :results, keyword_init: true) do
+    def initialize(errors: 0, unparseable: 0, unresolved: 0, total: 0, results: [])
       super
     end
   end
@@ -155,6 +155,73 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "feedback embedding" d
     data = JSON.parse(result)
     expect(data).not_to have_key("feedback_url")
     expect(data).not_to have_key("feedback_hint")
+  end
+end
+
+RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "setup_warning embedding" do
+  let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [] }) }
+  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:config) { instance_double(Evilution::Config) }
+
+  def errored_result(klass)
+    double(error?: true, killed?: false, survived?: false, error_class: klass, status: :error)
+  end
+
+  let(:autoload_failure_summary) do
+    results = Array.new(10) { errored_result("NameError") }
+    instance_double(
+      Evilution::Result::Summary,
+      results: results,
+      total: 10,
+      errors: 10,
+      unparseable: 0,
+      unresolved: 0
+    )
+  end
+
+  it "embeds setup_warning when nearly all mutations errored with the same class" do
+    result = described_class.call(
+      bare_report,
+      verbosity: "summary",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: autoload_failure_summary
+    )
+    data = JSON.parse(result)
+    expect(data).to have_key("setup_warning")
+    expect(data["setup_warning"]).to include("NameError")
+    expect(data["setup_warning"]).to include("preload")
+  end
+
+  it "embeds setup_warning even at minimal verbosity (silent wrong scores are dangerous)" do
+    result = described_class.call(
+      JSON.generate({ "summary" => {}, "survived" => [], "killed" => [] }),
+      verbosity: "minimal",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: autoload_failure_summary
+    )
+    data = JSON.parse(result)
+    expect(data["setup_warning"]).to include("preload")
+  end
+
+  it "omits setup_warning on a clean summary" do
+    clean_summary = instance_double(
+      Evilution::Result::Summary,
+      results: [], total: 0, errors: 0, unparseable: 0, unresolved: 0
+    )
+    result = described_class.call(
+      bare_report,
+      verbosity: "summary",
+      survived_results: [],
+      config: config,
+      enricher: noop_enricher,
+      summary: clean_summary
+    )
+    data = JSON.parse(result)
+    expect(data).not_to have_key("setup_warning")
   end
 end
 
