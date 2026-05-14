@@ -82,7 +82,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     snapshot = @state_guard.snapshot
     begin
       status = ::RSpec::Core::Runner.run(args, StringIO.new, StringIO.new)
-      @result_builder.from_run(status, command, detector, examples_executed: examples_loaded)
+      @result_builder.from_run(status, command, detector, examples_loaded:)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure

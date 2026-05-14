@@ -79,9 +79,9 @@ RSpec.describe Evilution::Integration::RSpec::ResultBuilder do
     # examples (spec file failed to load, --spec ignored, fail_if_no_examples
     # active, etc.), there is no evidence the mutation was caught — calling
     # that "killed" silently produces wrong scores. Surface it as :error.
-    context "when status nonzero AND zero examples executed" do
+    context "when status nonzero AND zero examples loaded" do
       it "returns an error hash (so classify_status reports :error, not :killed)" do
-        result = builder.from_run(2, "rspec args", detector, examples_executed: 0)
+        result = builder.from_run(2, "rspec args", detector, examples_loaded: 0)
 
         expect(result[:passed]).to be false
         expect(result[:error]).to match(/0 examples|no examples ran/i)
@@ -95,19 +95,19 @@ RSpec.describe Evilution::Integration::RSpec::ResultBuilder do
         allow(detector).to receive(:unique_crash_classes).and_return(["LoadError"])
         allow(detector).to receive(:crash_summary).and_return("LoadError x1")
 
-        result = builder.from_run(1, "rspec args", detector, examples_executed: 0)
+        result = builder.from_run(1, "rspec args", detector, examples_loaded: 0)
 
         expect(result[:test_crashed]).to be true
         expect(result[:error_class]).to eq("LoadError")
       end
     end
 
-    it "keeps plain fail behavior when examples_executed is positive" do
-      result = builder.from_run(1, "rspec args", detector, examples_executed: 3)
+    it "keeps plain fail behavior when examples_loaded is positive" do
+      result = builder.from_run(1, "rspec args", detector, examples_loaded: 3)
       expect(result).to eq({ passed: false, test_command: "rspec args" })
     end
 
-    it "keeps plain fail behavior when examples_executed is nil (back-compat)" do
+    it "keeps plain fail behavior when examples_loaded is nil (back-compat)" do
       result = builder.from_run(1, "rspec args", detector)
       expect(result).to eq({ passed: false, test_command: "rspec args" })
     end
