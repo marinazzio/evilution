@@ -105,29 +105,33 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
     # returns a fresh anonymous Class each call, so the recorded superclass
     # differs from the existing class's superclass. Common idiomatic pattern
     # for Rack middleware shims (also Data.define, Class.new in similar
-    # positions). The class already exists with the previous shape — the
-    # mutation targets a method body, not the inheritance chain — so we
-    # swallow with a one-shot warning, same shape as idempotency violations.
+    # positions). To actually apply the mutation we must remove the existing
+    # constants the source defines, then retry — same pattern used for
+    # ArgumentError 'already defined'. Swallowing without retry would silently
+    # leave the original class in place and report the mutation as survived
+    # even though it never ran.
     describe "TypeError superclass mismatch (anonymous-parent re-eval)" do
-      it "swallows TypeError when message mentions 'superclass mismatch'" do
-        attempts = 0
-        result = recovery.call(source) do
-          attempts += 1
-          raise TypeError, "superclass mismatch for class ExtendedRack" if attempts == 1
+      it "strips defined constants and retries when TypeError mentions 'superclass mismatch'" do
+        Object.const_set(:EvilutionRecoveryTest, Class.new)
 
-          :ok
+        attempts = 0
+        recovery.call(source) do
+          attempts += 1
+          raise TypeError, "superclass mismatch for class EvilutionRecoveryTest" if attempts == 1
         end
 
-        expect(attempts).to eq(1)
-        expect(result).to be_nil
+        expect(attempts).to eq(2)
+        expect(defined?(EvilutionRecoveryTest)).to be_nil
       end
 
-      it "emits a one-shot warning identifying the mismatch class" do
+      it "re-raises a persistent superclass mismatch on the retry attempt" do
+        Object.const_set(:EvilutionRecoveryTest, Class.new)
+
         expect do
           recovery.call(source) do
-            raise TypeError, "superclass mismatch for class ExtendedRack"
+            raise TypeError, "superclass mismatch for class EvilutionRecoveryTest"
           end
-        end.to output(/superclass mismatch/i).to_stderr
+        end.to raise_error(TypeError, /superclass mismatch/)
       end
 
       it "re-raises TypeError whose message is not a superclass mismatch" do
