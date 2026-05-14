@@ -65,6 +65,15 @@ RSpec.describe Evilution::MCP::MutateTool::ConfigBuilder do
         config = described_class.build(files: [], line_ranges: {}, params: { preload: nil })
         expect(config.preload).to be(false)
       end
+
+      it "raises ConfigError when preload: true is passed (schema disallows; validator catches)" do
+        # MCP schema advertises preload as `string | false` (no `true`). If a client
+        # bypasses the schema and sends `true`, Config's preload validator raises
+        # so the user gets a clear error instead of silent misbehavior.
+        expect do
+          described_class.build(files: [], line_ranges: {}, params: { preload: true })
+        end.to raise_error(Evilution::ConfigError, /preload must be nil, false, or a String path/)
+      end
     end
   end
 end

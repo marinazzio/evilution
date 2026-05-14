@@ -67,6 +67,8 @@ RSpec.describe Evilution::Feedback::SetupWarning do
       expect(message).to include("NameError")
       expect(message).to include("preload")
       expect(message).to include("Rails")
+      expect(message).to include("mutations errored")
+      expect(message).not_to match(/workers errored/i)
     end
 
     it "returns a LoadError-specific hint when all mutations errored with LoadError" do

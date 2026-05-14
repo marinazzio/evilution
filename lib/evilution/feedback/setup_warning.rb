@@ -55,16 +55,16 @@ module Evilution::Feedback::SetupWarning
   end
   private_class_method :dominant_error_class
 
-  NAME_ERROR_HINT = "Most workers errored with NameError. This usually means autoloaded constants " \
+  NAME_ERROR_HINT = "Most mutations errored with NameError. This usually means autoloaded constants " \
                     "(Rails / Zeitwerk) weren't available when the mutation re-evaluated the source. " \
                     "Pass `preload: 'spec/rails_helper.rb'` (or your project's preload entry) so the " \
                     "MCP server requires it before forking workers."
 
-  LOAD_ERROR_HINT = "Most workers errored with LoadError. A `require` in the mutated source path failed " \
-                    "before any test ran. Check that the file's dependencies are reachable from the MCP " \
-                    "server's load path, or pass `preload: '<entrypoint>'` to set them up."
+  LOAD_ERROR_HINT = "Most mutations errored with LoadError. A `require` in the mutated source path " \
+                    "failed before any test ran. Check that the file's dependencies are reachable from " \
+                    "the MCP server's load path, or pass `preload: '<entrypoint>'` to set them up."
 
-  GENERIC_HINT_TEMPLATE = "Most workers errored with %<klass>s (%<count>d / %<total>d). The mutation " \
+  GENERIC_HINT_TEMPLATE = "Most mutations errored with %<klass>s (%<count>d / %<total>d). The mutation " \
                           "score reflects this setup failure, not the test suite. Try the CLI for an " \
                           "independent reading, or pass `preload: '<path>'` if the failure is autoload-related."
 
