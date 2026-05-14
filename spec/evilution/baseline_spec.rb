@@ -78,6 +78,47 @@ RSpec.describe Evilution::Baseline do
         .to output(%r{no matching test.*lib/user\.rb.*--spec}i).to_stderr
     end
 
+    context "with explicit test_files (from --spec flag)" do
+      # When the user passes --spec, they have told us which spec files cover
+      # the subjects. Baseline must run those spec files (and ONLY those) —
+      # never auto-discover or fall back to the full suite. Doing otherwise
+      # produces the misleading "No matching test found... Use --spec" warning
+      # users have reported even though they did pass --spec, and causes
+      # baseline to run unrelated specs that may fail for environment reasons,
+      # cascading into wrong score reporting.
+      subject(:baseline) do
+        described_class.new(
+          spec_resolver: spec_resolver, timeout: 5,
+          test_files: ["spec/explicit_spec.rb"]
+        )
+      end
+
+      it "runs the explicit spec files and skips auto-discovery" do
+        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(true)
+
+        baseline.call([subject1, subject3])
+
+        expect(baseline).to have_received(:run_spec_file).with("spec/explicit_spec.rb").once
+        expect(baseline).not_to have_received(:run_spec_file).with("spec/user_spec.rb")
+        expect(baseline).not_to have_received(:run_spec_file).with("spec/order_spec.rb")
+      end
+
+      it "does not fire the 'No matching test found' warning when test_files is provided" do
+        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(true)
+
+        expect { baseline.call([subject1]) }
+          .not_to output(/no matching test/i).to_stderr
+      end
+
+      it "reports failed explicit spec files" do
+        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(false)
+
+        result = baseline.call([subject1])
+
+        expect(result.failed_spec_files).to contain_exactly("spec/explicit_spec.rb")
+      end
+    end
+
     it "records duration" do
       allow(baseline).to receive(:run_spec_file).and_return(true)
 

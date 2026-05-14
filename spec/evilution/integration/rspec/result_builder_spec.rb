@@ -72,5 +72,44 @@ RSpec.describe Evilution::Integration::RSpec::ResultBuilder do
       result = builder.from_run(1, "rspec args", detector)
       expect(result).to eq({ passed: false, test_command: "rspec args" })
     end
+
+    # Bug B (EV-720r): user reported all mutations marked `killed=100%` on
+    # macOS Rails. Root cause is classify_status defaulting to :killed for any
+    # nonzero RSpec exit. If RSpec returns nonzero because it loaded ZERO
+    # examples (spec file failed to load, --spec ignored, fail_if_no_examples
+    # active, etc.), there is no evidence the mutation was caught — calling
+    # that "killed" silently produces wrong scores. Surface it as :error.
+    context "when status nonzero AND zero examples executed" do
+      it "returns an error hash (so classify_status reports :error, not :killed)" do
+        result = builder.from_run(2, "rspec args", detector, examples_executed: 0)
+
+        expect(result[:passed]).to be false
+        expect(result[:error]).to match(/0 examples|no examples ran/i)
+        expect(result[:test_command]).to eq("rspec args")
+      end
+
+      it "still surfaces crashes when only_crashes? is true, even with 0 examples" do
+        # Crash signal is stronger than the zero-examples heuristic; keep
+        # current behavior.
+        allow(detector).to receive(:only_crashes?).and_return(true)
+        allow(detector).to receive(:unique_crash_classes).and_return(["LoadError"])
+        allow(detector).to receive(:crash_summary).and_return("LoadError x1")
+
+        result = builder.from_run(1, "rspec args", detector, examples_executed: 0)
+
+        expect(result[:test_crashed]).to be true
+        expect(result[:error_class]).to eq("LoadError")
+      end
+    end
+
+    it "keeps plain fail behavior when examples_executed is positive" do
+      result = builder.from_run(1, "rspec args", detector, examples_executed: 3)
+      expect(result).to eq({ passed: false, test_command: "rspec args" })
+    end
+
+    it "keeps plain fail behavior when examples_executed is nil (back-compat)" do
+      result = builder.from_run(1, "rspec args", detector)
+      expect(result).to eq({ passed: false, test_command: "rspec args" })
+    end
   end
 end

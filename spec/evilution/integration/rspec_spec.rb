@@ -58,6 +58,34 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:passed]).to be true
     end
 
+    # EV-720r: distinguish "RSpec ran examples and they failed → killed" from
+    # "RSpec exited nonzero but loaded zero examples → no observation". The
+    # second case must surface as :error so it cannot silently inflate kill
+    # counts. world.example_count is the count of loaded examples after the
+    # run; zero indicates the spec file failed to load (autoload error,
+    # missing dependency, etc.).
+    it "returns an error result when rspec exits nonzero AND no examples loaded" do
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+      allow(RSpec.world).to receive(:example_count).and_return(0)
+
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result[:error]).to match(/0 examples|no examples/i)
+    end
+
+    it "treats nonzero exit with loaded examples as a real test failure" do
+      # If at least one example was loaded and ran, nonzero exit means the
+      # test caught the mutation. Do NOT downgrade this to :error.
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+      allow(RSpec.world).to receive(:example_count).and_return(3)
+
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result[:error]).to be_nil
+    end
+
     it "restores the original file even when runner raises" do
       allow(RSpec::Core::Runner).to receive(:run).and_raise("boom")
 

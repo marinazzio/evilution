@@ -82,12 +82,27 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     snapshot = @state_guard.snapshot
     begin
       status = ::RSpec::Core::Runner.run(args, StringIO.new, StringIO.new)
-      @result_builder.from_run(status, command, detector)
+      @result_builder.from_run(status, command, detector, examples_executed: examples_loaded)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
       @state_guard.release(snapshot)
     end
+  end
+
+  # Count of examples loaded into RSpec.world by this run. Used to distinguish
+  # "test failed → mutation killed" (positive count, nonzero status) from
+  # "spec file failed to load / RSpec returned nonzero with nothing observed"
+  # (zero count, nonzero status). The latter must NOT be classified as killed
+  # — silently counting it would inflate scores with mutations no example
+  # actually saw (EV-720r).
+  def examples_loaded
+    world = ::RSpec.world
+    return nil unless world.respond_to?(:example_count)
+
+    world.example_count
+  rescue StandardError
+    nil
   end
 
   def reset_examples

@@ -55,7 +55,11 @@ class Evilution::Runner::BaselineRunner
     return nil unless config.baseline? && subjects.any?
 
     log_start
-    baseline = Evilution::Baseline.new(timeout: config.timeout, **integration_class.baseline_options)
+    baseline = Evilution::Baseline.new(
+      timeout: config.timeout,
+      test_files: config.spec_files.empty? ? nil : config.spec_files,
+      **integration_class.baseline_options
+    )
     result = baseline.call(subjects)
     log_complete(result)
     result

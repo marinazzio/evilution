@@ -15,16 +15,18 @@ class Evilution::Baseline
     end
   end
 
-  def initialize(spec_resolver: Evilution::SpecResolver.new, timeout: 30, runner: nil, fallback_dir: "spec")
+  def initialize(spec_resolver: Evilution::SpecResolver.new, timeout: 30, runner: nil,
+                 fallback_dir: "spec", test_files: nil)
     @spec_resolver = spec_resolver
     @timeout = timeout
     @runner = runner
     @fallback_dir = fallback_dir
+    @test_files = test_files
   end
 
   def call(subjects)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    spec_files = resolve_unique_spec_files(subjects)
+    spec_files = baseline_spec_files(subjects)
     failed = Set.new
 
     spec_files.each do |spec_file|
@@ -95,6 +97,17 @@ class Evilution::Baseline
   end
 
   private
+
+  # When --spec was provided, run those files only. Auto-discovery is skipped
+  # entirely — the user has declared what covers their subjects and any
+  # mismatch between auto-discovery and their declaration is what produced
+  # the misleading "No matching test found" warning users have reported even
+  # while passing --spec.
+  def baseline_spec_files(subjects)
+    return Array(@test_files).uniq if @test_files && !@test_files.empty?
+
+    resolve_unique_spec_files(subjects)
+  end
 
   def resolve_unique_spec_files(subjects)
     warned = Set.new
