@@ -203,5 +203,74 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(result).not_to include("register :foo")
       expect(result).not_to include("should be neutralized")
     end
+
+    # EV-70hd / #1212: BodyCallNeutralizer's premise is "the parent already ran
+    # this body during preload, so re-running side-effect calls in the child
+    # would double-register." That premise breaks for lazy-loaded plugin files
+    # (e.g. roda's typecast_params.rb) — the file is first-required INSIDE the
+    # child fork, the parent has never run its DSL calls, and neutralizing
+    # them strips method definitions that subsequent sibling statements depend
+    # on (alias / etc.), cascading NameError.
+    describe "lazy-load-aware skip" do
+      let(:plugin_src) do
+        <<~RUBY
+          module Roda
+            module Plugins
+              module TypecastParams
+                class Params
+                  handle_type(:int) { |v| v.to_i }
+                end
+              end
+            end
+          end
+        RUBY
+      end
+
+      after { described_class.reset_preload_snapshot! }
+
+      it "neutralizes when the target file is in the preload snapshot" do
+        described_class.preloaded_features = Set.new(["/preloaded/file.rb"])
+        result = neutralizer.call(plugin_src, file_path: "/preloaded/file.rb")
+
+        expect(result).not_to include("handle_type")
+      end
+
+      it "skips neutralization when the target file is NOT in the preload snapshot" do
+        # Lazy-loaded plugin path: parent never ran it, child re-eval is the
+        # file's FIRST execution. Stripping DSL calls here removes methods
+        # other statements depend on. Skip — let the file load intact.
+        described_class.preloaded_features = Set.new(["/other/file.rb"])
+        result = neutralizer.call(plugin_src, file_path: "/lazy/plugin.rb")
+
+        expect(result).to eq(plugin_src)
+      end
+
+      it "normalizes file paths so relative/absolute forms match the snapshot" do
+        absolute = File.expand_path("lib/some_file.rb")
+        described_class.preloaded_features = Set.new([absolute])
+        result = neutralizer.call(plugin_src, file_path: "lib/some_file.rb")
+
+        expect(result).not_to include("handle_type")
+      end
+
+      it "falls back to current behavior when file_path is not provided (backwards compat)" do
+        # External callers that pass no file_path get the legacy
+        # always-neutralize behavior. Existing internal callers will pass
+        # file_path; this branch preserves any out-of-tree users.
+        described_class.preloaded_features = Set.new([])
+        result = neutralizer.call(plugin_src)
+
+        expect(result).not_to include("handle_type")
+      end
+
+      it "returns a frozen lazy-init snapshot so fork COW pages are not broken by accidental mutation" do
+        # Snapshot is shared across forks via copy-on-write. Mutating it would
+        # both change neutralization semantics and force each child to copy the
+        # backing page, defeating COW. Freezing the lazy-init result guards
+        # against in-place mutation.
+        described_class.reset_preload_snapshot!
+        expect(described_class.preloaded_features).to be_frozen
+      end
+    end
   end
 end

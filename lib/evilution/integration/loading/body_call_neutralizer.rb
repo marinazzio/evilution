@@ -25,7 +25,36 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     require require_relative autoload
   ].to_set.freeze
 
-  def call(source)
+  class << self
+    attr_writer :preloaded_features
+
+    # Snapshot of `$LOADED_FEATURES` captured at parent preload-end (or lazily
+    # initialised on first access). Forks inherit this set via copy-on-write,
+    # so worker processes see the same membership the parent saw when it
+    # finished its preload phase. Frozen so in-place mutation cannot silently
+    # change neutralization semantics or force child forks to copy the page.
+    def preloaded_features
+      @preloaded_features ||= $LOADED_FEATURES.to_set.freeze
+    end
+
+    def reset_preload_snapshot!
+      @preloaded_features = nil
+    end
+  end
+
+  # `file_path` (optional) lets callers gate neutralization on whether the
+  # target file was actually preloaded into the parent. The neutralizer's
+  # premise — "this body has already run once, re-running it would double-
+  # register" — only holds when the parent loaded the file. Lazy-loaded
+  # plugin files (e.g. roda's `lib/roda/plugins/typecast_params.rb`, which
+  # the gem only requires when the user opts in via `plugin :typecast_params`)
+  # are first-loaded inside the child fork, so neutralizing their DSL calls
+  # strips method definitions that subsequent sibling statements (alias, etc.)
+  # depend on, producing cascading NameError. Callers that don't pass a path
+  # get the legacy always-neutralize behavior.
+  def call(source, file_path: nil)
+    return source if file_path && !preloaded?(file_path)
+
     result = Prism.parse(source)
     return source if result.failure?
 
@@ -36,6 +65,10 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   end
 
   private
+
+  def preloaded?(file_path)
+    self.class.preloaded_features.include?(File.expand_path(file_path))
+  end
 
   def collect_edits(tree)
     edits = []

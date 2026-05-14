@@ -97,11 +97,13 @@ class Evilution::Mutator::Base < Prism::Visitor
   # stays out of the hot path. For parseable mutations we strip class/module
   # body calls that are known to be non-idempotent (registries etc.); for
   # unparseable bytes we fall through so the syntax validator can reject
-  # them at apply time.
+  # them at apply time. Passing the subject's file path lets the neutralizer
+  # skip files the parent never preloaded — those are lazy plugin files whose
+  # DSL calls are still needed for the child fork's first-time load.
   def build_eval_source(surgery)
     return surgery.source unless surgery.ok?
 
-    @body_call_neutralizer.call(surgery.source)
+    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path)
   end
 
   NEWLINE_BYTE = 10
