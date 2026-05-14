@@ -27,7 +27,8 @@ class Evilution::Runner::MutationPlanner
 
   def call(subjects)
     generation = generate(subjects)
-    disabled_filter = filter_disabled(generation.mutations)
+    deduped = deduplicate(generation.mutations)
+    disabled_filter = filter_disabled(deduped)
     disabled_mutations = compute_disabled_mutations(disabled_filter)
     sig_filter = filter_sig_blocks(disabled_filter.enabled)
     equivalent_filter = filter_equivalent(sig_filter.enabled)
@@ -57,6 +58,22 @@ class Evilution::Runner::MutationPlanner
       skipped_count: skipped_count,
       disabled_mutations: disabled_mutations
     )
+  end
+
+  # Two operators can independently emit the same byte-level mutation
+  # (statement_deletion deleting a trailing literal AND last_expression_removal
+  # producing the same result, for example). Running both is wasted compute
+  # and inflates the denominator. Key is (file_path, mutated_source) — two
+  # mutations producing the same resulting source are operationally identical
+  # regardless of operator name. Order-stable: first occurrence wins, so
+  # operator-name ordering in the registry determines which name surfaces.
+  def deduplicate(mutations)
+    seen = {}
+    mutations.each do |mutation|
+      key = [mutation.file_path, mutation.mutated_source]
+      seen[key] ||= mutation
+    end
+    seen.values
   end
 
   def generate(subjects)

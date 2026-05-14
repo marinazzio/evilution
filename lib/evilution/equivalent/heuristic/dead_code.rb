@@ -3,8 +3,15 @@
 require_relative "../heuristic"
 
 class Evilution::Equivalent::Heuristic::DeadCode
+  # Both operators produce statement-deletion-shaped edits. MutationPlanner
+  # dedupes by (file_path, mutated_source); whichever operator is registered
+  # first surfaces its name on the surviving mutation. Classify equivalence
+  # by edit shape, not by operator label, so dead-code classification holds
+  # regardless of registry order (EV-74e3 PR #1236 review).
+  STATEMENT_DELETION_OPERATORS = %w[statement_deletion last_expression_removal].to_set.freeze
+
   def match?(mutation)
-    return false unless mutation.operator_name == "statement_deletion"
+    return false unless STATEMENT_DELETION_OPERATORS.include?(mutation.operator_name)
 
     node = mutation.subject.node
     return false unless node
