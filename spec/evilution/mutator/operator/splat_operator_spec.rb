@@ -89,6 +89,30 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       removed = mutations.select { |m| m.mutated_source.include?("bar(opts)") }
       expect(removed).not_to be_empty
     end
+
+    # EV-jjpt (#1202): demoting `**opts` to bare `opts` after an inline kwarg
+    # produces `bar(k: v, opts)` — positional-after-keyword, a syntax error.
+    # The operator must skip the mutation when a kwarg precedes the splat.
+    it "does not mutate double-splat when a kwarg precedes it (positional-after-keyword)" do
+      mutations = mutations_for("def foo\n  bar(k: v, **opts)\nend\n")
+
+      splat_mutations = mutations.select { |m| m.operator_name == "splat_operator" }
+      expect(splat_mutations).to be_empty
+    end
+
+    it "still mutates double-splat when it precedes the kwargs (positional-before-keyword is valid)" do
+      mutations = mutations_for("def foo\n  bar(**opts, k: v)\nend\n")
+
+      removed = mutations.select { |m| m.mutated_source.include?("bar(opts, k: v)") }
+      expect(removed).not_to be_empty
+    end
+
+    it "skips when any kwarg precedes the splat, even with positional args before all of them" do
+      mutations = mutations_for("def foo\n  bar(x, k: v, **opts)\nend\n")
+
+      splat_mutations = mutations.select { |m| m.operator_name == "splat_operator" }
+      expect(splat_mutations).to be_empty
+    end
   end
 
   describe "valid Ruby output" do
