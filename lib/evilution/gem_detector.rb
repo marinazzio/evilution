@@ -26,8 +26,8 @@ module Evilution::GemDetector
       nil
     end
 
-    def gem_entry_for(root)
-      gem_name = gem_name_for(root)
+    def gem_entry_for(root, target_paths: nil)
+      gem_name = gem_name_for(root, target_paths: target_paths)
       return nil unless gem_name
 
       dotted = File.join(root, "lib", "#{gem_name.tr("-", "/")}.rb")
@@ -65,11 +65,68 @@ module Evilution::GemDetector
       end
     end
 
-    def gem_name_for(root)
-      specs = Dir.glob(File.join(root, "*.gemspec"))
-      return nil if specs.empty?
+    # When the root has multiple gemspecs (e.g. dotenv ships dotenv.gemspec
+    # alongside dotenv-rails.gemspec), `Dir.glob.first` is filesystem-order-
+    # dependent and often picks the wrong one — preloading the rails companion
+    # then raises `uninitialized constant Rails`. Disambiguate by:
+    #   1. exact-entry match — if a target is *exactly* the lib entry for a
+    #      gemspec (`lib/dotenv/rails.rb` for `dotenv-rails.gemspec`), use it
+    #   2. first-lib-subdir match — `lib/dotenv/parser.rb` matches `dotenv`
+    #   3. fall back to the shortest gemspec basename — `dotenv` <
+    #      `dotenv-rails`, which is the conventional "parent" gem.
+    def gem_name_for(root, target_paths: nil)
+      names = Dir.glob(File.join(root, "*.gemspec")).map { |p| File.basename(p, ".gemspec") }
+      return nil if names.empty?
+      return names.first if names.length == 1
 
-      File.basename(specs.first, ".gemspec")
+      paths = Array(target_paths)
+      match_by_exact_entry(root, names, paths) ||
+        match_by_subdir(root, names, paths) ||
+        names.min_by(&:length)
+    end
+
+    def match_by_exact_entry(root, names, paths)
+      paths.each do |path|
+        next if path.nil?
+
+        expanded = File.expand_path(path)
+        match = names.find { |n| entry_paths_for(root, n).include?(expanded) }
+        return match if match
+      end
+      nil
+    end
+
+    def entry_paths_for(root, gem_name)
+      [
+        File.join(root, "lib", "#{gem_name.tr("-", "/")}.rb"),
+        File.join(root, "lib", "#{gem_name}.rb")
+      ]
+    end
+
+    def match_by_subdir(root, names, paths)
+      paths.each do |path|
+        subdir = lib_subdir_for(root, path)
+        next if subdir.nil?
+
+        match = names.find { |n| n == subdir }
+        return match if match
+      end
+      nil
+    end
+
+    # For `<root>/lib/dotenv/parser.rb` returns "dotenv". For
+    # `<root>/lib/dotenv-rails.rb` returns "dotenv-rails". Returns nil when
+    # the target isn't under `<root>/lib/`.
+    def lib_subdir_for(root, path)
+      return nil if path.nil?
+
+      expanded = File.expand_path(path)
+      lib_root = File.join(File.expand_path(root), "lib")
+      return nil unless expanded.start_with?("#{lib_root}/")
+
+      relative = expanded[(lib_root.length + 1)..]
+      first_segment = relative.split("/", 2).first
+      File.basename(first_segment, ".rb")
     end
   end
 end

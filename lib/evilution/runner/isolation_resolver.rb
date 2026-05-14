@@ -151,7 +151,7 @@ class Evilution::Runner::IsolationResolver
     return @detected_gem_entry if defined?(@detected_gem_entry)
 
     root = Evilution::GemDetector.gem_root_for_any(target_files)
-    @detected_gem_entry = root && Evilution::GemDetector.gem_entry_for(root)
+    @detected_gem_entry = root && Evilution::GemDetector.gem_entry_for(root, target_paths: target_files)
   end
 
   def find_first_existing_candidate
