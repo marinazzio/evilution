@@ -60,6 +60,19 @@ RSpec.describe Evilution::Equivalent::Heuristic::DeadCode do
     expect(heuristic.match?(mutation)).to be false
   end
 
+  # EV-74e3 PR review #1236: last_expression_removal can win dedup over
+  # statement_deletion for the same byte change. Dead-code classification
+  # must hold regardless of which operator name surfaces, otherwise dedup
+  # silently strips equivalent-classification for trailing literals after
+  # return/raise.
+  it "matches last_expression_removal as well (deduplicates with statement_deletion)" do
+    subj = subject_for("method_with_dead_code")
+    dead_line = source.lines.index { |l| l.include?("puts \"unreachable\"") } + 1
+    mutation = double("Mutation", operator_name: "last_expression_removal", subject: subj, line: dead_line)
+
+    expect(heuristic.match?(mutation)).to be true
+  end
+
   it "handles released node gracefully" do
     subj = subject_for("method_with_dead_code")
     subj.release_node!
