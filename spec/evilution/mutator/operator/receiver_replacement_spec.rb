@@ -77,5 +77,60 @@ RSpec.describe Evilution::Mutator::Operator::ReceiverReplacement do
         expect(mutation.operator_name).to eq("receiver_replacement")
       end
     end
+
+    describe "Ruby-keyword-collision safety" do
+      # `self.class` -> bare `class` is a syntax error because `class` is a
+      # reserved keyword for class definition. Same for `self.then`, etc.
+      # Stripping the receiver from any call whose name is reserved produces
+      # unparseable code; skip those mutations entirely.
+
+      it "skips self.class (bare expression)" do
+        muts = mutations_for("self_class_bare")
+
+        expect(muts).to be_empty
+      end
+
+      it "skips self.class in a chained call (self.class.new)" do
+        muts = mutations_for("self_class_chained")
+        # No mutation on the inner self.class. A mutation on `self.class.new`
+        # itself doesn't apply (no SelfNode receiver on the outer .new call,
+        # the receiver is the inner CallNode), so the method has no mutations.
+        expect(muts).to be_empty
+      end
+
+      it "skips self.class on the LHS of a constant path (self.class::Handler)" do
+        muts = mutations_for("self_class_const_path")
+
+        expect(muts).to be_empty
+      end
+
+      it "skips self.then chained with a block" do
+        muts = mutations_for("self_then_chained")
+
+        expect(muts).to be_empty
+      end
+
+      it "skips self.class as an argument (is_a?(self.class))" do
+        muts = mutations_for("is_a_self_class")
+        # The argument's self.class is skipped. The outer `other.is_a?(...)`
+        # has a non-self receiver, so it's also skipped.
+        expect(muts).to be_empty
+      end
+
+      it "skips writer calls whose base name is reserved (self.class = value)" do
+        # Prism CallNode name is `:class=` (with the `=` suffix). Stripping
+        # `self.` produces `class = value`, which Ruby's parser rejects
+        # because `class` is the class-definition keyword.
+        muts = mutations_for("self_class_writer")
+
+        expect(muts).to be_empty
+      end
+
+      it "skips writer calls for any reserved-keyword base name (self.then = value)" do
+        muts = mutations_for("self_then_writer")
+
+        expect(muts).to be_empty
+      end
+    end
   end
 end
