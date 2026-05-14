@@ -38,6 +38,21 @@ class Evilution::Integration::Loading::RedefinitionRecovery
     else
       raise
     end
+  rescue TypeError => e
+    raise unless superclass_mismatch?(e)
+
+    # `class X < Struct.new(...)` (or Data.define / Class.new in the same
+    # position) returns a fresh anonymous parent class on every call, so the
+    # recorded superclass of the existing X differs from the re-eval's. Ruby
+    # raises TypeError. Simply swallowing would leave the *original* class
+    # in place and silently report the mutation as survived — a false
+    # negative. Instead, strip the constants this source declares and retry
+    # exactly once, mirroring the ArgumentError 'already defined' path. If
+    # the retry still mismatches (genuine inheritance conflict the mutation
+    # cannot resolve), propagate so the mutation reports :error rather than
+    # being silently miscounted.
+    remove_defined_constants(source)
+    block.call
   end
 
   private
@@ -49,6 +64,10 @@ class Evilution::Integration::Loading::RedefinitionRecovery
   def idempotency_violation?(error)
     msg = error.message
     IDEMPOTENCY_PATTERNS.any? { |pat| msg.include?(pat) }
+  end
+
+  def superclass_mismatch?(error)
+    error.message.include?("superclass mismatch")
   end
 
   def warn_once_for(error)

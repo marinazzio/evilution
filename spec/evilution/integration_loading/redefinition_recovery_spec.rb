@@ -99,5 +99,46 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
         end.to raise_error(ArgumentError, /bad operand/)
       end
     end
+
+    # EV-lqpn (sinatra base.rb:225): `class ExtendedRack < Struct.new(:app)`
+    # raises `TypeError: superclass mismatch` on re-eval because Struct.new
+    # returns a fresh anonymous Class each call, so the recorded superclass
+    # differs from the existing class's superclass. Common idiomatic pattern
+    # for Rack middleware shims (also Data.define, Class.new in similar
+    # positions). To actually apply the mutation we must remove the existing
+    # constants the source defines, then retry — same pattern used for
+    # ArgumentError 'already defined'. Swallowing without retry would silently
+    # leave the original class in place and report the mutation as survived
+    # even though it never ran.
+    describe "TypeError superclass mismatch (anonymous-parent re-eval)" do
+      it "strips defined constants and retries when TypeError mentions 'superclass mismatch'" do
+        Object.const_set(:EvilutionRecoveryTest, Class.new)
+
+        attempts = 0
+        recovery.call(source) do
+          attempts += 1
+          raise TypeError, "superclass mismatch for class EvilutionRecoveryTest" if attempts == 1
+        end
+
+        expect(attempts).to eq(2)
+        expect(defined?(EvilutionRecoveryTest)).to be_nil
+      end
+
+      it "re-raises a persistent superclass mismatch on the retry attempt" do
+        Object.const_set(:EvilutionRecoveryTest, Class.new)
+
+        expect do
+          recovery.call(source) do
+            raise TypeError, "superclass mismatch for class EvilutionRecoveryTest"
+          end
+        end.to raise_error(TypeError, /superclass mismatch/)
+      end
+
+      it "re-raises TypeError whose message is not a superclass mismatch" do
+        expect do
+          recovery.call(source) { raise TypeError, "no implicit conversion of String into Integer" }
+        end.to raise_error(TypeError, /no implicit conversion/)
+      end
+    end
   end
 end
