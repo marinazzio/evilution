@@ -116,6 +116,21 @@ RSpec.describe Evilution::Mutator::Operator::ReceiverReplacement do
         # has a non-self receiver, so it's also skipped.
         expect(muts).to be_empty
       end
+
+      it "skips writer calls whose base name is reserved (self.class = value)" do
+        # Prism CallNode name is `:class=` (with the `=` suffix). Stripping
+        # `self.` produces `class = value`, which Ruby's parser rejects
+        # because `class` is the class-definition keyword.
+        muts = mutations_for("self_class_writer")
+
+        expect(muts).to be_empty
+      end
+
+      it "skips writer calls for any reserved-keyword base name (self.then = value)" do
+        muts = mutations_for("self_then_writer")
+
+        expect(muts).to be_empty
+      end
     end
   end
 end

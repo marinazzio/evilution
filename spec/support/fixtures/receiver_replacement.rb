@@ -43,6 +43,14 @@ class ReceiverReplacementExample
     other.is_a?(self.class)
   end
 
+  def self_class_writer(value)
+    self.class = value
+  end
+
+  def self_then_writer(value)
+    self.then = value
+  end
+
   class Handler
   end
 end

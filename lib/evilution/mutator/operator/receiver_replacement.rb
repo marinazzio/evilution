@@ -32,9 +32,18 @@ class Evilution::Mutator::Operator::ReceiverReplacement < Evilution::Mutator::Ba
 
   def eligible_self_call?(node)
     return false unless node.receiver.is_a?(Prism::SelfNode)
-    return false if RUBY_RESERVED_KEYWORDS.include?(node.name)
+    return false if reserved_keyword_method?(node.name)
 
     true
+  end
+
+  # `self.class = value` is a writer call whose Prism `name` is `:class=` —
+  # not `:class` — so a literal lookup in RUBY_RESERVED_KEYWORDS misses it,
+  # and stripping the receiver leaves `class = value` (parse error). Normalize
+  # the trailing `=` from writer forms before comparing.
+  def reserved_keyword_method?(name)
+    base = name.to_s.chomp("=").to_sym
+    RUBY_RESERVED_KEYWORDS.include?(base)
   end
 
   def call_without_self_text(node)
