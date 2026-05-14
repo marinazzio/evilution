@@ -4,10 +4,22 @@ require "prism"
 
 require_relative "../mutator"
 require_relative "../integration/loading/body_call_neutralizer"
+require_relative "../ast/heredoc_span"
 
 class Evilution::Mutator::Base < Prism::Visitor
   AffectedSlices = Data.define(:original, :mutated)
   private_constant :AffectedSlices
+
+  # Match a heredoc anchor `<<MARKER` / `<<-MARKER` / `<<~MARKER` (optionally
+  # quoted) when the identifier sits directly against the `<<` (or its
+  # `-`/`~`/quote prefix). The space-separated forms `arr << x`, `1 << 2`,
+  # `class << self` deliberately do NOT match — `<<` alone is also Ruby's
+  # shift / append / singleton-class operator, and skipping mutations that
+  # only contain those would lose useful coverage. False positive on the
+  # unusual no-space shift `obj<<value` is accepted (over-skip is safer than
+  # emitting an unparseable mutation).
+  HEREDOC_ANCHOR_PATTERN = /<<[-~]?["'`]?[A-Za-z_]/
+  private_constant :HEREDOC_ANCHOR_PATTERN
 
   attr_reader :mutations
 
@@ -31,6 +43,26 @@ class Evilution::Mutator::Base < Prism::Visitor
 
   def add_mutation(offset:, length:, replacement:, node:)
     return if @filter && @filter.skip?(node)
+
+    # When the byte range opens a heredoc but stops at its inline anchor,
+    # extend it to cover the body+terminator. Without this every operator
+    # whose edit straddles a `<<~MARKER` anchor (argument_removal,
+    # argument_nil_substitution, method_call_removal, statement_deletion,
+    # method_body_replacement, block_removal, conditional_branch,
+    # string_interpolation, ...) emits an orphan-heredoc unparseable.
+    extended_length = Evilution::AST::HeredocSpan.extend_length(
+      node: node, offset: offset, length: length
+    )
+
+    # If the replacement re-references a heredoc anchor (e.g. argument_removal
+    # rebuilding the args list with a kept `<<~MSG` arg), we cannot safely
+    # extend the range — doing so would strip the kept heredoc's body without
+    # putting it back. Skip the mutation rather than emit unparseable bytes.
+    # When the replacement is heredoc-free (nil, "", a literal, or a non-
+    # heredoc kept arg), extension cleanly sweeps the orphaned body+terminator.
+    return if extended_length > length && replacement.match?(HEREDOC_ANCHOR_PATTERN)
+
+    length = extended_length
 
     surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source, offset: offset, length: length, replacement: replacement

@@ -82,5 +82,59 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
         expect(mutation.operator_name).to eq("argument_removal")
       end
     end
+
+    describe "heredoc-anchored arguments" do
+      # Two paths through the heredoc safety logic:
+      #   1. Replacement is heredoc-free (e.g. removing the heredoc arg leaves
+      #      a plain literal): byte range extended past the heredoc body, the
+      #      mutation parses cleanly.
+      #   2. Replacement re-references a kept heredoc anchor: byte-range
+      #      extension would strip the kept heredoc's body. Skip rather than
+      #      emit unparseable bytes.
+
+      it "produces a parseable mutation when the heredoc arg is removed" do
+        muts = mutations_for("heredoc_arg")
+
+        # arg[1] removal leaves only `ArgumentError` — heredoc-free, safe to
+        # extend. arg[0] removal leaves `<<~MSG.strip` — heredoc anchor in
+        # replacement, skipped. Result: exactly one parseable mutation whose
+        # diff drops the heredoc and replaces it with bare `ArgumentError`.
+        expect(muts.length).to eq(1)
+        expect(muts.first.parse_status).to eq(:ok)
+        plus_line = muts.first.diff.lines.find { |l| l.start_with?("+") }
+        expect(plus_line).to include("raise ArgumentError")
+        minus_lines = muts.first.diff.lines.select { |l| l.start_with?("-") }
+        expect(minus_lines.join).to include("<<~MSG")
+      end
+
+      it "skips both mutations on a two-heredoc call (no safe heredoc-free replacement exists)" do
+        muts = mutations_for("two_heredocs")
+
+        # Removing either arg leaves a `<<~...` in the replacement — both
+        # paths trigger the skip branch. Acceptable trade-off: no unparseable
+        # mutations, at the cost of these two specific mutations.
+        expect(muts).to be_empty
+      end
+
+      it "does NOT skip a mutation when the replacement contains `<<` as shift, not a heredoc anchor" do
+        # `raise ArgumentError, (arr << x), <<~MSG.strip`
+        # Removing the 3rd arg (heredoc) leaves replacement
+        # `ArgumentError, (arr << x)` — contains `<<` as a shift operator,
+        # NOT a heredoc anchor. The skip heuristic must distinguish these
+        # and let the mutation through.
+        muts = mutations_for("shift_arg_with_heredoc")
+
+        # Find the mutation whose `+` line keeps the shift and drops the
+        # heredoc anchor (the `<<~MSG` should appear only in the `-` lines).
+        shift_kept_mut = muts.find do |m|
+          plus_line = m.diff.lines.find { |l| l.start_with?("+") }
+          plus_line && plus_line.include?("(arr << x)") && !plus_line.include?("<<~MSG")
+        end
+        expect(shift_kept_mut).not_to be_nil,
+                                      "Expected a mutation that keeps `arr << x` and removes the heredoc; got: " \
+                                      "#{muts.map(&:diff).inspect}"
+        expect(shift_kept_mut.parse_status).to eq(:ok)
+      end
+    end
   end
 end
