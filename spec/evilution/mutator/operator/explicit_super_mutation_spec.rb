@@ -108,5 +108,45 @@ RSpec.describe Evilution::Mutator::Operator::ExplicitSuperMutation do
 
       expect(muts).to be_empty
     end
+
+    describe "dangling-comma safety" do
+      # EV-05tp (#1215): stripping splat from `super(*x, &block)` left the
+      # comma between args and block in place, producing `super(, &block)`.
+      # The byte range used to remove args must include the trailing
+      # separator before the block argument.
+      it "produces parseable mutations when removing the splat in front of a block" do
+        muts = mutations_for("with_splat_and_block")
+
+        expect(muts).not_to be_empty
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        # The empty-args variant must drop the splat AND the comma, keeping
+        # the block.
+        no_args_block = muts.find do |m|
+          plus_line = m.diff.lines.find { |l| l.start_with?("+") }
+          plus_line && plus_line.include?("super(&block)")
+        end
+        expect(no_args_block).not_to be_nil,
+                                     "Expected `super(&block)` mutation; got: #{muts.map(&:diff).inspect}"
+      end
+
+      it "produces parseable mutations when stripping all args in front of a block" do
+        muts = mutations_for("with_args_and_block")
+
+        expect(muts).not_to be_empty
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        no_args_block = muts.find do |m|
+          plus_line = m.diff.lines.find { |l| l.start_with?("+") }
+          plus_line && plus_line.include?("super(&block)")
+        end
+        expect(no_args_block).not_to be_nil
+      end
+
+      it "produces parseable mutations for splat-only super without block" do
+        muts = mutations_for("with_splat_only")
+
+        expect(muts).not_to be_empty
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+      end
+    end
   end
 end
