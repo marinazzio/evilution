@@ -262,6 +262,15 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         expect(result).not_to include("handle_type")
       end
+
+      it "returns a frozen lazy-init snapshot so fork COW pages are not broken by accidental mutation" do
+        # Snapshot is shared across forks via copy-on-write. Mutating it would
+        # both change neutralization semantics and force each child to copy the
+        # backing page, defeating COW. Freezing the lazy-init result guards
+        # against in-place mutation.
+        described_class.reset_preload_snapshot!
+        expect(described_class.preloaded_features).to be_frozen
+      end
     end
   end
 end

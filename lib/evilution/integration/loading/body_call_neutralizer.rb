@@ -31,9 +31,10 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     # Snapshot of `$LOADED_FEATURES` captured at parent preload-end (or lazily
     # initialised on first access). Forks inherit this set via copy-on-write,
     # so worker processes see the same membership the parent saw when it
-    # finished its preload phase.
+    # finished its preload phase. Frozen so in-place mutation cannot silently
+    # change neutralization semantics or force child forks to copy the page.
     def preloaded_features
-      @preloaded_features ||= $LOADED_FEATURES.to_set
+      @preloaded_features ||= $LOADED_FEATURES.to_set.freeze
     end
 
     def reset_preload_snapshot!
