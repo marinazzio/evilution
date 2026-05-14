@@ -681,6 +681,21 @@ For each entry in `survived[]`:
 
 Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
 
+### Long Minitest fork runs — not a hang
+
+Minitest projects under `--isolation=fork` re-bootstrap the test environment (`test_helper.rb`, plugins, runnable state) once per mutation. On constant-heavy files (e.g. Shopify/liquid's `lib/liquid/lexer.rb`, ~270 mutations) the wall-clock cost is dominated by that per-fork bootstrap and any mutations that hit a `--timeout` rather than killing the test fast. A single-worker run (`-j 1`) on a few hundred mutations can take 4+ minutes; combined with `--no-progress` and a non-TTY stderr (CI, redirected logs) the run looks silent the entire time.
+
+Recommended invocation for Minitest fork canaries:
+
+```bash
+RUBYOPT="-Itest" bundle exec evilution mutate lib/<file>.rb \
+  -j 4 -t 10 \
+  --integration=minitest --isolation=fork \
+  --spec test/<dir>/<file>_test.rb
+```
+
+`-j 4` parallelises across workers, `-t 10` caps any mutation that pathologically loops at 10 s. Expect the run to print progress only when stderr is a TTY (use `bundle exec evilution mutate ... 2>&1 | tee log` to get progress while still saving output). The historical "Minitest fork hangs on liquid" report (EV-blnq / GH #1211) turned out to be a slow run + silent UX, not an actual deadlock — the worker logs show steady forward progress when captured via `--quiet-children --quiet-children-dir DIR`.
+
 ### 8. CI gate
 
 ```bash
