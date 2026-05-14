@@ -38,6 +38,19 @@ class Evilution::Integration::Loading::RedefinitionRecovery
     else
       raise
     end
+  rescue TypeError => e
+    raise unless superclass_mismatch?(e)
+
+    # `class X < Struct.new(...)` (or Data.define / Class.new) returns a fresh
+    # anonymous parent class on every call. On re-eval the recorded superclass
+    # of X differs from the existing X's superclass, so Ruby raises
+    # "superclass mismatch". The existing class object is the one we want —
+    # the mutation targets a method body inside or outside that class, not the
+    # inheritance chain — so swallow with the same one-shot warning shape as
+    # idempotency violations. Defs after the offending class line will not
+    # take effect this run.
+    warn_once_for(e)
+    nil
   end
 
   private
@@ -49,6 +62,10 @@ class Evilution::Integration::Loading::RedefinitionRecovery
   def idempotency_violation?(error)
     msg = error.message
     IDEMPOTENCY_PATTERNS.any? { |pat| msg.include?(pat) }
+  end
+
+  def superclass_mismatch?(error)
+    error.message.include?("superclass mismatch")
   end
 
   def warn_once_for(error)

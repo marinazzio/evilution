@@ -99,5 +99,42 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
         end.to raise_error(ArgumentError, /bad operand/)
       end
     end
+
+    # EV-lqpn (sinatra base.rb:225): `class ExtendedRack < Struct.new(:app)`
+    # raises `TypeError: superclass mismatch` on re-eval because Struct.new
+    # returns a fresh anonymous Class each call, so the recorded superclass
+    # differs from the existing class's superclass. Common idiomatic pattern
+    # for Rack middleware shims (also Data.define, Class.new in similar
+    # positions). The class already exists with the previous shape — the
+    # mutation targets a method body, not the inheritance chain — so we
+    # swallow with a one-shot warning, same shape as idempotency violations.
+    describe "TypeError superclass mismatch (anonymous-parent re-eval)" do
+      it "swallows TypeError when message mentions 'superclass mismatch'" do
+        attempts = 0
+        result = recovery.call(source) do
+          attempts += 1
+          raise TypeError, "superclass mismatch for class ExtendedRack" if attempts == 1
+
+          :ok
+        end
+
+        expect(attempts).to eq(1)
+        expect(result).to be_nil
+      end
+
+      it "emits a one-shot warning identifying the mismatch class" do
+        expect do
+          recovery.call(source) do
+            raise TypeError, "superclass mismatch for class ExtendedRack"
+          end
+        end.to output(/superclass mismatch/i).to_stderr
+      end
+
+      it "re-raises TypeError whose message is not a superclass mismatch" do
+        expect do
+          recovery.call(source) { raise TypeError, "no implicit conversion of String into Integer" }
+        end.to raise_error(TypeError, /no implicit conversion/)
+      end
+    end
   end
 end
