@@ -52,4 +52,13 @@ class ArgumentCallExample
       second
     B
   end
+
+  # Validates the heredoc-skip heuristic: a replacement that contains a
+  # `<<` shift/append operator (NOT a heredoc anchor) must NOT trigger the
+  # skip branch even when the byte range contains a real heredoc anchor.
+  def shift_arg_with_heredoc(arr, x)
+    raise ArgumentError, (arr << x), <<~MSG.strip
+      could not append
+    MSG
+  end
 end

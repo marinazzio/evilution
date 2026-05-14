@@ -97,11 +97,14 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
 
         # arg[1] removal leaves only `ArgumentError` — heredoc-free, safe to
         # extend. arg[0] removal leaves `<<~MSG.strip` — heredoc anchor in
-        # replacement, skipped. Result: exactly one parseable mutation.
+        # replacement, skipped. Result: exactly one parseable mutation whose
+        # diff drops the heredoc and replaces it with bare `ArgumentError`.
         expect(muts.length).to eq(1)
         expect(muts.first.parse_status).to eq(:ok)
-        expect(muts.first.mutated_source).to include("raise ArgumentError")
-        expect(muts.first.mutated_source).not_to include("<<~MSG")
+        plus_line = muts.first.diff.lines.find { |l| l.start_with?("+") }
+        expect(plus_line).to include("raise ArgumentError")
+        minus_lines = muts.first.diff.lines.select { |l| l.start_with?("-") }
+        expect(minus_lines.join).to include("<<~MSG")
       end
 
       it "skips both mutations on a two-heredoc call (no safe heredoc-free replacement exists)" do
@@ -111,6 +114,26 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
         # paths trigger the skip branch. Acceptable trade-off: no unparseable
         # mutations, at the cost of these two specific mutations.
         expect(muts).to be_empty
+      end
+
+      it "does NOT skip a mutation when the replacement contains `<<` as shift, not a heredoc anchor" do
+        # `raise ArgumentError, (arr << x), <<~MSG.strip`
+        # Removing the 3rd arg (heredoc) leaves replacement
+        # `ArgumentError, (arr << x)` — contains `<<` as a shift operator,
+        # NOT a heredoc anchor. The skip heuristic must distinguish these
+        # and let the mutation through.
+        muts = mutations_for("shift_arg_with_heredoc")
+
+        # Find the mutation whose `+` line keeps the shift and drops the
+        # heredoc anchor (the `<<~MSG` should appear only in the `-` lines).
+        shift_kept_mut = muts.find do |m|
+          plus_line = m.diff.lines.find { |l| l.start_with?("+") }
+          plus_line && plus_line.include?("(arr << x)") && !plus_line.include?("<<~MSG")
+        end
+        expect(shift_kept_mut).not_to be_nil,
+                                      "Expected a mutation that keeps `arr << x` and removes the heredoc; got: " \
+                                      "#{muts.map(&:diff).inspect}"
+        expect(shift_kept_mut.parse_status).to eq(:ok)
       end
     end
   end
