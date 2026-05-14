@@ -112,5 +112,73 @@ RSpec.describe Evilution::GemDetector do
       File.write(File.join(@tmp, "lib", "thing.rb"), "")
       expect(described_class.gem_entry_for(@tmp)).to be_nil
     end
+
+    describe "multi-gemspec disambiguation (EV-b0ee / #1206)" do
+      # bkeepers/dotenv is the motivating case: dotenv.gemspec and
+      # dotenv-rails.gemspec sit side-by-side. With no signal, the old
+      # `Dir.glob.first` pick was filesystem-order-dependent and often
+      # selected dotenv-rails.gemspec, which preloaded lib/dotenv/rails.rb
+      # and exploded on `uninitialized constant Rails`.
+
+      it "picks the gemspec matching the target file's first lib subdir" do
+        write_gemspec(@tmp, "dotenv")
+        write_gemspec(@tmp, "dotenv-rails")
+        write_gem_entry(@tmp, "dotenv") # lib/dotenv.rb
+        FileUtils.mkdir_p(File.join(@tmp, "lib", "dotenv"))
+        File.write(File.join(@tmp, "lib", "dotenv", "parser.rb"), "")
+        write_gem_entry(@tmp, "dotenv-rails") # lib/dotenv/rails.rb
+
+        entry = described_class.gem_entry_for(
+          @tmp, target_paths: [File.join(@tmp, "lib", "dotenv", "parser.rb")]
+        )
+        expect(entry).to eq(File.join(@tmp, "lib", "dotenv.rb"))
+      end
+
+      it "picks the gemspec matching the target when target is the rails companion" do
+        write_gemspec(@tmp, "dotenv")
+        write_gemspec(@tmp, "dotenv-rails")
+        write_gem_entry(@tmp, "dotenv")
+        rails_entry = write_gem_entry(@tmp, "dotenv-rails") # lib/dotenv/rails.rb
+
+        entry = described_class.gem_entry_for(
+          @tmp, target_paths: [rails_entry]
+        )
+        expect(entry).to eq(rails_entry)
+      end
+
+      it "falls back to the shortest gemspec name when no target_paths match a gemspec" do
+        write_gemspec(@tmp, "dotenv")
+        write_gemspec(@tmp, "dotenv-rails")
+        write_gem_entry(@tmp, "dotenv")
+        write_gem_entry(@tmp, "dotenv-rails")
+
+        # Target file under a directory that matches neither gemspec name.
+        FileUtils.mkdir_p(File.join(@tmp, "lib", "other"))
+        File.write(File.join(@tmp, "lib", "other", "x.rb"), "")
+        entry = described_class.gem_entry_for(
+          @tmp, target_paths: [File.join(@tmp, "lib", "other", "x.rb")]
+        )
+        expect(entry).to eq(File.join(@tmp, "lib", "dotenv.rb"))
+      end
+
+      it "falls back to the shortest gemspec name when target_paths is nil" do
+        write_gemspec(@tmp, "dotenv")
+        write_gemspec(@tmp, "dotenv-rails")
+        write_gem_entry(@tmp, "dotenv")
+        write_gem_entry(@tmp, "dotenv-rails")
+
+        expect(described_class.gem_entry_for(@tmp)).to eq(
+          File.join(@tmp, "lib", "dotenv.rb")
+        )
+      end
+
+      it "leaves single-gemspec behavior unchanged regardless of target_paths" do
+        write_gemspec(@tmp, "solo")
+        entry = write_gem_entry(@tmp, "solo")
+
+        expect(described_class.gem_entry_for(@tmp, target_paths: [entry])).to eq(entry)
+        expect(described_class.gem_entry_for(@tmp)).to eq(entry)
+      end
+    end
   end
 end
