@@ -10,3 +10,4 @@ Metrics/ClassLength:
   Exclude:
     - "lib/evilution/isolation/fork.rb"
     - "lib/evilution/integration/minitest.rb"
+    - "lib/evilution/mcp/mutate_tool.rb"

@@ -89,6 +89,20 @@ class Evilution::MCP::MutateTool < MCP::Tool
         type: "boolean",
         description: "Save session results to .evilution/results/ for later inspection via evilution-session"
       },
+      preload: {
+        oneOf: [
+          { type: "string" },
+          { type: "boolean", enum: [false] }
+        ],
+        description: "Preload a file (e.g. 'spec/rails_helper.rb') into the MCP server process before " \
+                     "forking workers. Default: false. Pass an explicit path (string) for Rails / Zeitwerk " \
+                     "projects where workers need autoloaded constants resolved before the mutation runs — " \
+                     "without this, autoload-dependent code fails with NameError on every mutation, producing " \
+                     "all-errored / score 0.0 results. Pass `false` to explicitly disable preload (e.g. to " \
+                     "override a `.evilution.yml` setting). `true` is not accepted — pass an explicit path. " \
+                     "Trade-off: opt-in pollutes the long-lived MCP server process for the lifetime of the " \
+                     "session; restart the server when switching projects."
+      },
       skip_config: {
         type: "boolean",
         description: "When true, ignore .evilution.yml / config/evilution.yml. " \
