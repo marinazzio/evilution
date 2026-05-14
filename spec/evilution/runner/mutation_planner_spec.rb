@@ -107,6 +107,47 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       end
     end
 
+    # EV-74e3: two operators can independently produce the same byte change
+    # (e.g. statement_deletion + last_expression_removal for a multi-stmt
+    # method whose tail is a literal). Running both is wasted compute and
+    # inflates the denominator. Dedupe by (file_path, mutated_source) before
+    # the filtering pipeline.
+    it "deduplicates mutations with identical mutated_source within the same file" do
+      registry = Evilution::Mutator::Registry.new
+      registry.register(Evilution::Mutator::Operator::LastExpressionRemoval)
+      registry.register(Evilution::Mutator::Operator::StatementDeletion)
+
+      subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
+      plan = described_class.new(config, registry: registry).call(subjects)
+
+      # Within the predicate_true method (2-stmt body: log_something + true)
+      # both operators produce a `true`-deletion mutation. After dedup there
+      # is exactly one such mutation for predicate_true.
+      predicate_true_subject = subjects.find { |s| s.name.include?("predicate_true") }
+      predicate_true_line = predicate_true_subject.line_number
+      predicate_true_true_deletions = plan.enabled.select do |m|
+        m.diff =~ /^-\s*true\s*$/ && m.line >= predicate_true_line && m.line <= predicate_true_line + 3
+      end
+
+      expect(predicate_true_true_deletions.length).to eq(1),
+                                                      "expected single true-deletion in predicate_true after dedup, " \
+                                                      "got #{predicate_true_true_deletions.length}: " \
+                                                      "#{predicate_true_true_deletions.map(&:operator_name)}"
+    end
+
+    it "preserves the first operator_name when deduping (stable order)" do
+      registry = Evilution::Mutator::Registry.new
+      # Register last_expression_removal FIRST so its mutation wins dedup.
+      registry.register(Evilution::Mutator::Operator::LastExpressionRemoval)
+      registry.register(Evilution::Mutator::Operator::StatementDeletion)
+
+      subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
+      plan = described_class.new(config, registry: registry).call(subjects)
+
+      predicate_true_mutations = plan.enabled.select { |m| m.diff =~ /^-\s*true\s*$/ }
+      expect(predicate_true_mutations.map(&:operator_name).uniq).to eq(["last_expression_removal"])
+    end
+
     it "forwards skip_heredoc_literals to operator_options" do
       subjects = subjects_for("spec/support/fixtures/heredoc_mutations.rb")
 
