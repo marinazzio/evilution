@@ -82,5 +82,36 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
         expect(mutation.operator_name).to eq("argument_removal")
       end
     end
+
+    describe "heredoc-anchored arguments" do
+      # Two paths through the heredoc safety logic:
+      #   1. Replacement is heredoc-free (e.g. removing the heredoc arg leaves
+      #      a plain literal): byte range extended past the heredoc body, the
+      #      mutation parses cleanly.
+      #   2. Replacement re-references a kept heredoc anchor: byte-range
+      #      extension would strip the kept heredoc's body. Skip rather than
+      #      emit unparseable bytes.
+
+      it "produces a parseable mutation when the heredoc arg is removed" do
+        muts = mutations_for("heredoc_arg")
+
+        # arg[1] removal leaves only `ArgumentError` — heredoc-free, safe to
+        # extend. arg[0] removal leaves `<<~MSG.strip` — heredoc anchor in
+        # replacement, skipped. Result: exactly one parseable mutation.
+        expect(muts.length).to eq(1)
+        expect(muts.first.parse_status).to eq(:ok)
+        expect(muts.first.mutated_source).to include("raise ArgumentError")
+        expect(muts.first.mutated_source).not_to include("<<~MSG")
+      end
+
+      it "skips both mutations on a two-heredoc call (no safe heredoc-free replacement exists)" do
+        muts = mutations_for("two_heredocs")
+
+        # Removing either arg leaves a `<<~...` in the replacement — both
+        # paths trigger the skip branch. Acceptable trade-off: no unparseable
+        # mutations, at the cost of these two specific mutations.
+        expect(muts).to be_empty
+      end
+    end
   end
 end

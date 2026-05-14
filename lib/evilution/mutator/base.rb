@@ -4,6 +4,7 @@ require "prism"
 
 require_relative "../mutator"
 require_relative "../integration/loading/body_call_neutralizer"
+require_relative "../ast/heredoc_span"
 
 class Evilution::Mutator::Base < Prism::Visitor
   AffectedSlices = Data.define(:original, :mutated)
@@ -31,6 +32,26 @@ class Evilution::Mutator::Base < Prism::Visitor
 
   def add_mutation(offset:, length:, replacement:, node:)
     return if @filter && @filter.skip?(node)
+
+    # When the byte range opens a heredoc but stops at its inline anchor,
+    # extend it to cover the body+terminator. Without this every operator
+    # whose edit straddles a `<<~MARKER` anchor (argument_removal,
+    # argument_nil_substitution, method_call_removal, statement_deletion,
+    # method_body_replacement, block_removal, conditional_branch,
+    # string_interpolation, ...) emits an orphan-heredoc unparseable.
+    extended_length = Evilution::AST::HeredocSpan.extend_length(
+      node: node, offset: offset, length: length
+    )
+
+    # If the replacement re-references a heredoc anchor (e.g. argument_removal
+    # rebuilding the args list with a kept `<<~MSG` arg), we cannot safely
+    # extend the range — doing so would strip the kept heredoc's body without
+    # putting it back. Skip the mutation rather than emit unparseable bytes.
+    # When the replacement is heredoc-free (nil, "", a literal, or a non-
+    # heredoc kept arg), extension cleanly sweeps the orphaned body+terminator.
+    return if extended_length > length && replacement.include?("<<")
+
+    length = extended_length
 
     surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source, offset: offset, length: length, replacement: replacement

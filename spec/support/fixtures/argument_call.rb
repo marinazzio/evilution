@@ -38,4 +38,18 @@ class ArgumentCallExample
   def array_index_assign(arr, i, x)
     arr[i] = x
   end
+
+  def heredoc_arg
+    raise ArgumentError, <<~MSG.strip
+      Could not find policy
+    MSG
+  end
+
+  def two_heredocs
+    Logger.info(<<~A, <<~B)
+      first
+    A
+      second
+    B
+  end
 end
