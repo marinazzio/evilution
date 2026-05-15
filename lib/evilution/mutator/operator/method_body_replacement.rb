@@ -10,7 +10,10 @@ class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::
     target = mutation_target(node.body)
     if target
       replacements = ALWAYS_SAFE_REPLACEMENTS.dup
-      replacements << SUPER_REPLACEMENT if body_calls_super?(target)
+      # Super detection scans the whole body (rescue/else/ensure clauses
+      # included) — a super call in any clause means a parent target exists,
+      # so a bare-super replacement of the statements is meaningful.
+      replacements << SUPER_REPLACEMENT if body_calls_super?(node.body)
 
       replacements.each do |replacement|
         add_mutation(

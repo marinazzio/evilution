@@ -43,4 +43,10 @@ class MethodBodyExample
   rescue StandardError => e
     handle(e)
   end
+
+  def with_super_only_in_rescue
+    do_work
+  rescue StandardError
+    super
+  end
 end

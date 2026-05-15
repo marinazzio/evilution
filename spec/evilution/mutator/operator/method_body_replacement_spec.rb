@@ -94,6 +94,15 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       end
     end
 
+    it "emits a super-replacement when super lives only in the rescue clause" do
+      muts = mutations_for("with_super_only_in_rescue")
+
+      expect(muts.length).to eq(3)
+      super_mut = muts.find { |m| m.mutated_source.match?(/^\s*super\n\s*rescue StandardError/) }
+      expect(super_mut).not_to be_nil
+      expect(Prism.parse(super_mut.mutated_source).errors).to be_empty
+    end
+
     it "generates 0 mutations for a method-level rescue with no body statements" do
       muts = mutations_for("only_rescue_no_body")
 
