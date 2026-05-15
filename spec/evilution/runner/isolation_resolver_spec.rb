@@ -135,6 +135,42 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       end
     end
 
+    it "stubs Minitest.autorun before requiring the user preload file when integration is :minitest" do
+      Dir.mktmpdir do |dir|
+        preload_file = File.join(dir, "preloaded.rb")
+        marker = File.join(dir, "marker")
+        File.write(preload_file, <<~PRE)
+          require "minitest"
+          loc = ::Minitest.singleton_class.instance_method(:autorun).source_location
+          File.write(#{marker.inspect}, loc ? loc.first : "nil")
+        PRE
+
+        resolver = described_class.new(
+          config(preload: preload_file, isolation: :fork, integration: :minitest),
+          target_files: -> { [] }, hooks: nil
+        )
+        resolver.perform_preload
+
+        expect(File.read(marker)).to end_with("lib/evilution/integration/minitest.rb")
+      end
+    end
+
+    it "does not stub Minitest.autorun when integration is :rspec" do
+      Dir.mktmpdir do |dir|
+        preload_file = File.join(dir, "preloaded.rb")
+        File.write(preload_file, "# noop\n")
+
+        resolver = described_class.new(
+          config(preload: preload_file, isolation: :fork, integration: :rspec),
+          target_files: -> { [] }, hooks: nil
+        )
+
+        expect(Evilution::Integration::Minitest).not_to receive(:stub_autorun!)
+
+        resolver.perform_preload
+      end
+    end
+
     it "loads an explicit preload file under :auto when no Rails root is detected" do
       allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
       Dir.mktmpdir do |dir|
