@@ -7,6 +7,6 @@ assignees: marinazzio
 
 ---
 
-- [ ] Bump version
+- [ ] Bump version for both Gemfile.lock and Gemfile.min_prism
 - [ ] Update CHANGELOG
 - [ ] Update agent and user manuals

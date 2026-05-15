@@ -2,6 +2,13 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.30.1] - 2026-05-15
+
+### Fixed
+
+- **Minitest 5.11+ / 6.x reporter contract: `MinitestCrashDetector` now implements `prerecord(klass, name)`** — `Minitest::AbstractReporter` calls `prerecord` on every reporter immediately before each test runs; the crash detector implemented `start` / `report` / `record` / `passed?` but not `prerecord`, so on any project using Minitest ≥ 5.11 every mutation aborted with `undefined method 'prerecord' for an instance of Evilution::Integration::MinitestCrashDetector` and the run reported score 0.0 / all-errored regardless of actual test behavior. PR #1207 (EV-l6gx) addressed the `run_all_suites` vs `__run` dispatch gap but did not audit the reporter interface; this patch closes the remaining hole. Surfaced by the EV-5rtm redis-rb stability canary against Minitest 6.0.6 (EV-ju3o, PR #1243, GH #1240)
+- **`Minitest.autorun` no longer installs an at-exit handler when invoked by evilution-loaded user helpers** — Minitest-based projects (redis-rb, mail, others) routinely have `test/helper.rb` do `require "minitest/autorun"`, which installs an `at_exit` block calling `Minitest.run(ARGV)`. Evilution loads those helpers during baseline and per-mutation execution, so the handler ran at evilution's own process exit, saw the original `ARGV` (still carrying `--integration`, `--spec`, `--preload`, ...), and Minitest's option parser printed a misleading "invalid option: --integration" usage banner after the mutation summary. `Evilution::Integration::Minitest.stub_autorun!` is now invoked right after `require "minitest"` in both the orchestrator's baseline path (`run_baseline_test_file`) and the per-instance `ensure_framework_loaded`; it redefines `Minitest.autorun` to a no-op (idempotently, keyed on the redefined method's `source_location`) so subsequent `require "minitest/autorun"` calls in user code never register the handler. Cosmetic-only fix: mutation scoring and exit code were already correct (EV-7u9c, PR #1244, GH #1241)
+
 ## [0.30.0] - 2026-05-15
 
 ### Added
