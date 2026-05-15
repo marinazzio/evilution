@@ -6,6 +6,7 @@ AllCops:
   SuggestExtensions: false
   Exclude:
     - "spec/support/fixtures/**/*"
+    - "tmp/**/*"
     - "vendor/**/*"
 
 Style/ClassAndModuleChildren:
