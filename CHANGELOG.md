@@ -2,6 +2,13 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.30.2] - 2026-05-15
+
+### Fixed
+
+- **`method_body_replacement` no longer corrupts methods with a method-level `rescue`/`ensure`** — for the shorthand form `def foo; stmts; rescue => e; ...; end` (no explicit `begin`), Prism makes `DefNode#body` a `BeginNode` whose `location` spans the *entire* `def...end` block — the `def` keyword and matching `end` included. The operator replaced that whole range with `nil` / `self` / `super`, obliterating the method framing and leaving the replacement dangling at the enclosing class/module scope; `super` replacements then raised `NoMethodError: super called outside of method` at load time, and the run miscounted every such mutation as an error. The operator now targets only the leading statements (`body.statements`) when the body is a `BeginNode`, preserving the `rescue`/`else`/`ensure` clauses and the `def` framing; methods with a rescue/ensure-only body (no leading statements) emit no mutation. Super *detection* still scans the full body, so a `super` call in any clause keeps the bare-super replacement candidate. Surfaced by the EV-5rtm redis-rb stability canary — 5 methods in `lib/redis/client.rb` (`ensure_connected`, `call_v`, `blocking_call_v`, `pipelined`, `multi`) all-errored before this fix (EV-9a6c, PR #1251, GH #1247)
+- **`Minitest.autorun` stub now runs before the user `--preload` file** — the EV-7u9c fix (0.30.1) stubbed `Minitest.autorun` from `Integration::Minitest#ensure_framework_loaded` and `run_baseline_test_file`, both of which execute *after* `Runner#perform_preload`. When the user passed `--preload <file>` and that file required `minitest/autorun` (typical for `spec_helper.rb` / `test_helper.rb`), the `at_exit` handler was installed during preload — before the stub took effect — and the misleading "invalid option: --integration" banner returned at process exit. `Evilution::Runner::IsolationResolver#perform_preload` now invokes `Evilution::Integration::Minitest.stub_autorun!` immediately before requiring the preload file when `config.integration == :minitest`; it is a no-op for the RSpec integration. Surfaced by the EV-xqv3 rouge stability canary, whose `spec/spec_helper.rb` requires `minitest/autorun` (EV-5nxs, PR #1249, GH #1248)
+
 ## [0.30.1] - 2026-05-15
 
 ### Fixed
