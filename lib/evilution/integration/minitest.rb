@@ -16,9 +16,22 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   def self.run_baseline_test_file(test_file)
     require "minitest"
     require "stringio"
+    stub_autorun!
     ::Minitest::Runnable.runnables.clear
     baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
     run_baseline_minitest
+  end
+
+  # User helpers that `require "minitest/autorun"` install an at_exit handler
+  # calling `Minitest.run(ARGV)`. At evilution process exit ARGV still holds
+  # evilution flags (--integration, --spec, ...) and Minitest's option parser
+  # prints a misleading "invalid option" banner. Stubbing autorun before user
+  # code loads prevents the handler from ever being installed.
+  def self.stub_autorun!
+    location = ::Minitest.singleton_class.instance_method(:autorun).source_location
+    return if location && location.first == __FILE__
+
+    ::Minitest.define_singleton_method(:autorun) { nil }
   end
 
   def self.baseline_test_files(test_file)
@@ -96,6 +109,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
 
     fire_hook(:setup_integration_pre, integration: :minitest)
     require "minitest"
+    self.class.stub_autorun!
     @minitest_loaded = true
     fire_hook(:setup_integration_post, integration: :minitest)
   rescue LoadError => e
