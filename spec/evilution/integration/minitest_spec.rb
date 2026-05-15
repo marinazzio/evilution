@@ -332,6 +332,40 @@ RSpec.describe Evilution::Integration::Minitest do
     end
   end
 
+  describe ".stub_autorun!" do
+    let(:original_method) { Minitest.singleton_class.instance_method(:autorun) }
+
+    around do |example|
+      saved = original_method
+      example.run
+    ensure
+      Minitest.singleton_class.send(:define_method, :autorun, saved)
+    end
+
+    it "redefines Minitest.autorun to a no-op owned by the integration file" do
+      described_class.stub_autorun!
+
+      location = Minitest.singleton_class.instance_method(:autorun).source_location
+      expect(location.first).to end_with("lib/evilution/integration/minitest.rb")
+    end
+
+    it "makes Minitest.autorun return nil without raising" do
+      described_class.stub_autorun!
+
+      expect(Minitest.autorun).to be_nil
+    end
+
+    it "is idempotent" do
+      described_class.stub_autorun!
+      first_location = Minitest.singleton_class.instance_method(:autorun).source_location
+
+      described_class.stub_autorun!
+      second_location = Minitest.singleton_class.instance_method(:autorun).source_location
+
+      expect(second_location).to eq(first_location)
+    end
+  end
+
   describe ".baseline_options" do
     it "includes a runner" do
       options = described_class.baseline_options
