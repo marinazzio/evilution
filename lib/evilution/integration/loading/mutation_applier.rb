@@ -59,6 +59,21 @@ class Evilution::Integration::Loading::MutationApplier
     @redefinition_recovery.call(mutation.original_source) do
       @source_evaluator.call(eval_target, mutation.file_path)
     end
+    mark_feature_loaded(mutation.file_path)
+  end
+
+  # The mutated source is eval'd straight into the VM — `eval` does not register
+  # a `$LOADED_FEATURES` entry. If the spec then `require`s the same file (common
+  # when the project lazy-loads it and only the test references it), `require`
+  # reloads the ORIGINAL from disk and clobbers the mutation, so every mutation
+  # silently survives. Under fork isolation each worker starts from the same
+  # pre-`require` snapshot, so the whole file scores 0%. Registering the
+  # canonical path makes a later `require`/`require_relative` a no-op.
+  def mark_feature_loaded(file_path)
+    absolute = File.realpath(File.expand_path(file_path))
+    $LOADED_FEATURES << absolute unless $LOADED_FEATURES.include?(absolute)
+  rescue Errno::ENOENT
+    nil
   end
 
   def failure_result(error, message)
