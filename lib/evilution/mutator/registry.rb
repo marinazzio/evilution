@@ -45,6 +45,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::NegationInsertion,
       Evilution::Mutator::Operator::ReturnValueRemoval,
       Evilution::Mutator::Operator::CollectionReplacement,
+      Evilution::Mutator::Operator::ArgumentMethodCallReplacement,
       Evilution::Mutator::Operator::MethodCallRemoval,
       Evilution::Mutator::Operator::ArgumentRemoval,
       Evilution::Mutator::Operator::BlockRemoval,
