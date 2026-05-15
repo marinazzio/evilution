@@ -7,14 +7,18 @@ class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::
   SUPER_REPLACEMENT = "super"
 
   def visit_def_node(node)
-    if node.body
+    target = mutation_target(node.body)
+    if target
       replacements = ALWAYS_SAFE_REPLACEMENTS.dup
+      # Super detection scans the whole body (rescue/else/ensure clauses
+      # included) — a super call in any clause means a parent target exists,
+      # so a bare-super replacement of the statements is meaningful.
       replacements << SUPER_REPLACEMENT if body_calls_super?(node.body)
 
       replacements.each do |replacement|
         add_mutation(
-          offset: node.body.location.start_offset,
-          length: node.body.location.length,
+          offset: target.location.start_offset,
+          length: target.location.length,
           replacement: replacement,
           node: node
         )
@@ -25,6 +29,18 @@ class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::
   end
 
   private
+
+  # A method-level rescue/ensure (`def foo; stmts; rescue; ...; end`) makes
+  # node.body a BeginNode whose location spans the entire `def...end` — the
+  # `def` keyword and matching `end` included. Replacing that range obliterates
+  # the method framing, leaving the replacement (`nil`/`self`/`super`) dangling
+  # at the enclosing scope. The replaceable region is only the leading
+  # statements; returns nil when there are none (rescue/ensure-only body).
+  def mutation_target(body)
+    return body unless body.is_a?(Prism::BeginNode)
+
+    body.statements
+  end
 
   # The bare-super replacement raises NoMethodError at runtime when the enclosing
   # class has no parent implementation of the method. We emit it only when the

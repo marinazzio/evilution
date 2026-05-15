@@ -20,4 +20,33 @@ class MethodBodyExample
   def with_forwarding_super(...)
     super(...)
   end
+
+  def with_method_rescue
+    do_work
+  rescue StandardError => e
+    handle(e)
+  end
+
+  def with_super_and_method_rescue(arg)
+    super(arg)
+  rescue StandardError => e
+    recover(e)
+  end
+
+  def with_method_ensure
+    do_work
+  ensure
+    cleanup
+  end
+
+  def only_rescue_no_body
+  rescue StandardError => e
+    handle(e)
+  end
+
+  def with_super_only_in_rescue
+    do_work
+  rescue StandardError
+    super
+  end
 end
