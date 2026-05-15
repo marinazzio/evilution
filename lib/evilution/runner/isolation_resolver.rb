@@ -37,6 +37,7 @@ class Evilution::Runner::IsolationResolver
     return unless path
 
     prepare_load_path_for_preload
+    prepare_integration_for_preload
     require File.expand_path(path)
   rescue Evilution::ConfigError
     raise
@@ -184,6 +185,19 @@ class Evilution::Runner::IsolationResolver
 
   def raise_explicit_preload_missing(path)
     raise Evilution::ConfigError.new("preload file not found: #{path.inspect}", file: path)
+  end
+
+  # User preload files (spec_helper.rb, test_helper.rb) typically require
+  # 'minitest/autorun', which installs an at_exit handler that re-parses ARGV
+  # at process exit. The stub from Integration::Minitest#ensure_framework_loaded
+  # only fires during baseline — too late to prevent the handler from being
+  # registered. Stub before user code runs.
+  def prepare_integration_for_preload
+    return unless config.integration.to_s == "minitest"
+
+    require "minitest"
+    require_relative "../integration/minitest"
+    Evilution::Integration::Minitest.stub_autorun!
   end
 
   def warn_missing_explicit_preload(path)
