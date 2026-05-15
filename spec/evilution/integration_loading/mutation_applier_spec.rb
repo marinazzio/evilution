@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "tempfile"
 require "evilution/integration/loading/mutation_applier"
 
 RSpec.describe Evilution::Integration::Loading::MutationApplier do
@@ -108,6 +109,56 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(evaluator).to receive(:call).with(mutation.eval_source, mutation.file_path)
 
       applier.call(mutation)
+    end
+
+    it "registers the mutated file in $LOADED_FEATURES so a later require is a no-op" do
+      added = nil
+      Tempfile.create(["target", ".rb"]) do |file|
+        file.write("class T; end\n")
+        file.flush
+        realpath = File.realpath(file.path)
+        $LOADED_FEATURES.delete(realpath)
+
+        m = double(
+          "Mutation", file_path: file.path,
+                      original_source: "class T; end\n",
+                      mutated_source: "class T; end\n",
+                      eval_source: "class T; end\n"
+        )
+        applier.call(m)
+        added = realpath
+
+        expect($LOADED_FEATURES).to include(realpath)
+      end
+    ensure
+      $LOADED_FEATURES.delete(added) if added
+    end
+
+    it "does not duplicate an already-registered feature path" do
+      added = nil
+      Tempfile.create(["target", ".rb"]) do |file|
+        file.write("class T; end\n")
+        file.flush
+        realpath = File.realpath(file.path)
+        $LOADED_FEATURES << realpath unless $LOADED_FEATURES.include?(realpath)
+        added = realpath
+
+        m = double(
+          "Mutation", file_path: file.path,
+                      original_source: "class T; end\n",
+                      mutated_source: "class T; end\n",
+                      eval_source: "class T; end\n"
+        )
+        applier.call(m)
+
+        expect($LOADED_FEATURES.count(realpath)).to eq(1)
+      end
+    ensure
+      $LOADED_FEATURES.delete(added) if added
+    end
+
+    it "does not raise when the mutated file does not exist on disk" do
+      expect { applier.call(mutation) }.not_to raise_error
     end
 
     it "wraps SyntaxError into a failure result" do
