@@ -64,6 +64,42 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       expect(muts.length).to eq(0)
     end
 
+    it "replaces only the statements (not the def framing) for a method-level rescue" do
+      muts = mutations_for("with_method_rescue")
+
+      expect(muts.length).to eq(2)
+      muts.each do |mutation|
+        expect(mutation.mutated_source).to match(/rescue StandardError => e/)
+        result = Prism.parse(mutation.mutated_source)
+        expect(result.errors).to be_empty
+      end
+    end
+
+    it "emits a parseable super-replacement for a method-level rescue whose body calls super" do
+      muts = mutations_for("with_super_and_method_rescue")
+
+      expect(muts.length).to eq(3)
+      super_mut = muts.find { |m| m.mutated_source.match?(/^\s*super\n\s*rescue StandardError => e/) }
+      expect(super_mut).not_to be_nil
+      expect(Prism.parse(super_mut.mutated_source).errors).to be_empty
+    end
+
+    it "replaces only the statements for a method-level ensure" do
+      muts = mutations_for("with_method_ensure")
+
+      expect(muts.length).to eq(2)
+      muts.each do |mutation|
+        expect(mutation.mutated_source).to match(/ensure\n\s+cleanup/)
+        expect(Prism.parse(mutation.mutated_source).errors).to be_empty
+      end
+    end
+
+    it "generates 0 mutations for a method-level rescue with no body statements" do
+      muts = mutations_for("only_rescue_no_body")
+
+      expect(muts.length).to eq(0)
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
