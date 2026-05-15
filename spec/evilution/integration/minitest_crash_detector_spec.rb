@@ -122,6 +122,33 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
     end
   end
 
+  describe "#prerecord" do
+    it "is a no-op so AbstractReporter dispatch on Minitest 5.11+/6.x does not raise" do
+      expect { detector.prerecord(Object, "test_foo") }.not_to raise_error
+    end
+
+    it "does not mutate detector state" do
+      detector.prerecord(Object, "test_foo")
+
+      expect(detector).not_to be_crashed
+      expect(detector).not_to be_assertion_failure
+    end
+  end
+
+  describe "AbstractReporter contract" do
+    it "implements every method Minitest::CompositeReporter dispatches to its children" do
+      composite = Minitest::CompositeReporter.new
+      composite << detector
+
+      expect { composite.start }.not_to raise_error
+      expect { composite.prerecord(Object, "test_foo") }.not_to raise_error
+      result = Minitest::Result.new("test_foo")
+      expect { composite.record(result) }.not_to raise_error
+      expect { composite.report }.not_to raise_error
+      expect { composite.passed? }.not_to raise_error
+    end
+  end
+
   describe "#reset" do
     it "clears all tracked state" do
       result = Minitest::Result.new("test_foo")

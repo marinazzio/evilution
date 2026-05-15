@@ -11,6 +11,10 @@ class Evilution::Integration::MinitestCrashDetector
     # Required by Minitest reporter interface
   end
 
+  def prerecord(_klass, _name)
+    # Required by Minitest::AbstractReporter (5.11+/6.x) before each test
+  end
+
   def report
     # Required by Minitest reporter interface
   end
