@@ -44,6 +44,16 @@ RSpec.describe Evilution::Runner do
 
   subject(:runner) { described_class.new(config: config) }
 
+  # The proof-of-life canary runs inside Runner#call. Specs here stub the
+  # isolation pipeline with canned results, which would trip the canary; stub
+  # it to a no-op so each example tests its own concern. The "proof-of-life
+  # canary" describe re-stubs Canary per example to test the canary itself.
+  before do
+    allow(Evilution::Runner::Canary).to receive(:new).and_return(
+      instance_double(Evilution::Runner::Canary, call: nil)
+    )
+  end
+
   describe "#call" do
     before do
       parser = instance_double(Evilution::AST::Parser)
@@ -2670,6 +2680,34 @@ RSpec.describe Evilution::Runner do
 
       default_runner = described_class.new(config: config)
       default_runner.call
+    end
+  end
+
+  describe "proof-of-life canary" do
+    let(:config) { Evilution::Config.new(skip_config_file: true) }
+
+    it "runs the canary before baseline when config.canary? is true" do
+      runner = described_class.new(config: config)
+      allow(runner).to receive(:isolator).and_return(instance_double(Evilution::Isolation::InProcess))
+      allow(runner).to receive(:baseline_runner).and_return(
+        instance_double(Evilution::Runner::BaselineRunner, integration_class: Evilution::Integration::RSpec)
+      )
+      canary = instance_double(Evilution::Runner::Canary, call: nil)
+      allow(Evilution::Runner::Canary).to receive(:new).and_return(canary)
+
+      runner.send(:run_canary)
+
+      expect(canary).to have_received(:call)
+    end
+
+    it "skips the canary when config.canary? is false" do
+      cfg = Evilution::Config.new(canary: false, skip_config_file: true)
+      runner = described_class.new(config: cfg)
+      allow(Evilution::Runner::Canary).to receive(:new)
+
+      runner.send(:run_canary)
+
+      expect(Evilution::Runner::Canary).not_to have_received(:new)
     end
   end
 end

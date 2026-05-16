@@ -62,6 +62,16 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:incremental]).to be(true)
   end
 
+  it "parses --canary to true" do
+    options, = parse(["--canary"])
+    expect(options[:canary]).to be(true)
+  end
+
+  it "parses --no-canary to false" do
+    options, = parse(["--no-canary"])
+    expect(options[:canary]).to be(false)
+  end
+
   it "parses --quiet-children to true" do
     options, = parse(["--quiet-children"])
     expect(options[:quiet_children]).to be(true)

@@ -400,6 +400,18 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#canary?" do
+      it "defaults to true" do
+        config = Evilution::Config.new(skip_config_file: true)
+        expect(config.canary?).to be true
+      end
+
+      it "is false when canary: false is given" do
+        config = Evilution::Config.new(canary: false, skip_config_file: true)
+        expect(config.canary?).to be false
+      end
+    end
+
     describe "#suggest_tests?" do
       it "returns true when suggest_tests is enabled" do
         config = described_class.new(suggest_tests: true, skip_config_file: true)

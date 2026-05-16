@@ -31,6 +31,13 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
   end
 
   before do
+    # Runner#call runs the proof-of-life canary; these specs stub the
+    # isolation pipeline with canned results, which would trip it. Stub the
+    # canary to a no-op so each example tests memory instrumentation only.
+    allow(Evilution::Runner::Canary).to receive(:new).and_return(
+      instance_double(Evilution::Runner::Canary, call: nil)
+    )
+
     allow(Evilution::Memory).to receive(:rss_mb).and_return(42.5)
 
     parser = instance_double(Evilution::AST::Parser)
