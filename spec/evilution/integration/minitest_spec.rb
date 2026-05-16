@@ -132,6 +132,33 @@ RSpec.describe Evilution::Integration::Minitest do
     end
   end
 
+  describe "#call when zero tests run" do
+    before do
+      stub_minitest_run(passed: false) # dispatch records nothing -> 0 test methods
+      allow(integration).to receive(:load)
+    end
+
+    it "returns an error result instead of reporting the mutation survived" do
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result[:error]).to match(/0 test methods/)
+    end
+
+    it "tags the error so classify_status maps it to :error" do
+      result = integration.call(mutation)
+
+      expect(result[:error_class]).to eq("Evilution::Error")
+      expect(result).not_to have_key(:test_crashed)
+    end
+
+    it "does not classify a zero-test run as passed (survived)" do
+      result = integration.call(mutation)
+
+      expect(result[:passed]).not_to be true
+    end
+  end
+
   describe "setup_integration hooks" do
     before do
       stub_minitest_run(passed: true)
@@ -269,12 +296,15 @@ RSpec.describe Evilution::Integration::Minitest do
       # the suite runner sees an empty list and returns cleanly. The point is
       # that the version-dispatch helper resolves to a real Minitest method
       # (run_all_suites on 6.x, __run on 5.x) without raising NoMethodError.
+      # Reaching the zero-tests guard proves dispatch itself succeeded — a
+      # NoMethodError would have been caught and surfaced as the error instead.
       integration_real = described_class.new(test_files: ["test/some_test.rb"])
       allow(integration_real).to receive(:load)
 
       result = integration_real.call(mutation)
 
-      expect(result[:passed]).to be true
+      expect(result[:error]).to match(/0 test methods/)
+      expect(result[:error]).not_to match(/NoMethodError/)
       expect(result[:test_command]).to include("test/some_test.rb")
     end
 
