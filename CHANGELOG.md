@@ -2,6 +2,13 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.30.3] - 2026-05-16
+
+### Fixed
+
+- **Fork isolation no longer clobbers the eval'd mutation when the spec `require`s a lazily-loaded target file** — `MutationApplier` evals the mutated source straight into the VM, which does not register a `$LOADED_FEATURES` entry. When the project lazy-loads the target file (only the spec references it) and the spec then `require`s it, `require` found nothing loaded and re-read the **original** file from disk, clobbering the mutation before any test ran. Every mutation then silently survived. In-process runs masked it — the first mutation's spec-load populated `$LOADED_FEATURES` for the rest of the process — but under fork isolation each worker restarts from the same pre-`require` snapshot, so the whole file scored 0%. `MutationApplier` now registers the mutated file's canonical (`File.realpath`) path in `$LOADED_FEATURES` after applying the mutation, so a later `require`/`require_relative` is a no-op. Surfaced by the EV-7764 pagy stability canary: `gem/lib/pagy/classes/request.rb` went from 0% to 82.8% under `--jobs 4` (EV-vxgl, PR #1256, GH #1253)
+- **Minitest integration reports `:error` instead of a misleading 0% when zero test methods run** — if the dispatched Minitest run executed no test methods (the resolved spec registered no `Minitest::Runnable` suite — commonly because the project's tests use a different framework such as the `test-unit` gem, or `--spec` points at the wrong file), `reporter.passed?` returned `true` for the empty run and every mutation was scored *survived*, producing a meaningless 0%. `run_minitest` now reports the dispatched test-method count; a zero-count run yields an error-shaped result so `classify_status` maps it to `:error` and the high-error-rate warning fires, instead of silently inflating the denominator. The Minitest analogue of the EV-720r RSpec fix. Surfaced by the EV-9cd2 kaminari stability canary (kaminari runs on `test-unit`, not Minitest) (EV-5dxk, PR #1257, GH #1254)
+
 ## [0.30.2] - 2026-05-15
 
 ### Fixed
