@@ -181,25 +181,49 @@ RSpec.describe Evilution::Integration::Minitest do
     # Minitest::Reporters.use! (and similar plugins) replace the composite's
     # reporters during Minitest.init_plugins, evicting evilution's own
     # SummaryReporter. A reporter-based test count then reads 0 even on a real
-    # run. run_minitest must count from the runnable registry instead.
-    before do
+    # run. run_minitest must count from the runnable registry instead, and
+    # pass/fail must still flow through the plugin's replacement reporter.
+    # Mimics Minitest::Reporters.use!: swap the composite's reporters for the
+    # plugin's own delegate during dispatch.
+    def install_replacement_reporter(reporter, options)
+      reporter.reporters.clear
+      replacement = Minitest::SummaryReporter.new(StringIO.new, options)
+      replacement.start
+      reporter.reporters << replacement
+    end
+
+    def recorded_result(failing:)
+      result = Minitest::Result.new("test_real")
+      result.failures << Minitest::Assertion.new("boom") if failing
+      result
+    end
+
+    def stub_evicting_plugin(failing:)
       allow(integration).to receive(:load)
-      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
-        reporter.reporters.clear # simulate Minitest::Reporters.use! eviction
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, options|
+        install_replacement_reporter(reporter, options)
         Class.new(Minitest::Test) { define_method(:test_real) { assert true } }
+        reporter.record(recorded_result(failing: failing))
       end
     end
 
     it "does not misreport a real run as zero tests" do
-      result = integration.call(mutation)
+      stub_evicting_plugin(failing: false)
 
-      expect(result[:error]).to be_nil
+      expect(integration.call(mutation)[:error]).to be_nil
     end
 
-    it "scores the mutation instead of erroring it" do
+    it "preserves a passing outcome through the replacement reporter" do
+      stub_evicting_plugin(failing: false)
+
+      expect(integration.call(mutation)[:passed]).to be true
+    end
+
+    it "preserves a failing outcome through the replacement reporter" do
+      stub_evicting_plugin(failing: true)
       result = integration.call(mutation)
 
-      expect(result).to have_key(:passed)
+      expect(result[:passed]).to be false
       expect(result[:error]).not_to match(/0 test methods/) if result[:error]
     end
   end
