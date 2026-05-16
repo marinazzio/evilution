@@ -2,6 +2,14 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.30.4] - 2026-05-16
+
+### Fixed
+
+- **Minitest integration no longer errors every mutation when the project test helper calls `Minitest::Reporters.use!`** — a regression shipped in 0.30.3. The EV-5dxk zero-tests guard read `summary.count` from a `SummaryReporter` that evilution adds to its `CompositeReporter`. But when the target's test helper uses the `minitest-reporters` gem (`Minitest::Reporters.use!` — an extremely common setup), that plugin **replaces** the composite's reporters during `Minitest.init_plugins`, evicting evilution's own `SummaryReporter`. `summary.count` then never advanced — it read 0 even when tests ran — so the guard false-fired and every mutation was reported as errored ("no Minitest tests executed"), collapsing the score to a meaningless 0/0. `run_minitest` now derives the dispatched test-method count from the runnable registry (`Minitest::Runnable.runnables`), which is immune to reporter plugins. Surfaced by the EV-7764 pagy stability canary (EV-xfaj, PR #1260, GH #1259)
+- **In-process isolation no longer false-kills genuinely-equivalent mutations and inflates the score** — `run_minitest` returned `passed: reporter.passed?`. When the target test helper calls `Minitest::Reporters.use!`, `init_plugins` replaces the composite's reporters with `minitest-reporters`' `DelegateReporter`, which delegates to a process-global reporter created once by `use!` and never reset between runs. Under in-process isolation one process runs every mutation in sequence, so that reporter's failures accumulate: `reporter.passed?` then reported `false` for every mutation after the first genuine kill, false-killing real survivors. On the pagy `request.rb` canary, in-process scored 98.44% against fork's correct 82.81%. `run_minitest` now attaches evilution's own fresh `SummaryReporter` to the composite **after** plugin init (so init_plugins cannot evict it) and reads the run's verdict from that per-run reporter; in-process and fork now converge (EV-wu8w, PR #1264, GH #1263)
+- **`MinitestCrashDetector` survives reporter-plugin eviction** — the same `Minitest::Reporters.use!` swap that evicted evilution's `SummaryReporter` also detached the `MinitestCrashDetector`, which was attached to the composite before `initialize_minitest_state`. With the detector evicted, `build_minitest_result`'s `detector.only_crashes?` path went dead on `minitest-reporters` projects: a crash-only mutation result lost its `test_crashed` / `error` / `error_class` crash diagnostics and returned a plain killed result. The detector is now attached after plugin init alongside the `SummaryReporter`, keeping it in the live composite (EV-8z2n, PR #1265, GH #1262)
+
 ## [0.30.3] - 2026-05-16
 
 ### Fixed
