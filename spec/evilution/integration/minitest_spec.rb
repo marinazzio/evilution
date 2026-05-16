@@ -31,24 +31,42 @@ RSpec.describe Evilution::Integration::Minitest do
 
   subject(:integration) { described_class.new(test_files: ["test/some_test.rb"]) }
 
+  # Anonymous Minitest::Test subclasses created in the dispatch stubs register
+  # into Minitest::Runnable.runnables and persist there. run_minitest counts
+  # test methods from that registry, so a stubbed dispatch must register a
+  # runnable to mimic a real run. Clear the registry after each example.
+  after { Minitest::Runnable.runnables.clear }
+
   # Stub the version-dispatch helper rather than ::Minitest.__run directly so
   # the stubs work whether the installed Minitest is 5.x (has __run) or 6.x
   # (uses run_all_suites). The dispatch method takes the same (reporter, options)
   # signature regardless of underlying Minitest version.
   #
   # Block receives the call args only (no leading instance). RSpec's
-  # any_instance binds self to the instance via instance_exec.
+  # any_instance binds self to the instance via instance_exec. A real dispatch
+  # has at least one registered runnable; register one so run_minitest's
+  # registry-based test count is non-zero.
   def stub_minitest_run(passed: true)
     allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+      Class.new(Minitest::Test) { define_method(:test_stub) { assert true } }
       reporter.record(Minitest::Result.new("test_stub")) if passed
     end
   end
 
   def stub_minitest_run_failed
     allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+      Class.new(Minitest::Test) { define_method(:test_stub) { assert true } }
       result = Minitest::Result.new("test_stub")
       result.failures << Minitest::Assertion.new("expected true")
       reporter.record(result)
+    end
+  end
+
+  # Dispatch that registers no runnable — mimics a spec that loads no Minitest
+  # suite (wrong --integration, or a non-Minitest framework such as test-unit).
+  def stub_minitest_no_tests
+    allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |_reporter, _options|
+      nil
     end
   end
 
@@ -134,7 +152,7 @@ RSpec.describe Evilution::Integration::Minitest do
 
   describe "#call when zero tests run" do
     before do
-      stub_minitest_run(passed: false) # dispatch records nothing -> 0 test methods
+      stub_minitest_no_tests # dispatch registers no runnable -> 0 test methods
       allow(integration).to receive(:load)
     end
 
@@ -156,6 +174,57 @@ RSpec.describe Evilution::Integration::Minitest do
       result = integration.call(mutation)
 
       expect(result[:passed]).not_to be true
+    end
+  end
+
+  describe "#call when a reporter plugin evicts evilution's reporters" do
+    # Minitest::Reporters.use! (and similar plugins) replace the composite's
+    # reporters during Minitest.init_plugins, evicting evilution's own
+    # SummaryReporter. A reporter-based test count then reads 0 even on a real
+    # run. run_minitest must count from the runnable registry instead, and
+    # pass/fail must still flow through the plugin's replacement reporter.
+    # Mimics Minitest::Reporters.use!: swap the composite's reporters for the
+    # plugin's own delegate during dispatch.
+    def install_replacement_reporter(reporter, options)
+      reporter.reporters.clear
+      replacement = Minitest::SummaryReporter.new(StringIO.new, options)
+      replacement.start
+      reporter.reporters << replacement
+    end
+
+    def recorded_result(failing:)
+      result = Minitest::Result.new("test_real")
+      result.failures << Minitest::Assertion.new("boom") if failing
+      result
+    end
+
+    def stub_evicting_plugin(failing:)
+      allow(integration).to receive(:load)
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, options|
+        install_replacement_reporter(reporter, options)
+        Class.new(Minitest::Test) { define_method(:test_real) { assert true } }
+        reporter.record(recorded_result(failing: failing))
+      end
+    end
+
+    it "does not misreport a real run as zero tests" do
+      stub_evicting_plugin(failing: false)
+
+      expect(integration.call(mutation)[:error]).to be_nil
+    end
+
+    it "preserves a passing outcome through the replacement reporter" do
+      stub_evicting_plugin(failing: false)
+
+      expect(integration.call(mutation)[:passed]).to be true
+    end
+
+    it "preserves a failing outcome through the replacement reporter" do
+      stub_evicting_plugin(failing: true)
+      result = integration.call(mutation)
+
+      expect(result[:passed]).to be false
+      expect(result[:error]).not_to match(/0 test methods/) if result[:error]
     end
   end
 
@@ -256,6 +325,7 @@ RSpec.describe Evilution::Integration::Minitest do
 
     it "flags test_crashed with error detail when all failures are crashes" do
       allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+        Class.new(Minitest::Test) { define_method(:test_crash) { assert true } }
         result = Minitest::Result.new("test_crash")
         result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
         reporter.record(result)
