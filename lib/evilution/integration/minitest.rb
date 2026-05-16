@@ -178,15 +178,34 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options[:io] = out
 
     reporter = ::Minitest::CompositeReporter.new
-    reporter << ::Minitest::SummaryReporter.new(out, options)
     reporter << detector
 
     self.class.initialize_minitest_state(reporter, options)
+    summary = attach_summary_reporter(reporter, out, options)
     reporter.start
     dispatch_minitest_suites(reporter, options)
     reporter.report
 
-    { passed: reporter.passed?, count: minitest_method_count }
+    { passed: summary.passed?, count: minitest_method_count }
+  end
+
+  # Add evilution's own SummaryReporter to the composite AFTER plugin init,
+  # and read the run's verdict from it rather than from reporter.passed?.
+  #
+  # A target test helper that calls Minitest::Reporters.use! makes
+  # init_plugins replace the composite's reporters with minitest-reporters'
+  # DelegateReporter, which delegates to a process-global reporter created
+  # once by use!. That global reporter is never reset between runs, so under
+  # in_process isolation — where one process runs every mutation in sequence
+  # — its failures accumulate: reporter.passed? would report false for every
+  # mutation after the first genuine kill, false-killing real survivors and
+  # inflating the score. A fresh SummaryReporter attached here survives
+  # plugin init (init_plugins already ran) and sees only the current run,
+  # giving an isolation-correct pass/fail.
+  def attach_summary_reporter(reporter, out, options)
+    summary = ::Minitest::SummaryReporter.new(out, options)
+    reporter << summary
+    summary
   end
 
   # Count dispatched test methods from the runnable registry, not a reporter.

@@ -179,17 +179,21 @@ RSpec.describe Evilution::Integration::Minitest do
 
   describe "#call when a reporter plugin evicts evilution's reporters" do
     # Minitest::Reporters.use! (and similar plugins) replace the composite's
-    # reporters during Minitest.init_plugins, evicting evilution's own
-    # SummaryReporter. A reporter-based test count then reads 0 even on a real
-    # run. run_minitest must count from the runnable registry instead, and
-    # pass/fail must still flow through the plugin's replacement reporter.
-    # Mimics Minitest::Reporters.use!: swap the composite's reporters for the
-    # plugin's own delegate during dispatch.
-    def install_replacement_reporter(reporter, options)
-      reporter.reporters.clear
-      replacement = Minitest::SummaryReporter.new(StringIO.new, options)
-      replacement.start
-      reporter.reporters << replacement
+    # reporters during Minitest.init_plugins. evilution attaches its own
+    # SummaryReporter AFTER init so it survives the swap; run_minitest reads
+    # the verdict from that reporter and the test count from the runnable
+    # registry, both immune to the plugin.
+
+    # Mimics a reporter plugin: during init_plugins (inside
+    # initialize_minitest_state), drop the composite's reporters and install
+    # the plugin's own.
+    def stub_reporter_plugin(plugin_reporter)
+      allow(described_class).to receive(:initialize_minitest_state)
+        .and_wrap_original do |orig, composite, options|
+          orig.call(composite, options)
+          composite.reporters.clear
+          composite.reporters << plugin_reporter
+        end
     end
 
     def recorded_result(failing:)
@@ -198,33 +202,55 @@ RSpec.describe Evilution::Integration::Minitest do
       result
     end
 
-    def stub_evicting_plugin(failing:)
-      allow(integration).to receive(:load)
-      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, options|
-        install_replacement_reporter(reporter, options)
+    def stub_dispatch(failing:)
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |composite, _options|
         Class.new(Minitest::Test) { define_method(:test_real) { assert true } }
-        reporter.record(recorded_result(failing: failing))
+        composite.record(recorded_result(failing: failing))
       end
     end
 
+    before do
+      allow(integration).to receive(:load)
+      stub_reporter_plugin(Minitest::SummaryReporter.new(StringIO.new, {}))
+    end
+
     it "does not misreport a real run as zero tests" do
-      stub_evicting_plugin(failing: false)
+      stub_dispatch(failing: false)
 
       expect(integration.call(mutation)[:error]).to be_nil
     end
 
-    it "preserves a passing outcome through the replacement reporter" do
-      stub_evicting_plugin(failing: false)
+    it "preserves a passing outcome" do
+      stub_dispatch(failing: false)
 
       expect(integration.call(mutation)[:passed]).to be true
     end
 
-    it "preserves a failing outcome through the replacement reporter" do
-      stub_evicting_plugin(failing: true)
+    it "preserves a failing outcome" do
+      stub_dispatch(failing: true)
       result = integration.call(mutation)
 
       expect(result[:passed]).to be false
       expect(result[:error]).not_to match(/0 test methods/) if result[:error]
+    end
+
+    it "does not let a prior mutation's failure poison a later passing mutation" do
+      # The plugin reporter is process-global and never reset between runs.
+      # Under in_process isolation one process runs every mutation in
+      # sequence, so its failures accumulate. run_minitest must read the
+      # verdict from evilution's own per-run reporter, not the composite.
+      sticky = Minitest::SummaryReporter.new(StringIO.new, {})
+      sticky.start
+      allow(sticky).to receive(:start) # process-global: never reset between runs
+      stub_reporter_plugin(sticky)
+
+      stub_dispatch(failing: true)
+      integration.call(mutation)          # mutation 1: genuine failure
+
+      stub_dispatch(failing: false)
+      result = integration.call(mutation) # mutation 2: tests pass
+
+      expect(result[:passed]).to be true
     end
   end
 
