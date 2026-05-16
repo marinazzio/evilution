@@ -234,6 +234,22 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(result[:error]).not_to match(/0 test methods/) if result[:error]
     end
 
+    it "still classifies crash-only failures via the crash detector" do
+      # The crash detector must survive plugin eviction too: build_minitest_result
+      # queries detector.only_crashes? to mark a crash :error rather than :killed.
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |composite, _options|
+        Class.new(Minitest::Test) { define_method(:test_real) { assert true } }
+        result = Minitest::Result.new("test_real")
+        result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
+        composite.record(result)
+      end
+
+      result = integration.call(mutation)
+
+      expect(result[:test_crashed]).to be true
+      expect(result[:error_class]).to eq("NoMethodError")
+    end
+
     it "does not let a prior mutation's failure poison a later passing mutation" do
       # The plugin reporter is process-global and never reset between runs.
       # Under in_process isolation one process runs every mutation in
