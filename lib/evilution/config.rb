@@ -20,7 +20,7 @@ class Evilution::Config
     example_targeting_fallback: :full_file,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default
+    profile: :default, canary: true
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -31,7 +31,7 @@ class Evilution::Config
               :skip_heredoc_literals, :related_specs_heuristic,
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
               :example_targeting, :example_targeting_fallback, :example_targeting_cache,
-              :spec_selector, :quiet_children, :quiet_children_dir, :profile
+              :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -66,6 +66,10 @@ class Evilution::Config
 
   def baseline?
     baseline
+  end
+
+  def canary?
+    canary
   end
 
   def incremental?
@@ -129,6 +133,11 @@ class Evilution::Config
 
       # Minimum mutation score to pass (0.0 to 1.0, default: 0.0)
       # min_score: 0.0
+
+      # Proof-of-life canary: run a synthetic, guaranteed-unobservable
+      # mutation at session start and abort if the pipeline misreports it
+      # (default: true). Set false to skip (e.g. for CI speed).
+      # canary: true
 
       # Test integration: rspec, minitest (default: rspec)
       # integration: rspec
@@ -237,7 +246,8 @@ class Evilution::Config
     related_specs_heuristic: nil,
     fallback_to_full_suite: nil,
     quiet_children: nil,
-    quiet_children_dir: nil
+    quiet_children_dir: nil,
+    canary: nil
   }.freeze
   private_constant :SIMPLE_ATTR_TRANSFORMS
 

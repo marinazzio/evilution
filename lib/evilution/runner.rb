@@ -4,6 +4,11 @@ require "fileutils"
 require_relative "../evilution"
 
 class Evilution::Runner
+  # Autoloaded: canary.rb subclasses Evilution::Error at class-body eval
+  # time, which is not yet defined while evilution.rb is mid-load. Deferring
+  # the load until first reference lets evilution.rb finish defining Error.
+  autoload :Canary, File.expand_path("runner/canary", __dir__)
+
   attr_reader :config
 
   def initialize(config: Evilution::Config.new, on_result: nil, hooks: nil)
@@ -26,6 +31,8 @@ class Evilution::Runner
 
     perform_preload
     log_memory("after preload") if rails_root_detected?
+
+    run_canary
 
     baseline_result = run_baseline(subjects)
 
@@ -120,6 +127,17 @@ class Evilution::Runner
 
   def run_baseline(subjects)
     baseline_runner.call(subjects)
+  end
+
+  def run_canary
+    return unless config.canary?
+
+    Evilution::Runner::Canary.new(
+      config: config,
+      isolator: isolator,
+      integration_class: baseline_runner.integration_class,
+      hooks: @hooks
+    ).call
   end
 
   def run_mutations(mutations, baseline_result = nil)

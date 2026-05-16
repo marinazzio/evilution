@@ -86,6 +86,11 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Use --no-incremental to override `incremental: true` from the config file for one run.") do |v|
       @options[:incremental] = v
     end
+    opts.on("--[no-]canary",
+            "Run a proof-of-life synthetic mutation at session start; abort if " \
+            "the pipeline misreports it (default: enabled). Use --no-canary to skip.") do |v|
+      @options[:canary] = v
+    end
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
   end
 
