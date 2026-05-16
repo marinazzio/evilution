@@ -178,10 +178,9 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options[:io] = out
 
     reporter = ::Minitest::CompositeReporter.new
-    reporter << detector
 
     self.class.initialize_minitest_state(reporter, options)
-    summary = attach_summary_reporter(reporter, out, options)
+    summary = attach_evilution_reporters(reporter, detector, out, options)
     reporter.start
     dispatch_minitest_suites(reporter, options)
     reporter.report
@@ -189,8 +188,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     { passed: summary.passed?, count: minitest_method_count }
   end
 
-  # Add evilution's own SummaryReporter to the composite AFTER plugin init,
-  # and read the run's verdict from it rather than from reporter.passed?.
+  # Attach evilution's own reporters to the composite AFTER plugin init, and
+  # read the run's verdict from the SummaryReporter rather than reporter.passed?.
   #
   # A target test helper that calls Minitest::Reporters.use! makes
   # init_plugins replace the composite's reporters with minitest-reporters'
@@ -199,12 +198,16 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   # in_process isolation — where one process runs every mutation in sequence
   # — its failures accumulate: reporter.passed? would report false for every
   # mutation after the first genuine kill, false-killing real survivors and
-  # inflating the score. A fresh SummaryReporter attached here survives
-  # plugin init (init_plugins already ran) and sees only the current run,
-  # giving an isolation-correct pass/fail.
-  def attach_summary_reporter(reporter, out, options)
+  # inflating the score. Anything attached before init_plugins is likewise
+  # evicted — that silently disabled the MinitestCrashDetector, so
+  # build_minitest_result's only_crashes? path went dead and crashes were
+  # downgraded from :error to :killed. Attaching both reporters here, after
+  # init_plugins has run, keeps them in the live composite for the current
+  # run. Returns the SummaryReporter.
+  def attach_evilution_reporters(reporter, detector, out, options)
     summary = ::Minitest::SummaryReporter.new(out, options)
     reporter << summary
+    reporter << detector
     summary
   end
 
