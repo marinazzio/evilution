@@ -122,16 +122,37 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     return unresolved_result(mutation) if files.nil?
 
     command = "ruby -Itest #{files.join(" ")}"
-
-    files.each { |f| load(File.expand_path(f)) }
-
-    args = build_args(mutation)
-    detector = reset_crash_detector
-    passed = run_minitest(args, detector)
-
-    build_minitest_result(passed, command, detector)
+    execute_minitest(mutation, files, command)
   rescue StandardError => e
     { passed: false, error: e.message, test_command: command }
+  end
+
+  def execute_minitest(mutation, files, command)
+    files.each { |f| load(File.expand_path(f)) }
+
+    detector = reset_crash_detector
+    run = run_minitest(build_args(mutation), detector)
+
+    return no_tests_ran_result(command) if run[:count].zero?
+
+    build_minitest_result(run[:passed], command, detector)
+  end
+
+  # Zero dispatched test methods means the run carries no signal — the result
+  # is neither survived nor killed. Most common cause: the project's tests use
+  # a framework other than Minitest (e.g. the test-unit gem, whose
+  # Test::Unit::TestCase classes are not Minitest::Runnable), or --spec points
+  # at a file that registers no Minitest suite. Report :error so the score is
+  # not silently inflated to 0% with every mutation marked survived.
+  def no_tests_ran_result(command)
+    {
+      passed: false,
+      error: "no Minitest tests executed (0 test methods ran) — the resolved " \
+             "spec registered no Minitest suite. Check --integration/--spec; " \
+             "the project may use a non-Minitest framework (e.g. test-unit).",
+      error_class: "Evilution::Error",
+      test_command: command
+    }
   end
 
   def unresolved_result(mutation)
@@ -157,7 +178,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options[:io] = out
 
     reporter = ::Minitest::CompositeReporter.new
-    reporter << ::Minitest::SummaryReporter.new(out, options)
+    summary = ::Minitest::SummaryReporter.new(out, options)
+    reporter << summary
     reporter << detector
 
     self.class.initialize_minitest_state(reporter, options)
@@ -165,7 +187,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     dispatch_minitest_suites(reporter, options)
     reporter.report
 
-    reporter.passed?
+    { passed: reporter.passed?, count: summary.count }
   end
 
   def dispatch_minitest_suites(reporter, options)
