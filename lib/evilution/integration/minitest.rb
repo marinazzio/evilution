@@ -178,8 +178,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options[:io] = out
 
     reporter = ::Minitest::CompositeReporter.new
-    summary = ::Minitest::SummaryReporter.new(out, options)
-    reporter << summary
+    reporter << ::Minitest::SummaryReporter.new(out, options)
     reporter << detector
 
     self.class.initialize_minitest_state(reporter, options)
@@ -187,7 +186,17 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     dispatch_minitest_suites(reporter, options)
     reporter.report
 
-    { passed: reporter.passed?, count: summary.count }
+    { passed: reporter.passed?, count: minitest_method_count }
+  end
+
+  # Count dispatched test methods from the runnable registry, not a reporter.
+  # A project test helper that calls Minitest::Reporters.use! swaps the
+  # composite's reporters during init_plugins, evicting evilution's
+  # SummaryReporter — a reporter-based count then reads 0 even on a real run.
+  # The runnable registry is immune to reporter plugins. Must run after
+  # initialize_minitest_state: runnable_methods calls srand(Minitest.seed).
+  def minitest_method_count
+    ::Minitest::Runnable.runnables.sum { |r| r.runnable_methods.size }
   end
 
   def dispatch_minitest_suites(reporter, options)
