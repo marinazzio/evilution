@@ -42,6 +42,32 @@ RSpec.describe Evilution::RailsDetector do
       expect(described_class.rails_root_for(File.join(@tmp, "does_not_exist.rb"))).to be_nil
     end
 
+    it "returns nil for an explicit nil path without raising" do
+      expect { described_class.rails_root_for(nil) }.not_to raise_error
+      expect(described_class.rails_root_for(nil)).to be_nil
+    end
+
+    it "returns nil when the path's parent directory does not exist" do
+      rails_tree
+      missing = File.join(@tmp, "app", "no_such_dir", "ghost.rb")
+      expect(described_class.rails_root_for(missing)).to be_nil
+    end
+
+    it "detects the Rails root when handed a directory path directly" do
+      rails_tree
+      expect(described_class.rails_root_for(File.join(@tmp, "app", "models"))).to eq(@tmp)
+    end
+
+    it "returns the Rails root when handed the root directory itself" do
+      rails_tree
+      expect(described_class.rails_root_for(@tmp)).to eq(@tmp)
+    end
+
+    it "detects the Rails root when handed a path to an existing file" do
+      rails_tree
+      expect(described_class.rails_root_for(File.join(@tmp, "app", "models", "user.rb"))).to eq(@tmp)
+    end
+
     it "memoizes the walk-up result for the same directory" do
       rails_tree
       path = File.join(@tmp, "app", "models", "user.rb")
@@ -49,6 +75,15 @@ RSpec.describe Evilution::RailsDetector do
       # Remove the marker; memoized result should still return
       FileUtils.rm_f(File.join(@tmp, "config", "application.rb"))
       expect(described_class.rails_root_for(path)).to eq(@tmp)
+    end
+
+    it "re-walks the tree after reset_cache! clears the memoized result" do
+      rails_tree
+      path = File.join(@tmp, "app", "models", "user.rb")
+      expect(described_class.rails_root_for(path)).to eq(@tmp)
+      FileUtils.rm_f(File.join(@tmp, "config", "application.rb"))
+      described_class.reset_cache!
+      expect(described_class.rails_root_for(path)).to be_nil
     end
 
     it "stops at the filesystem root without error" do

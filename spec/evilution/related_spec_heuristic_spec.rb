@@ -75,6 +75,22 @@ RSpec.describe Evilution::RelatedSpecHeuristic do
         expect(result.length).to eq(2)
       end
 
+      it "returns related specs in sorted order" do
+        create_file("spec/system/news_spec.rb")
+        create_file("spec/integration/news_spec.rb")
+        create_file("spec/features/news_spec.rb")
+        create_file("spec/requests/news_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to eq([
+                               "spec/features/news_spec.rb",
+                               "spec/integration/news_spec.rb",
+                               "spec/requests/news_spec.rb",
+                               "spec/system/news_spec.rb"
+                             ])
+      end
+
       it "returns empty array when no related specs exist" do
         result = heuristic.call(mutation)
 
@@ -115,6 +131,22 @@ RSpec.describe Evilution::RelatedSpecHeuristic do
       end
     end
 
+    context "when includes() only appears on an added line" do
+      let(:mutation) do
+        double("Mutation",
+               file_path: "app/controllers/news_controller.rb",
+               diff: "- News.all\n+ News.includes(:comments)")
+      end
+
+      it "returns empty array because includes() was not removed" do
+        create_file("spec/requests/news_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to eq([])
+      end
+    end
+
     context "domain extraction" do
       it "strips _controller suffix from controller files" do
         mutation = double("Mutation",
@@ -147,6 +179,17 @@ RSpec.describe Evilution::RelatedSpecHeuristic do
         result = heuristic.call(mutation)
 
         expect(result).to include("spec/requests/admin/users_spec.rb")
+      end
+
+      it "strips the bare app/ prefix from files outside controllers and models" do
+        mutation = double("Mutation",
+                          file_path: "app/services/payment.rb",
+                          diff: "- Payment.includes(:items)\n+ Payment")
+        create_file("spec/requests/services/payment_spec.rb")
+
+        result = heuristic.call(mutation)
+
+        expect(result).to eq(["spec/requests/services/payment_spec.rb"])
       end
     end
 
@@ -206,6 +249,15 @@ RSpec.describe Evilution::RelatedSpecHeuristic do
         result = heuristic.call(mutation)
 
         expect(result).to include("spec/requests/news_fetcher_spec.rb")
+      end
+
+      it "returns empty array when the file path yields an empty domain" do
+        mutation = double("Mutation",
+                          file_path: "app/.rb",
+                          diff: "- Foo.includes(:bar)\n+ Foo")
+        create_file("spec/requests/_spec.rb")
+
+        expect(heuristic.call(mutation)).to eq([])
       end
     end
   end

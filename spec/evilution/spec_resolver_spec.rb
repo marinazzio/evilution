@@ -127,6 +127,12 @@ RSpec.describe Evilution::SpecResolver do
       it "does not fall back to spec directory root" do
         expect(resolver.call("lib/foo/bar/baz.rb")).to be_nil
       end
+
+      it "does not generate a suffix-only fallback candidate for the leaf directory" do
+        create_file("spec/models/game/_spec.rb")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
     end
 
     context "Rails controller to request spec mapping" do
@@ -171,6 +177,18 @@ RSpec.describe Evilution::SpecResolver do
         create_file("spec/controllers/concerns/set_locale_spec.rb")
 
         expect(resolver.call("app/controllers/concerns/set_locale.rb")).to eq("spec/controllers/concerns/set_locale_spec.rb")
+      end
+
+      it "does not map a non-controller-directory file to a request spec even when it ends with _controller" do
+        create_file("spec/requests/models/event_spec.rb")
+
+        expect(resolver.call("app/models/event_controller.rb")).to be_nil
+      end
+
+      it "does not map a controller-directory file lacking the _controller suffix to a request spec" do
+        create_file("spec/requests/foo_spec.rb")
+
+        expect(resolver.call("app/controllers/foo.rb")).to be_nil
       end
     end
 

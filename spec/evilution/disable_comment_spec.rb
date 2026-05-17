@@ -131,6 +131,34 @@ RSpec.describe Evilution::DisableComment do
       end
     end
 
+    context "with a plain comment inside an open range" do
+      let(:source) do
+        <<~RUBY
+          # evilution:disable
+          a = 1
+          # just a normal comment
+          b = 2
+          # evilution:enable
+        RUBY
+      end
+
+      it "does not let a non-marker comment close the disabled range" do
+        result = detector.call(source)
+
+        expect(result).to eq([1..5])
+      end
+    end
+
+    context "with source that fails to parse" do
+      let(:source) { "# evilution:disable\ndef foo\n  1 +\n" }
+
+      it "returns an empty array for unparseable source" do
+        result = detector.call(source)
+
+        expect(result).to eq([])
+      end
+    end
+
     context "with no disable comments" do
       let(:source) do
         <<~RUBY
