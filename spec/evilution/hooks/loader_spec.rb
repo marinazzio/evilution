@@ -129,6 +129,9 @@ RSpec.describe Evilution::Hooks::Loader do
     ensure
       hook_file&.close
       hook_file&.unlink
+      # If the loader regresses and leaks the probe, drop it so the leaked
+      # global state cannot cascade into unrelated specs.
+      Module.send(:remove_const, :HOOK_ISOLATION_PROBE) if Module.const_defined?(:HOOK_ISOLATION_PROBE, false)
     end
 
     it "raises ArgumentError for unknown events" do

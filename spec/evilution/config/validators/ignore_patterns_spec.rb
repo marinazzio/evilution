@@ -15,7 +15,7 @@ RSpec.describe Evilution::Config::Validators::IgnorePatterns do
 
     it "returns the same patterns array it validated" do
       patterns = ["call{name=info}", "call{name=debug}"]
-      expect(described_class.call(patterns)).to eq(patterns)
+      expect(described_class.call(patterns)).to be(patterns)
     end
 
     it "wraps a single string in an array" do
