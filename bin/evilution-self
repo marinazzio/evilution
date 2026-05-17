@@ -8,6 +8,13 @@
 $stdout.sync = true
 $stderr.sync = true
 
+# Pin the locked gemset regardless of how this entrypoint is invoked. Run
+# directly (script/run_self_baseline spawns it without `bundle exec`), bare
+# RubyGems would activate the newest installed gem of each dependency — e.g.
+# diff-lcs 2.0.0, which evilution loads early and which then conflicts with
+# rspec-expectations' `diff-lcs < 2.0` pin, breaking every worker's spec load.
+require "bundler/setup"
+
 snapshot = File.expand_path("../tmp/evilution-runtime", __dir__)
 abort "snapshot missing — run script/build_runtime_snapshot" unless File.directory?(File.join(snapshot, "lib"))
 
