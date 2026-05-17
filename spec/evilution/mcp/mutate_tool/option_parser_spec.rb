@@ -29,6 +29,11 @@ RSpec.describe Evilution::MCP::MutateTool::OptionParser do
     it "raises ParseError for non-numeric range" do
       expect { described_class.parse_files(["lib/a.rb:abc"]) }.to raise_error(Evilution::ParseError, /invalid line range/)
     end
+
+    it "quotes the offending range string in the error message via inspect" do
+      expect { described_class.parse_files(["lib/a.rb:abc"]) }
+        .to raise_error(Evilution::ParseError, 'invalid line range: "abc"')
+    end
   end
 
   describe ".normalize_verbosity" do
@@ -50,6 +55,11 @@ RSpec.describe Evilution::MCP::MutateTool::OptionParser do
     it "raises ParseError for anything else" do
       expect { described_class.normalize_verbosity("loud") }.to raise_error(Evilution::ParseError, /invalid verbosity/)
     end
+
+    it "quotes the rejected value in the error message via inspect" do
+      expect { described_class.normalize_verbosity("loud") }
+        .to raise_error(Evilution::ParseError, 'invalid verbosity: "loud" (must be full, summary, or minimal)')
+    end
   end
 
   describe ".validate!" do
@@ -59,6 +69,11 @@ RSpec.describe Evilution::MCP::MutateTool::OptionParser do
 
     it "raises ParseError listing unknown keys" do
       expect { described_class.validate!(bogus: 1, also_bogus: 2) }.to raise_error(Evilution::ParseError, /unknown parameters/)
+    end
+
+    it "joins the unknown keys into a comma-separated list in the message" do
+      expect { described_class.validate!(bogus: 1, also_bogus: 2) }
+        .to raise_error(Evilution::ParseError, "unknown parameters: bogus, also_bogus")
     end
   end
 

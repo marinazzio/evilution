@@ -83,6 +83,25 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(data["sessions"].first["timestamp"]).to eq("2026-03-20T10:00:00+00:00")
     end
 
+    it "exposes each session entry as a hash with string-keyed summary fields" do
+      write_session("20260320T100000-aabb0000.json",
+                    session_summary(timestamp: "2026-03-20T10:00:00+00:00",
+                                    total: 12, killed: 9, survived: 3, score: 0.75, duration: 4.2))
+
+      data = parse_response(call(action: "list", results_dir: results_dir))
+      entry = data["sessions"].first
+
+      expect(entry.keys).to contain_exactly(
+        "file", "timestamp", "total", "killed", "survived", "score", "duration"
+      )
+      expect(entry["total"]).to eq(12)
+      expect(entry["killed"]).to eq(9)
+      expect(entry["survived"]).to eq(3)
+      expect(entry["score"]).to eq(0.75)
+      expect(entry["duration"]).to eq(4.2)
+      expect(entry["file"]).to end_with("20260320T100000-aabb0000.json")
+    end
+
     it "returns an empty sessions array (still wrapped in envelope) when no sessions exist" do
       data = parse_response(call(action: "list", results_dir: results_dir))
 
