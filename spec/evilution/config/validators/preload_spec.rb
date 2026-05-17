@@ -26,5 +26,10 @@ RSpec.describe Evilution::Config::Validators::Preload do
       expect { described_class.call(true) }
         .to raise_error(Evilution::ConfigError, "preload must be nil, false, or a String path, got true")
     end
+
+    it "inspects the rejected value in the message" do
+      expect { described_class.call(Rational(1, 2)) }
+        .to raise_error(Evilution::ConfigError, "preload must be nil, false, or a String path, got (1/2)")
+    end
   end
 end

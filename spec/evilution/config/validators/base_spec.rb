@@ -55,6 +55,11 @@ RSpec.describe Evilution::Config::Validators::Base do
       expect { subclass.call_coerce_symbol([:a]) }
         .to raise_error(Evilution::ConfigError, "test must be a or b, got [:a]")
     end
+
+    it "inspects the rejected value in the message" do
+      expect { subclass.call_coerce_symbol(Rational(1, 2)) }
+        .to raise_error(Evilution::ConfigError, "test must be a or b, got (1/2)")
+    end
   end
 
   describe "coerce_positive_int!" do

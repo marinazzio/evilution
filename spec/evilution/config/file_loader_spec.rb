@@ -76,6 +76,13 @@ RSpec.describe Evilution::Config::FileLoader do
           .to raise_error(Evilution::ConfigError, /unknown_key/)
       end
 
+      it "lists the known keys in sorted order in the error message" do
+        File.write(".evilution.yml", "schema_version: 1\nunknown_key: value\n")
+        sorted = described_class::KNOWN_KEYS.sort.inspect
+        expect { described_class.load }
+          .to raise_error(Evilution::ConfigError, /Known keys: #{Regexp.escape(sorted)}/)
+      end
+
       it "raises ConfigError when schema_version exceeds CURRENT_SCHEMA_VERSION" do
         File.write(".evilution.yml", "schema_version: 99\n")
         expect { described_class.load }

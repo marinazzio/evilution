@@ -114,4 +114,34 @@ RSpec.describe Evilution::Equivalent::Heuristic::AliasSwap do
 
     expect(heuristic.match?(mutation)).to be false
   end
+
+  it "does not match an alias-pair diff carried by a non-matching operator" do
+    # The diff is a genuine detect -> find alias swap, but the operator is not
+    # in MATCHING_OPERATORS. The operator guard must reject it regardless.
+    mutation = double("Mutation",
+                      operator_name: "arithmetic_replacement",
+                      diff: "- [1, 2].detect { |x| x > 1 }\n+ [1, 2].find { |x| x > 1 }")
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
+  it "does not match when the removed line has no extractable method" do
+    # The "- " line is bare (no .method call), so extract_method returns nil.
+    # The removed && added guard must reject before calling to_sym on nil.
+    mutation = double("Mutation",
+                      operator_name: "send_mutation",
+                      diff: "- x + 1\n+ arr.size")
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
+  it "does not match when the diff has no removed line at all" do
+    # No line begins with "- ", so extract_method finds no line.
+    # The "return nil unless line" guard must prevent matching against nil.
+    mutation = double("Mutation",
+                      operator_name: "send_mutation",
+                      diff: "+ arr.size")
+
+    expect(heuristic.match?(mutation)).to be false
+  end
 end

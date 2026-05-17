@@ -495,6 +495,48 @@ RSpec.describe Evilution::Config do
         expect(config.fallback_to_full_suite?).to be true
       end
     end
+
+    describe "#baseline?" do
+      it "returns true by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.baseline?).to be true
+      end
+
+      it "returns false when baseline is disabled" do
+        config = described_class.new(baseline: false, skip_config_file: true)
+
+        expect(config.baseline?).to be false
+      end
+    end
+
+    describe "#incremental?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.incremental?).to be false
+      end
+
+      it "returns true when incremental is enabled" do
+        config = described_class.new(incremental: true, skip_config_file: true)
+
+        expect(config.incremental?).to be true
+      end
+    end
+
+    describe "#save_session?" do
+      it "returns false by default" do
+        config = described_class.new(skip_config_file: true)
+
+        expect(config.save_session?).to be false
+      end
+
+      it "returns true when save_session is enabled" do
+        config = described_class.new(save_session: true, skip_config_file: true)
+
+        expect(config.save_session?).to be true
+      end
+    end
   end
 
   describe "example_targeting (orchestration)" do
