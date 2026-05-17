@@ -2,6 +2,7 @@
 
 require "tmpdir"
 require "fileutils"
+require "pathname"
 require "evilution/spec_selector"
 
 RSpec.describe Evilution::SpecSelector do
@@ -126,6 +127,23 @@ RSpec.describe Evilution::SpecSelector do
 
       absolute = "#{Dir.pwd}/app/controllers/games_controller.rb"
       expect(selector.call(absolute)).to eq(["spec/requests/games_overlay_spec.rb"])
+    end
+
+    it "coerces a non-string source path to a string before mapping lookup" do
+      create_file("spec/requests/games_overlay_spec.rb")
+      selector = build(spec_mappings: {
+                         "app/controllers/games_controller.rb" => ["spec/requests/games_overlay_spec.rb"]
+                       })
+
+      pathname = Pathname.new("app/controllers/games_controller.rb")
+      expect(selector.call(pathname)).to eq(["spec/requests/games_overlay_spec.rb"])
+    end
+
+    it "does not match a nil source against an empty-string mapping key" do
+      create_file("spec/requests/games_overlay_spec.rb")
+      selector = build(spec_mappings: { "" => ["spec/requests/games_overlay_spec.rb"] })
+
+      expect(selector.call(nil)).to be_nil
     end
   end
 end

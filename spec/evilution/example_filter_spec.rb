@@ -408,5 +408,323 @@ RSpec.describe Evilution::ExampleFilter do
 
       expect(locations).to eq(["#{spec_path}:2", "#{spec_path}:5"])
     end
+
+    it "sorts locations even when spec_paths are passed in reverse order" do
+      src = <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+      spec_a, spec_b = [
+        write_source("RSpec.describe Foo do\n  it \"a\" do\n    Foo.new.bar_method\n  end\nend\n"),
+        write_source("RSpec.describe Foo do\n  it \"b\" do\n    Foo.new.bar_method\n  end\nend\n")
+      ].sort
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_b, spec_a])
+
+      expect(locations).to eq(["#{spec_a}:2", "#{spec_b}:2"])
+    end
+
+    it "dedups a location when the same spec path is listed twice" do
+      src = <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "a" do
+            Foo.new.bar_method
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path, spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+  end
+
+  describe "empty or missing spec paths" do
+    let(:src) do
+      <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+    end
+
+    it "returns the fallback without scanning when spec_paths is nil" do
+      filter_full = described_class.new(cache: cache, fallback: :full_file)
+
+      locations = filter_full.call(mutation(original_source: src, line: 3), nil)
+
+      expect(locations).to be_nil
+    end
+
+    it "returns the fallback without scanning when spec_paths is empty" do
+      filter_unresolved = described_class.new(cache: cache, fallback: :unresolved)
+
+      locations = filter_unresolved.call(mutation(original_source: src, line: 3), [])
+
+      expect(locations).to be_nil
+    end
+
+    it "returns the full-file fallback value (the empty paths) for empty spec_paths" do
+      filter_full = described_class.new(cache: cache, fallback: :full_file)
+
+      locations = filter_full.call(mutation(original_source: src, line: 3), [])
+
+      expect(locations).to eq([])
+    end
+  end
+
+  describe "invalid mutation source" do
+    let(:spec_path) do
+      write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "covers bar_method" do
+            Foo.new.bar_method
+          end
+        end
+      RUBY
+    end
+
+    it "falls back when mutation.original_source fails to parse" do
+      unparseable = "class Foo\n  def bar_method\n    1\n  end\nend\n)"
+
+      filter_unresolved = described_class.new(cache: cache, fallback: :unresolved)
+      locations = filter_unresolved.call(mutation(original_source: unparseable, line: 3), [spec_path])
+
+      expect(locations).to be_nil
+    end
+  end
+
+  describe "argument validation" do
+    it "raises ArgumentError for an unrecognized fallback symbol" do
+      expect { described_class.new(cache: cache, fallback: :bogus) }
+        .to raise_error(ArgumentError, "invalid fallback: :bogus")
+    end
+
+    it "names the offending fallback value in the error message" do
+      expect { described_class.new(cache: cache, fallback: "full_file") }
+        .to raise_error(ArgumentError, /invalid fallback: "full_file"/)
+    end
+  end
+
+  describe "enclosing-node traversal" do
+    it "captures the method name, not the enclosing class name, for a def target" do
+      src = <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "exercises bar_method" do
+            Foo.new.bar_method
+          end
+          it "mentions Foo only" do
+            Foo
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "descends into a method nested in a class to capture the method name" do
+      src = <<~RUBY
+        class Outer
+          def inner_method
+            42
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Outer do
+          it "calls inner_method" do
+            Outer.new.inner_method
+          end
+          it "mentions Outer only" do
+            Outer
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "descends into a method nested in a module to capture the method name" do
+      src = <<~RUBY
+        module Outer
+          def inner_method
+            42
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Outer do
+          it "calls inner_method" do
+            Outer.inner_method
+          end
+          it "mentions Outer only" do
+            Outer
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "ignores a def whose body does not contain the target line" do
+      src = <<~RUBY
+        class Foo
+          def first_method
+            1
+          end
+
+          def second_method
+            2
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "covers first_method" do
+            Foo.new.first_method
+          end
+          it "covers second_method" do
+            Foo.new.second_method
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 7), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:5"])
+    end
+
+    it "stops at the first matching def and ignores later defs" do
+      src = <<~RUBY
+        class Foo
+          def alpha_method
+            1
+          end
+
+          def beta_method
+            2
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "covers alpha_method" do
+            Foo.new.alpha_method
+          end
+          it "covers beta_method" do
+            Foo.new.beta_method
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "captures the inner class name when target is in a sibling-free nested class" do
+      src = <<~RUBY
+        module Outer
+          class FirstClass
+            CONST_A = 1
+          end
+
+          class SecondClass
+            CONST_B = 2
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Outer do
+          it "covers FirstClass" do
+            Outer::FirstClass::CONST_A
+          end
+          it "covers SecondClass" do
+            Outer::SecondClass::CONST_B
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 7), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:5"])
+    end
+
+    it "stops descending once an enclosing method is captured" do
+      src = <<~RUBY
+        class Foo
+          def builder_method
+            helper = Class.new do
+              def deep_helper
+                1
+              end
+            end
+            helper
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "covers builder_method" do
+            Foo.new.builder_method
+          end
+          it "covers deep_helper" do
+            deep_helper_thing
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 5), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "does not resolve a token when the target line is outside every block" do
+      src = <<~RUBY
+        TOP_CONSTANT = 1
+        class Foo
+          def bar_method
+            2
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "covers bar_method" do
+            Foo.new.bar_method
+          end
+        end
+      RUBY
+
+      filter_unresolved = described_class.new(cache: cache, fallback: :unresolved)
+      locations = filter_unresolved.call(mutation(original_source: src, line: 1), [spec_path])
+
+      expect(locations).to be_nil
+    end
   end
 end

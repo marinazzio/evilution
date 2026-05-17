@@ -65,6 +65,30 @@ RSpec.describe Evilution::ParallelDbWarning do
     "test:\n  adapter: sqlite3\n  database: db/test<%= undefined_erb_helper_xyz %>.sqlite3\n"
   end
 
+  def uppercase_sqlite_yml
+    <<~YAML
+      test:
+        adapter: SQLite3
+        database: db/test.sqlite3
+    YAML
+  end
+
+  def array_top_level_yml
+    "- one\n- two\n"
+  end
+
+  def array_test_section_yml
+    "test:\n  - sqlite3\n  - other\n"
+  end
+
+  def numeric_adapter_yml
+    <<~YAML
+      test:
+        adapter: 12345
+        database: db/test.sqlite3
+    YAML
+  end
+
   def call_warn(jobs:, root: @tmp)
     io = StringIO.new
     config = instance_double(Evilution::Config, jobs: jobs)
@@ -128,6 +152,43 @@ RSpec.describe Evilution::ParallelDbWarning do
       call_warn(jobs: 2)
       described_class.reset!
       expect(call_warn(jobs: 2)).not_to eq("")
+    end
+
+    it "defaults the scanned root to the current working directory" do
+      write_database_yml(sqlite_yml)
+      described_class.reset!
+      allow(Dir).to receive(:pwd).and_return(@tmp)
+      io = StringIO.new
+      config = instance_double(Evilution::Config, jobs: 2)
+      described_class.warn_if_sqlite_parallel(config, output: io)
+      expect(io.string).to include("SQLite")
+    end
+
+    it "warns regardless of the case used for the adapter name" do
+      write_database_yml(uppercase_sqlite_yml)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "does not warn or raise when database.yml parses to an array" do
+      write_database_yml(array_top_level_yml)
+      described_class.reset!
+      expect { call_warn(jobs: 2) }.not_to raise_error
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "does not warn or raise when the test section is an array" do
+      write_database_yml(array_test_section_yml)
+      described_class.reset!
+      expect { call_warn(jobs: 2) }.not_to raise_error
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "does not warn or raise when the adapter value is not a string" do
+      write_database_yml(numeric_adapter_yml)
+      described_class.reset!
+      expect { call_warn(jobs: 2) }.not_to raise_error
+      expect(call_warn(jobs: 2)).to eq("")
     end
   end
 end
