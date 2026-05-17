@@ -43,4 +43,15 @@ RSpec.describe Evilution::Reporter::HTML::Sections::MutationMap do
     html = described_class.new([result(line: 1, op: "<op>")]).render
     expect(html).to include("&lt;op&gt;")
   end
+
+  it "strips leading and trailing whitespace from the title attribute" do
+    html = described_class.new([result(line: 1, status: :error, error_message: "  boom  ")]).render
+    expect(html).to include('title="boom"')
+    expect(html).not_to include('title="  boom')
+  end
+
+  it "omits the title attribute when error_message is whitespace-only" do
+    html = described_class.new([result(line: 1, status: :error, error_message: "   ")]).render
+    expect(html).not_to include("title=")
+  end
 end

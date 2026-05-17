@@ -164,6 +164,88 @@ RSpec.describe Evilution::MCP::MutateTool do
       expect(parsed["error"]["message"]).to eq("no files found")
     end
 
+    context "orchestration wiring" do
+      it "returns a real MCP::Tool::Response carrying the compact report text" do
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        # Pins method_body_replacement (nil/self) and statement deletion of the
+        # final `::MCP::Tool::Response.new(...)`: a non-response or class would
+        # have no #content / #error?.
+        expect(response).to be_an_instance_of(MCP::Tool::Response)
+        expect(response.error?).to be false
+        expect(response.content).to be_an(Array)
+        expect(response.content.first[:type]).to eq("text")
+
+        # The text must be the JSON document produced by build_compact_report.
+        text = response.content.first[:text]
+        expect(text).to be_a(String)
+        document = JSON.parse(text)
+        expect(document).to include("summary", "survived")
+      end
+
+      it "drives the Runner with the config built from the request and the streamer" do
+        # Pins the `config = build_config(...)` and
+        # `on_result = build_progress_streamer(...)` assignments and their use
+        # as Runner.new arguments.
+        described_class.call(files: ["lib/foo.rb:15-30"], server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: an_instance_of(Evilution::Config).and(
+            have_attributes(
+              target_files: ["lib/foo.rb"],
+              line_ranges: { "lib/foo.rb" => 15..30 },
+              format: :json
+            )
+          ),
+          on_result: nil
+        )
+      end
+
+      it "invokes the runner instance via #call to obtain the summary" do
+        # Pins `.call` on `Evilution::Runner.new(...).call`: without it the
+        # runner double (not a summary) would flow into report building.
+        described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        expect(runner).to have_received(:call)
+      end
+
+      it "passes the streamer proc as on_result when suggestions stream" do
+        context = double("server_context", report_progress: nil)
+
+        described_class.call(files: ["lib/foo.rb"], suggest_tests: true, server_context: context)
+
+        # build_progress_streamer must return a callable, not nil/self.
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: anything,
+          on_result: an_instance_of(Proc)
+        )
+      end
+
+      it "builds an ErrorPayload from the raised error and returns it as the error response body" do
+        boom = Evilution::ConfigError.new("bad config")
+        allow(runner).to receive(:call).and_raise(boom)
+
+        captured = nil
+        allow(Evilution::MCP::MutateTool::ErrorPayload)
+          .to receive(:build).and_wrap_original do |original, error|
+            captured = error
+            original.call(error)
+          end
+
+        response = described_class.call(files: ["lib/foo.rb"], server_context: nil)
+
+        # Pins `payload = ErrorPayload.build(e)` and the rescue-path
+        # `::MCP::Tool::Response.new([...], error: true)`.
+        expect(captured).to be(boom)
+        expect(response).to be_an_instance_of(MCP::Tool::Response)
+        expect(response.error?).to be true
+
+        expected_text = JSON.generate(Evilution::MCP::MutateTool::ErrorPayload.build(boom))
+        expect(response.content.first[:text]).to eq(expected_text)
+        expect(JSON.parse(response.content.first[:text])["error"]["type"]).to eq("config_error")
+      end
+    end
+
     it "defaults to empty files when not provided" do
       described_class.call(server_context: nil)
 
@@ -252,6 +334,34 @@ RSpec.describe Evilution::MCP::MutateTool do
       parsed = JSON.parse(response.content.first[:text])
       expect(parsed["error"]["type"]).to eq("parse_error")
       expect(parsed["error"]["message"]).to include("invalid line range")
+    end
+
+    context "config building" do
+      it "validates options before parsing files" do
+        # Pins `OptionParser.validate!(opts)`: dropping it would let an unknown
+        # parameter through instead of surfacing a parse error.
+        response = described_class.call(files: ["lib/foo.rb"], bogus_param: 1, server_context: nil)
+
+        expect(response.error?).to be true
+        parsed = JSON.parse(response.content.first[:text])
+        expect(parsed["error"]["type"]).to eq("parse_error")
+        expect(parsed["error"]["message"]).to include("bogus_param")
+      end
+
+      it "feeds the parsed files and ranges into the built config" do
+        # Pins `parsed = OptionParser.parse_files(...)` and the
+        # `ConfigBuilder.build(files:, line_ranges:, params:)` call: the parsed
+        # result must reach the Config the runner receives.
+        described_class.call(files: ["lib/a.rb:1-3", "lib/b.rb"], server_context: nil)
+
+        expect(Evilution::Runner).to have_received(:new).with(
+          config: have_attributes(
+            target_files: ["lib/a.rb", "lib/b.rb"],
+            line_ranges: { "lib/a.rb" => 1..3 }
+          ),
+          on_result: anything
+        )
+      end
     end
 
     context "config file handling" do
@@ -708,6 +818,29 @@ RSpec.describe Evilution::MCP::MutateTool do
           entry = JSON.parse(response.content.first[:text])["survived"].first
           expect(resolver).not_to have_received(:call)
           expect(entry["spec_file"]).to eq("spec/custom_override_spec.rb")
+        end
+
+        it "emits a generic suggestion for survived entries when suggest_tests is false" do
+          response = described_class.call(files: ["lib/foo.rb"], verbosity: "full", server_context: nil)
+
+          entry = JSON.parse(response.content.first[:text])["survived"].first
+          expect(entry["suggestion"]).to eq("Add a test that depends on the side effect of this statement")
+        end
+
+        it "emits concrete test code as the suggestion when suggest_tests is true" do
+          # Pins `suggest_tests: opts[:suggest_tests] == true` in
+          # build_compact_report: the mutation `opts == true` is always false,
+          # so a concrete suggestion would never reach the report.
+          response = described_class.call(
+            files: ["lib/foo.rb"],
+            verbosity: "full",
+            suggest_tests: true,
+            server_context: nil
+          )
+
+          entry = JSON.parse(response.content.first[:text])["survived"].first
+          expect(entry["suggestion"]).to start_with("# Mutation: deleted `x = 1` in Foo#bar")
+          expect(entry["suggestion"]).to include("it '")
         end
 
         it "caches resolver lookups for survivors from the same file" do

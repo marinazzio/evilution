@@ -68,6 +68,19 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out["errors"].first).to have_key("error_message")
   end
 
+  it "leaves a non-Array summary-trim section untouched instead of iterating it" do
+    # Guards `data[key].is_a?(Array)` in strip_heavy_fields: a String section is
+    # truthy but cannot be iterated; real code returns early and leaves it intact.
+    json = JSON.generate({ "summary" => { "total" => 1 }, "survived" => [],
+                           "timed_out" => "not-an-array" })
+    out = nil
+    expect do
+      out = JSON.parse(described_class.call(json, verbosity: "summary", survived_results: [],
+                                                  config: nil, enricher: noop_enricher))
+    end.not_to raise_error
+    expect(out["timed_out"]).to eq("not-an-array")
+  end
+
   it "keeps a 100-error summary payload comfortably under 50 KB" do
     long_bt = (1..40).map { |i| "lib/foo.rb:#{i}:in 'bar'" }
     huge_diff = "+ added line\n- removed line\n" * 50
@@ -280,5 +293,39 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity err
     out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))
 
     expect(out).not_to have_key("errors")
+  end
+
+  it "ignores a non-Array errors payload instead of mis-sampling it" do
+    # Guards `entries.is_a?(Array)` in error_sample: a Hash is truthy and answers
+    # #empty?, but must not be treated as a sample-able list. Real code drops it.
+    json = JSON.generate({ "summary" => { "total" => 1 }, "survived" => [],
+                           "errors" => { "operator" => "x" } })
+    out = nil
+    expect do
+      out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [],
+                                                  config: nil, enricher: noop_enricher))
+    end.not_to raise_error
+    expect(out).not_to have_key("errors")
+  end
+
+  it "skips a non-Array error_backtrace when trimming an error entry" do
+    # Guards `backtrace.is_a?(Array)` in trim_error_entry: a String backtrace
+    # must not be passed to #first, and must not appear in the trimmed entry.
+    json = JSON.generate({
+                           "summary" => { "total" => 1, "errors" => 1 },
+                           "survived" => [],
+                           "errors" => [{
+                             "operator" => "method_call_removal", "file" => "lib/foo.rb", "line" => 1,
+                             "error_message" => "boom", "error_class" => "RuntimeError",
+                             "error_backtrace" => "not-an-array"
+                           }]
+                         })
+    out = nil
+    expect do
+      out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [],
+                                                  config: nil, enricher: noop_enricher))
+    end.not_to raise_error
+    expect(out["errors"].first).not_to have_key("error_backtrace")
+    expect(out["errors"].first["error_message"]).to eq("boom")
   end
 end

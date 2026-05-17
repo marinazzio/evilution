@@ -77,5 +77,53 @@ RSpec.describe Evilution::MCP::MutateTool::SurvivedEnricher do
       expect(entry).not_to have_key("spec_file")
       expect(entry["next_step"]).to include("the covering test file")
     end
+
+    it "skips entries whose survived_result is nil instead of crashing" do
+      # Guards `next unless result`: a nil result at an index must be skipped,
+      # not dereferenced. The surviving entry is enriched, the nil one is left bare.
+      data = { "survived" => [{}, {}] }
+      resolver = double
+      allow(resolver).to receive(:call).with("lib/foo.rb").and_return("spec/foo_spec.rb")
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(false)
+
+      expect do
+        described_class.call(data, [nil, result], config)
+      end.not_to raise_error
+      expect(data["survived"][0]).to eq({})
+      expect(data["survived"][1]["subject"]).to eq("Foo#bar")
+    end
+
+    it "normalizes spec_files: drops empty strings and stringifies entries" do
+      # Guards `.map(&:to_s)` (symbol entry must become a String) and
+      # `.reject(&:empty?)` (a leading empty string must not win as the override).
+      data = { "survived" => [{}] }
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(true)
+      allow(config).to receive(:spec_files).and_return(["", :"spec/custom_spec.rb"])
+
+      described_class.call(data, [result], config)
+      spec_file = data["survived"].first["spec_file"]
+      expect(spec_file).to eq("spec/custom_spec.rb")
+      expect(spec_file).to be_a(String)
+    end
+
+    it "falls back to a fresh SpecResolver for an unknown integration" do
+      # Guards line 50: an unknown integration has no registered class, so the
+      # method must return a usable SpecResolver. If the return is dropped, or
+      # the class itself is returned, enrich_entry's `resolver.call` would crash.
+      data = { "survived" => [{}] }
+      resolver = double
+      allow(resolver).to receive(:call).with("lib/foo.rb").and_return("spec/foo_spec.rb")
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      config = double(integration: :totally_unknown)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(false)
+
+      expect do
+        described_class.call(data, [result], config)
+      end.not_to raise_error
+      expect(data["survived"].first["spec_file"]).to eq("spec/foo_spec.rb")
+    end
   end
 end

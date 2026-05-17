@@ -15,17 +15,36 @@ RSpec.describe Evilution::MCP::MutateTool::ConfigBuilder do
     end
 
     it "passes skip_config_file when skip_config is truthy" do
+      # skip_config_file is consumed by Config#initialize; when true it skips loading the
+      # config file. Verify behaviorally: a config file that sets a non-MCP key (timeout)
+      # must NOT take effect when skip_config is true — Config keeps the default 30.
+      allow(Evilution::Config::FileLoader).to receive(:load).and_return({ timeout: 99 })
       config = described_class.build(files: [], line_ranges: {}, params: { skip_config: true })
-      # skip_config_file is consumed by Config#initialize; when true it skips loading .evilution.yml.
-      # Verify behavior indirectly: without it, file options could clobber MCP defaults; with it,
-      # MCP defaults remain intact.
+
+      expect(config.timeout).to eq(30)
       expect(config.format).to eq(:json)
       expect(config.quiet).to be(true)
+    end
+
+    it "does NOT skip the config file when skip_config is absent" do
+      # Guards the `if params[:skip_config]` guard: without skip_config the config file
+      # IS loaded, so its timeout value flows into the resulting Config.
+      allow(Evilution::Config::FileLoader).to receive(:load).and_return({ timeout: 99 })
+      config = described_class.build(files: [], line_ranges: {}, params: {})
+
+      expect(config.timeout).to eq(99)
     end
 
     it "copies spec overrides to spec_files" do
       config = described_class.build(files: [], line_ranges: {}, params: { spec: ["spec/a_spec.rb"] })
       expect(config.spec_files).to eq(["spec/a_spec.rb"])
+    end
+
+    it "leaves spec_files at the default when spec is absent" do
+      # Guards the `if params[:spec]` guard: with no :spec key, opts[:spec_files] must
+      # not be assigned, so Config keeps its empty-array default.
+      config = described_class.build(files: [], line_ranges: {}, params: { skip_config: true })
+      expect(config.spec_files).to eq([])
     end
 
     it "passes through documented keys" do

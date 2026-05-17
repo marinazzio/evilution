@@ -174,6 +174,87 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(account_pos).to be < user_pos
     end
 
+    it "shows per-file killed, survived and total counts in the file header" do
+      output = reporter.call(summary)
+
+      expect(output).to include("1 killed / 1 survived / 2 total")
+    end
+
+    it "reflects multiple killed mutations in the per-file killed count" do
+      r1 = Evilution::Result::MutationResult.new(mutation: killed_mutation, status: :killed, duration: 0.1)
+      r2 = Evilution::Result::MutationResult.new(mutation: survived_mutation, status: :killed, duration: 0.1)
+      s = Evilution::Result::Summary.new(results: [r1, r2], duration: 0.3)
+
+      output = reporter.call(s)
+
+      expect(output).to include("2 killed / 0 survived / 2 total")
+    end
+
+    context "with unparseable mutations" do
+      let(:unparseable_mutation_b) do
+        double(
+          "Mutation",
+          operator_name: "boolean_literal_replacement",
+          file_path: "lib/user.rb",
+          line: 4,
+          column: 0,
+          diff: "- true\n+ false"
+        )
+      end
+
+      let(:unparseable_mutation_z) do
+        double(
+          "Mutation",
+          operator_name: "string_literal",
+          file_path: "lib/user.rb",
+          line: 30,
+          column: 0,
+          diff: '- "a"\n+ "b"'
+        )
+      end
+
+      let(:unparseable_summary) do
+        rb = Evilution::Result::MutationResult.new(
+          mutation: unparseable_mutation_b, status: :unparseable, duration: 0.0
+        )
+        rz = Evilution::Result::MutationResult.new(
+          mutation: unparseable_mutation_z, status: :unparseable, duration: 0.0
+        )
+        Evilution::Result::Summary.new(results: [killed_result, rz, rb], duration: 0.6)
+      end
+
+      it "renders an unparseable details section with operators and locations" do
+        output = reporter.call(unparseable_summary)
+
+        expect(output).to include('class="unparseable-details"')
+        expect(output).to include("Unparseable (2)")
+        expect(output).to include("boolean_literal_replacement")
+        expect(output).to include("string_literal")
+      end
+
+      it "sorts unparseable entries by operator name then line" do
+        output = reporter.call(unparseable_summary)
+
+        details = output[output.index('class="unparseable-details"')..]
+        expect(details.index("boolean_literal_replacement")).to be < details.index("string_literal")
+      end
+
+      it "omits the unparseable section when no unparseable results exist" do
+        output = reporter.call(summary)
+
+        expect(output).not_to include('class="unparseable-details"')
+      end
+    end
+
+    it "omits the coverage gaps section when a file has no survivors" do
+      s = Evilution::Result::Summary.new(results: [killed_result], duration: 0.5)
+
+      file_section = reporter.call(s)[%r{<section class="file-section">.*</section>}m]
+
+      expect(file_section).not_to include('<div class="survived-details">')
+      expect(file_section).not_to include("Coverage Gaps")
+    end
+
     it "color-codes lines by mutation status" do
       output = reporter.call(summary)
 
@@ -282,6 +363,32 @@ RSpec.describe Evilution::Reporter::HTML do
 
         expect(output).not_to include('class="neutral-details"')
       end
+
+      it "sorts neutral entries by operator name then line" do
+        neutral_z = Evilution::Result::MutationResult.new(
+          mutation: double(
+            "Mutation",
+            operator_name: "string_literal", file_path: "lib/user.rb",
+            line: 2, column: 0, diff: "- 0\n+ 1"
+          ),
+          status: :neutral, duration: 0.1
+        )
+        neutral_a = Evilution::Result::MutationResult.new(
+          mutation: double(
+            "Mutation",
+            operator_name: "boolean_literal_replacement", file_path: "lib/user.rb",
+            line: 40, column: 0, diff: "- 0\n+ 1"
+          ),
+          status: :neutral, duration: 0.1
+        )
+        neutral_summary = Evilution::Result::Summary.new(
+          results: [neutral_z, neutral_a], duration: 0.6
+        )
+        output = reporter.call(neutral_summary)
+
+        details = output[output.index('class="neutral-details"')..]
+        expect(details.index("boolean_literal_replacement")).to be < details.index("string_literal")
+      end
     end
 
     context "with unresolved mutations" do
@@ -331,6 +438,32 @@ RSpec.describe Evilution::Reporter::HTML do
         output = reporter.call(summary)
 
         expect(output).not_to include('class="unresolved-details"')
+      end
+
+      it "sorts unresolved entries by operator name then line" do
+        unresolved_z = Evilution::Result::MutationResult.new(
+          mutation: double(
+            "Mutation",
+            operator_name: "string_literal", file_path: "lib/user.rb",
+            line: 2, column: 0, diff: "- 0\n+ 1"
+          ),
+          status: :unresolved, duration: 0.0
+        )
+        unresolved_a = Evilution::Result::MutationResult.new(
+          mutation: double(
+            "Mutation",
+            operator_name: "boolean_literal_replacement", file_path: "lib/user.rb",
+            line: 40, column: 0, diff: "- 0\n+ 1"
+          ),
+          status: :unresolved, duration: 0.0
+        )
+        unresolved_summary = Evilution::Result::Summary.new(
+          results: [unresolved_z, unresolved_a], duration: 0.6
+        )
+        output = reporter.call(unresolved_summary)
+
+        details = output[output.index('class="unresolved-details"')..]
+        expect(details.index("boolean_literal_replacement")).to be < details.index("string_literal")
       end
     end
 
@@ -495,6 +628,35 @@ RSpec.describe Evilution::Reporter::HTML do
       output = reporter_with_baseline.call(summary)
 
       expect(output).not_to include("NEW REGRESSION")
+    end
+
+    it "applies the survived-entry class to non-regression survivors" do
+      output = reporter_with_baseline.call(summary)
+
+      expect(output).to include(%(<div class="survived-entry">))
+    end
+
+    it "applies the regression class to new survivors" do
+      new_subj = double("Subject", name: "User#new_method")
+      new_survived_mutation = double(
+        "Mutation",
+        operator_name: "boolean_literal_replacement",
+        file_path: "lib/user.rb",
+        line: 15,
+        column: 4,
+        diff: "- true\n+ false",
+        subject: new_subj
+      )
+      new_survived_result = Evilution::Result::MutationResult.new(
+        mutation: new_survived_mutation,
+        status: :survived,
+        duration: 0.1
+      )
+      s = Evilution::Result::Summary.new(results: [new_survived_result], duration: 0.1)
+
+      output = reporter_with_baseline.call(s)
+
+      expect(output).to include(%(<div class="survived-entry regression">))
     end
 
     it "works without baseline (no comparison section)" do
@@ -667,6 +829,35 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include(%(<div class="error-details">))
       expect(output).not_to include("<script>alert(1)")
       expect(output).to include("&lt;script&gt;alert(1)&lt;/script&gt;")
+    end
+
+    it "renders error entries sorted by operator name then line" do
+      reverse_order_summary = Evilution::Result::Summary.new(
+        results: [error_result_b, error_result_a, killed_result],
+        duration: 1.0
+      )
+      output = reporter.call(reverse_order_summary)
+
+      details = output[output.index(%(<div class="error-details">))..]
+      expect(details.index("boolean_literal_replacement")).to be < details.index("integer_literal")
+    end
+
+    it "renders the inline error message text rather than the result object" do
+      output = reporter.call(error_details_summary)
+
+      expect(output).to include(%(<pre class="error-message">syntax error at line 5</pre>))
+      expect(output).not_to include("MutationResult")
+    end
+
+    it "renders an error entry without crashing when the result carries no error message" do
+      messageless = Evilution::Result::MutationResult.new(
+        mutation: error_mutation_a,
+        status: :error,
+        duration: 0.05
+      )
+      messageless_summary = Evilution::Result::Summary.new(results: [messageless], duration: 0.1)
+
+      expect { reporter.call(messageless_summary) }.not_to raise_error
     end
 
     it "scopes error entries to their file section" do

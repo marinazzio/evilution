@@ -64,6 +64,15 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("Result: ")
     end
 
+    it "emits a blank spacer line between the metrics/sections block and the trailer" do
+      output = described_class.new.call(empty_summary)
+      lines = output.split("\n")
+      result_index = lines.index { |line| line.start_with?("Result: ") }
+
+      expect(result_index).to be > 0
+      expect(lines[result_index - 1]).to eq("")
+    end
+
     it "omits all section headers when summary has no items in any section" do
       output = described_class.new.call(empty_summary)
 

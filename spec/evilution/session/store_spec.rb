@@ -259,6 +259,29 @@ RSpec.describe Evilution::Session::Store do
       expect(survived_files).to contain_exactly("lib/models/user.rb", "lib/models/account.rb")
       expect(data["summary"]["total"]).to eq(3)
     end
+
+    it "includes skipped in the summary when the run skipped mutations" do
+      summary = Evilution::Result::Summary.new(results: [], duration: 1.0, skipped: 3)
+
+      store.save(summary)
+
+      expect(read_saved_session["summary"]["skipped"]).to eq(3)
+    end
+
+    it "omits skipped from the summary when nothing was skipped" do
+      summary = Evilution::Result::Summary.new(results: [], duration: 1.0, skipped: 0)
+
+      store.save(summary)
+
+      expect(read_saved_session["summary"]).not_to have_key("skipped")
+    end
+
+    it "removes the temp file and re-raises when the write cannot be renamed into place" do
+      allow(File).to receive(:rename).and_raise(Errno::EACCES)
+
+      expect { store.save(build_summary) }.to raise_error(Errno::EACCES)
+      expect(Dir.glob(File.join(results_dir, "*.tmp-*"))).to be_empty
+    end
   end
 
   describe "#list" do
@@ -317,6 +340,33 @@ RSpec.describe Evilution::Session::Store do
       expect(entry[:file]).to be_a(String)
       expect(entry[:file]).to end_with(".json")
       expect(entry[:timestamp]).to be_a(String)
+    end
+
+    it "returns sessions in reverse-chronological order even when the glob is unsorted" do
+      summary_hash = lambda do |total|
+        { "total" => total, "killed" => 1, "survived" => 0, "score" => 1.0, "duration" => 1.0 }
+      end
+      early = File.join(results_dir, "20260101T000000-aaaa0000.json")
+      mid = File.join(results_dir, "20260201T000000-bbbb0000.json")
+      late = File.join(results_dir, "20260301T000000-cccc0000.json")
+      File.write(early, JSON.generate("summary" => summary_hash.call(1)))
+      File.write(mid, JSON.generate("summary" => summary_hash.call(2)))
+      File.write(late, JSON.generate("summary" => summary_hash.call(3)))
+      allow(Dir).to receive(:glob).and_return([mid, early, late])
+
+      totals = store.list.map { |entry| entry[:total] }
+
+      expect(totals).to eq([3, 2, 1])
+    end
+
+    it "skips session files whose summary is not a hash" do
+      store.save(build_summary)
+      File.write(
+        File.join(results_dir, "20260301T000000-bad00000.json"),
+        JSON.generate("summary" => "not-a-hash")
+      )
+
+      expect(store.list.length).to eq(1)
     end
   end
 
@@ -381,6 +431,13 @@ RSpec.describe Evilution::Session::Store do
 
       expect { store.load(future_path) }.to raise_error(Evilution::Error, /#{Regexp.escape(future_path)}/)
     end
+
+    it "returns non-hash JSON content without attempting schema validation" do
+      array_path = File.join(results_dir, "20260105T000000-eeee0000.json")
+      File.write(array_path, JSON.generate([1, 2, 3]))
+
+      expect(store.load(array_path)).to eq([1, 2, 3])
+    end
   end
 
   describe "#gc" do
@@ -425,6 +482,17 @@ RSpec.describe Evilution::Session::Store do
       nonexistent_store = described_class.new(results_dir: File.join(results_dir, "nonexistent"))
 
       expect(nonexistent_store.gc(older_than: Time.now)).to eq([])
+    end
+
+    it "ignores result files whose name is not a parseable timestamp" do
+      File.write(File.join(results_dir, "20260101T000000-aaaa0000.json"), "{}")
+      File.write(File.join(results_dir, "not-a-timestamp.json"), "{}")
+
+      deleted = store.gc(older_than: Time.new(2026, 6, 1))
+
+      expect(deleted.length).to eq(1)
+      expect(deleted.first).to include("20260101T000000")
+      expect(File.exist?(File.join(results_dir, "not-a-timestamp.json"))).to be true
     end
   end
 

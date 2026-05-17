@@ -36,6 +36,23 @@ RSpec.describe Evilution::MCP::InfoTool::ResponseFormatter do
       response = described_class.success("schema_version" => 99, "ok" => true)
       expect(parse_body(response)["schema_version"]).to eq(99)
     end
+
+    it "leaves a non-Hash payload untouched instead of injecting a schema_version" do
+      response = described_class.success("plain string payload")
+      expect(parse_body(response)).to eq("plain string payload")
+    end
+
+    it "treats a payload carrying a symbol schema_version key as already versioned" do
+      payload = { schema_version: 42, ok: true }
+      result = described_class.send(:inject_schema_version, payload)
+      expect(result).to equal(payload)
+      expect(result).not_to have_key("schema_version")
+    end
+
+    it "returns a non-Hash payload unchanged from inject_schema_version" do
+      result = described_class.send(:inject_schema_version, "raw")
+      expect(result).to eq("raw")
+    end
   end
 
   describe ".error" do

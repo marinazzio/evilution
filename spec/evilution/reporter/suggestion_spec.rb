@@ -1722,5 +1722,78 @@ RSpec.describe Evilution::Reporter::Suggestion do
       expect(suggestion).to include("it")
       expect(suggestion).to include("expect")
     end
+
+    it "embeds the mutation file path and line in the location comment" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("# lib/foo.rb:5")
+    end
+
+    it "uses the parsed method name in the it description" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("#bar")
+      expect(suggestion).to include("subject.bar")
+    end
+
+    it "indents every body line by two spaces" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+      body_lines = suggestion.lines.select { |l| l.include?("expect(result)") }
+
+      expect(body_lines).not_to be_empty
+      expect(body_lines).to all(start_with("  "))
+    end
+  end
+
+  describe "minitest concrete template rendering (integration: :minitest, suggest_tests: true)" do
+    subject(:suggestion_reporter) { described_class.new(suggest_tests: true, integration: :minitest) }
+
+    it "embeds the mutation file path and line in the location comment" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("# lib/foo.rb:5")
+    end
+
+    it "renders the action-specific mutation header from format_header" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("# Mutation: changed `a > b` to `a >= b` in Foo#bar")
+    end
+
+    it "renders the deleted-action header for statement_deletion mutations" do
+      mutation = build_mutation("statement_deletion", diff: "-   do_something\n+   nil")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to include("# Mutation: deleted `do_something` in Foo#bar")
+    end
+
+    it "indents every body line by two spaces" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+      body_lines = suggestion.lines.select { |l| l.include?("assert_equal") }
+
+      expect(body_lines).not_to be_empty
+      expect(body_lines).to all(start_with("  "))
+    end
+
+    it "does not leave a trailing blank line after the chomped body" do
+      mutation = build_mutation("comparison_replacement", diff: "-   a > b\n+   a >= b")
+
+      suggestion = suggestion_reporter.suggestion_for(mutation)
+
+      expect(suggestion).to end_with("end")
+    end
   end
 end

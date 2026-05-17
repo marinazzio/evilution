@@ -22,6 +22,12 @@ RSpec.describe Evilution::Reporter::Suggestion::DiffLines do
       expect(result.mutated).to be_nil
     end
 
+    it "strips surrounding whitespace left after removing the marker" do
+      result = described_class.from_diff("-   a >= b  \n+   a > b\t")
+      expect(result.original).to eq("a >= b")
+      expect(result.mutated).to eq("a > b")
+    end
+
     it "returns a frozen instance" do
       result = described_class.from_diff("- a >= b\n+ a > b")
       expect(result).to be_frozen

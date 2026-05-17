@@ -28,6 +28,29 @@ RSpec.describe Evilution::MCP::InfoTool::StatusGlossary do
       stub_const("Evilution::Result::MutationResult::STATUSES", %i[killed survived timeout])
       expect { described_class.entries }.to raise_error(Evilution::Error, /status glossary drift/)
     end
+
+    it "reports statuses documented but no longer defined as missing" do
+      stub_const("Evilution::Result::MutationResult::STATUSES", %i[killed survived timeout])
+      expect { described_class.entries }.to raise_error(
+        Evilution::Error, /\["equivalent", "error", "neutral", "unparseable", "unresolved"\]/
+      )
+    end
+
+    it "reports statuses defined but not documented as missing" do
+      stub_const("Evilution::Result::MutationResult::STATUSES", %i[killed survived timeout bogus])
+      expect { described_class.entries }.to raise_error(Evilution::Error) do |error|
+        expect(error.message).to include("bogus")
+      end
+    end
+
+    it "excludes statuses present in both sets from the missing list" do
+      stub_const("Evilution::Result::MutationResult::STATUSES", %i[killed survived timeout bogus])
+      expect { described_class.entries }.to raise_error(Evilution::Error) do |error|
+        %w[killed survived timeout].each do |shared|
+          expect(error.message).not_to include(%("#{shared}"))
+        end
+      end
+    end
   end
 
   describe "ENTRIES constant" do
