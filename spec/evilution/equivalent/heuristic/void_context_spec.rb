@@ -167,5 +167,67 @@ RSpec.describe Evilution::Equivalent::Heuristic::VoidContext do
 
       expect(heuristic.match?(mutation)).to be false
     end
+
+    it "does not match when the diff has no removed line" do
+      # extract_method_pair finds no "- " line, so `removed` is nil. The
+      # guards must reject before calling to_sym / match on nil.
+      subj = subject_for("each_in_void_context")
+      line = find_line_in_method(subj, ".each")
+      mutation = double("Mutation",
+                        operator_name: "collection_replacement",
+                        subject: subj,
+                        line: line,
+                        diff: "+ [1, 2, 3].map { |x| puts x }")
+
+      expect(heuristic.match?(mutation)).to be false
+    end
+
+    it "does not match when the method body is not a plain statements node" do
+      # A rescue clause gives the method a BeginNode body. void_context?
+      # must reject it via the StatementsNode type guard.
+      rescue_source = "def guarded\n  [1, 2, 3].each { |x| x }\nrescue StandardError\n  nil\nend\n"
+      parsed = Prism.parse(rescue_source).value
+      finder = Evilution::AST::SubjectFinder.new(rescue_source, "rescue.rb")
+      finder.visit(parsed)
+      subj = finder.subjects.first
+      mutation = double("Mutation",
+                        operator_name: "collection_replacement",
+                        subject: subj,
+                        line: 2,
+                        diff: "- [1, 2, 3].each { |x| x }\n+ [1, 2, 3].map { |x| x }")
+
+      expect(heuristic.match?(mutation)).to be false
+    end
+
+    it "does not match when no call starts on the mutation line" do
+      # The mutation line points at an interior line of a multi-line .each
+      # call; no statement begins there. find_call_at_line must return nil
+      # so the call_node guard rejects the mutation.
+      subj = subject_for("each_multiline_void")
+      line = find_line_in_method(subj, "puts x")
+      mutation = double("Mutation",
+                        operator_name: "collection_replacement",
+                        subject: subj,
+                        line: line,
+                        diff: "- [1, 2, 3].each { |x| puts x }\n+ [1, 2, 3].map { |x| puts x }")
+
+      expect(heuristic.match?(mutation)).to be false
+    end
+
+    it "does not match when the call is the last statement (multi-statement method)" do
+      # The mutation line is the final statement of a multi-statement
+      # method, so the call's return value is the method's return value.
+      # void_context? must use the actual statement index, not the first
+      # call in the method.
+      subj = subject_for("each_void_multi_statement")
+      line = find_line_in_method(subj, "cleanup_something")
+      mutation = double("Mutation",
+                        operator_name: "collection_replacement",
+                        subject: subj,
+                        line: line,
+                        diff: "- [1, 2, 3].each { |x| puts x }\n+ [1, 2, 3].map { |x| puts x }")
+
+      expect(heuristic.match?(mutation)).to be false
+    end
   end
 end

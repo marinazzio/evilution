@@ -34,5 +34,10 @@ RSpec.describe Evilution::Config::Validators::Isolation do
       expect { described_class.call(true) }
         .to raise_error(Evilution::ConfigError, "isolation must be auto, fork, or in_process, got true")
     end
+
+    it "inspects the rejected value in the message" do
+      expect { described_class.call(Rational(1, 2)) }
+        .to raise_error(Evilution::ConfigError, "isolation must be auto, fork, or in_process, got (1/2)")
+    end
   end
 end

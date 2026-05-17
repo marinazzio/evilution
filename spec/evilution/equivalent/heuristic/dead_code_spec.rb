@@ -80,4 +80,29 @@ RSpec.describe Evilution::Equivalent::Heuristic::DeadCode do
 
     expect(heuristic.match?(mutation)).to be false
   end
+
+  it "does not treat code after a plain (non-raise) call as unreachable" do
+    # setup_something / cleanup_something are ordinary calls, not raise.
+    # Only `raise` (and explicit return) terminate control flow; a plain
+    # call must not mark following statements as dead code.
+    subj = subject_for("each_void_multi_statement")
+    line = source.lines.index { |l| l.include?("cleanup_something") } + 1
+    mutation = double("Mutation", operator_name: "statement_deletion", subject: subj, line: line)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
+  it "does not match when the method body is not a plain statements node" do
+    # A method with a rescue clause has a BeginNode body, not a
+    # StatementsNode. The type guard must reject it instead of treating
+    # the BeginNode as a statement list.
+    rescue_source = "def guarded\n  do_work\nrescue StandardError => e\n  handle(e)\nend\n"
+    parsed = Prism.parse(rescue_source).value
+    finder = Evilution::AST::SubjectFinder.new(rescue_source, "rescue.rb")
+    finder.visit(parsed)
+    subj = finder.subjects.first
+    mutation = double("Mutation", operator_name: "statement_deletion", subject: subj, line: 2)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
 end

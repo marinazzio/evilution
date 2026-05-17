@@ -52,4 +52,30 @@ RSpec.describe Evilution::Equivalent::Heuristic::MethodBodyNil do
 
     expect(heuristic.match?(mutation)).to be false
   end
+
+  def subject_from(method_source)
+    parsed = Prism.parse(method_source).value
+    finder = Evilution::AST::SubjectFinder.new(method_source, "inline.rb")
+    finder.visit(parsed)
+    finder.subjects.first
+  end
+
+  it "does not match a multi-statement body even when it begins with nil" do
+    # The body has two statements (a leading `nil`, then a call). Only a
+    # body that is *exactly* a single nil statement is equivalent; the
+    # length check must require exactly one statement.
+    subj = subject_from("def m\n  nil\n  do_work\nend\n")
+    mutation = double("Mutation", operator_name: "method_body_replacement", subject: subj)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
+  it "does not match when the method body is not a plain statements node" do
+    # A rescue clause gives the method a BeginNode body. The type guard
+    # must reject it instead of calling .body on the BeginNode.
+    subj = subject_from("def m\n  work\nrescue StandardError\n  nil\nend\n")
+    mutation = double("Mutation", operator_name: "method_body_replacement", subject: subj)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
 end

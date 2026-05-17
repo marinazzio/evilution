@@ -91,4 +91,13 @@ class EquivalentDetectionFixture
     [1, 2, 3].each { |x| puts x }
     cleanup_something
   end
+
+  # Multi-line .each call (not the last statement). Interior lines of the
+  # call do not start a statement, so no call begins on them.
+  def each_multiline_void
+    [1, 2, 3].each do |x|
+      puts x
+    end
+    finalize_things
+  end
 end

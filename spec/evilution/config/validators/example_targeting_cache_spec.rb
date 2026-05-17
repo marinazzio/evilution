@@ -24,10 +24,22 @@ RSpec.describe Evilution::Config::Validators::ExampleTargetingCache do
                         "example_targeting_cache must be a Hash, got NilClass")
     end
 
+    it "raises when value is a truthy non-Hash" do
+      expect { described_class.call("max_files: 50") }
+        .to raise_error(Evilution::ConfigError,
+                        "example_targeting_cache must be a Hash, got String")
+    end
+
     it "raises when key is not String or Symbol" do
       expect { described_class.call(1 => 10) }
         .to raise_error(Evilution::ConfigError,
                         "example_targeting_cache keys must be Strings or Symbols, got 1")
+    end
+
+    it "inspects the rejected key in the message" do
+      expect { described_class.call(Rational(1, 2) => 10) }
+        .to raise_error(Evilution::ConfigError,
+                        "example_targeting_cache keys must be Strings or Symbols, got (1/2)")
     end
 
     it "raises on non-positive max_files" do

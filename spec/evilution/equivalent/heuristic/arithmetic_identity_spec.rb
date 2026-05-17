@@ -90,4 +90,24 @@ RSpec.describe Evilution::Equivalent::Heuristic::ArithmeticIdentity do
 
     expect(heuristic.match?(mutation)).to be false
   end
+
+  it "does not match when the diff has no removed line" do
+    # No line begins with "- ", so diff_line returns nil. The
+    # "return false unless removed" guard must prevent calling sub on nil.
+    mutation = double("Mutation",
+                      operator_name: "integer_literal",
+                      diff: "+ x + 1")
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
+  it "inspects the removed line even when an added line precedes it" do
+    # The added "+ x + 1" line appears first in the diff. The heuristic must
+    # locate the "- " line specifically, not just the first non-empty line.
+    mutation = double("Mutation",
+                      operator_name: "integer_literal",
+                      diff: "+ x + 1\n- x + 0")
+
+    expect(heuristic.match?(mutation)).to be true
+  end
 end

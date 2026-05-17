@@ -101,6 +101,36 @@ RSpec.describe Evilution::Hooks::Loader do
       hook_file&.unlink
     end
 
+    it "names the actual class in the non-Proc ConfigError message" do
+      hook_file = Tempfile.new(["bad_hook", ".rb"])
+      hook_file.write('"not a proc"')
+      hook_file.flush
+
+      registry = Evilution::Hooks::Registry.new
+
+      expect { described_class.call(registry, worker_process_start: hook_file.path) }
+        .to raise_error(Evilution::ConfigError, /got String/)
+    ensure
+      hook_file&.close
+      hook_file&.unlink
+    end
+
+    it "evaluates each hook file in an isolated anonymous module" do
+      # Hook file defines a top-level constant. Evaluating it inside a fresh
+      # anonymous module must not leak that constant onto the Module class.
+      hook_file = Tempfile.new(["leaky_hook", ".rb"])
+      hook_file.write("HOOK_ISOLATION_PROBE = 1\nproc { |_| nil }")
+      hook_file.flush
+
+      registry = Evilution::Hooks::Registry.new
+      described_class.call(registry, worker_process_start: hook_file.path)
+
+      expect(Module.const_defined?(:HOOK_ISOLATION_PROBE)).to be(false)
+    ensure
+      hook_file&.close
+      hook_file&.unlink
+    end
+
     it "raises ArgumentError for unknown events" do
       hook_file = Tempfile.new(["hook", ".rb"])
       hook_file.write("proc { |_| nil }")
@@ -134,6 +164,35 @@ RSpec.describe Evilution::Hooks::Loader do
 
       expect { described_class.call(registry, "not_a_hash") }
         .to raise_error(Evilution::ConfigError, /hooks must be a mapping/)
+    end
+
+    it "names the actual class of a non-Hash config in the ConfigError message" do
+      registry = Evilution::Hooks::Registry.new
+
+      expect { described_class.call(registry, %w[an array]) }
+        .to raise_error(Evilution::ConfigError, /got Array/)
+    end
+
+    it "returns the registry unchanged when config_hooks is an empty Hash" do
+      registry = Evilution::Hooks::Registry.new
+
+      result = described_class.call(registry, {})
+
+      expect(result).to be(registry)
+    end
+
+    it "returns the populated registry when hooks are loaded" do
+      hook_file = Tempfile.new(["hook", ".rb"])
+      hook_file.write("proc { |_| nil }")
+      hook_file.flush
+
+      registry = Evilution::Hooks::Registry.new
+      result = described_class.call(registry, worker_process_start: hook_file.path)
+
+      expect(result).to be(registry)
+    ensure
+      hook_file&.close
+      hook_file&.unlink
     end
 
     it "handles string event keys from YAML" do

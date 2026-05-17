@@ -61,5 +61,21 @@ RSpec.describe Evilution::Config::Validators::SpecMappings do
         described_class.call("lib/foo.rb" => ["spec/missing_spec.rb"])
       end.to output(%r{\[evilution\] spec_mappings\["lib/foo\.rb"\]: spec/missing_spec\.rb not found, skipping}).to_stderr
     end
+
+    it "does not warn when the mapped spec file exists" do
+      FileUtils.mkdir_p("spec")
+      File.write("spec/foo_spec.rb", "")
+      expect do
+        described_class.call("lib/foo.rb" => ["spec/foo_spec.rb"])
+      end.not_to output.to_stderr
+    end
+
+    it "coerces a Symbol source key to a String" do
+      FileUtils.mkdir_p("spec")
+      File.write("spec/foo_spec.rb", "")
+      result = described_class.call("lib/foo.rb": ["spec/foo_spec.rb"])
+      expect(result.keys).to eq(["lib/foo.rb"])
+      expect(result.keys.first).to be_a(String)
+    end
   end
 end
