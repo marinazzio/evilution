@@ -56,19 +56,24 @@ class Evilution::Integration::Loading::MutationApplier
   def apply(mutation, eval_target)
     @constant_pinner.call(mutation.original_source)
     @concern_state_cleaner.call(mutation.file_path)
+    mark_feature_loaded(mutation.file_path)
     @redefinition_recovery.call(mutation.original_source) do
       @source_evaluator.call(eval_target, mutation.file_path)
     end
-    mark_feature_loaded(mutation.file_path)
   end
 
   # The mutated source is eval'd straight into the VM — `eval` does not register
-  # a `$LOADED_FEATURES` entry. If the spec then `require`s the same file (common
-  # when the project lazy-loads it and only the test references it), `require`
-  # reloads the ORIGINAL from disk and clobbers the mutation, so every mutation
-  # silently survives. Under fork isolation each worker starts from the same
-  # pre-`require` snapshot, so the whole file scores 0%. Registering the
-  # canonical path makes a later `require`/`require_relative` a no-op.
+  # a `$LOADED_FEATURES` entry. Any later `require`/`require_relative` of the
+  # same file then reloads the ORIGINAL from disk and clobbers the mutation, so
+  # every mutation silently survives. Two paths trigger that reload:
+  #   - the spec `require`s the file (it lazy-loads it and only the test
+  #     references it);
+  #   - the mutated source's OWN body `require_relative`s a sibling whose body
+  #     `require_relative`s this file back (e.g. lib/evilution/mcp/*.rb tools).
+  # The second reload happens DURING the eval, so registration must precede it:
+  # `mark_feature_loaded` runs before `@source_evaluator.call`, not after. Under
+  # fork isolation each worker starts from the same pre-`require` snapshot, so
+  # without this the whole file scores 0%.
   def mark_feature_loaded(file_path)
     absolute = File.realpath(File.expand_path(file_path))
     $LOADED_FEATURES << absolute unless $LOADED_FEATURES.include?(absolute)
