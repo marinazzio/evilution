@@ -203,5 +203,60 @@ RSpec.describe Evilution::Reporter::ProgressBar do
       match = output.string.match(/\[[=> ]{20}\]/)
       expect(match).not_to be_nil
     end
+
+    it "renders the exact partially-filled bar interior" do
+      bar = described_class.new(total: 10, output: output, width: 20)
+
+      5.times { bar.tick(status: :killed) }
+
+      expect(output.string).to include("[#{"=" * 9}>#{" " * 10}]")
+    end
+
+    it "renders the exact fully-filled bar interior" do
+      bar = described_class.new(total: 2, output: output, width: 10)
+
+      2.times { bar.tick(status: :killed) }
+
+      expect(output.string).to include("[#{"=" * 9}>]")
+    end
+
+    it "renders the exact empty bar interior before any progress" do
+      bar = described_class.new(total: 10, output: output, width: 10)
+
+      bar.finish
+
+      expect(output.string).to include("[#{" " * 10}]")
+    end
+  end
+
+  describe ".tty?" do
+    it "returns false for an object that does not respond to tty?" do
+      expect(described_class.tty?(Object.new)).to be false
+    end
+  end
+
+  describe "remaining-time estimate" do
+    it "computes remaining time from the per-mutation rate" do
+      allow(Process).to receive(:clock_gettime).and_return(1000.0, 1015.0, 1030.0)
+      bar = described_class.new(total: 10, output: output)
+
+      bar.tick(status: :killed)
+      bar.tick(status: :killed)
+
+      # completed=2, elapsed=30 -> (10-2) * (30/2) = 120s -> 02:00
+      # The minutes/seconds split also pins the `seconds % 60` reduction.
+      expect(output.string.lines.last).to include("~02:00 remaining")
+    end
+
+    it "clamps a negative estimate to zero when over-ticked" do
+      allow(Process).to receive(:clock_gettime).and_return(1000.0, 1030.0)
+      bar = described_class.new(total: 1, output: output)
+
+      bar.tick(status: :killed)
+      bar.tick(status: :killed)
+
+      # completed=2 > total=1 -> negative raw estimate -> clamped to 00:00
+      expect(output.string.lines.last).to include("~00:00 remaining")
+    end
   end
 end

@@ -10,6 +10,11 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning do
       expect(described_class.new.format(summary)).to be_nil
     end
 
+    it "returns nil when total is zero even though errors are present" do
+      summary = double("s", total: 0, errors: 3)
+      expect(described_class.new.format(summary)).to be_nil
+    end
+
     it "returns nil when errors are zero" do
       summary = double("s", total: 10, errors: 0)
       expect(described_class.new.format(summary)).to be_nil
