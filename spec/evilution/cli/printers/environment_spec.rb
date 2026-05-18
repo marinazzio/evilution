@@ -66,4 +66,17 @@ RSpec.describe Evilution::CLI::Printers::Environment do
     described_class.new(config, config_file: nil).render(io)
     expect(io.string).to include('ignore_patterns: ["Foo*"]')
   end
+
+  it "underlines the header with a 30-character rule" do
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string).to include("=" * 30)
+  end
+
+  it "renders the settings section together with the header" do
+    described_class.new(config, config_file: nil).render(io)
+    out = io.string
+    expect(out).to include("Settings:")
+    expect(out).to include("timeout: 30")
+    expect(out).to include("ignore_patterns: (none)")
+  end
 end

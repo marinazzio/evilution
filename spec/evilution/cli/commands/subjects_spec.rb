@@ -19,11 +19,24 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
       expect(result.exit_code).to eq(0)
       expect(out.string).to include("No subjects found")
     end
+
+    it "does not invoke the Subjects printer when there are no subjects" do
+      runner = instance_double(Evilution::Runner, parse_and_filter_subjects: [])
+      allow(Evilution::Runner).to receive(:new).and_return(runner)
+      allow(Evilution::CLI::Printers::Subjects).to receive(:new)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::CLI::Printers::Subjects).not_to have_received(:new)
+    end
   end
 
   describe "with subjects" do
     let(:subject_a) do
       instance_double("Subject", name: "Foo#bar", file_path: "lib/a.rb", line_number: 10, release_node!: nil)
+    end
+    let(:subject_b) do
+      instance_double("Subject", name: "Foo#baz", file_path: "lib/a.rb", line_number: 20, release_node!: nil)
     end
     let(:runner) { instance_double(Evilution::Runner, parse_and_filter_subjects: [subject_a]) }
     let(:registry) { instance_double("Registry") }
@@ -45,6 +58,17 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
     it "calls release_node! on each subject" do
       described_class.new(parsed, stdout: out, stderr: err).call
       expect(subject_a).to have_received(:release_node!)
+    end
+
+    it "passes the summed mutation total across all subjects to the printer" do
+      allow(runner).to receive(:parse_and_filter_subjects).and_return([subject_a, subject_b])
+      printer = instance_double(Evilution::CLI::Printers::Subjects, render: nil)
+      allow(Evilution::CLI::Printers::Subjects).to receive(:new).and_return(printer)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::CLI::Printers::Subjects).to have_received(:new)
+        .with(anything, total_mutations: 4)
     end
   end
 

@@ -262,5 +262,171 @@ RSpec.describe Evilution::CLI::Printers::Compare do
       expect { described_class.new(empty_buckets, format: :html).render(io) }
         .to raise_error(Evilution::Error, /unknown compare format/)
     end
+
+    it "includes the inspected format symbol in the error message" do
+      expect { described_class.new(empty_buckets, format: :html).render(io) }
+        .to raise_error(Evilution::Error, /:html/)
+    end
+  end
+
+  describe "text format - shared blocks and summary shape" do
+    let(:buckets) do
+      empty_buckets.merge(
+        shared_alive: [
+          { against: record(fp: "sa00001", file: "lib/s.rb", line: 2, operator: "Op::SA"),
+            current: record(fp: "sa00001", file: "lib/s.rb", line: 2, operator: "Op::SA") }
+        ],
+        shared_dead: [
+          { against: record(fp: "sd00001", file: "lib/d.rb", line: 4, operator: "Op::SD"),
+            current: record(fp: "sd00001", file: "lib/d.rb", line: 4, operator: "Op::SD") }
+        ]
+      )
+    end
+
+    it "renders the shared_alive block including its rows" do
+      described_class.new(buckets, format: :text).render(io)
+      expect(io.string).to include("shared_alive (1):")
+      expect(io.string).to include("lib/s.rb:2")
+      expect(io.string).to include("Op::SA")
+    end
+
+    it "renders the shared_dead block including its rows" do
+      described_class.new(buckets, format: :text).render(io)
+      expect(io.string).to include("shared_dead (1):")
+      expect(io.string).to include("lib/d.rb:4")
+      expect(io.string).to include("Op::SD")
+    end
+
+    it "shows the numeric entry count in shared headers, not the array" do
+      described_class.new(buckets, format: :text).render(io)
+      expect(io.string).to include("shared_alive (1):")
+      expect(io.string).not_to match(/shared_alive \(\[/)
+    end
+
+    it "prints a blank separator line before a populated block" do
+      b = empty_buckets.merge(
+        alive_only_current: [{ record: record(fp: "ccc0001"), peer_status: nil }]
+      )
+      described_class.new(b, format: :text).render(io)
+      lines = io.string.split("\n")
+      expect(lines[lines.index("alive_only_current (1):") - 1]).to eq("")
+    end
+
+    it "prints a blank separator line before a populated shared_alive block" do
+      b = empty_buckets.merge(
+        shared_alive: [
+          { against: record(fp: "shb0001", file: "lib/s.rb", line: 2, operator: "Op::S"),
+            current: record(fp: "shb0001", file: "lib/s.rb", line: 2, operator: "Op::S") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      lines = io.string.split("\n")
+      expect(lines[lines.index("shared_alive (1):") - 1]).to eq("")
+    end
+
+    it "prints a blank separator line before a populated shared_dead block" do
+      b = empty_buckets.merge(
+        shared_dead: [
+          { against: record(fp: "sdb0001", file: "lib/d.rb", line: 4, operator: "Op::D"),
+            current: record(fp: "sdb0001", file: "lib/d.rb", line: 4, operator: "Op::D") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      lines = io.string.split("\n")
+      expect(lines[lines.index("shared_dead (1):") - 1]).to eq("")
+    end
+
+    it "renders the summary as a single line" do
+      described_class.new(buckets, format: :text).render(io)
+      summary = io.string.split("\n").find { |l| l.start_with?("summary:") }
+      expect(summary).to include("alive_only_against=0")
+      expect(summary).to include("delta=±0")
+    end
+
+    it "does not print the summary parts on separate lines" do
+      described_class.new(buckets, format: :text).render(io)
+      summary_lines = io.string.split("\n").select { |l| l.include?("alive_only_against=") }
+      expect(summary_lines.length).to eq(1)
+    end
+
+    it "pads the file:line column to a fixed width in rows" do
+      b = empty_buckets.merge(
+        shared_alive: [
+          { against: record(fp: "pad0001", file: "lib/p.rb", line: 1, operator: "Op::P"),
+            current: record(fp: "pad0001", file: "lib/p.rb", line: 1, operator: "Op::P") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      row = io.string.split("\n").find { |l| l.include?("lib/p.rb:1") }
+      expect(row).to match(%r{lib/p\.rb:1 {2,}Op::P})
+    end
+
+    it "pads the operator column to a fixed width in rows" do
+      b = empty_buckets.merge(
+        shared_alive: [
+          { against: record(fp: "pad0002", file: "lib/p.rb", line: 1, operator: "Op::P"),
+            current: record(fp: "pad0002", file: "lib/p.rb", line: 1, operator: "Op::P") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      row = io.string.split("\n").find { |l| l.include?("Op::P") }
+      expect(row).to match(/Op::P {2,}pad0002/)
+    end
+  end
+
+  describe "text format - fully_empty? guard" do
+    it "renders blocks (not the empty message) when only alive_only_against is populated" do
+      b = empty_buckets.merge(
+        alive_only_against: [{ record: record(fp: "aoa0001"), peer_status: nil }]
+      )
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+      expect(io.string).to include("alive_only_against (1):")
+    end
+
+    it "renders blocks when only alive_only_current is populated" do
+      b = empty_buckets.merge(
+        alive_only_current: [{ record: record(fp: "aoc0001"), peer_status: nil }]
+      )
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+      expect(io.string).to include("alive_only_current (1):")
+    end
+
+    it "renders blocks when only shared_alive is populated" do
+      b = empty_buckets.merge(
+        shared_alive: [
+          { against: record(fp: "sha0001", operator: "Op::S"),
+            current: record(fp: "sha0001", operator: "Op::S") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+      expect(io.string).to include("shared_alive (1):")
+    end
+
+    it "renders blocks when only shared_dead is populated" do
+      b = empty_buckets.merge(
+        shared_dead: [
+          { against: record(fp: "shd0001", operator: "Op::S"),
+            current: record(fp: "shd0001", operator: "Op::S") }
+        ]
+      )
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+      expect(io.string).to include("shared_dead (1):")
+    end
+
+    it "is not fully empty when only excluded_against is non-zero" do
+      b = empty_buckets.merge(excluded_against: 1)
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+    end
+
+    it "is not fully empty when only excluded_current is non-zero" do
+      b = empty_buckets.merge(excluded_current: 1)
+      described_class.new(b, format: :text).render(io)
+      expect(io.string).not_to include("No mutations to compare.")
+    end
   end
 end

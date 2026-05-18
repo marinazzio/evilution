@@ -48,6 +48,25 @@ RSpec.describe Evilution::CLI::Commands::TestsList do
       expect(out.string).to include("No source files found")
       expect(result.exit_code).to eq(0)
     end
+
+    it "does not run the resolver or the resolved printer when there are no source files" do
+      config = instance_double(
+        Evilution::Config,
+        spec_files: [],
+        target_files: []
+      )
+      allow(Evilution::Config).to receive(:new).and_return(config)
+      changed_files = instance_double(Evilution::Git::ChangedFiles, call: [])
+      allow(Evilution::Git::ChangedFiles).to receive(:new).and_return(changed_files)
+      allow(Evilution::SpecResolver).to receive(:new)
+      allow(Evilution::CLI::Printers::TestsList).to receive(:new)
+
+      parsed_no_files = Evilution::CLI::ParsedArgs.new(command: :tests_list)
+      described_class.new(parsed_no_files, stdout: out, stderr: err).call
+
+      expect(Evilution::SpecResolver).not_to have_received(:new)
+      expect(Evilution::CLI::Printers::TestsList).not_to have_received(:new)
+    end
   end
 
   describe "when source files resolve via target_files" do

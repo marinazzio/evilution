@@ -154,4 +154,227 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     options, = parse(["--strict"])
     expect(options[:profile]).to eq("strict")
   end
+
+  it "sets the OptionParser banner" do
+    expect(described_class.build({}).help).to start_with("Usage: evilution [command] [options] [files...]")
+  end
+
+  it "sets the OptionParser version" do
+    expect(described_class.build({}).version).to eq(Evilution::VERSION)
+  end
+
+  it "includes the line-range targeting separator in help text" do
+    expect(described_class.build({}).help).to include("Line-range targeting: lib/foo.rb:15-30")
+  end
+
+  it "includes the commands separator in help text" do
+    help = described_class.build({}).help
+    expect(help).to include("Commands: run (default; alias: mutate), init, session {list,show,diff,gc}, subjects,")
+    expect(help).to include("tests {list}, util {mutation}, environment {show}, compare, mcp, version")
+  end
+
+  it "includes the Options separator in help text" do
+    expect(described_class.build({}).help).to include("Options:")
+  end
+
+  it "places a blank separator line between the banner and the line-range section" do
+    lines = described_class.build({}).help.split("\n", -1)
+    range_index = lines.index("Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-")
+    expect(lines[range_index - 1]).to eq("")
+  end
+
+  it "places a blank separator line between the line-range section and the commands section" do
+    lines = described_class.build({}).help.split("\n", -1)
+    commands_index = lines.index(
+      "Commands: run (default; alias: mutate), init, session {list,show,diff,gc}, subjects,"
+    )
+    expect(lines[commands_index - 1]).to eq("")
+  end
+
+  it "places a blank separator line between the commands section and the Options heading" do
+    lines = described_class.build({}).help.split("\n", -1)
+    options_index = lines.index("Options:")
+    expect(lines[options_index - 1]).to eq("")
+  end
+
+  it "emits the header sections separated by exactly the expected blank lines" do
+    lines = described_class.build({}).help.split("\n", -1)
+    expect(lines[0..7]).to eq(
+      [
+        "Usage: evilution [command] [options] [files...]",
+        "",
+        "Line-range targeting: lib/foo.rb:15-30, lib/foo.rb:15, lib/foo.rb:15-",
+        "",
+        "Commands: run (default; alias: mutate), init, session {list,show,diff,gc}, subjects,",
+        "         tests {list}, util {mutation}, environment {show}, compare, mcp, version",
+        "",
+        "Options:"
+      ]
+    )
+  end
+
+  it "parses --timeout as an integer" do
+    options, = parse(["--timeout", "30"])
+    expect(options[:timeout]).to eq(30)
+  end
+
+  it "omits :timeout when --timeout is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:timeout)
+  end
+
+  it "parses --fail-fast to 1" do
+    options, = parse(["--fail-fast"])
+    expect(options[:fail_fast]).to eq(1)
+  end
+
+  it "omits :fail_fast when --fail-fast is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:fail_fast)
+  end
+
+  it "parses --stdin to true" do
+    options, = parse(["--stdin"])
+    expect(options[:stdin]).to be(true)
+  end
+
+  it "omits :stdin when --stdin is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:stdin)
+  end
+
+  it "parses --integration as a string" do
+    options, = parse(["--integration", "minitest"])
+    expect(options[:integration]).to eq("minitest")
+  end
+
+  it "omits :integration when --integration is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:integration)
+  end
+
+  it "parses --isolation as a string" do
+    options, = parse(["--isolation", "fork"])
+    expect(options[:isolation]).to eq("fork")
+  end
+
+  it "omits :isolation when --isolation is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:isolation)
+  end
+
+  it "parses --preload as a string" do
+    options, = parse(["--preload", "spec/spec_helper.rb"])
+    expect(options[:preload]).to eq("spec/spec_helper.rb")
+  end
+
+  it "parses --no-preload to false" do
+    options, = parse(["--no-preload"])
+    expect(options[:preload]).to be(false)
+  end
+
+  it "omits :preload when neither --preload nor --no-preload is given" do
+    options, = parse([])
+    expect(options).not_to have_key(:preload)
+  end
+
+  it "parses --suggest-tests to true" do
+    options, = parse(["--suggest-tests"])
+    expect(options[:suggest_tests]).to be(true)
+  end
+
+  it "omits :suggest_tests when --suggest-tests is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:suggest_tests)
+  end
+
+  it "parses --no-progress to false" do
+    options, = parse(["--no-progress"])
+    expect(options[:progress]).to be(false)
+  end
+
+  it "omits :progress when --no-progress is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:progress)
+  end
+
+  it "parses --related-specs-heuristic to true" do
+    options, = parse(["--related-specs-heuristic"])
+    expect(options[:related_specs_heuristic]).to be(true)
+  end
+
+  it "omits :related_specs_heuristic when --related-specs-heuristic is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:related_specs_heuristic)
+  end
+
+  it "parses --show-disabled to true" do
+    options, = parse(["--show-disabled"])
+    expect(options[:show_disabled]).to be(true)
+  end
+
+  it "omits :show_disabled when --show-disabled is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:show_disabled)
+  end
+
+  it "parses --baseline-session as a string" do
+    options, = parse(["--baseline-session", "prior_session"])
+    expect(options[:baseline_session]).to eq("prior_session")
+  end
+
+  it "omits :baseline_session when --baseline-session is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:baseline_session)
+  end
+
+  it "parses --save-session to true" do
+    options, = parse(["--save-session"])
+    expect(options[:save_session]).to be(true)
+  end
+
+  it "omits :save_session when --save-session is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:save_session)
+  end
+
+  it "parses --eval as a string" do
+    options, = parse(["--eval", "1 + 1"])
+    expect(options[:eval]).to eq("1 + 1")
+  end
+
+  it "omits :eval when --eval is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:eval)
+  end
+
+  it "parses --quiet to true" do
+    options, = parse(["--quiet"])
+    expect(options[:quiet]).to be(true)
+  end
+
+  it "omits :quiet when --quiet is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:quiet)
+  end
+
+  it "parses --since as a string" do
+    options, = parse(["--since", "2026-01-01"])
+    expect(options[:since]).to eq("2026-01-01")
+  end
+
+  it "omits :since when --since is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:since)
+  end
+
+  it "parses --older-than as a string" do
+    options, = parse(["--older-than", "30d"])
+    expect(options[:older_than]).to eq("30d")
+  end
+
+  it "omits :older_than when --older-than is absent" do
+    options, = parse([])
+    expect(options).not_to have_key(:older_than)
+  end
 end

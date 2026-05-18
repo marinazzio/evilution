@@ -77,6 +77,14 @@ RSpec.describe Evilution::CLI::Parser::CommandExtractor do
       expect(extract(%w[session gc]).command).to eq(:session_gc)
     end
 
+    it "shifts a matched subcommand off remaining_argv" do
+      expect(extract(%w[session list]).remaining_argv).to eq([])
+    end
+
+    it "shifts an unknown subcommand off remaining_argv" do
+      expect(extract(%w[session foo]).remaining_argv).to eq([])
+    end
+
     it "sets parse_error on unknown session subcommand" do
       result = extract(%w[session foo])
       expect(result.command).to eq(:parse_error)

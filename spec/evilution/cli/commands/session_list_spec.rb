@@ -68,6 +68,16 @@ RSpec.describe Evilution::CLI::Commands::SessionList do
       expect(Evilution::CLI::Printers::SessionList).to have_received(:new)
         .with([{ timestamp: "2026-03-22T10:00:00+00:00" }], format: nil)
     end
+
+    context "when a timestamp is truthy but not a String" do
+      let(:sessions) { [{ timestamp: 1_700_000_000 }] }
+
+      it "skips the non-String timestamp instead of passing it to Time.parse" do
+        result = described_class.new(parsed(since: "2026-03-20"), stdout: out, stderr: err).call
+        expect(result.exit_code).to eq(0)
+        expect(out.string).to include("No sessions found")
+      end
+    end
   end
 
   describe "with --limit option" do
@@ -94,6 +104,11 @@ RSpec.describe Evilution::CLI::Commands::SessionList do
       expect(result.exit_code).to eq(2)
       expect(result.error).to be_a(Evilution::ConfigError)
       expect(result.error.message).to include("invalid --since date")
+    end
+
+    it "renders the rejected date value with #inspect (quoted)" do
+      result = described_class.new(parsed(since: "not-a-date"), stdout: out, stderr: err).call
+      expect(result.error.message).to include('"not-a-date"')
     end
   end
 

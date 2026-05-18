@@ -98,6 +98,25 @@ RSpec.describe Evilution::CLI::Parser do
     it "sets parse_error on missing util subcommand" do
       expect(parse(["util"]).command).to eq(:parse_error)
     end
+
+    it "stops parsing after a parse_error and does not raise on leftover flags" do
+      parsed = nil
+      expect { parsed = parse(%w[session foo --bogus-flag]) }.not_to raise_error
+      expect(parsed.command).to eq(:parse_error)
+      expect(parsed.parse_error).to match(/Unknown session subcommand: foo/)
+    end
+
+    it "returns an empty files list when parsing stops at a parse_error" do
+      parsed = parse(%w[session foo])
+      expect(parsed.command).to eq(:parse_error)
+      expect(parsed.files).to eq([])
+    end
+
+    it "returns an empty line_ranges hash when parsing stops at a parse_error" do
+      parsed = parse(%w[session foo])
+      expect(parsed.command).to eq(:parse_error)
+      expect(parsed.line_ranges).to eq({})
+    end
   end
 
   describe "options" do
@@ -119,6 +138,18 @@ RSpec.describe Evilution::CLI::Parser do
 
     it "parses --fail-fast=5" do
       expect(parse(["--fail-fast=5"]).options[:fail_fast]).to eq("5")
+    end
+
+    it "does not consume a non-numeric token following --fail-fast" do
+      parsed = parse(["--fail-fast", "lib/a.rb"])
+      expect(parsed.options[:fail_fast]).to eq(1)
+      expect(parsed.files).to eq(["lib/a.rb"])
+    end
+
+    it "consumes the numeric token after --fail-fast and leaves no positional file" do
+      parsed = parse(["--fail-fast", "3"])
+      expect(parsed.options[:fail_fast]).to eq("3")
+      expect(parsed.files).to eq([])
     end
 
     it "parses --spec comma list" do
@@ -208,6 +239,12 @@ RSpec.describe Evilution::CLI::Parser do
       stdin = StringIO.new("lib/a.rb\n")
       parsed = described_class.new(["--stdin", "lib/x.rb"], stdin: stdin).parse
       expect(parsed.stdin_error).to match(/--stdin cannot be combined/)
+    end
+
+    it "keeps the positional files when a stdin error occurs" do
+      stdin = StringIO.new("lib/a.rb\n")
+      parsed = described_class.new(["--stdin", "lib/x.rb"], stdin: stdin).parse
+      expect(parsed.files).to eq(["lib/x.rb"])
     end
 
     it "only honours --stdin for :run and :subjects commands" do

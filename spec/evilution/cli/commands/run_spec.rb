@@ -120,6 +120,18 @@ RSpec.describe Evilution::CLI::Commands::Run do
     end
   end
 
+  describe "#error_payload file field" do
+    it "omits the file field for an error that does not respond to :file" do
+      command = described_class.new(parsed, stdout: out, stderr: err)
+      error = Class.new(StandardError) { def message = "no file accessor" }.new
+
+      payload = command.send(:error_payload, error)
+
+      expect(payload[:error]).not_to have_key(:file)
+      expect(payload[:error][:message]).to eq("no file accessor")
+    end
+  end
+
   describe "JSON format via file_options when Config.new fails" do
     it "still emits JSON payload to stdout" do
       Dir.mktmpdir do |dir|
@@ -134,6 +146,60 @@ RSpec.describe Evilution::CLI::Commands::Run do
           expect(payload["error"]["type"]).to eq("config_error")
         end
       end
+    end
+  end
+
+  describe "hooks wiring" do
+    let(:config) { instance_double(Evilution::Config) }
+    let(:registry) { instance_double(Evilution::Hooks::Registry) }
+
+    before do
+      allow(Evilution::Config).to receive(:new).and_return(config)
+      allow(config).to receive(:min_score).and_return(0.0)
+    end
+
+    it "builds a hook registry and passes it to the Runner when config.hooks is non-empty" do
+      allow(config).to receive(:hooks).and_return(["lib/hook.rb"])
+      allow(Evilution::Hooks::Registry).to receive(:new).and_return(registry)
+      allow(Evilution::Hooks::Loader).to receive(:call)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Hooks::Loader).to have_received(:call).with(registry, ["lib/hook.rb"])
+      expect(Evilution::Runner).to have_received(:new).with(config: config, hooks: registry)
+    end
+
+    it "passes hooks: nil to the Runner when config.hooks is empty" do
+      allow(config).to receive(:hooks).and_return([])
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Runner).to have_received(:new).with(config: config, hooks: nil)
+    end
+
+    it "does not build a registry or invoke the Loader when config.hooks is empty" do
+      allow(config).to receive(:hooks).and_return([])
+      allow(Evilution::Hooks::Registry).to receive(:new)
+      allow(Evilution::Hooks::Loader).to receive(:call)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Hooks::Registry).not_to have_received(:new)
+      expect(Evilution::Hooks::Loader).not_to have_received(:call)
+    end
+  end
+
+  describe "json mode selection from config" do
+    it "uses config.json? to route an error to JSON output when no CLI format flag is set" do
+      config = instance_double(Evilution::Config, hooks: [], min_score: 0.0, quiet: false, json?: true)
+      allow(Evilution::Config).to receive(:new).and_return(config)
+      allow(runner).to receive(:call).and_raise(Evilution::Error, "boom")
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.error_rendered).to be(true)
+      payload = JSON.parse(out.string)
+      expect(payload["error"]["message"]).to eq("boom")
     end
   end
 
@@ -174,5 +240,57 @@ RSpec.describe Evilution::CLI::Commands::Run, "feedback footer on error path (Su
   it "does NOT emit the feedback footer on stderr when quiet=true" do
     described_class.new(parsed(format: :text, quiet: true), stdout: stdout, stderr: stderr).call
     expect(stderr.string).not_to include(Evilution::Feedback::DISCUSSION_URL)
+  end
+
+  describe "quiet decided by a successfully built config" do
+    let(:runner) { instance_double(Evilution::Runner) }
+
+    before do
+      allow(Evilution::Config).to receive(:new).and_call_original
+      allow(Evilution::Runner).to receive(:new).and_return(runner)
+      allow(runner).to receive(:call).and_raise(Evilution::Error, "boom")
+    end
+
+    it "suppresses the footer when config.quiet is true" do
+      config = instance_double(Evilution::Config, quiet: true, json?: false, hooks: [])
+      allow(Evilution::Config).to receive(:new).and_return(config)
+
+      described_class.new(parsed(format: :text), stdout: stdout, stderr: stderr).call
+
+      expect(stderr.string).not_to include(Evilution::Feedback::DISCUSSION_URL)
+    end
+
+    it "emits the footer when config.quiet is false" do
+      config = instance_double(Evilution::Config, quiet: false, json?: false, hooks: [])
+      allow(Evilution::Config).to receive(:new).and_return(config)
+
+      described_class.new(parsed(format: :text), stdout: stdout, stderr: stderr).call
+
+      expect(stderr.string).to include(Evilution::Feedback::Messages.cli_footer)
+    end
+  end
+
+  describe "quiet decided by file_options when config build fails" do
+    around do |example|
+      Dir.mktmpdir { |dir| Dir.chdir(dir) { example.run } }
+    end
+
+    before { allow(Evilution::Config).to receive(:file_options).and_call_original }
+
+    it "suppresses the footer when file_options requests quiet" do
+      File.write(".evilution.yml", "quiet: true\nfail_fast: -1\n")
+
+      described_class.new(parsed(format: :text), stdout: stdout, stderr: stderr).call
+
+      expect(stderr.string).not_to include(Evilution::Feedback::DISCUSSION_URL)
+    end
+
+    it "emits the footer when file_options has no quiet key" do
+      File.write(".evilution.yml", "format: text\nfail_fast: -1\n")
+
+      described_class.new(parsed(format: :text), stdout: stdout, stderr: stderr).call
+
+      expect(stderr.string).to include(Evilution::Feedback::Messages.cli_footer)
+    end
   end
 end

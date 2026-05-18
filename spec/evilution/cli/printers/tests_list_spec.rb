@@ -76,5 +76,19 @@ RSpec.describe Evilution::CLI::Printers::TestsList do
       described_class.new(mode: :resolved, entries: entries).render(io)
       expect(io.string).to include("2 source files, 1 spec file")
     end
+
+    it "uses the exact singular spec-file label for one unique spec" do
+      entries = [{ source: "lib/a.rb", spec: "spec/a_spec.rb" }]
+      described_class.new(mode: :resolved, entries: entries).render(io)
+      summary = io.string.split("\n").last
+      expect(summary).to eq("1 source files, 1 spec file")
+    end
+
+    it "prints a blank separator line before the resolved summary" do
+      entries = [{ source: "lib/a.rb", spec: "spec/a_spec.rb" }]
+      described_class.new(mode: :resolved, entries: entries).render(io)
+      lines = io.string.split("\n")
+      expect(lines[lines.index("1 source files, 1 spec file") - 1]).to eq("")
+    end
   end
 end
