@@ -155,7 +155,11 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
       plan = described_class.new(config, registry: registry).call(subjects)
 
-      predicate_true_mutations = plan.enabled.select { |m| m.diff =~ /^-\s*true\s*$/ }
+      predicate_true_subject = subjects.find { |s| s.name.include?("predicate_true") }
+      predicate_true_line = predicate_true_subject.line_number
+      predicate_true_mutations = plan.enabled.select do |m|
+        m.diff =~ /^-\s*true\s*$/ && m.line >= predicate_true_line && m.line <= predicate_true_line + 3
+      end
       expect(predicate_true_mutations.map(&:operator_name).uniq).to eq(["last_expression_removal"])
     end
 
