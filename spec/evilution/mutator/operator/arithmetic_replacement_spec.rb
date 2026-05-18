@@ -103,5 +103,47 @@ RSpec.describe Evilution::Mutator::Operator::ArithmeticReplacement do
       muts = described_class.new.call(subj)
       expect(muts).to be_empty
     end
+
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["arith", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `return super unless replacements` guard removal: a
+    # non-arithmetic call (no entry in REPLACEMENTS) must produce no
+    # mutations and must not raise (a deleted guard would `nil.each`).
+    it "leaves non-arithmetic calls untouched without raising" do
+      src = "class C\n  def m(a)\n    a.upcase\n  end\nend"
+
+      expect { mutations_for_source(src, "m") }.not_to raise_error
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
+    # Kills the `return super` -> bare `return` change: the recursive
+    # traversal must still descend into a non-arithmetic call's arguments
+    # so a nested arithmetic operator is found.
+    it "mutates arithmetic nested inside a non-arithmetic call's arguments" do
+      muts = mutations_for_source("class C\n  def m(a, b)\n    puts(a + b)\n  end\nend", "m")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("puts(a - b)")
+    end
+
+    # Kills the trailing `super` deletion: traversal must descend into a
+    # nested arithmetic call (the `*` inside the `+`'s argument).
+    it "mutates arithmetic operators nested inside other arithmetic" do
+      muts = mutations_for_source("class C\n  def m(a, b, c)\n    a + b * c\n  end\nend", "m")
+
+      sources = muts.map(&:mutated_source)
+      expect(sources).to include(a_string_including("a - b * c"))
+      expect(sources).to include(a_string_including("a + b / c"))
+    end
   end
 end

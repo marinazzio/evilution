@@ -14,4 +14,8 @@ class NegationExample
   def check_non_predicate(value)
     value.to_s
   end
+
+  def chained_predicates(value)
+    value.frozen?.nil?
+  end
 end

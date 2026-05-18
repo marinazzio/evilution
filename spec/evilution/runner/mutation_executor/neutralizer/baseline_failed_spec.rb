@@ -32,6 +32,14 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed 
     expect(neutralizer.call(r, baseline_result: baseline_failed)).to be(r)
   end
 
+  it "does NOT neutralize a non-survived result even when config.spec_files would force neutralization" do
+    nz = neutralizer(spec_files: ["spec/foo_spec.rb"])
+    r = killed(mutation)
+    out = nz.call(r, baseline_result: baseline_failed)
+    expect(out).to be(r)
+    expect(out.status).to eq(:killed)
+  end
+
   it "returns the result unchanged when baseline_result is nil" do
     r = survived(mutation)
     expect(neutralizer.call(r, baseline_result: nil)).to be(r)

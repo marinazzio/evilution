@@ -65,6 +65,46 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard do
     expect(succeeding.releases).to eq(["s_token"])
   end
 
+  it "release warning names the strategy via #class.name (nil for an anonymous class)" do
+    anon_strategy = Class.new do
+      def snapshot
+        :tok
+      end
+
+      def release(_)
+        raise StandardError, "boom"
+      end
+    end.new
+    guard = described_class.new(strategies: [anon_strategy])
+
+    token = guard.snapshot
+
+    # An anonymous class has #name == nil but #to_s == "#<Class:0x...>".
+    # Interpolating nil yields an empty segment between "for " and ":".
+    expect { guard.release(token) }.to output(
+      "[evilution] state release failed for : StandardError: boom\n"
+    ).to_stderr
+  end
+
+  it "release warning includes the error class name (not the error message twice)" do
+    raising = Class.new do
+      def snapshot
+        :tok
+      end
+
+      def release(_)
+        raise ArgumentError, "kaboom"
+      end
+    end.new
+    guard = described_class.new(strategies: [raising])
+
+    token = guard.snapshot
+
+    expect { guard.release(token) }.to output(
+      /state release failed for : ArgumentError: kaboom\n\z/
+    ).to_stderr
+  end
+
   it "uses DEFAULT_STRATEGIES when none provided (smoke test)" do
     expect { described_class.new }.not_to raise_error
     expect(described_class::DEFAULT_STRATEGIES).to all(respond_to(:snapshot, :release))

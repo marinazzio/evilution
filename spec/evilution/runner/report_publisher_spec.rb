@@ -37,7 +37,8 @@ RSpec.describe Evilution::Runner::ReportPublisher do
           allow(Evilution::Reporter::HTML).to receive(:new).and_return(reporter)
 
           publisher = described_class.new(cfg)
-          publisher.publish(summary)
+          expect { publisher.publish(summary) }
+            .to output(/HTML report written to evilution-report\.html/).to_stderr
           expect(File.read("evilution-report.html")).to eq("<html>x</html>")
         end
       end

@@ -12,8 +12,11 @@ RSpec.describe Evilution::Mutator::Operator::RescueBodyReplacement do
   let(:multi_body_subject) { subjects.find { |s| s.name.include?("rescue_with_multi_line_body") } }
   let(:multi_rescue_subject) { subjects.find { |s| s.name.include?("multiple_rescues") } }
   let(:no_rescue_subject) { subjects.find { |s| s.name.include?("no_rescue") } }
-  let(:raise_subject) { subjects.find { |s| s.name.include?("rescue_with_raise") } }
+  let(:raise_subject) { subjects.find { |s| s.name.include?("rescue_with_raise") && !s.name.include?("and_more") } }
   let(:empty_subject) { subjects.find { |s| s.name.include?("empty_rescue") } }
+  let(:bare_empty_subject) { subjects.find { |s| s.name.include?("bare_empty_rescue") } }
+  let(:raise_and_more_subject) { subjects.find { |s| s.name.include?("rescue_with_raise_and_more") } }
+  let(:non_call_first_subject) { subjects.find { |s| s.name.include?("rescue_non_call_first") } }
 
   describe "#call" do
     it "generates two mutations for a single rescue clause (nil and raise)" do
@@ -99,6 +102,65 @@ RSpec.describe Evilution::Mutator::Operator::RescueBodyReplacement do
       mutations = described_class.new.call(single_subject)
 
       expect(mutations.first.operator_name).to eq("rescue_body_replacement")
+    end
+
+    it "scopes the nil replacement to the statements body, not the whole rescue node" do
+      # Targeting node.location instead of node.statements.location would also
+      # delete the `rescue ArgumentError` line.
+      mutations = described_class.new.call(single_subject)
+      nil_mutation = mutations.find { |m| m.mutated_source.include?("nil") }
+
+      removed = nil_mutation.diff.lines.select { |l| l.start_with?("-") }.join
+      expect(removed).to include("handle_error")
+      expect(removed).not_to include("rescue")
+    end
+
+    it "scopes the raise replacement to the statements body, not the whole rescue node" do
+      mutations = described_class.new.call(single_subject)
+      raise_mutation = mutations.find { |m| m.diff.include?("raise") }
+
+      removed = raise_mutation.diff.lines.select { |l| l.start_with?("-") }.join
+      expect(removed).to include("handle_error")
+      expect(removed).not_to include("rescue")
+    end
+
+    it "inserts a raise with body-level indentation into an empty rescue" do
+      # The inserted `raise` must sit two columns past the `rescue` keyword,
+      # right after the rescue clause header — mutating the indentation maths
+      # or the insertion offset shifts or splices it.
+      mutations = described_class.new.call(empty_subject)
+      raise_mutation = mutations.first
+
+      expect(raise_mutation.mutated_source).to include("  rescue StandardError\n    raise\n  end")
+    end
+
+    it "inserts a raise into a bare rescue clause with no exception class" do
+      # `rescue` with no reference and no exception list exercises the
+      # keyword_loc branch of rescue_line_end.
+      mutations = described_class.new.call(bare_empty_subject)
+
+      expect(mutations.length).to eq(1)
+      raise_mutation = mutations.first
+      expect(raise_mutation.mutated_source).to include("  rescue\n    raise\n  end")
+      expect(Prism.parse(raise_mutation.mutated_source).errors).to be_empty
+    end
+
+    it "still emits a raise replacement when a bare raise is not the only statement" do
+      # bare_raise? must require exactly one statement; a `raise` followed by
+      # another statement is not a bare-raise body.
+      mutations = described_class.new.call(raise_and_more_subject)
+
+      expect(mutations.length).to eq(2)
+      expect(mutations.map(&:diff).any? { |d| d.include?("raise") }).to be(true)
+    end
+
+    it "handles a rescue body whose first statement is not a call node" do
+      # bare_raise? must check is_a?(Prism::CallNode) before reading .name —
+      # a non-call first statement would otherwise raise NoMethodError.
+      expect { described_class.new.call(non_call_first_subject) }.not_to raise_error
+
+      mutations = described_class.new.call(non_call_first_subject)
+      expect(mutations.length).to eq(2)
     end
   end
 end

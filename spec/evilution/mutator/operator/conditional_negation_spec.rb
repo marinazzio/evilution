@@ -42,6 +42,24 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalNegation do
       end
     end
 
+    it "recurses into an if body to mutate a nested if predicate" do
+      # The outer if produces 2 mutations; the nested if produces 2 more,
+      # but only when the visitor recurses into the outer if's body.
+      nested_subject = subjects.find { |s| s.name.include?("nested_if") }
+      mutations = described_class.new.call(nested_subject)
+
+      expect(mutations.length).to eq(4)
+    end
+
+    it "recurses into an unless body to mutate a nested unless predicate" do
+      # The outer unless produces 2 mutations; the nested unless produces 2
+      # more, but only when the visitor recurses into the outer unless body.
+      nested_subject = subjects.find { |s| s.name.include?("nested_unless") }
+      mutations = described_class.new.call(nested_subject)
+
+      expect(mutations.length).to eq(4)
+    end
+
     it "sets correct operator_name" do
       mutations = described_class.new.call(if_subject)
 

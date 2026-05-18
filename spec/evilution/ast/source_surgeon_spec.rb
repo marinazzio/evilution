@@ -80,6 +80,26 @@ RSpec.describe Evilution::AST::SourceSurgeon do
 
         expect(result.status).to eq(:unparseable)
       end
+
+      it "reports #ok? as a strict boolean for a successful mutation" do
+        result = described_class.apply("age >= 18", offset: 4, length: 2, replacement: ">")
+
+        expect(result.ok?).to be(true)
+        expect(result.unparseable?).to be(false)
+      end
+
+      it "reports #unparseable? as a strict boolean for a failed mutation" do
+        result = described_class.apply("config[:font_size]", offset: 17, length: 1, replacement: "")
+
+        expect(result.unparseable?).to be(true)
+        expect(result.ok?).to be(false)
+      end
+    end
+
+    it "returns a frozen Result" do
+      result = described_class.apply("age >= 18", offset: 4, length: 2, replacement: ">")
+
+      expect(result).to be_frozen
     end
 
     context "with multi-byte UTF-8 characters" do

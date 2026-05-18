@@ -60,6 +60,35 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalBranch do
       expect(sources).to include(a_string_matching(/else\s+nil\s+end/))
     end
 
+    def mutations_from_source(method_name, src)
+      tmpfile = Tempfile.new(["conditional_branch", ".rb"])
+      tmpfile.write(src)
+      tmpfile.close
+      subj = Evilution::AST::Parser.new.call(tmpfile.path)
+                                   .find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    it "produces no mutations for an if with an empty body" do
+      muts = mutations_from_source(
+        "empty_if", "class C\n  def empty_if(x)\n    if x\n    end\n  end\nend\n"
+      )
+
+      expect(muts).to be_empty
+    end
+
+    it "skips the else branch when the else body is empty" do
+      muts = mutations_from_source(
+        "empty_else",
+        "class C\n  def empty_else(x)\n    if x\n      1\n    else\n    end\n  end\nend\n"
+      )
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to match(/if x\s+nil\s+else/)
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::PredicateToNil do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["predicate_to_nil", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "replaces simple predicate with nil" do
       muts = mutations_for("simple_predicate")
@@ -55,6 +66,13 @@ RSpec.describe Evilution::Mutator::Operator::PredicateToNil do
       muts = mutations_for("non_predicate_method")
 
       expect(muts).to be_empty
+    end
+
+    it "recurses into a nested predicate receiver so the inner predicate is also replaced" do
+      muts = mutations_from_source("class C\n  def m(a)\n    a.b?.c?\n  end\nend\n")
+
+      # one nil-mutation for the outer c? + one for the receiver b?
+      expect(muts.length).to eq(2)
     end
 
     it "produces valid Ruby for all mutations" do

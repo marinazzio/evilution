@@ -80,6 +80,23 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Sequential do
     expect(execution.truncated).to be true
   end
 
+  it "notifies the notifier with start(count) and finish around the run" do
+    m1 = mutation("m1")
+    m2 = mutation("m2")
+    nz_notifier = double(:notifier)
+    allow(nz_notifier).to receive(:notify).and_return(nil)
+    expect(nz_notifier).to receive(:start).with(2).ordered
+    expect(nz_notifier).to receive(:finish).ordered
+
+    strategy = described_class.new(
+      runner: runner_returning(killed(m1), killed(m2)),
+      pipeline: passthrough_pipeline,
+      notifier: nz_notifier
+    )
+
+    strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+  end
+
   it "applies the pipeline to each result" do
     m1 = mutation("m1")
     nz = double(:neutralizer)

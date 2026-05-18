@@ -69,6 +69,59 @@ RSpec.describe Evilution::Mutator::Operator::BlockParamRemoval do
       end
     end
 
+    describe "recursion into nested defs" do
+      it "descends into a nested def when the outer def has no parameters" do
+        muts = mutations_for("no_params_outer")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.diff).to include("def no_params_inner(&blk)")
+        expect(muts.first.diff).to include("+     def no_params_inner")
+      end
+
+      it "descends into a nested def when the outer def has no block parameter" do
+        muts = mutations_for("plain_params_outer")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.diff).to include("def plain_params_inner(&blk)")
+      end
+
+      it "descends into a nested def when the outer def is an anonymous-forward def" do
+        muts = mutations_for("anon_forward_outer")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.diff).to include("def anon_forward_inner(&blk)")
+      end
+
+      it "removes the outer block param and still descends into a nested def" do
+        muts = mutations_for("block_param_outer")
+
+        expect(muts.length).to eq(2)
+        diffs = muts.map(&:diff)
+        expect(diffs.any? { |d| d.include?("def block_param_outer(&outer_blk)") }).to be true
+        expect(diffs.any? { |d| d.include?("def block_param_inner(&inner_blk)") }).to be true
+      end
+    end
+
+    describe "params with optional and block parameters" do
+      it "removes only the block param, keeping the optional parameter" do
+        muts = mutations_for("optional_and_block")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("def optional_and_block(value = 1)\n")
+        expect(muts.first.mutated_source).not_to include("def optional_and_block\n")
+      end
+    end
+
+    describe "anonymous block param with an empty body" do
+      it "does not crash and removes the anonymous block param" do
+        expect { mutations_for("anon_block_empty_body") }.not_to raise_error
+
+        muts = mutations_for("anon_block_empty_body")
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("def anon_block_empty_body\n")
+      end
+    end
+
     describe "anonymous block-forward safety" do
       it "skips def with anonymous `&` param when body forwards `&`" do
         # def f(input, &) = helper(map(input), &)

@@ -28,4 +28,14 @@ class EnsureExample
     dangerous_call
   ensure
   end
+
+  def nested_ensure
+    dangerous_call
+  ensure
+    begin
+      inner_call
+    ensure
+      inner_cleanup
+    end
+  end
 end

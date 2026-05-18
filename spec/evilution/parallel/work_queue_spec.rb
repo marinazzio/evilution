@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "tmpdir"
 require "evilution/parallel/work_queue"
+require "evilution/hooks"
 
 # This spec covers the public API contract of WorkQueue and a small set of
 # end-to-end smoke tests that exercise real Process.fork. Granular coverage of
@@ -115,6 +117,66 @@ RSpec.describe Evilution::Parallel::WorkQueue do
         expect(stat.utilization).to be_a(Float)
       end
       expect(stats.sum(&:items_completed)).to eq(4)
+    end
+
+    it "returns fresh dups, leaving the internally stored stats unfrozen" do
+      queue = described_class.new(size: 1)
+      queue.map([1]) { |n| n }
+
+      internal = queue.instance_variable_get(:@worker_stats)
+      expect(internal).not_to be_empty
+      # worker_stats must dup before freezing, so the stored objects stay mutable.
+      expect(internal.first).not_to be_frozen
+      queue.worker_stats
+      expect(internal.first).not_to be_frozen
+    end
+  end
+
+  describe "#map cleanup and final timing collection" do
+    it "collects final busy/wall timings from workers after the run" do
+      queue = described_class.new(size: 1)
+      queue.map([1]) do |n|
+        sleep 0.05
+        n
+      end
+
+      stat = queue.worker_stats.first
+      # collect_final_timings must drain the worker's STATS frame; otherwise
+      # busy_time and wall_time would stay at their 0.0 defaults.
+      expect(stat.wall_time).to be > 0.0
+      expect(stat.busy_time).to be > 0.0
+    end
+
+    it "reaps every worker process so no zombies remain after map" do
+      queue = described_class.new(size: 2)
+      queue.map([1, 2, 3, 4]) { |n| n }
+
+      queue.worker_stats.each do |stat|
+        expect { Process.wait(stat.pid) }.to raise_error(Errno::ECHILD)
+      end
+    end
+
+    it "passes hooks through to the forked workers" do
+      Dir.mktmpdir do |dir|
+        marker = File.join(dir, "fired")
+        hooks = Evilution::Hooks.new
+        hooks.register(:worker_process_start) { |_| File.write(marker, "yes") }
+
+        queue = described_class.new(size: 1, hooks: hooks)
+        queue.map([1]) { |n| n }
+
+        expect(File.exist?(marker)).to be(true)
+      end
+    end
+
+    it "does not mask the dispatcher's error during cleanup" do
+      queue = described_class.new(size: 1)
+      faulty = Object.new
+      def faulty.run = raise("dispatcher boom")
+      def faulty.first_error = nil
+      allow(queue).to receive(:build_dispatcher).and_return(faulty)
+
+      expect { queue.map([1]) { |n| n } }.to raise_error(RuntimeError, "dispatcher boom")
     end
   end
 end

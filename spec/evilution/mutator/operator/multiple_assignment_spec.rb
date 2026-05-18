@@ -54,6 +54,15 @@ RSpec.describe Evilution::Mutator::Operator::MultipleAssignment do
       swapped = mutations.select { |m| m.mutated_source.include?("b, a = 1, 2") }
       expect(swapped).not_to be_empty
     end
+
+    # Kills the `lefts.length == 2` -> `lefts.length` change in mutate_swap's
+    # guard: a three-target assignment must NOT produce any swap mutation.
+    it "does not swap three-target assignments" do
+      mutations = mutations_for("def foo\n  x, y, z = 1, 2, 3\nend\n")
+
+      swapped = mutations.select { |m| m.mutated_source.include?("y, x") }
+      expect(swapped).to be_empty
+    end
   end
 
   describe "edge cases" do
@@ -74,6 +83,18 @@ RSpec.describe Evilution::Mutator::Operator::MultipleAssignment do
     it "does not mutate single assignment" do
       mutations = mutations_for("def foo\n  a = 1\nend\n")
 
+      masgn_mutations = mutations.select { |m| m.operator_name == "multiple_assignment" }
+      expect(masgn_mutations).to be_empty
+    end
+
+    # Kills the `node.value.is_a?(Prism::ArrayNode)` -> `node.value` change:
+    # when the RHS is a single non-array expression the operator must treat
+    # it as having no extractable element list and produce no mutations
+    # (and must not raise from calling `.elements` on a non-array node).
+    it "does not mutate when the right-hand side is a single non-array value" do
+      expect { mutations_for("def foo\n  a, b = compute\nend\n") }.not_to raise_error
+
+      mutations = mutations_for("def foo\n  a, b = compute\nend\n")
       masgn_mutations = mutations.select { |m| m.operator_name == "multiple_assignment" }
       expect(masgn_mutations).to be_empty
     end

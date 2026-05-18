@@ -20,4 +20,12 @@ class IndexAssignment
   def no_assignment
     "plain"
   end
+
+  def index_in_index_value(h, g)
+    h[g[1] = 2] = 3
+  end
+
+  def regular_method_call(obj)
+    obj.compute(1)
+  end
 end

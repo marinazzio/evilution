@@ -36,4 +36,31 @@ RSpec.describe Evilution::CLI::Printers::Subjects do
     expect(io.string).to include("(1 mutation)")
     expect(io.string).to include("1 subject, 1 mutation")
   end
+
+  it "prints a blank separator line between entries and the summary" do
+    described_class.new(entries, total_mutations: 4).render(io)
+    lines = io.string.split("\n")
+    expect(lines[lines.index("2 subjects, 4 mutations") - 1]).to eq("")
+  end
+
+  it "uses only the entry name in a row, not the whole entry hash" do
+    described_class.new(entries, total_mutations: 4).render(io)
+    row = io.string.split("\n").find { |l| l.include?("Foo#bar") }
+    expect(row).not_to include(":file_path")
+    expect(row).not_to include("=>")
+  end
+
+  it "does not render the inspected entry hash keys in a row" do
+    described_class.new(entries, total_mutations: 4).render(io)
+    row = io.string.split("\n").find { |l| l.include?("Foo#bar") }
+    expect(row).not_to include("mutation_count:")
+    expect(row).not_to include("line_number:")
+    expect(row).not_to match(/\Aname:/)
+  end
+
+  it "renders the row beginning with the bare entry name" do
+    described_class.new(entries, total_mutations: 4).render(io)
+    row = io.string.split("\n").find { |l| l.include?("Foo#bar") }
+    expect(row).to eq("  Foo#bar  lib/foo.rb:10  (3 mutations)")
+  end
 end

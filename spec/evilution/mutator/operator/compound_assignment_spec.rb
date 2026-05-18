@@ -239,5 +239,87 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
         expect(mutation.operator_name).to eq("compound_assignment")
       end
     end
+
+    describe "recursion into nested compound assignments" do
+      # Each nested fixture wraps an inner `t -= 1` (a local-variable
+      # operator-write yielding 2 mutations) inside an outer compound
+      # assignment of a specific node type. The operator must descend past
+      # the outer write to also mutate the inner one — so dropping the outer
+      # visit method's `super` is observable as a smaller mutation count.
+
+      it "descends past a local-variable operator-write into a nested assignment" do
+        muts = mutations_for("nested_lvar_op_write")
+
+        # outer += : 2 swaps + 1 removal = 3, inner -= : 1 swap + 1 removal = 2
+        expect(muts.length).to eq(5)
+      end
+
+      it "descends past an instance-variable operator-write into a nested assignment" do
+        muts = mutations_for("nested_ivar_op_write")
+
+        expect(muts.length).to eq(5)
+      end
+
+      it "descends past a class-variable operator-write into a nested assignment" do
+        muts = mutations_for("nested_cvar_op_write")
+
+        expect(muts.length).to eq(5)
+      end
+
+      it "descends past a global-variable operator-write into a nested assignment" do
+        muts = mutations_for("nested_gvar_op_write")
+
+        expect(muts.length).to eq(5)
+      end
+
+      it "descends past a local-variable and-write into a nested assignment" do
+        muts = mutations_for("nested_lvar_and_write")
+
+        # outer &&= : 1 swap + 1 removal = 2, inner -= : 2
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past a local-variable or-write into a nested assignment" do
+        muts = mutations_for("nested_lvar_or_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past an instance-variable and-write into a nested assignment" do
+        muts = mutations_for("nested_ivar_and_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past an instance-variable or-write into a nested assignment" do
+        muts = mutations_for("nested_ivar_or_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past a class-variable and-write into a nested assignment" do
+        muts = mutations_for("nested_cvar_and_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past a class-variable or-write into a nested assignment" do
+        muts = mutations_for("nested_cvar_or_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past a global-variable and-write into a nested assignment" do
+        muts = mutations_for("nested_gvar_and_write")
+
+        expect(muts.length).to eq(4)
+      end
+
+      it "descends past a global-variable or-write into a nested assignment" do
+        muts = mutations_for("nested_gvar_or_write")
+
+        expect(muts.length).to eq(4)
+      end
+    end
   end
 end

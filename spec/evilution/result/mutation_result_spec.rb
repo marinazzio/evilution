@@ -65,9 +65,37 @@ RSpec.describe Evilution::Result::MutationResult do
     end
   end
 
+  describe "status predicates return strict booleans" do
+    {
+      timeout?: :timeout,
+      neutral?: :neutral,
+      equivalent?: :equivalent,
+      unresolved?: :unresolved,
+      unparseable?: :unparseable
+    }.each do |predicate, matching_status|
+      it "returns exactly true from ##{predicate} for a #{matching_status} result" do
+        result = described_class.new(mutation: mutation, status: matching_status)
+
+        expect(result.public_send(predicate)).to be(true)
+      end
+
+      it "returns exactly false from ##{predicate} for a non-#{matching_status} result" do
+        result = described_class.new(mutation: mutation, status: :killed)
+
+        expect(result.public_send(predicate)).to be(false)
+      end
+    end
+  end
+
   it "rejects invalid statuses" do
     expect { described_class.new(mutation: mutation, status: :invalid) }
       .to raise_error(ArgumentError, /invalid status/)
+  end
+
+  it "stores the mutation" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.mutation).to be(mutation)
   end
 
   it "stores duration" do
@@ -98,6 +126,32 @@ RSpec.describe Evilution::Result::MutationResult do
     result = described_class.new(mutation: mutation, status: :killed)
 
     expect(result.test_command).to be_nil
+  end
+
+  it "stores child_rss_kb via memory" do
+    memory = Evilution::Result::MemoryStats.new(child_rss_kb: 1234)
+    result = described_class.new(mutation: mutation, status: :killed, memory: memory)
+
+    expect(result.child_rss_kb).to eq(1234)
+  end
+
+  it "defaults child_rss_kb to nil when memory is absent" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.child_rss_kb).to be_nil
+  end
+
+  it "stores memory_delta_kb via memory" do
+    memory = Evilution::Result::MemoryStats.new(memory_delta_kb: 567)
+    result = described_class.new(mutation: mutation, status: :killed, memory: memory)
+
+    expect(result.memory_delta_kb).to eq(567)
+  end
+
+  it "defaults memory_delta_kb to nil when memory is absent" do
+    result = described_class.new(mutation: mutation, status: :killed)
+
+    expect(result.memory_delta_kb).to be_nil
   end
 
   it "stores parent_rss_kb via memory" do
@@ -192,6 +246,13 @@ RSpec.describe Evilution::Result::MutationResult do
       it "returns nil from ##{accessor} when underlying field is `false`" do
         underlying = %i[child_rss_kb memory_delta_kb parent_rss_kb].include?(accessor) ? :memory : :error
         result = described_class.new(mutation: mutation, status: :killed, **{ underlying => false })
+
+        expect(result.public_send(accessor)).to be_nil
+      end
+
+      it "returns nil from ##{accessor} when underlying field is a truthy non-typed object" do
+        underlying = %i[child_rss_kb memory_delta_kb parent_rss_kb].include?(accessor) ? :memory : :error
+        result = described_class.new(mutation: mutation, status: :killed, **{ underlying => Object.new })
 
         expect(result.public_send(accessor)).to be_nil
       end

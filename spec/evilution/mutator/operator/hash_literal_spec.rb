@@ -34,6 +34,17 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
       expect(muts).to be_empty
     end
 
+    it "recurses into hash elements to mutate a nested hash literal" do
+      # `{ a: { b: 1 } }`: the outer hash yields 2 mutations and the nested
+      # `{ b: 1 }` hash yields 2 more — only reached when the visitor recurses
+      # into the hash elements.
+      muts = mutations_for("returns_nested_hash")
+
+      expect(muts.length).to eq(4)
+      expect(muts.any? { |m| m.mutated_source.include?("{ a: {} }") }).to be true
+      expect(muts.any? { |m| m.mutated_source.include?("{ a: nil }") }).to be true
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

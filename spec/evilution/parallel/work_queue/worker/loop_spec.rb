@@ -41,6 +41,52 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect(stats_msg[2]).to be >= 0.0
     end
 
+    it "reports wall time as an elapsed delta, not an absolute monotonic clock value" do
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, 5])
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)
+      cmd_write.close
+
+      described_class.run(cmd_read, res_write) { |x| x }
+
+      _result = Evilution::Parallel::WorkQueue::Channel.read(res_read)
+      stats_msg = Evilution::Parallel::WorkQueue::Channel.read(res_read)
+      expect(stats_msg.first).to eq(Evilution::Parallel::WorkQueue::STATS)
+      # The whole run takes well under a second; an absolute CLOCK_MONOTONIC
+      # value would be many thousands of seconds since boot.
+      expect(stats_msg[2]).to be < 60.0
+    end
+
+    it "reports busy time per item as an elapsed delta, not an absolute clock value" do
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, 5])
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)
+      cmd_write.close
+
+      described_class.run(cmd_read, res_write) { |x| x }
+
+      _result = Evilution::Parallel::WorkQueue::Channel.read(res_read)
+      stats_msg = Evilution::Parallel::WorkQueue::Channel.read(res_read)
+      # busy is the sum of run_one elapsed deltas; an absolute clock value
+      # would be thousands of seconds.
+      expect(stats_msg[1]).to be < 60.0
+    end
+
+    it "closes cmd_io in the ensure block" do
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)
+      cmd_write.close
+
+      described_class.run(cmd_read, res_write) { |x| x }
+
+      expect(cmd_read.closed?).to be(true)
+    end
+
+    it "calls exit! to terminate the worker process" do
+      expect(described_class).to receive(:exit!)
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)
+      cmd_write.close
+
+      described_class.run(cmd_read, res_write) { |x| x }
+    end
+
     it "captures user-block StandardError as :error result" do
       Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, :boom])
       Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)

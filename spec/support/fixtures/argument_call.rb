@@ -27,6 +27,18 @@ class ArgumentCallExample
     send_data(a, b)
   end
 
+  def nested_call(a, b, c)
+    outer(inner(a, b), c)
+  end
+
+  def splat_among_positional(a, rest)
+    bar(a, *rest)
+  end
+
+  def kwarg_among_positional(a, val)
+    bar(a, key: val)
+  end
+
   def index_assign(h, k, v)
     h[k] = v
   end

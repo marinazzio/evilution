@@ -48,6 +48,12 @@ RSpec.describe Evilution::Mutator::Operator::DefinedCheck do
       replaced = mutations.select { |m| m.mutated_source.include?("if true") }
       expect(replaced).not_to be_empty
     end
+
+    it "recurses into a nested defined? so the inner check is also replaced" do
+      mutations = mutations_for("def foo\n  defined?(defined?(x))\nend\n")
+
+      expect(mutations.length).to eq(2)
+    end
   end
 
   describe "valid Ruby output" do

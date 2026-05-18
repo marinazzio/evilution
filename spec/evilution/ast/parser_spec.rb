@@ -59,6 +59,43 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  describe "#call error handling" do
+    it "raises ParseError when the file does not exist" do
+      missing = File.join(Dir.tmpdir, "evilution_does_not_exist_#{Process.pid}.rb")
+
+      expect { parser.call(missing) }
+        .to raise_error(Evilution::ParseError, /file not found: #{Regexp.escape(missing)}/)
+    end
+
+    it "raises ParseError when the source cannot be parsed" do
+      tmpfile = Tempfile.new(["broken", ".rb"])
+      tmpfile.write("def foo(\n")
+      tmpfile.close
+
+      expect { parser.call(tmpfile.path) }
+        .to raise_error(Evilution::ParseError, /failed to parse/)
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "includes the underlying parse error messages in the ParseError" do
+      tmpfile = Tempfile.new(["broken", ".rb"])
+      tmpfile.write("def foo(\n")
+      tmpfile.close
+
+      expected_messages = Prism.parse(File.read(tmpfile.path)).errors.map(&:message)
+      joined = expected_messages.join(", ")
+
+      expect { parser.call(tmpfile.path) }
+        .to raise_error(Evilution::ParseError) { |error|
+          expect(error.message).to include(joined)
+          expect(error.message).not_to include("[\"")
+        }
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
   context "with nested modules" do
     let(:nested_source) do
       <<~RUBY
@@ -81,6 +118,77 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects.first.name).to eq("Foo::Bar#baz")
     ensure
       tmpfile&.unlink
+    end
+  end
+
+  context "with sibling nested classes" do
+    let(:siblings_source) do
+      <<~RUBY
+        module Outer
+          class First
+            def one
+              1
+            end
+          end
+
+          class Second
+            def two
+              2
+            end
+          end
+        end
+      RUBY
+    end
+
+    it "pops context so a later sibling is not polluted by an earlier one" do
+      tmpfile = Tempfile.new(["siblings", ".rb"])
+      tmpfile.write(siblings_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      names = subjects.map(&:name)
+
+      expect(names).to contain_exactly("Outer::First#one", "Outer::Second#two")
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
+  context "with a method nested inside another method" do
+    let(:nested_def_source) do
+      <<~RUBY
+        class Builder
+          def outer
+            def inner
+              :inner
+            end
+          end
+        end
+      RUBY
+    end
+
+    it "descends into the body and finds inner method definitions" do
+      tmpfile = Tempfile.new(["nested_def", ".rb"])
+      tmpfile.write(nested_def_source)
+      tmpfile.close
+
+      subjects = parser.call(tmpfile.path)
+      names = subjects.map(&:name)
+
+      expect(names).to include("Builder#inner")
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
+  context "with a constant path node lacking #full_name" do
+    it "falls back to a String name when the node does not respond to full_name" do
+      fake_node = Struct.new(:name).new(:Widget)
+      finder = Evilution::AST::SubjectFinder.new("", "fake.rb")
+      result = finder.send(:constant_name, fake_node)
+
+      expect(result).to eq("Widget")
+      expect(result).to be_a(String)
     end
   end
 

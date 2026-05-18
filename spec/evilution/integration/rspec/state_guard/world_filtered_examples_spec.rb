@@ -36,6 +36,16 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::WorldFilteredExamples 
     expect(strategy.snapshot).to be_nil
   end
 
+  it "release is a no-op (does not raise) when @filtered_examples ivar is missing" do
+    RSpec.world.remove_instance_variable(:@filtered_examples) if RSpec.world.instance_variable_defined?(:@filtered_examples)
+    expect { strategy.release(Set.new([123])) }.not_to raise_error
+  end
+
+  it "release is a no-op (does not raise) when snapshot_keys is nil" do
+    RSpec.world.instance_variable_set(:@filtered_examples, { Object.new => 1 })
+    expect { strategy.release(nil) }.not_to raise_error
+  end
+
   it "release removes only keys added after snapshot" do
     pre = Object.new
     RSpec.world.instance_variable_set(:@filtered_examples, { pre => 1 })

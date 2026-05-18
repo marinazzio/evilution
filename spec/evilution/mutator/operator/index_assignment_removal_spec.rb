@@ -62,5 +62,22 @@ RSpec.describe Evilution::Mutator::Operator::IndexAssignmentRemoval do
 
       expect(muts).to be_empty
     end
+
+    it "recurses into the index expression to mutate a nested []=" do
+      # `h[g[1] = 2] = 3`: the outer []= yields 1 mutation and the nested
+      # `g[1] = 2` []= inside the index yields 1 more — only reached when the
+      # visitor recurses into the call's children.
+      muts = mutations_for("index_in_index_value")
+
+      expect(muts.length).to eq(2)
+    end
+
+    it "does not mutate a regular method call with a receiver" do
+      # `obj.compute(1)` has a receiver but its name is :compute, not :[]= —
+      # the operator must check the exact method name, not just truthiness.
+      muts = mutations_for("regular_method_call")
+
+      expect(muts).to be_empty
+    end
   end
 end

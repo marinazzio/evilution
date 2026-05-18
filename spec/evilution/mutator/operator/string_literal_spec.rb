@@ -240,6 +240,55 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         expect(muts).to be_empty
       end
 
+      it "mutates a string literal nested inside an interpolated symbol's interpolation" do
+        # visit_interpolated_symbol_node must descend into the non-string
+        # parts so the `"fallback"` literal inside `#{prefix || "fallback"}`
+        # is still mutated.
+        muts = mutations_for("returns_symbol_interp_with_string")
+
+        expect(muts.length).to eq(2)
+        replacements = muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") } }
+        expect(replacements).to include(
+          a_string_matching(/prefix \|\| ""/),
+          a_string_matching(/prefix \|\| nil/)
+        )
+      end
+
+      it "mutates a string literal nested inside an interpolated regex's interpolation" do
+        muts = mutations_for("returns_regex_interp_with_string")
+
+        expect(muts.length).to eq(2)
+        replacements = muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") } }
+        expect(replacements).to include(
+          a_string_matching(/prefix \|\| ""/),
+          a_string_matching(/prefix \|\| nil/)
+        )
+      end
+
+      it "mutates a string literal nested inside an interpolated x-string's interpolation" do
+        muts = mutations_for("returns_xstring_interp_with_string")
+
+        expect(muts.length).to eq(2)
+        replacements = muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") } }
+        expect(replacements).to include(
+          a_string_matching(/prefix \|\| ""/),
+          a_string_matching(/prefix \|\| nil/)
+        )
+      end
+
+      it "uses the \"mutation\" placeholder when an adjacent concat is all-empty" do
+        # node_content_empty? must inspect every part — an all-empty adjacent
+        # concat yields the non-empty `"mutation"` replacement, not `""`.
+        muts = mutations_for("returns_empty_adjacent")
+
+        expect(muts.length).to eq(2)
+        mutated_sources = muts.map(&:mutated_source)
+        expect(mutated_sources).to include(
+          a_string_matching(/def returns_empty_adjacent\s+"mutation"\s+end/),
+          a_string_matching(/def returns_empty_adjacent\s+nil\s+end/)
+        )
+      end
+
       it "does not collapse a pure-interpolation string `\"\#{a}\#{b}\"`" do
         # Non-regression for Copilot review (PR #1221): EmbeddedStatementsNode
         # parts also carry an `opening_loc` (the `#{` delimiter), so a naive

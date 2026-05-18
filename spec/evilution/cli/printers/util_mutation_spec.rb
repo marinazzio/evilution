@@ -40,12 +40,18 @@ RSpec.describe Evilution::CLI::Printers::UtilMutation do
 
     it "prints singular label for one mutation" do
       described_class.new([mutation], format: :text).render(io)
-      expect(io.string).to include("1 mutation")
+      expect(io.string).to match(/^1 mutation$/)
+      expect(io.string).not_to include("1 mutations")
     end
 
     it "prints plural label for multiple mutations" do
       described_class.new([mutation, mutation], format: :text).render(io)
       expect(io.string).to include("2 mutations")
+    end
+
+    it "prints a blank line after each mutation's diff" do
+      described_class.new([mutation], format: :text).render(io)
+      expect(io.string).to match(/   \+ 2\n\n1 mutation/)
     end
   end
 

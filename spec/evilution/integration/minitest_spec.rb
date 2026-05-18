@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "tempfile"
+require "tmpdir"
+require "securerandom"
 require "minitest"
 require "evilution/integration/minitest"
 
@@ -522,6 +524,420 @@ RSpec.describe Evilution::Integration::Minitest do
     it "sets fallback_dir to test" do
       options = described_class.baseline_options
       expect(options[:fallback_dir]).to eq("test")
+    end
+  end
+
+  describe ".run_baseline_test_file" do
+    # Each fixture defines a uniquely named Minitest::Test subclass. A class is
+    # only registered as a runnable on creation (the `inherited` hook); reusing
+    # a name across examples would re-open the existing class without
+    # re-registering it, so uniqueness keeps registration observable.
+    def write_minitest_file(class_name, assertion)
+      file = Tempfile.new(["baseline", "_test.rb"])
+      file.write(<<~RUBY)
+        require "minitest/autorun"
+        class #{class_name} < Minitest::Test
+          def test_case
+            #{assertion}
+          end
+        end
+      RUBY
+      file.flush
+      file
+    end
+
+    let(:unique) { "Baseline#{SecureRandom.hex(6)}Test" }
+    let(:passing_file) { write_minitest_file(unique, "assert true") }
+    let(:failing_file) { write_minitest_file(unique, 'assert false, "intentional"') }
+
+    after do
+      passing_file.close!
+      failing_file.close!
+    end
+
+    it "returns true when the baseline test file passes" do
+      expect(described_class.run_baseline_test_file(passing_file.path)).to be true
+    end
+
+    it "returns false when the baseline test file fails" do
+      expect(described_class.run_baseline_test_file(failing_file.path)).to be false
+    end
+
+    it "loads and runs the test methods from the given file" do
+      described_class.run_baseline_test_file(passing_file.path)
+
+      expect(Minitest::Runnable.runnables.map(&:name)).to include(unique)
+    end
+
+    it "clears previously registered runnables before loading" do
+      stale = Class.new(Minitest::Test)
+      expect(Minitest::Runnable.runnables).to include(stale)
+
+      described_class.run_baseline_test_file(passing_file.path)
+
+      expect(Minitest::Runnable.runnables).not_to include(stale)
+    end
+
+    it "stubs Minitest.autorun so loading the file installs no autorun handler" do
+      Minitest.define_singleton_method(:autorun) { :real_autorun }
+
+      described_class.run_baseline_test_file(passing_file.path)
+
+      location = Minitest.singleton_class.instance_method(:autorun).source_location
+      expect(location.first).to end_with("lib/evilution/integration/minitest.rb")
+    end
+  end
+
+  describe ".baseline_test_files" do
+    it "globs *_test.rb files when given a directory" do
+      Dir.mktmpdir do |dir|
+        File.write(File.join(dir, "foo_test.rb"), "")
+        File.write(File.join(dir, "ignored.rb"), "")
+
+        result = described_class.baseline_test_files(dir)
+
+        expect(result).to contain_exactly(File.join(dir, "foo_test.rb"))
+      end
+    end
+
+    it "wraps a single non-directory file path in an array" do
+      Tempfile.create(["single", "_test.rb"]) do |file|
+        expect(described_class.baseline_test_files(file.path)).to eq([file.path])
+      end
+    end
+
+    it "returns an empty list for a directory with no matching test files" do
+      Dir.mktmpdir do |dir|
+        expect(described_class.baseline_test_files(dir)).to eq([])
+      end
+    end
+  end
+
+  describe ".run_baseline_minitest" do
+    after { Minitest::Runnable.runnables.clear }
+
+    it "returns true when all registered runnables pass" do
+      Class.new(Minitest::Test) { define_method(:test_ok) { assert true } }
+
+      expect(described_class.run_baseline_minitest).to be true
+    end
+
+    it "returns false when a registered runnable fails" do
+      Class.new(Minitest::Test) { define_method(:test_bad) { assert false } }
+
+      expect(described_class.run_baseline_minitest).to be false
+    end
+
+    it "seeds Minitest before dispatch so a nil seed does not raise a TypeError" do
+      # Minitest 5.x's runnable_methods calls srand(Minitest.seed); a nil seed
+      # raises TypeError. initialize_minitest_state must seed it first.
+      Minitest.seed = nil
+      Class.new(Minitest::Test) { define_method(:test_seeded) { assert true } }
+
+      expect { described_class.run_baseline_minitest }.not_to raise_error
+    end
+  end
+
+  describe ".initialize_minitest_state" do
+    let(:reporter) { Minitest::CompositeReporter.new }
+
+    around do |example|
+      saved = Minitest.reporter
+      example.run
+    ensure
+      Minitest.reporter = saved
+    end
+
+    it "seeds the global RNG so a fixed seed yields a reproducible rand" do
+      described_class.initialize_minitest_state(reporter, { seed: 4321 })
+      first = rand
+      described_class.initialize_minitest_state(reporter, { seed: 4321 })
+      second = rand
+
+      expect(second).to eq(first)
+    end
+
+    it "uses the provided seed so a different seed yields a different rand" do
+      described_class.initialize_minitest_state(reporter, { seed: 4321 })
+      first = rand
+      described_class.initialize_minitest_state(reporter, { seed: 8765 })
+      second = rand
+
+      expect(second).not_to eq(first)
+    end
+
+    it "clears Minitest.reporter back to nil after plugin initialization" do
+      Minitest.reporter = :stale
+
+      described_class.initialize_minitest_state(reporter, { seed: 0 })
+
+      expect(Minitest.reporter).to be_nil
+    end
+
+    it "skips seeding the RNG when the seed is nil rather than calling srand(nil)" do
+      # srand(nil) raises TypeError; the guard must short-circuit on a nil seed.
+      expect { described_class.initialize_minitest_state(reporter, { seed: nil }) }
+        .not_to raise_error
+    end
+
+    it "exposes the run's reporter via Minitest.reporter while plugins initialize" do
+      # init_plugins runs immediately after the `Minitest.reporter = reporter`
+      # assignment; some plugins (pride) read Minitest.reporter during init.
+      # Pre-seed a stale sentinel so a dropped/no-op assignment is observable:
+      # if line 64 is deleted or its receiver-only form runs, init_plugins
+      # would still see the sentinel instead of the run's composite reporter.
+      Minitest.reporter = :stale_sentinel
+      observed = :not_called
+      allow(Minitest).to receive(:init_plugins) do
+        observed = Minitest.reporter
+      end
+
+      described_class.initialize_minitest_state(reporter, { seed: 0 })
+
+      expect(observed).to equal(reporter)
+    end
+  end
+
+  describe ".stub_autorun! idempotency" do
+    let(:original_autorun) { Minitest.singleton_class.instance_method(:autorun) }
+
+    around do |example|
+      saved = original_autorun
+      example.run
+    ensure
+      Minitest.singleton_class.send(:define_method, :autorun, saved)
+    end
+
+    it "preserves the already-stubbed method object on a second call" do
+      described_class.stub_autorun!
+      first = Minitest.singleton_class.instance_method(:autorun)
+
+      described_class.stub_autorun!
+      second = Minitest.singleton_class.instance_method(:autorun)
+
+      expect(second).to eq(first)
+    end
+
+    it "redefines a non-evilution autorun even when its location matches another file" do
+      Minitest.define_singleton_method(:autorun) { :real }
+      expect(Minitest.autorun).to eq(:real)
+
+      described_class.stub_autorun!
+
+      expect(Minitest.autorun).to be_nil
+    end
+  end
+
+  describe "test_command formatting" do
+    before { stub_minitest_run(passed: true) }
+
+    it "joins multiple test files with spaces in the command" do
+      custom = described_class.new(test_files: ["test/a_test.rb", "test/b_test.rb"])
+      allow(custom).to receive(:load)
+
+      result = custom.call(mutation)
+
+      expect(result[:test_command]).to eq("ruby -Itest test/a_test.rb test/b_test.rb")
+    end
+  end
+
+  describe "unresolved result content" do
+    before { stub_minitest_run(passed: true) }
+
+    it "names the mutation's file_path in the unresolved error" do
+      default = described_class.new
+      allow(default).to receive(:load)
+
+      result = default.call(mutation)
+
+      expect(result[:error]).to include(mutation.file_path)
+    end
+
+    it "names the mutation's file_path in the unresolved test_command" do
+      default = described_class.new
+      allow(default).to receive(:load)
+
+      result = default.call(mutation)
+
+      expect(result[:test_command]).to include(mutation.file_path)
+    end
+  end
+
+  describe "fallback glob test file selection" do
+    before { stub_minitest_run(passed: true) }
+
+    it "falls back to the test directory when the glob finds nothing" do
+      default = described_class.new(fallback_to_full_suite: true)
+      allow(default).to receive(:load)
+      allow(Dir).to receive(:glob).with("test/**/*_test.rb").and_return([])
+
+      result = default.call(mutation)
+
+      expect(result[:test_command]).to eq("ruby -Itest test")
+    end
+
+    it "uses the globbed test files when the glob finds matches" do
+      default = described_class.new(fallback_to_full_suite: true)
+      allow(default).to receive(:load)
+      allow(Dir).to receive(:glob)
+        .with("test/**/*_test.rb")
+        .and_return(["test/found_a_test.rb", "test/found_b_test.rb"])
+
+      result = default.call(mutation)
+
+      expect(result[:test_command]).to eq("ruby -Itest test/found_a_test.rb test/found_b_test.rb")
+    end
+  end
+
+  describe "warn_unresolved_test behavior" do
+    it "warns to stderr when a test cannot be resolved" do
+      default = described_class.new
+      allow(default).to receive(:load)
+
+      expect { default.call(mutation) }
+        .to output(/No matching test found for #{Regexp.escape(mutation.file_path)}/).to_stderr
+    end
+
+    it "warns only once per file path across repeated calls" do
+      default = described_class.new
+      allow(default).to receive(:load)
+
+      output = capture_warn_count { 2.times { default.call(mutation) } }
+
+      expect(output.scan("No matching test found").length).to eq(1)
+    end
+
+    def capture_warn_count
+      original = $stderr
+      $stderr = StringIO.new
+      yield
+      $stderr.string
+    ensure
+      $stderr = original
+    end
+  end
+
+  describe "crash detector reset between mutations" do
+    before { allow(integration).to receive(:load) }
+
+    def stub_crash_dispatch
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+        Class.new(Minitest::Test) { define_method(:test_crash) { assert true } }
+        result = Minitest::Result.new("test_crash")
+        result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
+        reporter.record(result)
+      end
+    end
+
+    it "does not carry crash state from a prior mutation into a passing run" do
+      stub_crash_dispatch
+      integration.call(mutation) # mutation 1: crash
+
+      stub_minitest_run(passed: true)
+      result = integration.call(mutation) # mutation 2: clean pass
+
+      expect(result[:passed]).to be true
+      expect(result).not_to have_key(:test_crashed)
+    end
+
+    it "resets accumulated assertion failures so a later pure crash is flagged" do
+      # Mutation 1 records an assertion failure; mutation 2 records only a
+      # crash. Without reset, the stale assertion failure makes only_crashes?
+      # false and the crash is mis-classified as :killed instead of :error.
+      stub_minitest_run_failed
+      integration.call(mutation) # mutation 1: assertion failure
+
+      stub_crash_dispatch
+      result = integration.call(mutation) # mutation 2: pure crash
+
+      expect(result[:test_crashed]).to be true
+    end
+  end
+
+  describe "crash error_class with multiple crash classes" do
+    before { allow(integration).to receive(:load) }
+
+    it "omits error_class when crashes span more than one exception class" do
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+        Class.new(Minitest::Test) { define_method(:test_a) { assert true } }
+        first = Minitest::Result.new("test_a")
+        first.failures << Minitest::UnexpectedError.new(NoMethodError.new("nme"))
+        reporter.record(first)
+        second = Minitest::Result.new("test_b")
+        second.failures << Minitest::UnexpectedError.new(ArgumentError.new("ae"))
+        reporter.record(second)
+      end
+
+      result = integration.call(mutation)
+
+      expect(result[:test_crashed]).to be true
+      expect(result[:error_class]).to be_nil
+    end
+  end
+
+  describe "dispatch delegation in the running pipeline" do
+    it "actually dispatches registered suites so a failing test is observed as failed" do
+      runner = described_class.new(test_files: ["test/some_test.rb"])
+      allow(runner).to receive(:load) do
+        Class.new(Minitest::Test) { define_method(:test_real_fail) { assert false } }
+      end
+
+      result = runner.call(mutation)
+
+      expect(result[:passed]).to be false
+    end
+
+    it "actually dispatches registered suites so a passing test is observed as passed" do
+      runner = described_class.new(test_files: ["test/some_test.rb"])
+      allow(runner).to receive(:load) do
+        Class.new(Minitest::Test) { define_method(:test_real_pass) { assert true } }
+      end
+
+      result = runner.call(mutation)
+
+      expect(result[:passed]).to be true
+    end
+  end
+
+  describe "framework loading stubs autorun" do
+    let(:original_autorun) { Minitest.singleton_class.instance_method(:autorun) }
+
+    around do |example|
+      saved = original_autorun
+      example.run
+    ensure
+      Minitest.singleton_class.send(:define_method, :autorun, saved)
+    end
+
+    it "stubs Minitest.autorun when the integration first loads the framework" do
+      Minitest.define_singleton_method(:autorun) { :real_autorun }
+      stub_minitest_run(passed: true)
+      runner = described_class.new(test_files: ["test/some_test.rb"])
+      allow(runner).to receive(:load)
+
+      runner.call(mutation)
+
+      location = Minitest.singleton_class.instance_method(:autorun).source_location
+      expect(location.first).to end_with("lib/evilution/integration/minitest.rb")
+    end
+  end
+
+  describe "setup_integration_post hook" do
+    before do
+      stub_minitest_run(passed: true)
+      allow(integration).to receive(:load)
+    end
+
+    it "fires the setup_integration_post hook with :minitest" do
+      hooks = Evilution::Hooks::Registry.new
+      received = nil
+      hooks.register(:setup_integration_post) { |payload| received = payload }
+      hooked = described_class.new(test_files: ["test/some_test.rb"], hooks: hooks)
+      allow(hooked).to receive(:load)
+
+      hooked.call(mutation)
+
+      expect(received).to eq({ integration: :minitest })
     end
   end
 end

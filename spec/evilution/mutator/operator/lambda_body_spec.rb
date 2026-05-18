@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::LambdaBody do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["lambda_body", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "replaces lambda body with nil" do
       muts = mutations_for("simple_lambda")
@@ -47,6 +58,12 @@ RSpec.describe Evilution::Mutator::Operator::LambdaBody do
 
     it "generates one mutation per lambda" do
       muts = mutations_for("multiple_lambdas")
+
+      expect(muts.length).to eq(2)
+    end
+
+    it "recurses into a nested lambda so the inner lambda body is also replaced" do
+      muts = mutations_from_source("class C\n  def m\n    -> { -> { 1 } }\n  end\nend\n")
 
       expect(muts.length).to eq(2)
     end

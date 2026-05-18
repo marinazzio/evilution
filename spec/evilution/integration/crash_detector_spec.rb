@@ -80,6 +80,15 @@ RSpec.describe Evilution::Integration::CrashDetector do
     end
   end
 
+  describe ".register_with_rspec" do
+    it "registers the class with RSpec's formatter registry for :example_failed" do
+      expect(RSpec::Core::Formatters).to receive(:register)
+        .with(described_class, :example_failed)
+
+      described_class.register_with_rspec
+    end
+  end
+
   describe "#crash_summary" do
     it "returns a summary of crash exceptions" do
       detector.example_failed(make_notification(NoMethodError.new("undefined method 'foo'")))
@@ -93,6 +102,32 @@ RSpec.describe Evilution::Integration::CrashDetector do
 
     it "returns nil when no crashes" do
       expect(detector.crash_summary).to be_nil
+    end
+
+    it "joins distinct crash class names with a comma and space" do
+      detector.example_failed(make_notification(NoMethodError.new("a")))
+      detector.example_failed(make_notification(TypeError.new("b")))
+
+      expect(detector.crash_summary).to start_with("NoMethodError, TypeError (")
+    end
+
+    it "reports the crash count, not the crash array, in the summary" do
+      3.times { detector.example_failed(make_notification(NoMethodError.new("x"))) }
+
+      expect(detector.crash_summary).to eq("NoMethodError (3 crashes)")
+    end
+
+    it "uses the singular noun 'crash' for exactly one crash" do
+      detector.example_failed(make_notification(NoMethodError.new("only one")))
+
+      expect(detector.crash_summary).to eq("NoMethodError (1 crash)")
+    end
+
+    it "uses the plural noun 'crashes' for more than one crash" do
+      detector.example_failed(make_notification(NoMethodError.new("a")))
+      detector.example_failed(make_notification(NoMethodError.new("b")))
+
+      expect(detector.crash_summary).to eq("NoMethodError (2 crashes)")
     end
   end
 

@@ -105,4 +105,52 @@ class CompoundAssignment
   def no_compound_assignment
     "hello"
   end
+
+  def nested_lvar_op_write(x, t)
+    x += (t -= 1)
+  end
+
+  def nested_ivar_op_write(t)
+    @ivar_op += (t -= 1)
+  end
+
+  def nested_cvar_op_write(t)
+    @@cvar_op += (t -= 1) # rubocop:disable Style/ClassVars
+  end
+
+  def nested_gvar_op_write(t)
+    $gvar_op += (t -= 1) # rubocop:disable Style/GlobalVars
+  end
+
+  def nested_lvar_and_write(x, t)
+    x &&= (t -= 1)
+  end
+
+  def nested_lvar_or_write(x, t)
+    x ||= (t -= 1)
+  end
+
+  def nested_ivar_and_write(t)
+    @ivar_and &&= (t -= 1)
+  end
+
+  def nested_ivar_or_write(t)
+    @ivar_or ||= (t -= 1)
+  end
+
+  def nested_cvar_and_write(t)
+    @@cvar_and &&= (t -= 1) # rubocop:disable Style/ClassVars
+  end
+
+  def nested_cvar_or_write(t)
+    @@cvar_or ||= (t -= 1) # rubocop:disable Style/ClassVars
+  end
+
+  def nested_gvar_and_write(t)
+    $gvar_and &&= (t -= 1) # rubocop:disable Style/GlobalVars
+  end
+
+  def nested_gvar_or_write(t)
+    $gvar_or ||= (t -= 1) # rubocop:disable Style/GlobalVars
+  end
 end

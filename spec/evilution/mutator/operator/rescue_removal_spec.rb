@@ -78,6 +78,17 @@ RSpec.describe Evilution::Mutator::Operator::RescueRemoval do
       expect(mutations.first.operator_name).to eq("rescue_removal")
     end
 
+    it "descends into nested begin nodes to find inner rescue clauses" do
+      # The operator must recurse (via super) into the outer begin's body —
+      # otherwise the inner rescue clause is never discovered.
+      nested_subject = subjects.find { |s| s.name.include?("nested_rescue") }
+      mutations = described_class.new.call(nested_subject)
+
+      expect(mutations.length).to eq(2)
+      expect(mutations.map(&:diff).any? { |d| d.include?("ArgumentError") }).to be(true)
+      expect(mutations.map(&:diff).any? { |d| d.include?("RuntimeError") }).to be(true)
+    end
+
     describe "orphan-clause safety" do
       let(:else_subject) { subjects.find { |s| s.name.include?("rescue_with_else") } }
       let(:else_ensure_subject) do
@@ -130,6 +141,30 @@ RSpec.describe Evilution::Mutator::Operator::RescueRemoval do
         end
       end
 
+      it "keeps the else when removing the last rescue of a multi-rescue chain with else" do
+        # The second rescue in `multiple_rescues_with_else` is a subsequent
+        # clause, not the chain head — removing it must NOT drop the else.
+        mutations = described_class.new.call(multi_else_subject)
+        runtime_removal = mutations.find { |m| m.diff.include?("RuntimeError") }
+
+        removed = runtime_removal.diff.lines.select { |l| l.start_with?("-") }.join
+        expect(removed).to include("rescue RuntimeError")
+        expect(removed).not_to match(/^-\s*else\b/)
+        expect(removed).not_to include("succeed")
+      end
+
+      it "keeps the rest of the chain when removing the first of multiple rescues with else" do
+        # Removing the head rescue (which has a subsequent) must stop at the
+        # next rescue — not extend through the else.
+        mutations = described_class.new.call(multi_else_subject)
+        arg_removal = mutations.find { |m| m.diff.include?("ArgumentError") }
+
+        removed = arg_removal.diff.lines.select { |l| l.start_with?("-") }.join
+        expect(removed).to include("rescue ArgumentError")
+        expect(removed).not_to include("RuntimeError")
+        expect(removed).not_to include("succeed")
+      end
+
       it "removes the full rescue clause when the rescue body is comment-only" do
         # roda streaming.rb / sinatra base.rb variant: body has no statements,
         # so the operator must use clause boundaries (next clause / end) — NOT
@@ -145,6 +180,11 @@ RSpec.describe Evilution::Mutator::Operator::RescueRemoval do
         plus_lines = mutation.diff.lines.select { |l| l.start_with?("+") }.join
         expect(plus_lines).not_to include("rescue")
         expect(plus_lines).not_to include("ClosedQueueError")
+        # The removal must stop at the `ensure` clause — it must not delete
+        # the trailing ensure body along with the rescue.
+        removed = mutation.diff.lines.select { |l| l.start_with?("-") }.join
+        expect(removed).not_to include("ensure")
+        expect(removed).not_to include("cleanup")
         # The ensure block still runs in the surviving body.
         expect(mutation.mutated_source).to include("ensure")
         expect(mutation.mutated_source).to include("cleanup")

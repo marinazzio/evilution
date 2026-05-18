@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 RSpec.describe Evilution::Mutator::Operator::BeginUnwrap do
   let(:fixture_path) { File.expand_path("../../../support/fixtures/begin_unwrap.rb", __dir__) }
   let(:source) { File.read(fixture_path) }
@@ -14,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::BeginUnwrap do
   def mutations_for(method_name)
     subject = subjects_from_fixture.find { |s| s.name.end_with?("##{method_name}") }
     described_class.new.call(subject)
+  end
+
+  def mutations_from_source(src)
+    tmpfile = Tempfile.new(["begin_unwrap", ".rb"])
+    tmpfile.write(src)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile&.close
+    tmpfile&.unlink
   end
 
   describe "#call" do
@@ -69,6 +82,53 @@ RSpec.describe Evilution::Mutator::Operator::BeginUnwrap do
       muts.each do |mutation|
         expect(mutation.operator_name).to eq("begin_unwrap")
       end
+    end
+
+    it "still visits a nested begin inside a non-unwrappable begin" do
+      src = <<~RUBY
+        def outer
+          begin
+            begin
+              inner_work
+            end
+          rescue StandardError
+            fallback
+          end
+        end
+      RUBY
+
+      muts = mutations_from_source(src)
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("inner_work")
+    end
+
+    it "visits a nested begin inside an unwrappable begin" do
+      src = <<~RUBY
+        def outer
+          begin
+            begin
+              inner_work
+            end
+          end
+        end
+      RUBY
+
+      muts = mutations_from_source(src)
+
+      expect(muts.length).to eq(2)
+    end
+
+    it "produces no mutation for an empty begin/end and does not raise" do
+      src = <<~RUBY
+        def empty
+          begin
+          end
+        end
+      RUBY
+
+      expect { mutations_from_source(src) }.not_to raise_error
+      expect(mutations_from_source(src)).to be_empty
     end
   end
 end

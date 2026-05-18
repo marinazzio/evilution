@@ -14,4 +14,20 @@ class ConditionalExample
       "positive"
     end
   end
+
+  def nested_if(x, y)
+    if x > 0
+      if y > 0
+        "both"
+      end
+    end
+  end
+
+  def nested_unless(x, y)
+    unless x > 0
+      unless y > 0
+        "neither"
+      end
+    end
+  end
 end

@@ -27,5 +27,10 @@ RSpec.describe Evilution::Parallel::WorkQueue::Validators::OptionalPositiveInt d
       expect { described_class.call!(:worker_max_items, 2.0) }
         .to raise_error(ArgumentError, "worker_max_items must be nil or a positive integer, got 2.0")
     end
+
+    it "inspects the offending value so strings are quoted in the message" do
+      expect { described_class.call!(:worker_max_items, "5") }
+        .to raise_error(ArgumentError, 'worker_max_items must be nil or a positive integer, got "5"')
+    end
   end
 end

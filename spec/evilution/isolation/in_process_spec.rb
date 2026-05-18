@@ -120,6 +120,23 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.duration).to be > 0
     end
 
+    it "records duration as elapsed seconds, not the absolute monotonic clock" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.duration).to be < 60
+    end
+
+    it "merges timeout: false into a passing result so it is not classified as timeout" do
+      test_command = ->(_m) { { passed: true } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_survived
+      expect(result).not_to be_timeout
+    end
+
     it "passes test_command from result to MutationResult" do
       test_command = ->(_m) { { passed: false, test_command: "rspec spec/foo_spec.rb" } }
 
@@ -170,6 +187,24 @@ RSpec.describe Evilution::Isolation::InProcess do
       end
 
       expect(output.string).not_to include("noisy")
+    end
+
+    it "restores $stdout to its original object after a normal run" do
+      original_stdout = $stdout
+
+      test_command = ->(_m) { { passed: false } }
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect($stdout).to equal(original_stdout)
+    end
+
+    it "restores $stderr to its original object after a normal run" do
+      original_stderr = $stderr
+
+      test_command = ->(_m) { { passed: false } }
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect($stderr).to equal(original_stderr)
     end
 
     it "restores $stdout and $stderr after timeout" do
@@ -232,6 +267,56 @@ RSpec.describe Evilution::Isolation::InProcess do
       isolator.call(mutation:, test_command:, timeout: 5)
 
       expect($LOADED_FEATURES).to eq(features_before)
+    end
+
+    it "reports the rss delta (after minus before) for a normal run" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(1000, 1500)
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.memory_delta_kb).to eq(500)
+    end
+
+    it "reports a negative rss delta when memory shrinks during a run" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(2000, 1200)
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.memory_delta_kb).to eq(-800)
+    end
+
+    it "leaves memory delta nil for a timed-out run instead of computing rss math" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(1000, 1500)
+      test_command = lambda { |_m|
+        sleep 10
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
+
+      expect(result).to be_timeout
+      expect(result.memory_delta_kb).to be_nil
+    end
+
+    it "computes a non-nil memory delta for a non-timeout run" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(1000, 1500)
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).not_to be_timeout
+      expect(result.memory_delta_kb).not_to be_nil
+    end
+
+    it "leaves memory delta nil when rss is unavailable" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(nil)
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.memory_delta_kb).to be_nil
     end
   end
 end

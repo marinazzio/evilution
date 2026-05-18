@@ -6,4 +6,8 @@ class HashChecker
   def returns_empty_hash
     {}
   end
+
+  def returns_nested_hash
+    { a: { b: 1 } }
+  end
 end

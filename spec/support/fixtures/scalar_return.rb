@@ -63,4 +63,19 @@ class ScalarReturnExample
 
   def empty_method
   end
+
+  def outer_with_nested_def
+    x = compute
+    def inner_method
+      y = compute
+      "done"
+    end
+  end
+
+  def rescue_body_method
+    x = compute
+    helper
+  rescue StandardError
+    fallback
+  end
 end

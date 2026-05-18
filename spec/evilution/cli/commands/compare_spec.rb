@@ -22,6 +22,15 @@ RSpec.describe Evilution::CLI::Commands::Compare do
   end
 
   describe "path slot resolution" do
+    it "does not mutate the caller's positional files array" do
+      files = [mutant_path, evilution_path]
+      args = parsed(files: files)
+      described_class.new(args, stdout: out, stderr: err).call
+
+      expect(files).to eq([mutant_path, evilution_path])
+      expect(args.files).to eq([mutant_path, evilution_path])
+    end
+
     it "maps two positional files to against/current in order" do
       result = run_with(files: [mutant_path, evilution_path])
       expect(result.exit_code).to eq(0)
@@ -185,6 +194,26 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(result.exit_code).to eq(2)
       expect(result.error).to be_a(Evilution::ConfigError)
       expect(result.error.message).to include("compare supports --format")
+    end
+
+    it "renders the rejected --format value with #inspect (symbol prefix preserved)" do
+      result = run_with(
+        files: [mutant_path, evilution_path],
+        options: { format: :html }
+      )
+      expect(result.error.message).to include(":html")
+    end
+
+    it "rejects a non-Hash JSON document without crashing on a missing key lookup" do
+      Tempfile.create(["array", ".json"]) do |f|
+        f.write(JSON.generate([1, 2, 3]))
+        f.flush
+
+        result = run_with(files: [f.path, evilution_path])
+        expect(result.exit_code).to eq(2)
+        expect(result.error).to be_a(Evilution::Error)
+        expect(result.error.message).to include("expected Hash, got Array")
+      end
     end
   end
 

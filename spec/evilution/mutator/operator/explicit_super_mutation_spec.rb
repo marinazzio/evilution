@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::ExplicitSuperMutation do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(method_name, body)
+    tmpfile = Tempfile.new(["explicit_super", ".rb"])
+    tmpfile.write(body)
+    tmpfile.close
+    subj = Evilution::AST::Parser.new.call(tmpfile.path)
+                                 .find { |s| s.name.end_with?("##{method_name}") }
+    described_class.new.call(subj)
+  ensure
+    tmpfile.unlink if tmpfile
+  end
+
   describe "#call" do
     context "with multiple arguments" do
       it "removes all arguments" do
@@ -107,6 +118,46 @@ RSpec.describe Evilution::Mutator::Operator::ExplicitSuperMutation do
       muts = mutations_for("no_super")
 
       expect(muts).to be_empty
+    end
+
+    describe "argument-list boundary handling" do
+      it "strips the closing paren region when removing all args (no leftover space)" do
+        muts = mutations_from_source(
+          "spaced", "class C\n  def spaced(a, b)\n    super(a, b )\n  end\nend\n"
+        )
+
+        strip_all = muts.find { |m| m.mutated_source.match?(/super\(\s*\)/) }
+        expect(strip_all).not_to be_nil
+        # The args-and-trailing-space must both go: `super()` exactly.
+        expect(strip_all.mutated_source).to include("super()")
+        expect(strip_all.mutated_source).not_to match(/super\( \)/)
+      end
+
+      it "handles a parenless super with arguments without error" do
+        muts = mutations_from_source(
+          "parenless", "class C\n  def parenless(a, b)\n    super a, b\n  end\nend\n"
+        )
+
+        expect(muts).not_to be_empty
+        expect(muts.map(&:parse_status)).to all(eq(:ok))
+        # Removing all args from a parenless super collapses to bare `super`.
+        expect(muts.map(&:mutated_source)).to include(a_string_matching(/super\s*$/))
+      end
+    end
+
+    describe "nested super recursion" do
+      it "mutates a super call nested inside another super's arguments" do
+        muts = mutations_from_source(
+          "nested", "class C\n  def nested\n    super(super(1, 2), 3)\n  end\nend\n"
+        )
+
+        # The inner super(1, 2) is only reachable through visitor recursion.
+        expect(muts.map(&:mutated_source)).to include(
+          a_string_matching(/super\(super, 3\)/),
+          a_string_matching(/super\(super\(1\), 3\)/),
+          a_string_matching(/super\(super\(2\), 3\)/)
+        )
+      end
     end
 
     describe "dangling-comma safety" do

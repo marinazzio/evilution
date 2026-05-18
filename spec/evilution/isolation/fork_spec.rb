@@ -137,6 +137,64 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_timeout
     end
 
+    # Kills L193 method_body_replacement (terminate_child -> `self`/`nil`):
+    # if terminate_child is gutted, a timed-out child is never signalled or
+    # reaped and stays alive after #call returns. The child records its own
+    # pid; after the run that pid must no longer be a live process.
+    it "terminates the timed-out child process so it is not left running" do
+      pid_file = Tempfile.new("timed_out_child_pid")
+      pid_path = pid_file.path
+      pid_file.close
+
+      test_command = lambda do |_m|
+        File.write(pid_path, Process.pid.to_s)
+        sleep 30
+        { passed: true }
+      end
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      child_pid = File.read(pid_path).strip.to_i
+
+      expect(result).to be_timeout
+      expect(child_pid).to be > 0
+      expect { Process.kill(0, child_pid) }.to raise_error(Errno::ESRCH)
+    ensure
+      begin
+        Process.kill("KILL", child_pid) if child_pid && child_pid.positive?
+      rescue Errno::ESRCH
+        nil
+      end
+      pid_file&.unlink
+    end
+
+    # Kills L194 statement_deletion / method_call_removal: the cleanup ladder
+    # must send SIGTERM before escalating to SIGKILL. The child traps TERM and
+    # writes a marker file before exiting; if SIGTERM is never sent the child
+    # is SIGKILLed (untrappable) and the marker is never written.
+    it "delivers SIGTERM to the timed-out child before escalating to SIGKILL" do
+      marker_file = Tempfile.new("term_marker")
+      marker_path = marker_file.path
+      marker_file.close
+      File.delete(marker_path)
+
+      test_command = lambda do |_m|
+        Signal.trap("TERM") do
+          File.write(marker_path, "received-term")
+          exit!(0)
+        end
+        sleep 30
+        { passed: true }
+      end
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+
+      expect(result).to be_timeout
+      expect(File.exist?(marker_path)).to be true
+      expect(File.read(marker_path)).to eq("received-term")
+    ensure
+      File.delete(marker_path) if marker_path && File.exist?(marker_path)
+    end
+
     it "returns error when child writes empty result" do
       test_command = lambda { |_m|
         # Exit without writing a result, causing the OS to close the pipe
@@ -274,6 +332,45 @@ RSpec.describe Evilution::Isolation::Fork do
       result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
 
       expect(result.duration).to be > 0
+    end
+
+    # Kills L28 method_call_removal: dropping `- start_time` makes `duration`
+    # an absolute CLOCK_MONOTONIC reading (process/boot uptime, easily
+    # thousands of seconds) instead of the small elapsed interval.
+    it "records duration as elapsed time, not an absolute clock value" do
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.duration).to be < 60
+    end
+
+    # Kills L50 statement_deletion / method_call_removal: the child must set
+    # ENV["TMPDIR"] to the per-run sandbox directory so mutation runs cannot
+    # pollute the shared system tmpdir. The child's ENV["TMPDIR"] is surfaced
+    # through the result :error field (a payload key that survives decoding).
+    it "sets ENV[\"TMPDIR\"] in the child to the run sandbox directory" do
+      test_command = lambda do |_m|
+        { passed: false, error: ENV["TMPDIR"].to_s, error_class: "TmpdirProbe" }
+      end
+
+      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(result.error_class).to eq("TmpdirProbe")
+      expect(result.error_message).to match(/evilution-run/)
+    end
+
+    # Kills L64 / L65 method_call_removal (`unless read_io.nil?` -> `unless
+    # read_io`): when binary_pipe raises, read_io/write_io stay nil. The
+    # original guard (`.nil?`) skips the close; the mutant guard (truthiness)
+    # runs `nil.close`, raising NoMethodError that masks the original error.
+    it "still surfaces the original error when cleanup runs with nil pipes" do
+      allow(isolator).to receive(:binary_pipe).and_raise(RuntimeError, "pipe boom")
+      test_command = ->(_m) { { passed: true } }
+
+      expect do
+        isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      end.to raise_error(RuntimeError, "pipe boom")
     end
 
     it "reaps the child even when wait_for_result raises (zombie-on-raise hardening)" do

@@ -46,4 +46,11 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::WorldExampleGroups do
     expect { strategy.release(nil) }.not_to raise_error
     expect(RSpec.world.instance_variable_get(:@example_groups)).to eq(%i[a b c])
   end
+
+  it "release is a no-op (does not raise) when @example_groups ivar is missing" do
+    RSpec.world.remove_instance_variable(:@example_groups) if RSpec.world.instance_variable_defined?(:@example_groups)
+    expect { strategy.release(%i[host_a]) }.not_to raise_error
+  ensure
+    RSpec.world.instance_variable_set(:@example_groups, [])
+  end
 end

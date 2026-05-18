@@ -43,6 +43,16 @@ RSpec.describe Evilution::Mutator::Operator::NegationInsertion do
       end
     end
 
+    it "recurses into the receiver to mutate a chained predicate call" do
+      # `value.frozen?.nil?`: the outer `.nil?` predicate yields 1 mutation
+      # and the receiver `value.frozen?` predicate yields 1 more — only
+      # reached when the visitor recurses into the call's children.
+      chained_subject = subjects.find { |s| s.name.include?("chained_predicates") }
+      mutations = described_class.new.call(chained_subject)
+
+      expect(mutations.length).to eq(2)
+    end
+
     it "sets correct operator_name" do
       mutations = described_class.new.call(empty_subject)
 

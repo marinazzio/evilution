@@ -61,6 +61,20 @@ RSpec.describe Evilution::CLI do
     end
   end
 
+  describe "parse error handling" do
+    it "returns exit code 2 for an unknown subcommand" do
+      cli = described_class.new(%w[session bogus])
+      capture_stderr { expect(cli.call).to eq(2) }
+    end
+
+    it "prints the parse error message to stderr" do
+      cli = described_class.new(%w[session bogus])
+      output = capture_stderr { cli.call }
+
+      expect(output).to include("Error: Unknown session subcommand: bogus")
+    end
+  end
+
   describe "mcp command" do
     it "starts the MCP server" do
       transport = instance_double(MCP::Server::Transports::StdioTransport, open: nil)

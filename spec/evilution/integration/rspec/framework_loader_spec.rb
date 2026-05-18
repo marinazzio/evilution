@@ -38,4 +38,47 @@ RSpec.describe Evilution::Integration::RSpec::FrameworkLoader do
 
     expect { loader.call }.to raise_error(Evilution::Error, /rspec-core is required but not available: no such file/)
   end
+
+  describe "spec/ LOAD_PATH handling" do
+    let(:spec_dir) { File.expand_path("spec") }
+
+    around do |example|
+      had_spec_dir = $LOAD_PATH.include?(spec_dir)
+      $LOAD_PATH.delete(spec_dir)
+      example.run
+    ensure
+      $LOAD_PATH.delete(spec_dir)
+      $LOAD_PATH.unshift(spec_dir) if had_spec_dir
+    end
+
+    it "prepends spec/ to the front of $LOAD_PATH when it is absent" do
+      allow(loader).to receive(:require).with("rspec/core").and_return(true)
+      allow(Evilution::Integration::CrashDetector).to receive(:register_with_rspec)
+
+      loader.call
+
+      expect($LOAD_PATH.first).to eq(spec_dir)
+    end
+
+    it "adds spec/ to $LOAD_PATH so it is present after the call" do
+      allow(loader).to receive(:require).with("rspec/core").and_return(true)
+      allow(Evilution::Integration::CrashDetector).to receive(:register_with_rspec)
+
+      expect($LOAD_PATH).not_to include(spec_dir)
+
+      loader.call
+
+      expect($LOAD_PATH).to include(spec_dir)
+    end
+
+    it "does not duplicate spec/ in $LOAD_PATH when it is already present" do
+      $LOAD_PATH.unshift(spec_dir)
+      allow(loader).to receive(:require).with("rspec/core").and_return(true)
+      allow(Evilution::Integration::CrashDetector).to receive(:register_with_rspec)
+
+      loader.call
+
+      expect($LOAD_PATH.count(spec_dir)).to eq(1)
+    end
+  end
 end

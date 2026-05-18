@@ -11,6 +11,11 @@ RSpec.describe Evilution::CLI::Dispatcher do
     expect { described_class.lookup(:nope_never_registered) }.to raise_error(KeyError, /nope_never_registered/)
   end
 
+  it "inspects the symbol in the unknown-command message" do
+    expect { described_class.lookup(:nope_never_registered) }
+      .to raise_error(KeyError, /unknown command: :nope_never_registered/)
+  end
+
   it "registers and looks up a command class" do
     fake = Class.new
     described_class.register(:fake, fake)

@@ -12,6 +12,16 @@ RSpec.describe Evilution::Mutator::Operator::LocalVariableAssignment do
   let(:single_subject) { subjects.find { |s| s.name.include?("single_assignment") } }
   let(:no_assign_subject) { subjects.find { |s| s.name.include?("no_assignments") } }
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["local_variable_assignment", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    Evilution::AST::Parser.new.call(tmpfile.path).flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "generates one mutation per local variable assignment" do
       mutations = described_class.new.call(multi_subject)
@@ -29,6 +39,13 @@ RSpec.describe Evilution::Mutator::Operator::LocalVariableAssignment do
       mutations = described_class.new.call(no_assign_subject)
 
       expect(mutations).to be_empty
+    end
+
+    it "recurses into a nested local variable assignment so the inner write is also mutated" do
+      mutations = mutations_from_source("def m\n  a = (b = 1)\n  a\nend\n")
+
+      # one mutation for the outer `a =` write + one for the nested `b =` write
+      expect(mutations.length).to eq(2)
     end
 
     it "replaces the assignment with just the value expression" do

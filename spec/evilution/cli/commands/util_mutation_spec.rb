@@ -178,6 +178,38 @@ RSpec.describe Evilution::CLI::Commands::UtilMutation do
       expect(result.exit_code).to eq(2)
       expect(result.error.message).to include("failed to parse source")
     end
+
+    it "joins the per-error messages with a comma into a flat string" do
+      allow(prism_result).to receive(:errors).and_return(
+        [
+          instance_double("ParseError", message: "unexpected token"),
+          instance_double("ParseError", message: "expected end")
+        ]
+      )
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.error.message).to eq("failed to parse source: unexpected token, expected end")
+    end
+  end
+
+  describe "subject finder traversal" do
+    let(:parsed) do
+      Evilution::CLI::ParsedArgs.new(
+        command: :util_mutation,
+        options: { eval: "def foo; x + y; end", format: :text }
+      )
+    end
+    let(:tmpfile) do
+      instance_double(Tempfile, write: nil, flush: nil, path: "/tmp/eval.rb", close!: nil)
+    end
+
+    before { allow(Tempfile).to receive(:new).and_return(tmpfile) }
+
+    it "visits the parsed AST root with the SubjectFinder" do
+      described_class.new(parsed, stdout: out, stderr: err).call
+      expect(finder).to have_received(:visit).with(:ast_root)
+    end
   end
 
   it "is registered with the dispatcher under :util_mutation" do

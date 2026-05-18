@@ -40,6 +40,12 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       disabled_method_line_range = 9..11
       enabled_in_disabled = plan.enabled.select { |m| disabled_method_line_range.cover?(m.line) }
       expect(enabled_in_disabled).to be_empty
+
+      # Mutations OUTSIDE the disable-comment ranges must remain enabled: the
+      # disabled-range check must actually test line membership, not blindly
+      # treat every range as a match.
+      expect(plan.enabled).not_to be_empty
+      expect(plan.enabled.map(&:line)).to all(satisfy { |l| !disabled_method_line_range.cover?(l) })
     end
 
     it "surfaces disabled mutations when config.show_disabled is set" do
@@ -59,6 +65,11 @@ RSpec.describe Evilution::Runner::MutationPlanner do
 
       expect(plan.enabled.map(&:line)).not_to include(3)
       expect(plan.skipped_count).to be > 0
+
+      # Mutations OUTSIDE the sig block range must remain enabled: the sig-block
+      # check must test line membership, not blindly treat every range as a match.
+      expect(plan.enabled).not_to be_empty
+      expect(plan.enabled.map(&:line).reject { |l| l == 3 }).not_to be_empty
     end
 
     it "splits equivalent mutations out of the enabled set" do
@@ -144,7 +155,11 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
       plan = described_class.new(config, registry: registry).call(subjects)
 
-      predicate_true_mutations = plan.enabled.select { |m| m.diff =~ /^-\s*true\s*$/ }
+      predicate_true_subject = subjects.find { |s| s.name.include?("predicate_true") }
+      predicate_true_line = predicate_true_subject.line_number
+      predicate_true_mutations = plan.enabled.select do |m|
+        m.diff =~ /^-\s*true\s*$/ && m.line >= predicate_true_line && m.line <= predicate_true_line + 3
+      end
       expect(predicate_true_mutations.map(&:operator_name).uniq).to eq(["last_expression_removal"])
     end
 

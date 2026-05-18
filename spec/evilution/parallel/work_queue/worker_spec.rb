@@ -72,6 +72,144 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
     end
   end
 
+  describe "#initialize state" do
+    it "initializes counters and timings, exposes worker_index and res_io" do
+      worker = described_class.spawn(worker_index: 3, hooks: nil) { |x| x }
+      begin
+        expect(worker.worker_index).to eq(3)
+        expect(worker.items_completed).to eq(0)
+        expect(worker.pending).to eq(0)
+        expect(worker.busy_time).to eq(0.0)
+        expect(worker.wall_time).to eq(0.0)
+        expect(worker.res_io).to be_a(IO)
+        expect(worker.res_io.closed?).to be(false)
+      ensure
+        worker.shutdown
+        worker.close_pipes
+        worker.reap
+      end
+    end
+  end
+
+  describe "#send_item" do
+    it "increments pending each time an item is enqueued" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      begin
+        expect { worker.send_item(0, 1) }.to change(worker, :pending).from(0).to(1)
+        expect { worker.send_item(1, 2) }.to change(worker, :pending).from(1).to(2)
+      ensure
+        worker.shutdown
+        worker.close_pipes
+        worker.reap
+      end
+    end
+  end
+
+  describe "#close_pipes" do
+    it "closes res_io and the command pipe" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.shutdown
+      worker.close_pipes
+      worker.reap
+      expect(worker.res_io.closed?).to be(true)
+      expect { worker.send_item(0, 1) }.to raise_error(IOError)
+    end
+  end
+
+  describe "#reap" do
+    it "waits for the child so it is no longer a child process" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.shutdown
+      worker.close_pipes
+      worker.reap
+      expect { Process.wait(worker.pid) }.to raise_error(Errno::ECHILD)
+    end
+  end
+
+  describe "#retire" do
+    it "captures real busy and wall timings from a worker that did work" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |_| sleep(0.05) }
+      worker.send_item(0, nil)
+      msg = nil
+      Timeout.timeout(5) { msg = worker.read_result until msg }
+      expect(msg[1]).to eq(:ok)
+      worker.items_completed += 1
+      worker.pending -= 1
+
+      stat = worker.retire
+      expect(stat.busy_time).to be > 0.0
+      expect(stat.wall_time).to be > 0.0
+      expect(worker.busy_time).to be > 0.0
+      expect(worker.wall_time).to be > 0.0
+    end
+
+    it "closes pipes and reaps the child" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.retire
+      expect(worker.res_io.closed?).to be(true)
+      expect { Process.wait(worker.pid) }.to raise_error(Errno::ECHILD)
+    end
+
+    it "returns zero timings without raising when the child was killed" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.kill
+      begin
+        Process.wait(worker.pid)
+      rescue Errno::ECHILD
+        nil
+      end
+      stat = nil
+      Timeout.timeout(10) { stat = worker.retire }
+      expect(stat.busy_time).to eq(0.0)
+      expect(stat.wall_time).to eq(0.0)
+    end
+
+    it "returns zero timings without raising when a non-stats frame is drained" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x * 10 }
+      worker.send_item(0, 5)
+      # Deliberately do not read the result; retire's drain must encounter the
+      # [index, :ok, value] frame, recognise it is not a STATS frame, and
+      # fall back to zero timings.
+      stat = nil
+      Timeout.timeout(10) { stat = worker.retire }
+      expect(stat.busy_time).to eq(0.0)
+      expect(stat.wall_time).to eq(0.0)
+    end
+  end
+
+  describe "child pipe hygiene" do
+    it "child observes EOF on the command pipe once the parent closes it" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      begin
+        worker.close_pipes
+        Timeout.timeout(8) { Process.wait(worker.pid) }
+      rescue Timeout::Error
+        Process.kill("KILL", worker.pid)
+        raise
+      ensure
+        begin
+          Process.wait(worker.pid)
+        rescue Errno::ECHILD
+          nil
+        end
+      end
+    end
+
+    it "parent observes EOF on the result pipe after the child exits" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.kill
+      begin
+        Process.wait(worker.pid)
+      rescue Errno::ECHILD
+        nil
+      end
+      result = :unset
+      Timeout.timeout(5) { result = worker.read_result }
+      expect(result).to be_nil
+      worker.close_pipes
+    end
+  end
+
   describe "#shutdown swallows Errno::EPIPE" do
     it "does not raise when child has already exited" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }

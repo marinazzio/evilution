@@ -26,4 +26,8 @@ class EqualityToIdentityExample
   def greater_than(a, b)
     a > b
   end
+
+  def nested_equality(a, b, c)
+    (a == b) == c
+  end
 end

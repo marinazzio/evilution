@@ -260,6 +260,26 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts).to be_empty
     end
 
+    it "still visits a replaceable call nested inside a receiverless call" do
+      # `puts items.map { ... }`: `puts` has no receiver so the operator
+      # bails on it, but it must keep traversing so the nested `items.map`
+      # call is still mutated to `flat_map`.
+      muts = mutations_for("receiverless_wrapping_call")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("puts items.flat_map {")
+    end
+
+    it "still visits a nested call when a replaceable-named call has no receiver" do
+      # `flat_map { items.flat_map { ... } }`: the outer `flat_map` has a
+      # replaceable name but no receiver, so the operator bails on it — yet it
+      # must keep traversing so the nested `items.flat_map` is still mutated.
+      muts = mutations_for("receiverless_named_call_wrapping")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("flat_map { items.map {")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

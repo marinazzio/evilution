@@ -138,6 +138,56 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
     end
   end
 
+  describe "anonymous splat forwarding" do
+    it "does not crash and emits no mutation for an anonymous `*` forward" do
+      source = "def foo(*)\n  bar(*)\nend\n"
+      expect { mutations_for(source) }.not_to raise_error
+
+      splat_mutations = mutations_for(source).select { |m| m.operator_name == "splat_operator" }
+      expect(splat_mutations).to be_empty
+    end
+
+    it "does not crash and emits no mutation for an anonymous `**` forward" do
+      source = "def foo(**)\n  bar(**)\nend\n"
+      expect { mutations_for(source) }.not_to raise_error
+
+      splat_mutations = mutations_for(source).select { |m| m.operator_name == "splat_operator" }
+      expect(splat_mutations).to be_empty
+    end
+  end
+
+  describe "recursion into nested splats" do
+    it "mutates a splat nested inside another splat (recurses past the outer splat)" do
+      mutations = mutations_for("def foo\n  bar(*[*y])\nend\n")
+
+      sources = mutations.map(&:mutated_source)
+      expect(sources).to include("def foo\n  bar([*y])\nend\n")
+      expect(sources).to include("def foo\n  bar(*[y])\nend\n")
+    end
+
+    it "mutates a splat nested inside a double-splat skipped as a hash element" do
+      mutations = mutations_for("def foo\n  {**bar(*x)}\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include("def foo\n  {**bar(x)}\nend\n")
+    end
+
+    it "mutates a splat nested inside a kwarg-preceded double-splat" do
+      mutations = mutations_for("def foo\n  bar(k: v, **f(*x))\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include("def foo\n  bar(k: v, **f(x))\nend\n")
+    end
+  end
+
+  describe "kwarg-after-splat detection across multiple splats" do
+    it "still mutates a later double-splat that is not preceded by any kwarg" do
+      mutations = mutations_for("def foo\n  bar(**a, **b)\nend\n")
+
+      sources = mutations.map(&:mutated_source)
+      expect(sources).to include("def foo\n  bar(a, **b)\nend\n")
+      expect(sources).to include("def foo\n  bar(**a, b)\nend\n")
+    end
+  end
+
   describe "operator name" do
     it "is splat_operator" do
       expect(described_class.operator_name).to eq("splat_operator")

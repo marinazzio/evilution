@@ -65,6 +65,27 @@ RSpec.describe Evilution::Mutator::Operator::BitwiseComplement do
       end
     end
 
+    it "recurses into the operand to mutate a nested ~ operator" do
+      muts = mutations_for("nested_complement")
+
+      # Outer ~ produces 2 mutations; the inner ~ is only reached when the
+      # visitor recurses into the operand. Four mutations total proves the
+      # nested operator was visited.
+      expect(muts.length).to eq(4)
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_including("~(a)"),
+        a_string_including("~(-a)")
+      )
+    end
+
+    it "does not mutate a non-~ call that has a receiver and no arguments" do
+      muts = mutations_for("predicate_call")
+
+      # `a.zero?` has a receiver and nil arguments but its name is :zero?,
+      # not :~ — the operator must check the exact operator name.
+      expect(muts).to be_empty
+    end
+
     it "does not mutate methods with no complement operators" do
       plain_source = "class Foo\n  def greet\n    'hello'\n  end\nend"
       plain_path = fixture_path

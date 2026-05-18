@@ -64,6 +64,27 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
       expect(muts.length).to eq(2)
     end
 
+    it "mutates a quoted symbol literal (closing is a quote, not a label colon)" do
+      tmpfile = Tempfile.new(["symbol_literal_quoted", ".rb"])
+      tmpfile.write("class C\n  def quoted_symbol\n    :\"foo bar\"\n  end\nend\n")
+      tmpfile.close
+      file_src = File.read(tmpfile.path)
+      file_tree = Prism.parse(file_src).value
+      finder = Evilution::AST::SubjectFinder.new(file_src, tmpfile.path)
+      finder.visit(file_tree)
+      quoted_subject = finder.subjects.find { |s| s.name.end_with?("#quoted_symbol") }
+
+      muts = described_class.new.call(quoted_subject)
+
+      expect(muts.length).to eq(2)
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_matching(/:__evilution_mutated__/),
+        a_string_matching(/def quoted_symbol\s+nil\s+end/)
+      )
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_foo")
 

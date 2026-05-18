@@ -72,6 +72,40 @@ RSpec.describe Evilution::Integration::Base do
     end
   end
 
+  describe "abstract method error messages name the concrete class" do
+    let(:named_subclass) do
+      klass = Class.new(described_class)
+      stub_const("EvilutionBaseNamedIntegration", klass)
+      klass
+    end
+
+    subject(:instance) { named_subclass.new }
+
+    it "names the concrete class (not the instance) for #ensure_framework_loaded" do
+      expect { instance.send(:ensure_framework_loaded) }.to raise_error(
+        NotImplementedError, "EvilutionBaseNamedIntegration#ensure_framework_loaded must be implemented"
+      )
+    end
+
+    it "names the concrete class (not the instance) for #run_tests" do
+      expect { instance.send(:run_tests, mutation) }.to raise_error(
+        NotImplementedError, "EvilutionBaseNamedIntegration#run_tests must be implemented"
+      )
+    end
+
+    it "names the concrete class (not the instance) for #build_args" do
+      expect { instance.send(:build_args, mutation) }.to raise_error(
+        NotImplementedError, "EvilutionBaseNamedIntegration#build_args must be implemented"
+      )
+    end
+
+    it "names the concrete class (not the instance) for #reset_state" do
+      expect { instance.send(:reset_state) }.to raise_error(
+        NotImplementedError, "EvilutionBaseNamedIntegration#reset_state must be implemented"
+      )
+    end
+  end
+
   describe "template #call orchestration" do
     let(:events) { [] }
     let(:hooks) { nil }

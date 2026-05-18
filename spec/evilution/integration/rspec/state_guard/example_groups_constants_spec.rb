@@ -45,4 +45,9 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ExampleGroupsConstants
     hide_const("RSpec::ExampleGroups")
     expect(strategy.snapshot).to be_nil
   end
+
+  it "release is a no-op (does not raise) when RSpec::ExampleGroups is undefined" do
+    hide_const("RSpec::ExampleGroups")
+    expect { strategy.release(Set.new([:SomePreExisting])) }.not_to raise_error
+  end
 end
