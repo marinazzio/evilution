@@ -78,6 +78,46 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
         expect(mutation.operator_name).to eq("comparison_replacement")
       end
     end
+
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["comparison", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `return super unless replacements` guard removal: a
+    # non-comparison call has no REPLACEMENTS entry and must not raise
+    # (a deleted guard would call `nil.each`).
+    it "leaves non-comparison calls untouched without raising" do
+      src = "class C\n  def m(a)\n    a.upcase\n  end\nend"
+
+      expect { mutations_for_source(src, "m") }.not_to raise_error
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
+    # Kills the `return super` -> bare `return` change: traversal must still
+    # descend into a non-comparison call's arguments.
+    it "mutates comparisons nested inside a non-comparison call's arguments" do
+      muts = mutations_for_source("class C\n  def m(a, b)\n    puts(a > b)\n  end\nend", "m")
+
+      expect(muts.length).to eq(3)
+      expect(muts.map(&:mutated_source)).to include(a_string_including("puts(a >= b)"))
+    end
+
+    # Kills the trailing `super` deletion: traversal must descend into a
+    # comparison nested inside another comparison expression.
+    it "mutates comparisons nested inside other comparisons" do
+      muts = mutations_for_source("class C\n  def m(a, b, c)\n    a == (b > c)\n  end\nend", "m")
+
+      sources = muts.map(&:mutated_source)
+      expect(sources).to include(a_string_including("b >= c"))
+    end
   end
 
   def source_diff(mutation)

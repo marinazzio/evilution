@@ -114,8 +114,21 @@ RSpec.describe Evilution::Mutator::Registry do
       expect { described_class.for_profile(:bogus) }.to raise_error(ArgumentError, /unknown profile/)
     end
 
+    it "inspects the unknown symbol profile in the message (keeps the leading colon)" do
+      expect { described_class.for_profile(:bogus) }.to(
+        raise_error(ArgumentError, "unknown profile: :bogus (expected :default or :strict)")
+      )
+    end
+
     it "raises ArgumentError on nil" do
       expect { described_class.for_profile(nil) }.to raise_error(ArgumentError, /unknown profile/)
+    end
+
+    it "inspects nil in the message for a nil profile (not a blank to_s)" do
+      # nil.inspect => "nil" but nil.to_s => "" — the message must show "nil".
+      expect { described_class.for_profile(nil) }.to(
+        raise_error(ArgumentError, "unknown profile: nil (expected :default or :strict)")
+      )
     end
 
     it "raises ArgumentError on Integer (not NoMethodError)" do

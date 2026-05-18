@@ -34,4 +34,22 @@ class RescueBodyExample
     dangerous_call
   rescue StandardError
   end
+
+  def bare_empty_rescue
+    dangerous_call
+  rescue
+  end
+
+  def rescue_with_raise_and_more
+    dangerous_call
+  rescue StandardError
+    raise
+    notify
+  end
+
+  def rescue_non_call_first
+    dangerous_call
+  rescue StandardError
+    42
+  end
 end

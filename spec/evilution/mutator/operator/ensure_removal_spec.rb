@@ -79,6 +79,16 @@ RSpec.describe Evilution::Mutator::Operator::EnsureRemoval do
       end
     end
 
+    it "recurses into the ensure body to mutate a nested ensure clause" do
+      # The outer ensure produces 1 mutation; a `begin/ensure` block inside
+      # that ensure body produces 1 more — only reached when the visitor
+      # recurses into the ensure node's children.
+      nested_subject = subjects.find { |s| s.name.include?("nested_ensure") }
+      mutations = described_class.new.call(nested_subject)
+
+      expect(mutations.length).to eq(2)
+    end
+
     it "sets correct operator_name" do
       mutations = described_class.new.call(simple_subject)
 

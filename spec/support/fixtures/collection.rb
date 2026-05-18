@@ -150,4 +150,8 @@ class CollectionProcessor
   def hash_values(hash)
     hash.values
   end
+
+  def non_replaceable_wrapping_call(items)
+    helper(items.map { |i| i })
+  end
 end

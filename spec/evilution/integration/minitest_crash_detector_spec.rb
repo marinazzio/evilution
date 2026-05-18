@@ -6,6 +6,28 @@ require "evilution/integration/minitest_crash_detector"
 RSpec.describe Evilution::Integration::MinitestCrashDetector do
   subject(:detector) { described_class.new }
 
+  describe "#passed?" do
+    it "returns true when no crashes have been recorded" do
+      expect(detector.passed?).to be true
+    end
+
+    it "returns false when a crash has been recorded" do
+      result = Minitest::Result.new("test_foo")
+      result.failures << Minitest::UnexpectedError.new(RuntimeError.new("boom"))
+      detector.record(result)
+
+      expect(detector.passed?).to be false
+    end
+
+    it "is unaffected by assertion failures alone" do
+      result = Minitest::Result.new("test_foo")
+      result.failures << Minitest::Assertion.new("expected true")
+      detector.record(result)
+
+      expect(detector.passed?).to be true
+    end
+  end
+
   describe "#record" do
     it "tracks assertion failures" do
       result = Minitest::Result.new("test_foo")
@@ -29,6 +51,16 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
     it "ignores passing results" do
       result = Minitest::Result.new("test_foo")
+
+      detector.record(result)
+
+      expect(detector).not_to be_crashed
+      expect(detector).not_to be_assertion_failure
+    end
+
+    it "ignores failures that are neither UnexpectedError nor Assertion" do
+      result = Minitest::Result.new("test_foo")
+      result.failures << Object.new
 
       detector.record(result)
 
@@ -76,8 +108,17 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
 
       detector.record(result)
 
-      expect(detector.crash_summary).to include("NoMethodError")
-      expect(detector.crash_summary).to include("1 crash")
+      expect(detector.crash_summary).to eq("NoMethodError (1 crash)")
+    end
+
+    it "uses the singular 'crash' for exactly one crash" do
+      result = Minitest::Result.new("test_foo")
+      result.failures << Minitest::UnexpectedError.new(NoMethodError.new("undefined"))
+
+      detector.record(result)
+
+      expect(detector.crash_summary).to end_with("(1 crash)")
+      expect(detector.crash_summary).not_to include("crashes")
     end
 
     it "deduplicates exception types" do
@@ -87,8 +128,18 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
         detector.record(result)
       end
 
-      expect(detector.crash_summary).to include("RuntimeError")
-      expect(detector.crash_summary).to include("2 crashes")
+      expect(detector.crash_summary).to eq("RuntimeError (2 crashes)")
+    end
+
+    it "joins multiple distinct crash classes with a comma separator" do
+      r1 = Minitest::Result.new("test_foo")
+      r1.failures << Minitest::UnexpectedError.new(TypeError.new("a"))
+      r2 = Minitest::Result.new("test_bar")
+      r2.failures << Minitest::UnexpectedError.new(NoMethodError.new("b"))
+      detector.record(r1)
+      detector.record(r2)
+
+      expect(detector.crash_summary).to eq("TypeError, NoMethodError (2 crashes)")
     end
   end
 

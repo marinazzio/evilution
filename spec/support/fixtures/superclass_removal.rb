@@ -19,3 +19,19 @@ class Service < ActiveRecord::Base
     :ok
   end
 end
+
+class WithConstant < User
+  TABLE = :records
+
+  def lookup
+    TABLE
+  end
+end
+
+class Outer < User
+  class Inner < User
+    def inner_method
+      :inner
+    end
+  end
+end

@@ -89,5 +89,47 @@ RSpec.describe Evilution::Mutator::Operator::BangMethod do
 
       expect(mutations.first.operator_name).to eq("bang_method")
     end
+
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["bang", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `return super unless node.receiver` guard removal/change: a
+    # call with no explicit receiver (a bare `foo!`) must NOT be mutated;
+    # without the guard the operator would emit a spurious `foo` mutation.
+    it "ignores receiverless bang calls" do
+      expect(mutations_for_source("class C\n  def m\n    process!\n  end\nend", "m")).to be_empty
+    end
+
+    # Kills the `return super` -> bare `return` change at the receiver guard:
+    # for a receiverless call the traversal must still descend into the
+    # arguments so a nested bang call there is mutated.
+    it "mutates a bang call nested in a receiverless call's arguments" do
+      muts = mutations_for_source("class C\n  def m(items)\n    process!(items.sort!)\n  end\nend", "m")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("items.sort")
+      expect(muts.first.mutated_source).not_to match(/sort!/)
+    end
+
+    # Kills the trailing `super` deletion: traversal must descend into the
+    # receiver chain so a bang call on the receiver is also mutated.
+    it "mutates bang calls in a chained receiver" do
+      muts = mutations_for_source("class C\n  def m(items)\n    items.sort!.uniq!\n  end\nend", "m")
+
+      expect(muts.length).to eq(2)
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_including("items.sort.uniq!"),
+        a_string_including("items.sort!.uniq")
+      )
+    end
   end
 end

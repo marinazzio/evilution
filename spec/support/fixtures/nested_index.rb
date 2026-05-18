@@ -20,4 +20,28 @@ class NestedIndex
   def no_index
     "plain"
   end
+
+  def nested_in_argument(x, y)
+    x[y[:a][:b]]
+  end
+
+  def index_then_call(h)
+    h[:a].bar
+  end
+
+  def self_index
+    self[:a][:b]
+  end
+
+  def method_chain(a)
+    a.foo(1).bar(2)
+  end
+
+  def empty_index_chain(h)
+    h[][:b]
+  end
+
+  def two_arg_index(h)
+    h[:a, :b][:c]
+  end
 end

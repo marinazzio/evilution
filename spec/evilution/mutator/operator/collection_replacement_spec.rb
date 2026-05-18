@@ -318,5 +318,15 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       muts = described_class.new.call(subj)
       expect(muts).to be_empty
     end
+
+    it "still visits a replaceable call nested inside a non-replaceable call" do
+      # `helper(items.map { ... })`: `helper` is not in the replacement table,
+      # but the operator must keep traversing so the nested `items.map` call
+      # is still replaced with `each`.
+      muts = mutations_for("non_replaceable_wrapping_call")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("helper(items.each {")
+    end
   end
 end

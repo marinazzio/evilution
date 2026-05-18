@@ -13,4 +13,8 @@ class CvarExample
   def no_cvars
     42
   end
+
+  def nested_cvar
+    @@a = (@@b = 1)
+  end
 end

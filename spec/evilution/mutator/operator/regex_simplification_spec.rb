@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
   let(:fixture_path) { File.expand_path("../../../support/fixtures/regex_simplification.rb", __dir__) }
   let(:source) { File.read(fixture_path) }
@@ -14,6 +16,26 @@ RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
   def mutations_for(method_name)
     subject = subjects_from_fixture.find { |s| s.name.end_with?("##{method_name}") }
     described_class.new.call(subject)
+  end
+
+  # Builds a one-method file whose body is `s.match?(<regex>)` and returns the
+  # mutations the operator emits for it. Backed by a real tempfile because the
+  # operator reads the subject's file path.
+  def mutations_for_regex(regex_literal)
+    tmpfile = Tempfile.new(["regex_simplification", ".rb"])
+    tmpfile.write("def probe(s)\n  s.match?(#{regex_literal})\nend\n")
+    tmpfile.flush
+    @tmpfiles ||= []
+    @tmpfiles << tmpfile
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  end
+
+  after do
+    Array(@tmpfiles).each do |f|
+      f.close
+      f.unlink
+    end
   end
 
   describe "#call" do
@@ -130,6 +152,83 @@ RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
 
       muts.each do |mutation|
         expect(mutation.operator_name).to eq("regex_simplification")
+      end
+    end
+
+    context "anchor guard" do
+      it "emits no anchor mutations for a regex with no anchors" do
+        muts = mutations_for_regex("/abc/")
+
+        expect(muts).to be_empty
+      end
+    end
+
+    context "character class range scanning" do
+      it "does not treat a dash after the class close as a range" do
+        muts = mutations_for_regex("/[a-z]-x/")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("/[az]-x/")
+      end
+
+      it "does not treat an escaped dash inside a class as a range" do
+        muts = mutations_for_regex('/[a\-z]/')
+
+        expect(muts).to be_empty
+      end
+
+      it "skips an escaped dash and still finds a later real range" do
+        muts = mutations_for_regex('/[a\-z0-9]/')
+        sources = muts.map(&:mutated_source)
+
+        expect(muts.length).to eq(1)
+        expect(sources).to include(a_string_including('/[a\-z09]/'))
+      end
+
+      it "skips both escape sequences without misreading the second escaped dash" do
+        muts = mutations_for_regex('/[\d\-x]/')
+
+        expect(muts).to be_empty
+      end
+
+      it "emits a range mutation only for an actual range dash" do
+        muts = mutations_for_regex("/[a-z]/")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("/[az]/")
+      end
+
+      it "treats a leading bracket after a negation caret as a class member" do
+        muts = mutations_for_regex("/[^]a-z]/")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to include("/[^]az]/")
+      end
+
+      it "does not treat a dash directly before the class close as a range" do
+        muts = mutations_for_regex("/[a-]b/")
+
+        expect(muts).to be_empty
+      end
+
+      it "does not mutate a literal plus inside a character class" do
+        muts = mutations_for_regex("/[a+b]z/")
+
+        expect(muts).to be_empty
+      end
+
+      it "removes a quantifier following a character class" do
+        muts = mutations_for_regex("/[a-z]+/")
+        sources = muts.map(&:mutated_source)
+
+        expect(sources).to include(a_string_including("/[az]+/"))
+        expect(sources).to include(a_string_including("/[a-z]/"))
+      end
+
+      it "skips an escaped close-bracket when locating the class end" do
+        muts = mutations_for_regex('/[a\]+]z/')
+
+        expect(muts).to be_empty
       end
     end
   end

@@ -58,6 +58,34 @@ RSpec.describe Evilution::Mutator::Operator::IndexToAt do
       expect(muts).to be_empty
     end
 
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["index", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `node.name == :[]` -> `node.name` change: a regular
+    # single-argument method call (not `[]`) must NOT be rewritten to `.at`.
+    it "does not mutate non-index single-argument method calls" do
+      expect(mutations_for_source("class C\n  def m(a)\n    a.push(0)\n  end\nend", "m")).to be_empty
+    end
+
+    # Kills the `node.arguments` -> `node` change: an empty index call `a[]`
+    # has nil arguments and must be skipped (without the guard the operator
+    # would call `.arguments.length` on nil and raise).
+    it "does not mutate (and does not raise on) an argumentless index call" do
+      src = "class C\n  def m(a)\n    a[]\n  end\nend"
+
+      expect { mutations_for_source(src, "m") }.not_to raise_error
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
     it "handles multi-byte source correctly" do
       mb_path = File.expand_path("../../../support/fixtures/index_access_multibyte.rb", __dir__)
       mb_source = File.read(mb_path)

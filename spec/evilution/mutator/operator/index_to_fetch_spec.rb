@@ -75,6 +75,45 @@ RSpec.describe Evilution::Mutator::Operator::IndexToFetch do
       expect(muts).to be_empty
     end
 
+    def mutations_from_source(method_name, src)
+      tmpfile = Tempfile.new(["index_to_fetch", ".rb"])
+      tmpfile.write(src)
+      tmpfile.close
+      subject = Evilution::AST::Parser.new.call(tmpfile.path)
+                                      .find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subject)
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    it "does not mutate a non-[] one-argument method call (name guard)" do
+      muts = mutations_from_source(
+        "dig_call", "class C\n  def dig_call(h)\n    h.dig(:k)\n  end\nend\n"
+      )
+
+      expect(muts).to be_empty
+    end
+
+    it "does not mutate an empty [] call with no arguments" do
+      muts = mutations_from_source(
+        "empty_index", "class C\n  def empty_index(h)\n    h[]\n  end\nend\n"
+      )
+
+      expect(muts).to be_empty
+    end
+
+    it "mutates a [] access nested inside another [] access" do
+      muts = mutations_from_source(
+        "nested_index", "class C\n  def nested_index(h, a)\n    h[a[0]]\n  end\nend\n"
+      )
+
+      expect(muts.length).to eq(2)
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_matching(/h\.fetch\(a\[0\]\)/),
+        a_string_matching(/h\[a\.fetch\(0\)\]/)
+      )
+    end
+
     it "generates valid replacement when multi-byte characters precede the target" do
       multibyte_source = <<~RUBY
         class Lookup

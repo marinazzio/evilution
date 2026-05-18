@@ -13,6 +13,16 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ObjectSpaceExampleGrou
     expect(snap).to all(be_a(Integer))
   end
 
+  it "snapshot includes ExampleGroup subclasses but excludes non-ExampleGroup classes" do
+    eg_subclass = Class.new(RSpec::Core::ExampleGroup)
+    plain_class = Class.new
+
+    snap = strategy.snapshot
+
+    expect(snap).to include(eg_subclass.object_id)
+    expect(snap).not_to include(plain_class.object_id)
+  end
+
   it "release prunes constants and ivars from groups created after snapshot" do
     snap = strategy.snapshot
 

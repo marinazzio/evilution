@@ -77,4 +77,19 @@ class RescueExample
       cleanup
     end
   end
+
+  # A rescue clause nested inside the body of an outer begin/rescue. The
+  # operator must descend into the outer begin to discover the inner one,
+  # so two removal mutations are expected: one per rescue clause.
+  def nested_rescue
+    begin
+      begin
+        inner_call
+      rescue ArgumentError
+        handle_inner
+      end
+    rescue RuntimeError
+      handle_outer
+    end
+  end
 end

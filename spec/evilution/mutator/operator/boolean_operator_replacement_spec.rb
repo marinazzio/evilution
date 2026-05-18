@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::BooleanOperatorReplacement do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["boolean_operator", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "replaces && with ||" do
       muts = mutations_for("both_true?")
@@ -43,6 +54,18 @@ RSpec.describe Evilution::Mutator::Operator::BooleanOperatorReplacement do
 
       expect(muts.length).to eq(1)
       expect(muts.first.mutated_source).to include("a and b")
+    end
+
+    it "recurses into a nested && so the inner operator is also replaced" do
+      muts = mutations_from_source("class C\n  def m(a, b, c)\n    a && b && c\n  end\nend\n")
+
+      expect(muts.length).to eq(2)
+    end
+
+    it "recurses into a nested || so the inner operator is also replaced" do
+      muts = mutations_from_source("class C\n  def m(a, b, c)\n    a || b || c\n  end\nend\n")
+
+      expect(muts.length).to eq(2)
     end
 
     it "produces valid Ruby for all mutations" do

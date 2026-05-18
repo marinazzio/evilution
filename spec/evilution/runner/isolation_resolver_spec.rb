@@ -40,6 +40,13 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
       expect(resolver.isolator).to equal(resolver.isolator)
     end
+
+    it "forwards the hooks object to the Fork isolator" do
+      hooks = Object.new
+      resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: hooks)
+      expect(Evilution::Isolation::Fork).to receive(:new).with(hooks: hooks).and_call_original
+      resolver.isolator
+    end
   end
 
   describe "#rails_root_detected?" do
@@ -58,6 +65,15 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       resolver.rails_root_detected?
       resolver.rails_root_detected?
       expect(Evilution::RailsDetector).to have_received(:rails_root_for_any).once
+    end
+
+    it "returns the same cached boolean on every call" do
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return("/app")
+      resolver = described_class.new(config, target_files: -> { [] }, hooks: nil)
+
+      first = resolver.rails_root_detected?
+      expect(first).to be(true)
+      expect(resolver.rails_root_detected?).to be(true)
     end
   end
 
@@ -78,6 +94,20 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       )
       expect { resolver.isolator }.not_to output.to_stderr
     end
+
+    it "warns at most once even across separate isolation resolutions" do
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return("/app")
+      noisy_config = Evilution::Config.new(isolation: :in_process, baseline: false, skip_config_file: true)
+      resolver = described_class.new(noisy_config, target_files: -> { [] }, hooks: nil)
+
+      written = +""
+      allow($stderr).to receive(:write) { |str| written << str }
+
+      resolver.isolator
+      resolver.perform_preload
+
+      expect(written.scan("unsafe on Rails").size).to eq(1)
+    end
   end
 
   describe "#perform_preload" do
@@ -88,11 +118,66 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       expect { resolver.perform_preload }.not_to raise_error
     end
 
+    it "does not auto-detect a preload file when config.preload is false even under :fork on Rails" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        FileUtils.mkdir_p(spec_dir)
+        marker = File.join(dir, "marker")
+        File.write(File.join(spec_dir, "rails_helper.rb"), "File.write(#{marker.inspect}, 'loaded')\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+
+        resolver = described_class.new(
+          config(preload: false, isolation: :fork), target_files: -> { [] }, hooks: nil
+        )
+        resolver.perform_preload
+
+        expect(File.exist?(marker)).to be(false)
+      end
+    end
+
     it "is a no-op when isolation resolves to :in_process" do
       resolver = described_class.new(
         config(isolation: :in_process), target_files: -> { [] }, hooks: nil
       )
       expect { resolver.perform_preload }.not_to raise_error
+    end
+
+    it "detects the Rails root only once while resolving a preload" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        FileUtils.mkdir_p(spec_dir)
+        File.write(File.join(spec_dir, "rails_helper.rb"), "# preloaded\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+        original_load_path = $LOAD_PATH.dup
+
+        begin
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+        end
+
+        expect(Evilution::RailsDetector).to have_received(:rails_root_for_any).once
+      end
+    end
+
+    it "adds the rails root spec directory to $LOAD_PATH before requiring the preload file" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        FileUtils.mkdir_p(spec_dir)
+        File.write(File.join(spec_dir, "rails_helper.rb"), "# preloaded\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+        expanded = File.expand_path(spec_dir)
+        original_load_path = $LOAD_PATH.dup
+
+        begin
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+          expect($LOAD_PATH).to include(expanded)
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+        end
+      end
     end
 
     it "raises Evilution::ConfigError when an explicit preload path is missing under :fork with no rails root" do
@@ -101,6 +186,24 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         target_files: -> { [] }, hooks: nil
       )
       expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /[Pp]reload file not found/)
+    end
+
+    it "wraps a failing preload file in a ConfigError naming the quoted path, error class and message" do
+      Dir.mktmpdir do |dir|
+        preload_file = File.join(dir, "preloaded.rb")
+        File.write(preload_file, "raise 'boom-from-preload'\n")
+
+        resolver = described_class.new(
+          config(preload: preload_file, isolation: :fork),
+          target_files: -> { [] }, hooks: nil
+        )
+
+        expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError) do |e|
+          expect(e.message).to include("failed to preload #{preload_file.inspect}")
+          expect(e.message).to include("RuntimeError")
+          expect(e.message).to include("boom-from-preload")
+        end
+      end
     end
 
     it "loads a preload file when one is provided" do
@@ -214,6 +317,26 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError, /preload file not found/)
     end
 
+    it "does not fall through to auto-detect under :in_process even when a Rails root with helpers exists" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        FileUtils.mkdir_p(spec_dir)
+        marker = File.join(dir, "marker")
+        File.write(File.join(spec_dir, "rails_helper.rb"), "File.write(#{marker.inspect}, 'loaded')\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+
+        resolver = described_class.new(
+          config(preload: "/nonexistent/helper.rb", isolation: :in_process),
+          target_files: -> { [] }, hooks: nil
+        )
+
+        expect { resolver.perform_preload }.to raise_error(
+          Evilution::ConfigError, %r{preload file not found: "/nonexistent/helper\.rb"}
+        )
+        expect(File.exist?(marker)).to be(false)
+      end
+    end
+
     describe "autodetect fallback chain (Rails detected, no explicit preload)" do
       def with_rails_root_having(file_paths)
         Dir.mktmpdir do |dir|
@@ -270,6 +393,19 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         end
       end
 
+      it "joins the tried candidate paths with a comma and no surrounding quotes" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+
+          expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError) do |e|
+            expect(e.message).to include(
+              "spec/rails_helper.rb, spec/spec_helper.rb, test/test_helper.rb"
+            )
+          end
+        end
+      end
+
       it "is a no-op under :in_process even when Rails is detected and no helpers exist" do
         Dir.mktmpdir do |dir|
           allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
@@ -319,6 +455,23 @@ RSpec.describe Evilution::Runner::IsolationResolver do
             expect(e.message).to include("spec/rails_helper.rb")
             expect(e.message).to include("spec/spec_helper.rb")
             expect(e.message).to include("test/test_helper.rb")
+          end
+        end
+      end
+
+      it "quotes the configured explicit path and comma-joins the chain in the combined error" do
+        Dir.mktmpdir do |dir|
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+          resolver = described_class.new(
+            config(preload: "/nonexistent/helper.rb", isolation: :fork),
+            target_files: -> { [] }, hooks: nil
+          )
+
+          expect { resolver.perform_preload }.to raise_error(Evilution::ConfigError) do |e|
+            expect(e.message).to include('Configured preload "/nonexistent/helper.rb" does not exist')
+            expect(e.message).to include(
+              "spec/rails_helper.rb, spec/spec_helper.rb, test/test_helper.rb"
+            )
           end
         end
       end
@@ -403,6 +556,31 @@ RSpec.describe Evilution::Runner::IsolationResolver do
           resolver.perform_preload
 
           expect(File.exist?(marker)).to be(false)
+        end
+      end
+
+      it "memoizes the detected gem entry across repeated lookups" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          FileUtils.mkdir_p(lib_dir)
+          File.write(File.join(lib_dir, "mygem.rb"), "# entry\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          Evilution::GemDetector.reset_cache!
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_call_original
+
+          resolver = described_class.new(
+            config(isolation: :fork),
+            target_files: -> { [File.join(lib_dir, "mygem.rb")] },
+            hooks: nil
+          )
+
+          first = resolver.send(:detected_gem_entry)
+          second = resolver.send(:detected_gem_entry)
+
+          expect(second).to eq(first)
+          expect(first).to end_with("lib/mygem.rb")
+          expect(Evilution::GemDetector).to have_received(:gem_root_for_any).once
         end
       end
 

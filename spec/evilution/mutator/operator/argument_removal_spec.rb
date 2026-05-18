@@ -64,6 +64,33 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
       expect(mutations_for("array_index_assign")).to be_empty
     end
 
+    it "skips a multi-arg call when one positional slot is a splat" do
+      # `bar(a, *rest)` has two arguments but the second is a splat — the
+      # positional-only guard must reject it (not just splats in single-arg
+      # calls).
+      muts = mutations_for("splat_among_positional")
+
+      expect(muts).to be_empty
+    end
+
+    it "skips a multi-arg call when one positional slot is a keyword hash" do
+      # `bar(a, key: val)` has two arguments but the second is a keyword hash.
+      muts = mutations_for("kwarg_among_positional")
+
+      expect(muts).to be_empty
+    end
+
+    it "recurses into argument expressions to mutate a nested call" do
+      # `outer(inner(a, b), c)`: the outer call yields 2 mutations and the
+      # nested `inner(a, b)` call yields 2 more — only reached when the
+      # visitor recurses into the argument expressions.
+      muts = mutations_for("nested_call")
+
+      expect(muts.length).to eq(4)
+      expect(muts.any? { |m| m.mutated_source.include?("outer(inner(b), c)") }).to be true
+      expect(muts.any? { |m| m.mutated_source.include?("outer(inner(a), c)") }).to be true
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

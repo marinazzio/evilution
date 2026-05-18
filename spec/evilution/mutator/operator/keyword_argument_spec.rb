@@ -79,6 +79,13 @@ RSpec.describe Evilution::Mutator::Operator::KeywordArgument do
       removed = mutations.select { |m| m.mutated_source.include?("def foo(x)") }
       expect(removed).to be_empty
     end
+
+    it "does not remove a lone optional keyword (needs >= 2 params)" do
+      mutations = mutations_for("def foo(bar: 42)\n  bar\nend\n")
+
+      empty_params = mutations.select { |m| m.mutated_source.include?("def foo()") }
+      expect(empty_params).to be_empty
+    end
   end
 
   describe "removing keyword rest parameter" do
@@ -96,6 +103,14 @@ RSpec.describe Evilution::Mutator::Operator::KeywordArgument do
 
       removed = mutations.reject { |m| m.mutated_source.include?("**opts") }
       expect(removed).not_to be_empty
+    end
+
+    it "does not treat a **nil keyword block as a removable keyword rest" do
+      source = "def foo(x, **nil)\n  x\nend\n"
+      mutations = mutations_for(source)
+
+      keyword_mutations = mutations.select { |m| m.operator_name == "keyword_argument" }
+      expect(keyword_mutations).to be_empty
     end
   end
 

@@ -16,6 +16,18 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
     described_class.new.call(subject)
   end
 
+  def outer_subject_mutations(inline_source)
+    tmpfile = Tempfile.new(["method_body", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    outermost = subjects.min_by(&:line_number)
+    described_class.new.call(outermost)
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "generates 2 mutations for a method without super in body (nil + self only)" do
       muts = mutations_for("with_body")
@@ -62,6 +74,13 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       muts = mutations_for("empty_method")
 
       expect(muts.length).to eq(0)
+    end
+
+    it "recurses into a nested def so the inner method body is also replaced" do
+      muts = outer_subject_mutations("class C\n  def m\n    def inner\n      42\n    end\n  end\nend\n")
+
+      # 2 mutations (nil/self) for the outer def + 2 for the nested inner def
+      expect(muts.length).to eq(4)
     end
 
     it "replaces only the statements (not the def framing) for a method-level rescue" do

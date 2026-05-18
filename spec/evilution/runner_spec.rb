@@ -2710,4 +2710,428 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Runner::Canary).not_to have_received(:new)
     end
   end
+
+  describe "private helper delegation" do
+    let(:config) { Evilution::Config.new(skip_config_file: true, baseline: false) }
+
+    describe "#initialize default config" do
+      it "builds a usable Config instance by default (not the Config class)" do
+        default_runner = described_class.new
+
+        expect(default_runner.config).to be_a(Evilution::Config)
+      end
+    end
+
+    describe "#parse_and_filter_subjects" do
+      it "returns the subjects produced by the subject pipeline" do
+        pipeline = instance_double(Evilution::Runner::SubjectPipeline)
+        allow(Evilution::Runner::SubjectPipeline).to receive(:new).and_return(pipeline)
+        allow(pipeline).to receive(:call).and_return([subject_obj])
+
+        expect(runner.parse_and_filter_subjects).to eq([subject_obj])
+      end
+    end
+
+    describe "#rails_root_detected?" do
+      it "returns the value from the isolation resolver" do
+        resolver = instance_double(Evilution::Runner::IsolationResolver, rails_root_detected?: true)
+        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
+
+        expect(runner.send(:rails_root_detected?)).to be(true)
+      end
+    end
+
+    describe "#perform_preload" do
+      it "delegates to the isolation resolver" do
+        resolver = instance_double(Evilution::Runner::IsolationResolver)
+        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
+        allow(resolver).to receive(:perform_preload)
+
+        runner.send(:perform_preload)
+
+        expect(resolver).to have_received(:perform_preload)
+      end
+    end
+
+    describe "#clear_operator_caches" do
+      it "clears the mutator base parse cache" do
+        allow(Evilution::Mutator::Base).to receive(:clear_parse_cache!)
+
+        runner.send(:clear_operator_caches)
+
+        expect(Evilution::Mutator::Base).to have_received(:clear_parse_cache!)
+      end
+    end
+
+    describe "#emit_parallel_db_warning" do
+      it "forwards the config to ParallelDbWarning.warn_if_sqlite_parallel" do
+        allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+
+        runner.send(:emit_parallel_db_warning)
+
+        expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+      end
+    end
+
+    describe "#equivalent_results" do
+      it "returns one equivalent MutationResult per mutation" do
+        m1 = instance_double(Evilution::Mutation, strip_sources!: nil)
+        m2 = instance_double(Evilution::Mutation, strip_sources!: nil)
+
+        results = runner.send(:equivalent_results, [m1, m2])
+
+        expect(results.map(&:status)).to eq(%i[equivalent equivalent])
+        expect(results.map(&:mutation)).to eq([m1, m2])
+        expect(results.map(&:duration)).to eq([0.0, 0.0])
+      end
+
+      it "strips sources from each equivalent mutation" do
+        m1 = instance_double(Evilution::Mutation, strip_sources!: nil)
+
+        runner.send(:equivalent_results, [m1])
+
+        expect(m1).to have_received(:strip_sources!)
+      end
+
+      it "returns an empty array when there are no equivalent mutations" do
+        expect(runner.send(:equivalent_results, [])).to eq([])
+      end
+    end
+
+    describe "#release_subject_nodes" do
+      it "releases the AST node of every subject" do
+        s1 = double("Subject1", release_node!: nil)
+        s2 = double("Subject2", release_node!: nil)
+
+        runner.send(:release_subject_nodes, [s1, s2])
+
+        expect(s1).to have_received(:release_node!)
+        expect(s2).to have_received(:release_node!)
+      end
+    end
+
+    describe "#output_report" do
+      it "publishes the summary through the report publisher" do
+        publisher = instance_double(Evilution::Runner::ReportPublisher)
+        allow(Evilution::Runner::ReportPublisher).to receive(:new).and_return(publisher)
+        allow(publisher).to receive(:publish)
+        summary = double("Summary")
+
+        runner.send(:output_report, summary)
+
+        expect(publisher).to have_received(:publish).with(summary)
+      end
+    end
+
+    describe "#save_session" do
+      it "saves the session through the report publisher" do
+        publisher = instance_double(Evilution::Runner::ReportPublisher)
+        allow(Evilution::Runner::ReportPublisher).to receive(:new).and_return(publisher)
+        allow(publisher).to receive(:save_session)
+        summary = double("Summary")
+
+        runner.send(:save_session, summary)
+
+        expect(publisher).to have_received(:save_session).with(summary)
+      end
+    end
+
+    describe "#log_memory" do
+      it "delegates phase and context to diagnostics" do
+        diag = instance_double(Evilution::Runner::Diagnostics)
+        allow(Evilution::Runner::Diagnostics).to receive(:new).and_return(diag)
+        allow(diag).to receive(:log_memory)
+
+        runner.send(:log_memory, "phase-x", "context-y")
+
+        expect(diag).to have_received(:log_memory).with("phase-x", "context-y")
+      end
+    end
+
+    describe "#install_signal_handlers" do
+      it "installs a handler for both INT and TERM" do
+        installed = []
+        allow(runner).to receive(:install_signal_handler) { |sig| installed << sig }
+
+        runner.send(:install_signal_handlers)
+
+        expect(installed).to contain_exactly("INT", "TERM")
+      end
+    end
+
+    describe "#install_signal_handler" do
+      around do |example|
+        prev_int = Signal.trap("INT", "DEFAULT")
+        example.run
+        Signal.trap("INT", prev_int)
+      end
+
+      it "traps the signal and runs temp dir cleanup when fired" do
+        chained = false
+        Signal.trap("INT") { chained = true }
+
+        runner.send(:install_signal_handler, "INT")
+
+        allow(Evilution::TempDirTracker).to receive(:cleanup_all)
+        handler = Signal.trap("INT", "DEFAULT")
+        handler.call
+
+        expect(Evilution::TempDirTracker).to have_received(:cleanup_all)
+        expect(chained).to be(true)
+      end
+
+      it "re-raises the signal with the default disposition when there was no prior Ruby handler" do
+        require "timeout"
+        reader, writer = IO.pipe
+
+        pid = fork do
+          reader.close
+          Signal.trap("TERM", "DEFAULT")
+          Evilution::Runner.new(config: Evilution::Config.new(skip_config_file: true))
+                           .send(:install_signal_handler, "TERM")
+          writer.puts("ready")
+          writer.close
+          sleep 5
+        end
+
+        writer.close
+        expect(reader.gets).to eq("ready\n")
+        reader.close
+
+        Process.kill("TERM", pid)
+        status =
+          begin
+            Timeout.timeout(3) { Process.wait2(pid).last }
+          rescue Timeout::Error
+            Process.kill("KILL", pid)
+            Process.wait2(pid).last
+          end
+
+        expect(status.signaled?).to be(true)
+        expect(status.termsig).to eq(Signal.list.fetch("TERM"))
+      end
+    end
+  end
+
+  describe "#call observable side effects" do
+    before do
+      parser = instance_double(Evilution::AST::Parser)
+      allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
+      allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
+
+      registry = instance_double(Evilution::Mutator::Registry)
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      allow(isolator).to receive(:call).and_return(mutation_result)
+    end
+
+    it "installs signal handlers during the run" do
+      expect(runner).to receive(:install_signal_handlers).and_call_original
+
+      runner.call
+    end
+
+    it "configures child output during the run" do
+      expect(runner).to receive(:configure_child_output)
+
+      runner.call
+    end
+
+    it "emits the parallel DB warning during the run" do
+      allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+
+      runner.call
+
+      expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+    end
+
+    it "clears operator parse caches during the run" do
+      allow(Evilution::Mutator::Base).to receive(:clear_parse_cache!).and_call_original
+
+      runner.call
+
+      expect(Evilution::Mutator::Base).to have_received(:clear_parse_cache!)
+    end
+
+    it "publishes the report and saves the session" do
+      publisher = instance_double(Evilution::Runner::ReportPublisher)
+      allow(Evilution::Runner::ReportPublisher).to receive(:new).and_return(publisher)
+      allow(publisher).to receive(:publish)
+      allow(publisher).to receive(:save_session)
+
+      summary = runner.call
+
+      expect(publisher).to have_received(:publish).with(summary)
+      expect(publisher).to have_received(:save_session).with(summary)
+    end
+
+    it "records a small elapsed duration, not an absolute monotonic timestamp" do
+      result = runner.call
+
+      expect(result.duration).to be < 60
+    end
+
+    it "performs preload during the run" do
+      expect(runner).to receive(:perform_preload).and_call_original
+
+      runner.call
+    end
+
+    it "runs the canary during the run" do
+      expect(runner).to receive(:run_canary).and_call_original
+
+      runner.call
+    end
+
+    it "logs memory phases with subject and result counts" do
+      phases = []
+      allow(runner).to receive(:log_memory) { |phase, context| phases << [phase, context] }
+
+      runner.call
+
+      expect(phases).to include(["after parse_subjects", "1 subjects"])
+      expect(phases).to include(["after run_mutations", "1 results"])
+    end
+
+    it "logs the after-preload phase when a Rails root is detected" do
+      allow(runner).to receive(:rails_root_detected?).and_return(true)
+      phases = []
+      allow(runner).to receive(:log_memory) { |phase, _context| phases << phase }
+
+      runner.call
+
+      expect(phases).to include("after preload")
+    end
+
+    it "does not log the after-preload phase when no Rails root is detected" do
+      allow(runner).to receive(:rails_root_detected?).and_return(false)
+      phases = []
+      allow(runner).to receive(:log_memory) { |phase, _context| phases << phase }
+
+      runner.call
+
+      expect(phases).not_to include("after preload")
+    end
+
+    it "includes equivalent results in the summary" do
+      equivalent_mutation = double(
+        "EquivalentMutation",
+        subject: subject_obj,
+        operator_name: "comparison_replacement",
+        original_source: "a",
+        mutated_source: "a",
+        file_path: "lib/example.rb",
+        line: 7,
+        column: 0,
+        diff: "",
+        strip_sources!: nil,
+        unparseable?: false,
+        unified_diff: nil
+      )
+      plan = Evilution::Runner::MutationPlanner::Plan.new(
+        enabled: [mutation],
+        equivalent: [equivalent_mutation],
+        skipped_count: 0,
+        disabled_mutations: []
+      )
+      planner = instance_double(Evilution::Runner::MutationPlanner)
+      allow(Evilution::Runner::MutationPlanner).to receive(:new).and_return(planner)
+      allow(planner).to receive(:call).and_return(plan)
+
+      result = runner.call
+
+      expect(result.total).to eq(2)
+      expect(result.equivalent).to eq(1)
+    end
+  end
+
+  describe "#configure_child_output" do
+    after { Evilution::ChildOutput.log_dir = nil }
+
+    def cco_config(**overrides)
+      Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, **overrides)
+    end
+
+    def cco_runner(**overrides)
+      described_class.new(config: cco_config(**overrides))
+    end
+
+    context "when quiet_children is false" do
+      it "resets ChildOutput.log_dir to nil" do
+        Evilution::ChildOutput.log_dir = "/tmp/stale-from-prior-run"
+
+        cco_runner(quiet_children: false).send(:configure_child_output)
+
+        expect(Evilution::ChildOutput.log_dir).to be_nil
+      end
+
+      it "does not create the quiet_children_dir on disk" do
+        Dir.mktmpdir do |parent|
+          dir = File.join(parent, "child-output")
+
+          cco_runner(quiet_children: false, quiet_children_dir: dir).send(:configure_child_output)
+
+          expect(File.directory?(dir)).to be(false)
+        end
+      end
+    end
+
+    context "when quiet_children is true" do
+      it "sets ChildOutput.log_dir to the quiet_children_dir" do
+        Dir.mktmpdir do |parent|
+          dir = File.join(parent, "child-output")
+
+          cco_runner(quiet_children: true, quiet_children_dir: dir).send(:configure_child_output)
+
+          expect(Evilution::ChildOutput.log_dir).to eq(dir)
+        end
+      end
+
+      it "creates the quiet_children_dir on disk" do
+        Dir.mktmpdir do |parent|
+          dir = File.join(parent, "child-output")
+
+          cco_runner(quiet_children: true, quiet_children_dir: dir).send(:configure_child_output)
+
+          expect(File.directory?(dir)).to be(true)
+        end
+      end
+
+      it "removes stale files left in the dir by a prior run" do
+        Dir.mktmpdir do |dir|
+          stale = File.join(dir, "999.err")
+          File.write(stale, "from previous run")
+
+          cco_runner(quiet_children: true, quiet_children_dir: dir).send(:configure_child_output)
+
+          expect(File.exist?(stale)).to be(false)
+        end
+      end
+    end
+
+    context "when the quiet_children_dir is not writable" do
+      let(:bad_dir) { "/nonexistent_root/cannot_write/here" }
+
+      it "raises a ConfigError pointing at --quiet-children-dir" do
+        expect do
+          cco_runner(quiet_children: true, quiet_children_dir: bad_dir).send(:configure_child_output)
+        end.to raise_error(Evilution::ConfigError, /quiet_children_dir.*not writable.*--quiet-children-dir/)
+      end
+
+      it "quotes the offending directory path in the error message" do
+        expect do
+          cco_runner(quiet_children: true, quiet_children_dir: bad_dir).send(:configure_child_output)
+        end.to raise_error(Evilution::ConfigError, /#{Regexp.escape(bad_dir.inspect)}/)
+      end
+
+      it "names the underlying system error class in the error message" do
+        expect do
+          cco_runner(quiet_children: true, quiet_children_dir: bad_dir).send(:configure_child_output)
+        end.to raise_error(Evilution::ConfigError, /not writable: Errno::/)
+      end
+    end
+  end
 end

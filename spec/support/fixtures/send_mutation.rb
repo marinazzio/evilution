@@ -136,4 +136,12 @@ class SendMutationFixture
   def using_chop
     "hello".chop
   end
+
+  def receiverless_wrapping_call(items)
+    puts items.map { |x| x }
+  end
+
+  def receiverless_named_call_wrapping(items)
+    flat_map { items.flat_map { |x| x } }
+  end
 end

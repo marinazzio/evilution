@@ -52,4 +52,9 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::WorldSourcesByPath do
     expect { strategy.release(nil) }.not_to raise_error
     expect(RSpec.world.instance_variable_get(:@sources_by_path).keys).to eq(["x"])
   end
+
+  it "release is a no-op (does not raise) when @sources_by_path ivar is missing" do
+    RSpec.world.remove_instance_variable(:@sources_by_path) if RSpec.world.instance_variable_defined?(:@sources_by_path)
+    expect { strategy.release(Set.new(["host/a.rb"])) }.not_to raise_error
+  end
 end

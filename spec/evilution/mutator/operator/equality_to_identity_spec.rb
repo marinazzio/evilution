@@ -57,6 +57,17 @@ RSpec.describe Evilution::Mutator::Operator::EqualityToIdentity do
       expect(muts).to be_empty
     end
 
+    it "recurses into the receiver to mutate a nested == call" do
+      # `(a == b) == c`: the outer == yields 1 mutation and the nested
+      # `a == b` (the receiver) yields 1 more — only reached when the visitor
+      # recurses into the call's children.
+      muts = mutations_for("nested_equality")
+
+      expect(muts.length).to eq(2)
+      expect(muts.any? { |m| m.mutated_source.include?("(a.equal?(b)) == c") }).to be true
+      expect(muts.any? { |m| m.mutated_source.include?("(a == b).equal?(c)") }).to be true
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

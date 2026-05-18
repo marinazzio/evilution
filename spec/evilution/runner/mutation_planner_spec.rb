@@ -40,6 +40,12 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       disabled_method_line_range = 9..11
       enabled_in_disabled = plan.enabled.select { |m| disabled_method_line_range.cover?(m.line) }
       expect(enabled_in_disabled).to be_empty
+
+      # Mutations OUTSIDE the disable-comment ranges must remain enabled: the
+      # disabled-range check must actually test line membership, not blindly
+      # treat every range as a match.
+      expect(plan.enabled).not_to be_empty
+      expect(plan.enabled.map(&:line)).to all(satisfy { |l| !disabled_method_line_range.cover?(l) })
     end
 
     it "surfaces disabled mutations when config.show_disabled is set" do
@@ -59,6 +65,11 @@ RSpec.describe Evilution::Runner::MutationPlanner do
 
       expect(plan.enabled.map(&:line)).not_to include(3)
       expect(plan.skipped_count).to be > 0
+
+      # Mutations OUTSIDE the sig block range must remain enabled: the sig-block
+      # check must test line membership, not blindly treat every range as a match.
+      expect(plan.enabled).not_to be_empty
+      expect(plan.enabled.map(&:line).reject { |l| l == 3 }).not_to be_empty
     end
 
     it "splits equivalent mutations out of the enabled set" do

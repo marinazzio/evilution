@@ -84,4 +84,25 @@ class StringChecker
   def returns_plain_symbol
     :a_plain_symbol
   end
+
+  def returns_symbol_interp_with_string
+    :"visit_#{prefix || "fallback"}"
+  end
+
+  def returns_regex_interp_with_string
+    /^#{prefix || "fallback"}/
+  end
+
+  def returns_xstring_interp_with_string
+    `echo #{prefix || "fallback"}`
+  end
+
+  def returns_empty_adjacent
+    "" \
+      ""
+  end
+
+  def prefix
+    "node"
+  end
 end

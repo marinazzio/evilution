@@ -78,6 +78,24 @@ RSpec.describe Evilution::Mutator::Operator::LastExpressionRemoval do
       expect(mutations).to be_empty
     end
 
+    it "recurses into a nested def to remove its trailing literal" do
+      # The outer def's last statement is a nested def (not a literal), so the
+      # only mutation comes from descending into the nested def's body.
+      mutations = described_class.new.call(subject_named("nested_outer"))
+
+      expect(mutations.length).to eq(1)
+      expect(mutations.first.diff).to match(/^-\s*true\s*$/)
+    end
+
+    it "does not crash and skips a method whose body is a begin/rescue node" do
+      # A def with a rescue clause has a BeginNode body, not a StatementsNode;
+      # the operator must skip it rather than treat it as a statement list.
+      subject = subject_named("rescue_bodied")
+
+      expect { described_class.new.call(subject) }.not_to raise_error
+      expect(described_class.new.call(subject)).to be_empty
+    end
+
     it "produces parseable Ruby" do
       subjects.each do |s|
         described_class.new.call(s).each do |mutation|

@@ -20,6 +20,12 @@ RSpec.describe "Evilution::Runner#configure_child_output" do
     expect(Evilution::ChildOutput.log_dir).to be_nil
   end
 
+  it "resets a stale ChildOutput.log_dir back to nil when quiet_children is false" do
+    Evilution::ChildOutput.log_dir = "/tmp/stale-from-prior-run"
+    runner_with(cfg(quiet_children: false))
+    expect(Evilution::ChildOutput.log_dir).to be_nil
+  end
+
   it "creates the log dir and sets ChildOutput.log_dir when quiet_children is true" do
     Dir.mktmpdir do |parent|
       dir = File.join(parent, "ch")
@@ -42,5 +48,18 @@ RSpec.describe "Evilution::Runner#configure_child_output" do
     expect do
       runner_with(cfg(quiet_children: true, quiet_children_dir: "/nonexistent_root/cannot_write/here"))
     end.to raise_error(Evilution::ConfigError, /quiet_children_dir.*not writable.*--quiet-children-dir/)
+  end
+
+  it "quotes the offending directory path in the ConfigError message" do
+    bad_dir = "/nonexistent_root/cannot_write/here"
+    expect do
+      runner_with(cfg(quiet_children: true, quiet_children_dir: bad_dir))
+    end.to raise_error(Evilution::ConfigError, /#{Regexp.escape(bad_dir.inspect)}/)
+  end
+
+  it "names the underlying error class in the ConfigError message" do
+    expect do
+      runner_with(cfg(quiet_children: true, quiet_children_dir: "/nonexistent_root/cannot_write/here"))
+    end.to raise_error(Evilution::ConfigError, /not writable: Errno::/)
   end
 end

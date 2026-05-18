@@ -53,6 +53,48 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentMethodCallReplacement do
       expect(diffs_for("no_args_call")).to be_empty
     end
 
+    it "does not descend into a double-splat hash entry (only AssocNode values mutate)" do
+      tmpfile = Tempfile.new(["amcr_splat", ".rb"])
+      tmpfile.write("def m\n  log(**build.opts, a: parsed.from_id)\nend\n")
+      tmpfile.close
+      splat_subjects = parser.call(tmpfile.path)
+      mutations = splat_subjects.flat_map { |s| described_class.new.call(s) }
+
+      expect(mutations.length).to eq(1)
+      expect(mutations.first.mutated_source).to include("**build.opts")
+      expect(mutations.first.mutated_source).to include("a: parsed)")
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    def mutations_from_source(src)
+      tmpfile = Tempfile.new(["amcr_nested", ".rb"])
+      tmpfile.write(src)
+      tmpfile.close
+      nested_subjects = parser.call(tmpfile.path)
+      nested_subjects.flat_map { |s| described_class.new.call(s) }
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    it "descends into a call argument nested inside an array literal" do
+      mutations = mutations_from_source("def m\n  x = [wrap(inner.x)]\n  x\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include(a_string_matching(/wrap\(inner\)/))
+    end
+
+    it "descends into a call argument nested inside a hash literal value" do
+      mutations = mutations_from_source("def m\n  x = { k: wrap(inner.x) }\n  x\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include(a_string_matching(/wrap\(inner\)/))
+    end
+
+    it "descends into a call argument nested inside a keyword-hash argument" do
+      mutations = mutations_from_source("def m\n  log(k: wrap(inner.x))\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include(a_string_matching(/wrap\(inner\)/))
+    end
+
     it "produces parseable Ruby for every mutation" do
       subjects.each do |s|
         described_class.new.call(s).each do |mutation|

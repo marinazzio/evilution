@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalFlip do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["conditional_flip", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "flips if to unless" do
       muts = mutations_for("simple_if")
@@ -69,6 +80,22 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalFlip do
       muts = mutations_for("with_elsif")
 
       expect(muts).to be_empty
+    end
+
+    it "recurses into a nested if so the inner conditional is also flipped" do
+      muts = mutations_from_source(
+        "class C\n  def m(x)\n    if x > 0\n      if x > 5\n        1\n      end\n    end\n  end\nend\n"
+      )
+
+      expect(muts.length).to eq(2)
+    end
+
+    it "recurses into a nested unless so the inner conditional is also flipped" do
+      muts = mutations_from_source(
+        "class C\n  def m(x)\n    unless x > 0\n      unless x > 5\n        1\n      end\n    end\n  end\nend\n"
+      )
+
+      expect(muts.length).to eq(2)
     end
 
     it "produces valid Ruby for all mutations" do

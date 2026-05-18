@@ -92,6 +92,42 @@ RSpec.describe Evilution::Mutator::Operator::StringInterpolation do
         expect(mutation.operator_name).to eq("string_interpolation")
       end
     end
+
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["strinterp", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `super` deletion in visit_interpolated_string_node: traversal
+    # must descend into a nested interpolated string so its inner
+    # interpolation is also mutated (two mutations, not one).
+    it "mutates interpolation nested inside another interpolated string" do
+      muts = mutations_for_source(
+        %(class C\n  def m(a, b)\n    "outer \#{"inner \#{b}"} \#{a}"\n  end\nend), "m"
+      )
+
+      expect(muts.length).to eq(3)
+      expect(muts.map(&:mutated_source)).to include(a_string_including('inner #{nil}'))
+    end
+
+    # Kills the `super` deletion in visit_interpolated_symbol_node: traversal
+    # must descend into a nested interpolated string within an interpolated
+    # symbol so the inner interpolation is also mutated.
+    it "mutates interpolation nested inside an interpolated symbol" do
+      muts = mutations_for_source(
+        %(class C\n  def m(a, b)\n    :"key_\#{"v\#{b}"}_\#{a}"\n  end\nend), "m"
+      )
+
+      expect(muts.length).to eq(3)
+      expect(muts.map(&:mutated_source)).to include(a_string_including('v#{nil}'))
+    end
   end
 end
 # rubocop:enable Lint/InterpolationCheck

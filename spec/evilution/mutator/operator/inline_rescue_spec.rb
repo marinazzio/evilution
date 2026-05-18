@@ -33,6 +33,11 @@ RSpec.describe Evilution::Mutator::Operator::InlineRescue do
 
       expect(removal).not_to be_nil
       expect(removal.diff).to include("- ", "dangerous_call rescue fallback_value")
+      # The expression itself must survive intact; only the rescue clause goes.
+      simple_body = removal.mutated_source[/def simple_inline_rescue\n(.*?)\n  end/m, 1]
+      expect(simple_body).to match(/^\s*dangerous_call\s*$/)
+      expect(simple_body).not_to include("rescue")
+      expect(simple_body).not_to include("fallback_value")
       result = Prism.parse(removal.mutated_source)
       expect(result.errors).to be_empty, "Invalid Ruby: #{removal.mutated_source}"
     end
@@ -43,6 +48,9 @@ RSpec.describe Evilution::Mutator::Operator::InlineRescue do
 
       expect(nil_mutation).not_to be_nil
       expect(nil_mutation.mutated_source).to include("rescue nil")
+      # Only the fallback expression is replaced; the guarded expression stays.
+      expect(nil_mutation.mutated_source).to include("dangerous_call rescue nil")
+      expect(nil_mutation.mutated_source).not_to include("fallback_value")
       result = Prism.parse(nil_mutation.mutated_source)
       expect(result.errors).to be_empty, "Invalid Ruby: #{nil_mutation.mutated_source}"
     end
@@ -68,6 +76,24 @@ RSpec.describe Evilution::Mutator::Operator::InlineRescue do
       mutations = described_class.new.call(multiple_subject)
 
       expect(mutations.length).to eq(4)
+    end
+
+    it "descends into an inline rescue nested inside another inline rescue" do
+      tmpfile = Tempfile.new(["inline_rescue_nested", ".rb"])
+      tmpfile.write("def m\n  (a rescue b) rescue c\nend\n")
+      tmpfile.close
+      nested_subjects = parser.call(tmpfile.path)
+      mutations = nested_subjects.flat_map { |s| described_class.new.call(s) }
+
+      # 2 mutations per rescue modifier; the inner one is only reached via
+      # the visitor recursion.
+      expect(mutations.length).to eq(4)
+      expect(mutations.map(&:mutated_source)).to include(
+        a_string_matching(/\(a rescue nil\) rescue c/),
+        a_string_matching(/\(a\) rescue c/)
+      )
+    ensure
+      tmpfile.unlink if tmpfile
     end
 
     it "produces valid Ruby for all mutations" do

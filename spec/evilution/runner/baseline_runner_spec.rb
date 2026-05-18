@@ -27,6 +27,13 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner = described_class.new(cfg)
       expect { runner.integration_class }.to raise_error(Evilution::Error, /unknown integration/)
     end
+
+    it "names the unknown integration value in the error message" do
+      cfg = Evilution::Config.allocate
+      cfg.instance_variable_set(:@integration, :bogus)
+      runner = described_class.new(cfg)
+      expect { runner.integration_class }.to raise_error(Evilution::Error, /unknown integration: bogus/)
+    end
   end
 
   describe "#build_integration" do
@@ -37,6 +44,14 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       )
       built = runner.build_integration
       expect(built).to be_a(Evilution::Integration::RSpec)
+    end
+
+    it "forwards the hooks object to the integration" do
+      runner = described_class.new(config(integration: :rspec), hooks: :hooks_obj)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(
+        hash_including(hooks: :hooks_obj)
+      ).and_call_original
+      runner.build_integration
     end
 
     it "passes spec_files as test_files when not empty" do
@@ -133,6 +148,114 @@ RSpec.describe Evilution::Runner::BaselineRunner do
         .with(hash_including(timeout: 7, runner: instance_of(Evilution::Integration::RSpec::BaselineRunner)))
         .and_return(baseline)
       expect(runner.call([:subject])).to eq(:ok)
+    end
+
+    it "passes config.spec_files as Baseline test_files when spec_files is not empty" do
+      runner = described_class.new(
+        config(baseline: true, integration: :rspec, spec_files: ["spec/a_spec.rb"])
+      )
+      baseline = instance_double(Evilution::Baseline, call: :ok)
+      expect(Evilution::Baseline).to receive(:new)
+        .with(hash_including(test_files: ["spec/a_spec.rb"]))
+        .and_return(baseline)
+      runner.call([:subject])
+    end
+
+    it "passes nil Baseline test_files when config.spec_files is empty" do
+      runner = described_class.new(config(baseline: true, integration: :rspec))
+      baseline = instance_double(Evilution::Baseline, call: :ok)
+      expect(Evilution::Baseline).to receive(:new)
+        .with(hash_including(test_files: nil))
+        .and_return(baseline)
+      runner.call([:subject])
+    end
+
+    describe "progress logging on a text tty" do
+      def loud_config(**overrides)
+        Evilution::Config.new(
+          quiet: false, baseline: true, format: :text, skip_config_file: true, **overrides
+        )
+      end
+
+      # Capture $stderr writes while reporting the stream as a tty, since the
+      # logging guards require $stderr.tty? to be true.
+      def capture_tty_stderr(result)
+        baseline = instance_double(Evilution::Baseline, call: result)
+        allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+        written = +""
+        allow($stderr).to receive(:tty?).and_return(true)
+        allow($stderr).to receive(:write) { |str| written << str }
+        written
+      end
+
+      def result_with(failed_files)
+        Evilution::Baseline::Result.new(failed_spec_files: Set.new(failed_files), duration: 0.0)
+      end
+
+      it "writes a start banner before running the baseline" do
+        runner = described_class.new(loud_config(integration: :rspec))
+        written = capture_tty_stderr(result_with([]))
+
+        runner.call([:subject])
+        expect(written).to include("Running baseline test suite...\n")
+      end
+
+      it "writes a completion summary naming the failing spec file count" do
+        runner = described_class.new(loud_config(integration: :rspec))
+        written = capture_tty_stderr(result_with(["spec/a_spec.rb", "spec/b_spec.rb"]))
+
+        runner.call([:subject])
+        expect(written).to include("Baseline complete: 2 failing spec files\n")
+      end
+
+      it "uses the singular noun when exactly one spec file failed" do
+        runner = described_class.new(loud_config(integration: :rspec))
+        written = capture_tty_stderr(result_with(["spec/a_spec.rb"]))
+
+        runner.call([:subject])
+        expect(written).to include("Baseline complete: 1 failing spec file\n")
+        expect(written).not_to include("failing spec files")
+      end
+
+      it "uses the plural noun when zero spec files failed" do
+        runner = described_class.new(loud_config(integration: :rspec))
+        written = capture_tty_stderr(result_with([]))
+
+        runner.call([:subject])
+        expect(written).to include("Baseline complete: 0 failing spec files\n")
+      end
+
+      it "stays silent when config.quiet is true" do
+        runner = described_class.new(config(baseline: true, integration: :rspec))
+        written = capture_tty_stderr(result_with([]))
+
+        runner.call([:subject])
+        expect(written).to eq("")
+      end
+
+      it "stays silent when $stderr is not a tty" do
+        runner = described_class.new(loud_config(integration: :rspec))
+        baseline = instance_double(Evilution::Baseline, call: result_with([]))
+        allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+        written = +""
+        allow($stderr).to receive(:tty?).and_return(false)
+        allow($stderr).to receive(:write) { |str| written << str }
+
+        runner.call([:subject])
+        expect(written).to eq("")
+      end
+
+      it "stays silent when the output format is not text" do
+        runner = described_class.new(
+          Evilution::Config.new(
+            quiet: false, baseline: true, format: :json, integration: :rspec, skip_config_file: true
+          )
+        )
+        written = capture_tty_stderr(result_with(["spec/a_spec.rb"]))
+
+        runner.call([:subject])
+        expect(written).to eq("")
+      end
     end
   end
 

@@ -8,4 +8,12 @@ class BitwiseComplement
   def complement_expression(a, b)
     ~(a + b)
   end
+
+  def nested_complement(a)
+    ~(~a)
+  end
+
+  def predicate_call(a)
+    a.zero?
+  end
 end

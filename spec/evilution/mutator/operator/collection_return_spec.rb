@@ -67,6 +67,46 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReturn do
       expect(muts.first.mutated_source).to match(/def multi_line_returns_hash\s+\{\}\s+end/)
     end
 
+    def mutations_for_source(src, method_name)
+      tmpfile = Tempfile.new(["collret", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("##{method_name}") }
+      described_class.new.call(subj)
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
+    # Kills the `body.is_a?(Prism::StatementsNode)` -> `body` change: a method
+    # whose body is a BeginNode (def-level rescue) is not a StatementsNode and
+    # must be skipped (without the type guard the operator calls `.body` on a
+    # BeginNode and raises).
+    it "does not mutate (and does not raise on) a method with a rescue body" do
+      src = "class C\n  def m\n    compute\n  rescue StandardError\n    [1, 2]\n  end\nend"
+
+      expect { mutations_for_source(src, "m") }.not_to raise_error
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
+    # Kills the `node.elements.any?` -> `node.elements` change in
+    # collection_replacement: an empty array as the last expression must NOT
+    # be replaced (an empty array is still truthy, so dropping `.any?` would
+    # emit a no-op `[]` mutation).
+    it "does not mutate when the last expression is an empty array" do
+      src = "class C\n  def m\n    x = compute\n    []\n  end\nend"
+
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
+    # Kills the `node.elements.any?` -> `node.elements` change for hashes.
+    it "does not mutate when the last expression is an empty hash" do
+      src = "class C\n  def m\n    x = compute\n    {}\n  end\nend"
+
+      expect(mutations_for_source(src, "m")).to be_empty
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

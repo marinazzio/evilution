@@ -78,6 +78,27 @@ RSpec.describe Evilution::Mutator::Operator::ReceiverReplacement do
       end
     end
 
+    # Kills the trailing `super` deletion: traversal must descend into a
+    # self-call nested inside another self-call's arguments.
+    it "mutates self-calls nested inside another self-call's arguments" do
+      src = "class C\n  def m(x)\n    self.outer(self.inner(x))\n  end\nend"
+      tmpfile = Tempfile.new(["receiver", ".rb"])
+      tmpfile.write(src)
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subj = subjects.find { |s| s.name.end_with?("#m") }
+
+      muts = described_class.new.call(subj)
+      expect(muts.length).to eq(2)
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_including("outer(self.inner(x))"),
+        a_string_including("self.outer(inner(x))")
+      )
+    ensure
+      tmpfile&.close
+      tmpfile&.unlink
+    end
+
     describe "Ruby-keyword-collision safety" do
       # `self.class` -> bare `class` is a syntax error because `class` is a
       # reserved keyword for class definition. Same for `self.then`, etc.

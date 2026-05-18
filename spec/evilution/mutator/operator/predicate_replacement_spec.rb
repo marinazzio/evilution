@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::PredicateReplacement do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["predicate_replacement", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects.flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "replaces predicate with true and false" do
       muts = mutations_for("simple_predicate")
@@ -57,6 +68,13 @@ RSpec.describe Evilution::Mutator::Operator::PredicateReplacement do
       muts = mutations_for("non_predicate_method")
 
       expect(muts).to be_empty
+    end
+
+    it "recurses into a nested predicate receiver so the inner predicate is also replaced" do
+      muts = mutations_from_source("class C\n  def m(a)\n    a.b?.c?\n  end\nend\n")
+
+      # 2 mutations (true/false) for the outer c? + 2 for the receiver b?
+      expect(muts.length).to eq(4)
     end
 
     it "produces valid Ruby for all mutations" do

@@ -20,20 +20,25 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, **overrides)
   end
 
-  def build(cfg, isolator:, cache: nil, on_result: nil)
+  def build(cfg, isolator:, cache: nil, on_result: nil, hooks: nil,
+            baseline_runner: default_baseline_runner)
     described_class.new(
       cfg,
       isolator: isolator,
-      baseline_runner: instance_double(
-        Evilution::Runner::BaselineRunner,
-        build_integration: ->(_m) { "cmd" },
-        neutralization_resolver: ->(_f) {},
-        neutralization_fallback_dir: "spec"
-      ),
+      baseline_runner: baseline_runner,
       cache: cache,
-      hooks: nil,
+      hooks: hooks,
       diagnostics: Evilution::Runner::Diagnostics.new(cfg),
       on_result: on_result
+    )
+  end
+
+  def default_baseline_runner
+    instance_double(
+      Evilution::Runner::BaselineRunner,
+      build_integration: ->(_m) { "cmd" },
+      neutralization_resolver: ->(_f) {},
+      neutralization_fallback_dir: "spec"
     )
   end
 
@@ -161,6 +166,88 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       execution = build(cfg, isolator: isolator).call([infra_mut, baseline_mut], baseline)
 
       expect(execution.results.map(&:status)).to eq(%i[neutral neutral])
+    end
+
+    it "feeds the built integration into the test command, not the baseline runner" do
+      cfg = config(jobs: 1)
+      mut = mutation
+      captured = nil
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) do |mutation:, test_command:, **|
+        captured = test_command.call(mutation)
+        killed_result(mutation)
+      end
+
+      build(cfg, isolator: isolator).call([mut], nil)
+
+      expect(captured).to eq("cmd")
+    end
+
+    it "uses the baseline neutralization resolver only when the baseline failed" do
+      cfg = config(jobs: 1)
+      mut = mutation(file: "lib/foo.rb")
+      baseline_runner = instance_double(
+        Evilution::Runner::BaselineRunner,
+        build_integration: ->(_m) { "cmd" },
+        neutralization_resolver: ->(_f) { "spec/resolved_spec.rb" },
+        neutralization_fallback_dir: "spec/fallback"
+      )
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| survived_result(mutation) }
+      baseline = instance_double(
+        Evilution::Baseline::Result, failed?: true,
+                                     failed_spec_files: ["spec/resolved_spec.rb"]
+      )
+
+      execution = build(cfg, isolator: isolator, baseline_runner: baseline_runner)
+                  .call([mut], baseline)
+
+      expect(execution.results.map(&:status)).to eq([:neutral])
+    end
+  end
+
+  describe "parallel pool construction" do
+    def capture_pool_factory(cfg, hooks:)
+      isolator = instance_double(Evilution::Isolation::Fork)
+      parallel = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+      allow(parallel).to receive(:call).and_return(
+        Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
+      )
+      factory = nil
+      allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new) do |**kwargs|
+        factory = kwargs[:pool_factory]
+        parallel
+      end
+      build(cfg, isolator: isolator, hooks: hooks).call([mutation], nil)
+      factory
+    end
+
+    it "passes the configured hooks through to the pool" do
+      hooks = Object.new
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 2), hooks: hooks).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(hooks: hooks))
+    end
+
+    it "sets the pool item timeout to double the configured timeout" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 2, timeout: 9), hooks: nil).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(item_timeout: 18))
+    end
+
+    it "leaves the pool item timeout nil when no timeout is configured" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 2, timeout: nil), hooks: nil).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(item_timeout: nil))
     end
   end
 end

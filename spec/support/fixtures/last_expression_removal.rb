@@ -40,4 +40,18 @@ class LastExpressionRemovalExample
     do_work
     helper.thing
   end
+
+  def nested_outer
+    setup
+    def nested_inner
+      side_effect
+      true
+    end
+  end
+
+  def rescue_bodied
+    do_work
+  rescue StandardError
+    log
+  end
 end

@@ -12,6 +12,16 @@ RSpec.describe Evilution::Mutator::Operator::GlobalVariableWrite do
   let(:single_subject) { subjects.find { |s| s.name.include?("single_gvar") } }
   let(:no_gvar_subject) { subjects.find { |s| s.name.include?("no_gvars") } }
 
+  def mutations_from_source(inline_source)
+    tmpfile = Tempfile.new(["global_variable_write", ".rb"])
+    tmpfile.write(inline_source)
+    tmpfile.flush
+    Evilution::AST::Parser.new.call(tmpfile.path).flat_map { |s| described_class.new.call(s) }
+  ensure
+    tmpfile.close
+    tmpfile.unlink
+  end
+
   describe "#call" do
     it "generates two mutations per global variable write" do
       mutations = described_class.new.call(multi_subject)
@@ -29,6 +39,13 @@ RSpec.describe Evilution::Mutator::Operator::GlobalVariableWrite do
       mutations = described_class.new.call(no_gvar_subject)
 
       expect(mutations).to be_empty
+    end
+
+    it "recurses into a nested global variable write so the inner write is also mutated" do
+      mutations = mutations_from_source("def m\n  $a = ($b = 1)\n  $a\nend\n")
+
+      # 2 mutations for the outer $a write + 2 for the nested $b write
+      expect(mutations.length).to eq(4)
     end
 
     it "generates a removal mutation that keeps only the value" do

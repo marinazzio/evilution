@@ -62,6 +62,25 @@ RSpec.describe Evilution::Mutator::Operator::ScalarReturn do
       expect(mutations_for("empty_method")).to be_empty
     end
 
+    it "recurses into a method body to mutate a nested def" do
+      # The outer def's last expression is the nested def (non-scalar, so the
+      # outer yields nothing); the nested def's multi-line scalar body is only
+      # mutated when the visitor recurses into the outer def's body.
+      muts = mutations_for("outer_with_nested_def")
+
+      expect(muts.length).to eq(1)
+      method_body = muts.first.mutated_source[/def inner_method\n(.+?)\n    end/m, 1]
+      expect(method_body.strip).to eq('""')
+    end
+
+    it "handles a method whose body is a begin/rescue rather than statements" do
+      # `rescue_body_method`'s body is a BeginNode, not a StatementsNode. The
+      # operator must guard with an explicit type check before reading
+      # `body.body` — a truthiness-only check would raise NoMethodError.
+      expect { mutations_for("rescue_body_method") }.not_to raise_error
+      expect(mutations_for("rescue_body_method")).to be_empty
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

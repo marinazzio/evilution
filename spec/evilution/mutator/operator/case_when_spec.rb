@@ -16,6 +16,17 @@ RSpec.describe Evilution::Mutator::Operator::CaseWhen do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(method_name, src)
+    tmpfile = Tempfile.new(["case_when", ".rb"])
+    tmpfile.write(src)
+    tmpfile.close
+    subj = Evilution::AST::Parser.new.call(tmpfile.path)
+                                 .find { |s| s.name.end_with?("##{method_name}") }
+    described_class.new.call(subj)
+  ensure
+    tmpfile.unlink if tmpfile
+  end
+
   describe "#call" do
     context "when branch removal" do
       it "removes each when branch from a multi-branch case" do
@@ -72,6 +83,44 @@ RSpec.describe Evilution::Mutator::Operator::CaseWhen do
 
         expect(else_removals).to be_empty
       end
+
+      it "removes the else keyword together with its body" do
+        muts = mutations_for("simple_case")
+        else_removal = muts.find { |m| m.diff.match?(/^-\s+else/) }
+
+        expect(else_removal).not_to be_nil
+        # The whole else clause (keyword + body) must be gone, not just the
+        # `else` keyword: `"other"` must not survive in the simple_case body.
+        case_body = else_removal.mutated_source[/def simple_case\(x\)\n(.*?)\n  end/m, 1]
+        expect(case_body).not_to match(/^\s*"other"/)
+        expect(case_body).not_to include("else")
+      end
+    end
+
+    context "with an empty else body" do
+      it "does not emit an else-removal mutation when the else body is empty" do
+        muts = mutations_from_source(
+          "empty_else",
+          "class C\n  def empty_else(x)\n    case x\n    when 1\n      1\n    else\n    end\n  end\nend\n"
+        )
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.diff).not_to match(/^-\s+else/)
+      end
+    end
+
+    it "descends into a case nested inside a when body" do
+      muts = mutations_from_source(
+        "nested",
+        "class C\n  def nested(x)\n    case x\n    when 1\n      case x\n      " \
+        "when 2 then 3\n      when 4 then 5\n      end\n    when 6\n      7\n    end\n  end\nend\n"
+      )
+
+      # The inner case's when-branches are only reachable via visitor recursion.
+      expect(muts.map(&:mutated_source)).to include(
+        a_string_matching(/when 2 then nil/),
+        a_string_matching(/when 4 then nil/)
+      )
     end
 
     it "produces valid Ruby for all mutations" do

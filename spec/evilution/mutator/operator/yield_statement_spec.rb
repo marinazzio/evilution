@@ -118,6 +118,20 @@ RSpec.describe Evilution::Mutator::Operator::YieldStatement do
     end
   end
 
+  describe "recursing into yield arguments" do
+    it "visits a yield nested inside another yield's arguments" do
+      # `yield(yield)`: the outer yield produces 3 mutations. The inner
+      # (argument) yield produces 1 more, but only when the visitor recurses
+      # into the outer yield's arguments.
+      mutations = mutations_for("def foo\n  yield(yield)\nend\n")
+
+      yield_mutations = mutations.select { |m| m.operator_name == "yield_statement" }
+      expect(yield_mutations.length).to eq(4)
+      # the inner-yield "remove yield" mutation rewrites the argument to nil
+      expect(yield_mutations.any? { |m| m.mutated_source.include?("yield(nil)") }).to be true
+    end
+  end
+
   describe "operator name" do
     it "is yield_statement" do
       expect(described_class.operator_name).to eq("yield_statement")

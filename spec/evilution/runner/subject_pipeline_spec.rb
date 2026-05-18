@@ -69,6 +69,20 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
+    it "sorts glob results that arrive out of order" do
+      Dir.mktmpdir do |dir|
+        a = write(dir, "lib/a.rb", "class A; def x; end; end\n")
+        b = write(dir, "lib/b.rb", "class B; def y; end; end\n")
+        allow(Dir).to receive(:glob).and_return([b, a])
+
+        config = Evilution::Config.new(
+          target: "source:lib/*.rb", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to eq(%w[A#x B#y])
+      end
+    end
+
     it "raises Evilution::Error when the glob matches nothing" do
       Dir.mktmpdir do |dir|
         Dir.chdir(dir) do
@@ -128,6 +142,24 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
+    it "excludes subjects whose class name does not start with the wildcard prefix" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/mixed.rb", <<~RUBY)
+          class Foo
+            def bar; 1; end
+          end
+          class Bar
+            def qux; 2; end
+          end
+        RUBY
+        config = Evilution::Config.new(
+          target_files: [file], target: "Foo*", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to eq(["Foo#bar"])
+      end
+    end
+
     it "matches bare class name to both instance and class methods" do
       Dir.mktmpdir do |dir|
         file = write(dir, "lib/foo.rb", <<~RUBY)
@@ -141,6 +173,17 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         )
         pipeline = described_class.new(config, parser: parser)
         expect(pipeline.call.map(&:name)).to contain_exactly("Foo#bar", "Foo.baz")
+      end
+    end
+
+    it "matches a bare class name exactly, not as a name prefix" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", fixture)
+        config = Evilution::Config.new(
+          target_files: [file], target: "Foo", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to contain_exactly("Foo#bar", "Foo#baz")
       end
     end
 
@@ -243,6 +286,41 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         expect { pipeline.call }.to raise_error(Evilution::Error, /no classes found/)
       end
     end
+
+    it "names the unmatched target in the no-classes-found error" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/tree.rb", fixture)
+        config = Evilution::Config.new(
+          target_files: [file], target: "descendants:Missing",
+          quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect { pipeline.call }
+          .to raise_error(Evilution::Error, /matching 'descendants:Missing'/)
+      end
+    end
+
+    it "follows the inheritance chain even when classes are declared child-first" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/tree.rb", <<~RUBY)
+          class Grandchild < Child
+            def c; end
+          end
+          class Child < Base
+            def b; end
+          end
+          class Base
+            def a; end
+          end
+        RUBY
+        config = Evilution::Config.new(
+          target_files: [file], target: "descendants:Base",
+          quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to contain_exactly("Base#a", "Child#b", "Grandchild#c")
+      end
+    end
   end
 
   describe "#call with line_ranges" do
@@ -270,6 +348,48 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         )
         pipeline = described_class.new(config, parser: parser)
         expect(pipeline.call.map(&:name)).to eq(["Foo#b"])
+      end
+    end
+
+    it "keeps all subjects from files that have no configured range" do
+      Dir.mktmpdir do |dir|
+        ranged = write(dir, "lib/ranged.rb", <<~RUBY)
+          class Ranged
+            def keep       # line 2
+              1
+            end
+          end
+        RUBY
+        unranged = write(dir, "lib/unranged.rb", "class Other; def kept; end; end\n")
+
+        config = Evilution::Config.new(
+          target_files: [ranged, unranged], line_ranges: { ranged => (1..4) },
+          quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to contain_exactly("Ranged#keep", "Other#kept")
+      end
+    end
+
+    it "keeps a multi-line subject whose body reaches into the range" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/big.rb", <<~RUBY)
+          class Foo
+            def big       # starts line 2
+              a = 1
+              b = 2
+              c = 3
+              d = 4       # line 6
+            end
+          end
+        RUBY
+
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => (6..6) },
+          quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to eq(["Foo#big"])
       end
     end
   end

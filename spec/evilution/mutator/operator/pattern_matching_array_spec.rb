@@ -90,6 +90,65 @@ RSpec.describe Evilution::Mutator::Operator::PatternMatchingArray do
 
         expect(mutations.length).to eq(4)
       end
+
+      it "keeps the trailing rest splat when removing a find-pattern element" do
+        mutations = mutations_for("find_pattern_multiple")
+
+        # Removal of one required must preserve both bounding splats and the
+        # other required element.
+        expect(mutations.map(&:mutated_source)).to include(
+          a_string_matching(/in \[\*, String => b, \*\]/),
+          a_string_matching(/in \[\*, Integer => a, \*\]/)
+        )
+      end
+
+      it "wildcards exactly one element per mutation in a multi-required find pattern" do
+        mutations = mutations_for("find_pattern_multiple")
+
+        # Each wildcard mutation must replace a single element, not all of them.
+        expect(mutations.map(&:mutated_source)).to include(
+          a_string_matching(/in \[\*, _, String => b, \*\]/),
+          a_string_matching(/in \[\*, Integer => a, _, \*\]/)
+        )
+        expect(mutations.map(&:mutated_source)).not_to include(
+          a_string_matching(/in \[\*, _, _, \*\]/)
+        )
+      end
+    end
+
+    def mutations_from_source(src)
+      tmpfile = Tempfile.new(["pma_nested", ".rb"])
+      tmpfile.write(src)
+      tmpfile.close
+      nested_subjects = parser.call(tmpfile.path)
+      nested_subjects.flat_map { |s| described_class.new.call(s) }
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    it "descends into an array pattern nested inside another array pattern" do
+      mutations = mutations_from_source(
+        "def m(v)\n  case v\n  in [[Integer, String], Symbol]\n    1\n  end\nend\n"
+      )
+
+      # The inner [Integer, String] pattern is only reachable via recursion.
+      expect(mutations.map(&:mutated_source)).to include(
+        a_string_matching(/in \[\[_, String\], Symbol\]/),
+        a_string_matching(/in \[\[Integer, _\], Symbol\]/)
+      )
+    end
+
+    it "descends into an array pattern nested inside a find pattern element" do
+      mutations = mutations_from_source(
+        "def m(v)\n  case v\n  in [*, [Integer, String] => x, *]\n    1\n  end\nend\n"
+      )
+
+      # The inner [Integer, String] pattern is only reachable via recursion
+      # through the find-pattern visitor.
+      expect(mutations.map(&:mutated_source)).to include(
+        a_string_matching(/\[_, String\] => x/),
+        a_string_matching(/\[Integer, _\] => x/)
+      )
     end
 
     it "produces no mutations for non-array patterns" do
