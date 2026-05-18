@@ -363,6 +363,51 @@ RSpec.describe Evilution::Result::Summary do
 
       expect(s.mutations_per_second).to eq(0.0)
     end
+
+    it "uses float division even when total and duration are integers" do
+      s = described_class.new(results: [make_result(:killed), make_result(:killed), make_result(:killed)], duration: 2)
+
+      expect(s.mutations_per_second).to be_within(0.001).of(1.5)
+    end
+  end
+
+  describe "#peak_memory_mb" do
+    def result_with_child_rss(kb)
+      memory = Evilution::Result::MemoryStats.new(child_rss_kb: kb)
+      Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, memory: memory)
+    end
+
+    it "returns the highest child_rss_kb converted to megabytes" do
+      s = described_class.new(results: [result_with_child_rss(1024), result_with_child_rss(4096)])
+
+      expect(s.peak_memory_mb).to be_within(0.001).of(4.0)
+    end
+
+    it "finds the maximum regardless of result order" do
+      s = described_class.new(results: [result_with_child_rss(4096), result_with_child_rss(1024)])
+
+      expect(s.peak_memory_mb).to be_within(0.001).of(4.0)
+    end
+
+    it "ignores results without child_rss_kb" do
+      # The no-memory result is placed AFTER a result that already set the
+      # running max, so a dropped `next unless kb` would compare nil > Integer.
+      s = described_class.new(results: [result_with_child_rss(2048), make_result(:killed)])
+
+      expect(s.peak_memory_mb).to be_within(0.001).of(2.0)
+    end
+
+    it "returns nil when no result reports child memory" do
+      s = described_class.new(results: [make_result(:killed), make_result(:survived)])
+
+      expect(s.peak_memory_mb).to be_nil
+    end
+
+    it "returns nil for empty results" do
+      s = described_class.new(results: [])
+
+      expect(s.peak_memory_mb).to be_nil
+    end
   end
 
   describe "#coverage_gaps" do
