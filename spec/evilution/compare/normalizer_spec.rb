@@ -114,6 +114,18 @@ RSpec.describe Evilution::Compare::Normalizer do
         .to raise_error(Evilution::Compare::InvalidInput, /mystery/)
     end
 
+    it "inspects the offending status value in the unknown-status message" do
+      json = { "killed" => [{ "file" => "lib/x.rb", "line" => 1, "status" => "mystery", "diff" => "" }] }
+      expect { normalizer.from_evilution(json) }
+        .to raise_error(Evilution::Compare::InvalidInput, /unknown status "mystery"/)
+    end
+
+    it "coerces a missing diff to an empty string in diff_body" do
+      json = { "killed" => [{ "file" => "lib/x.rb", "line" => 1, "status" => "killed" }] }
+      record = normalizer.from_evilution(json).first
+      expect(record.diff_body).to eq("")
+    end
+
     it "ignores unknown top-level keys" do
       json = { "killed" => [], "mystery_key" => "ignored" }
       expect { normalizer.from_evilution(json) }.not_to raise_error
@@ -232,10 +244,46 @@ RSpec.describe Evilution::Compare::Normalizer do
       expect { normalizer.from_mutant(json) }.to raise_error(Evilution::Compare::InvalidInput)
     end
 
+    it "inspects the mutation_type in the unknown-shape message" do
+      json = subject_with(mutation_type: "weird", test_result: false, process_abort: false, timeout: false)
+      expect { normalizer.from_mutant(json) }
+        .to raise_error(Evilution::Compare::InvalidInput, /type="weird"/)
+    end
+
     it "raises InvalidInput when subject is missing source_path" do
       json = { "subject_results" => [{ "coverage_results" => [] }] }
       expect { normalizer.from_mutant(json) }
         .to raise_error(Evilution::Compare::InvalidInput, /source_path/)
+    end
+
+    it "coerces a missing mutation_diff to an empty string in diff_body" do
+      json = {
+        "subject_results" => [{
+          "source_path" => "lib/x.rb",
+          "coverage_results" => [{
+            "mutation_result" => {
+              "mutation_identification" => "evil:X#y:lib/x.rb:1:abcde",
+              "mutation_type" => "evil"
+            },
+            "criteria_result" => { "test_result" => true, "process_abort" => false, "timeout" => false }
+          }]
+        }]
+      }
+      expect(normalizer.from_mutant(json).first.diff_body).to eq("")
+    end
+
+    it "raises InvalidInput (not a NoMethodError) when mutation_identification is missing" do
+      json = {
+        "subject_results" => [{
+          "source_path" => "lib/x.rb",
+          "coverage_results" => [{
+            "mutation_result" => { "mutation_type" => "evil", "mutation_diff" => "" },
+            "criteria_result" => { "test_result" => false, "process_abort" => false, "timeout" => false }
+          }]
+        }]
+      }
+      expect { normalizer.from_mutant(json) }
+        .to raise_error(Evilution::Compare::InvalidInput)
     end
 
     it "raises InvalidInput when mutation_identification is unparseable" do
@@ -250,6 +298,20 @@ RSpec.describe Evilution::Compare::Normalizer do
       }
       expect { normalizer.from_mutant(json) }
         .to raise_error(Evilution::Compare::InvalidInput, /parse line/)
+    end
+
+    it "inspects the identification string in the unparseable-line message" do
+      json = {
+        "subject_results" => [{
+          "source_path" => "lib/x.rb",
+          "coverage_results" => [{
+            "mutation_result" => { "mutation_identification" => "garbage", "mutation_type" => "evil", "mutation_diff" => "" },
+            "criteria_result" => { "test_result" => false, "process_abort" => false, "timeout" => false }
+          }]
+        }]
+      }
+      expect { normalizer.from_mutant(json) }
+        .to raise_error(Evilution::Compare::InvalidInput, /cannot parse line from "garbage"/)
     end
 
     it "raises InvalidInput when mutation line is non-integer" do
@@ -268,6 +330,24 @@ RSpec.describe Evilution::Compare::Normalizer do
       }
       expect { normalizer.from_mutant(json) }
         .to raise_error(Evilution::Compare::InvalidInput, /non-integer/)
+    end
+
+    it "inspects the identification string in the non-integer-line message" do
+      json = {
+        "subject_results" => [{
+          "source_path" => "lib/x.rb",
+          "coverage_results" => [{
+            "mutation_result" => {
+              "mutation_identification" => "evil:X#y:lib/x.rb:NaN:abcde",
+              "mutation_type" => "evil",
+              "mutation_diff" => ""
+            },
+            "criteria_result" => { "test_result" => false, "process_abort" => false, "timeout" => false }
+          }]
+        }]
+      }
+      expect { normalizer.from_mutant(json) }
+        .to raise_error(Evilution::Compare::InvalidInput, %r{non-integer line in "evil:X#y:lib/x\.rb:NaN:abcde"})
     end
 
     it "parses the line even when the subject path contains a colon (Windows drive)" do

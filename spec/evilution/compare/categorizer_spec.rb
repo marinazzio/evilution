@@ -145,6 +145,36 @@ RSpec.describe Evilution::Compare::Categorizer do
       expect(ordered).to eq(%w[fp_b fp_a fp_c])
     end
 
+    it "sorts the alive_only_current bucket by [file_path, line, fingerprint]" do
+      against = []
+      current = [
+        record(fp: "fp_c", status: :survived, file: "lib/c.rb", line: 1),
+        record(fp: "fp_a", status: :survived, file: "lib/a.rb", line: 5),
+        record(fp: "fp_b", status: :survived, file: "lib/a.rb", line: 2)
+      ]
+
+      result = described_class.call(against, current)
+
+      ordered = result[:alive_only_current].map { |e| e[:record].fingerprint }
+      expect(ordered).to eq(%w[fp_b fp_a fp_c])
+    end
+
+    it "sorts the shared_dead bucket by against record key" do
+      against = [
+        record(fp: "fp_z", status: :killed, file: "lib/z.rb", line: 9),
+        record(fp: "fp_a", status: :killed, file: "lib/a.rb", line: 1)
+      ]
+      current = [
+        record(fp: "fp_z", status: :killed, file: "lib/z.rb", line: 9),
+        record(fp: "fp_a", status: :killed, file: "lib/a.rb", line: 1)
+      ]
+
+      result = described_class.call(against, current)
+
+      ordered = result[:shared_dead].map { |e| e[:against].fingerprint }
+      expect(ordered).to eq(%w[fp_a fp_z])
+    end
+
     it "sorts shared buckets by against record key" do
       against = [
         record(fp: "fp_z", status: :survived, file: "lib/z.rb", line: 9),

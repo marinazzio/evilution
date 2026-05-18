@@ -33,5 +33,20 @@ RSpec.describe Evilution::Compare::Detector do
       expect { described_class.call([]) }
         .to raise_error(Evilution::Compare::InvalidInput, /Hash/)
     end
+
+    it "names the offending class in the non-Hash error message" do
+      expect { described_class.call("not a hash") }
+        .to raise_error(Evilution::Compare::InvalidInput, /got String/)
+    end
+
+    it "does not detect evilution when status buckets are present but summary is absent" do
+      expect { described_class.call({ "survived" => [], "killed" => [] }) }
+        .to raise_error(Evilution::Compare::InvalidInput, /cannot detect/)
+    end
+
+    it "does not detect evilution when summary is present but no status bucket is" do
+      expect { described_class.call({ "summary" => { "total" => 0 }, "unrelated" => 1 }) }
+        .to raise_error(Evilution::Compare::InvalidInput, /cannot detect/)
+    end
   end
 end

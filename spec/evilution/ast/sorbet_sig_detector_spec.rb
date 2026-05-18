@@ -163,6 +163,30 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
         expect(ranges).to eq([])
       end
     end
+
+    context "with a parse error in source that also contains a sig block" do
+      let(:source) { "class Foo\n  sig { returns(Integer) }\n  def bar" }
+
+      it "returns an empty array rather than ranges from the partial tree" do
+        # Prism still produces a partial tree containing the sig block; the
+        # failure guard must discard it instead of returning a stale range.
+        expect(detector.call(source)).to eq([])
+      end
+    end
+
+    context "with a non-sig method call that takes a block" do
+      let(:source) do
+        <<~RUBY
+          configure { setting }
+        RUBY
+      end
+
+      it "does not match a block call whose name is not :sig" do
+        # `configure { ... }` has no receiver, no arguments and a block —
+        # only the `name == :sig` check excludes it.
+        expect(detector.call(source)).to eq([])
+      end
+    end
   end
 
   describe "#line_ranges" do
@@ -217,6 +241,14 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
     context "with empty source" do
       it "returns an empty array" do
         expect(detector.line_ranges("")).to eq([])
+      end
+    end
+
+    context "with a parse error in source that also contains a sig block" do
+      let(:source) { "class Foo\n  sig { returns(Integer) }\n  def bar" }
+
+      it "returns an empty array rather than line ranges from the partial tree" do
+        expect(detector.line_ranges(source)).to eq([])
       end
     end
   end

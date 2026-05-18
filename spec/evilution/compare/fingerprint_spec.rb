@@ -44,6 +44,18 @@ RSpec.describe Evilution::Compare::Fingerprint do
       expect(raw).to eq(clean)
     end
 
+    it "differs when only the minus (removed) lines differ" do
+      a = fp.call(diff: "- aaa\n+ same", file_path: "f", line: 1)
+      b = fp.call(diff: "- bbb\n+ same", file_path: "f", line: 1)
+      expect(a).not_to eq(b)
+    end
+
+    it "differs when only the plus (added) lines differ" do
+      a = fp.call(diff: "- same\n+ ppp", file_path: "f", line: 1)
+      b = fp.call(diff: "- same\n+ qqq", file_path: "f", line: 1)
+      expect(a).not_to eq(b)
+    end
+
     it "produces matching fingerprints across evilution and mutant extractors for equivalent diffs" do
       mutant_fp = described_class.new(extractor: mutant_extractor, normalizer: normalizer)
       mutant_diff = "--- x\n+++ x\n@@ -1 +1 @@\n-a + b\n+a - b\n"

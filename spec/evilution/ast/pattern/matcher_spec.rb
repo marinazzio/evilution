@@ -16,6 +16,43 @@ RSpec.describe Evilution::AST::Pattern do
       expect(matcher.match?(node)).to be true
     end
 
+    it "exposes the node type it was built with" do
+      matcher = described_class.new("call", {})
+
+      expect(matcher.node_type).to eq("call")
+    end
+
+    it "rejects a node that does not respond to the attribute" do
+      matcher = described_class.new("call", {
+                                      "definitely_not_an_attr" => Evilution::AST::Pattern::ValueMatcher.new("x")
+                                    })
+      node = parse_node("foo()")
+
+      expect { matcher.match?(node) }.not_to raise_error
+      expect(matcher.match?(node)).to be false
+    end
+
+    it "uses match_value? for value matchers that do not respond to match?" do
+      value_only_matcher = Object.new
+      def value_only_matcher.match_value?(actual) = actual.to_s == "foo"
+
+      matcher = described_class.new("call", { "name" => value_only_matcher })
+
+      expect(matcher.match?(parse_node("foo()"))).to be true
+      expect(matcher.match?(parse_node("bar()"))).to be false
+    end
+
+    it "uses match? for value matchers that respond to match?" do
+      probe = Object.new
+      def probe.match?(actual) = actual.to_s == "foo"
+      def probe.match_value?(_actual) = raise("match_value? must not be used")
+
+      matcher = described_class.new("call", { "name" => probe })
+
+      expect(matcher.match?(parse_node("foo()"))).to be true
+      expect(matcher.match?(parse_node("bar()"))).to be false
+    end
+
     it "does not match a different node type" do
       matcher = described_class.new("string", {})
       node = parse_node("foo()")
@@ -153,6 +190,13 @@ RSpec.describe Evilution::AST::Pattern do
 
       expect(matcher.match_value?(:error)).to be false
     end
+
+    it "match? returns a strict boolean" do
+      matcher = described_class.new(%w[debug info])
+
+      expect(matcher.match?(:debug)).to be true
+      expect(matcher.match?(:error)).to be false
+    end
   end
 
   describe Evilution::AST::Pattern::NegationMatcher do
@@ -184,6 +228,15 @@ RSpec.describe Evilution::AST::Pattern do
 
       expect(matcher.match?(parse_node("foo"))).to be true
       expect(matcher.match?(nil)).to be true
+    end
+  end
+
+  describe Evilution::AST::Pattern::WildcardValueMatcher do
+    it "match_value? returns a strict boolean for any value" do
+      matcher = described_class.new
+
+      expect(matcher.match_value?(:anything)).to be true
+      expect(matcher.match_value?(nil)).to be true
     end
   end
 end
