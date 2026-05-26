@@ -26,7 +26,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns killed when test command fails" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_killed
       expect(result.mutation).to eq(mutation)
@@ -35,7 +35,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns survived when test command passes" do
       test_command = ->(_m) { { passed: true } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_survived
     end
@@ -43,7 +43,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns unresolved when test command signals unresolved" do
       test_command = ->(_m) { { passed: false, unresolved: true, error: "no spec found" } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_unresolved
       expect(result).not_to be_error
@@ -56,7 +56,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
     end
@@ -75,7 +75,7 @@ RSpec.describe Evilution::Isolation::Fork do
       }
 
       start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.2)
+      result = isolator.call(mutation:, test_command:, timeout: 0.2)
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
 
       expect(result).to be_timeout
@@ -91,7 +91,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(Dir.exist?(dir)).to be false
       expect(Evilution::TempDirTracker.tracked_dirs).to be_empty
@@ -106,7 +106,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      isolator.call(mutation:, test_command:, timeout: 0.1)
 
       dirs_after = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
       new_dirs = dirs_after - dirs_before
@@ -120,7 +120,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
     end
@@ -132,7 +132,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
     end
@@ -152,7 +152,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       end
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
       child_pid = File.read(pid_path).strip.to_i
 
       expect(result).to be_timeout
@@ -186,7 +186,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true }
       end
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 0.1)
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
       expect(File.exist?(marker_path)).to be true
@@ -201,7 +201,7 @@ RSpec.describe Evilution::Isolation::Fork do
         exit!(0)
       }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
       expect(result.error_message).to eq("empty result from child")
@@ -230,7 +230,7 @@ RSpec.describe Evilution::Isolation::Fork do
 
       result = nil
       Timeout.timeout(5) do
-        result = isolator.call(mutation: mutation, test_command: test_command, timeout: 30)
+        result = isolator.call(mutation:, test_command:, timeout: 30)
       end
 
       expect(result).to be_survived
@@ -247,7 +247,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
       expect(result.error_message).to eq("boom")
@@ -256,7 +256,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns error when test command raises SyntaxError in child" do
       test_command = ->(_m) { raise SyntaxError, "unexpected ')'" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
       expect(result.error_message).to include("unexpected ')'")
@@ -265,7 +265,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "captures error_class and error_backtrace from child" do
       test_command = ->(_m) { raise ArgumentError, "bad arg" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.error_class).to eq("ArgumentError")
       expect(result.error_backtrace).to be_an(Array)
@@ -276,7 +276,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "captures error_class for SyntaxError from child" do
       test_command = ->(_m) { raise SyntaxError, "unexpected token" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.error_class).to eq("SyntaxError")
     end
@@ -284,7 +284,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "returns error when test command raises LoadError in child" do
       test_command = ->(_m) { raise LoadError, "cannot load such file -- foo" }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
       expect(result.error_message).to include("cannot load such file")
@@ -301,7 +301,7 @@ RSpec.describe Evilution::Isolation::Fork do
         }
       end
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_killed
       expect(result.error_message).to eq("test crashes: RuntimeError (1 crash)")
@@ -319,7 +319,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: true, blob: String.new("\xDB", encoding: Encoding::ASCII_8BIT) }
       end
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_survived
     ensure
@@ -329,7 +329,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "records duration" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.duration).to be > 0
     end
@@ -340,7 +340,7 @@ RSpec.describe Evilution::Isolation::Fork do
     it "records duration as elapsed time, not an absolute clock value" do
       test_command = ->(_m) { { passed: false } }
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.duration).to be < 60
     end
@@ -354,10 +354,45 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: false, error: ENV["TMPDIR"].to_s, error_class: "TmpdirProbe" }
       end
 
-      result = isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result.error_class).to eq("TmpdirProbe")
       expect(result.error_message).to match(/evilution-run/)
+    end
+
+    # Regression for EV-wqxu / GH #1278: mutation children must Dir.chdir into
+    # the sandbox so path-relativizing mutations (e.g. File.join(dir, name) ->
+    # name) write into the disposable sandbox instead of the repo root.
+    it "chdirs the child into the run sandbox directory" do
+      test_command = lambda do |_m|
+        { passed: false, error: Dir.pwd, error_class: "CwdProbe" }
+      end
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.error_class).to eq("CwdProbe")
+      expect(result.error_message).to match(/evilution-run/)
+    end
+
+    # Concrete leak scenario from EV-wqxu: a relative-path File.write inside
+    # the mutated subject must land inside the sandbox (cleaned up on tear-down)
+    # rather than the parent's CWD (typically the repo root, which would
+    # accumulate litter files).
+    it "does not leak files written to a relative path by the test command into the parent CWD" do
+      parent_cwd = Dir.pwd
+      probe_name = "evilution-cwd-leak-probe-#{Process.pid}-#{rand(1_000_000)}.tmp"
+
+      test_command = lambda do |_m|
+        File.write(probe_name, "leak")
+        { passed: false }
+      end
+
+      isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+
+      expect(File.exist?(File.join(parent_cwd, probe_name))).to be(false)
+    ensure
+      leak = File.join(parent_cwd, probe_name) if parent_cwd && probe_name
+      File.delete(leak) if leak && File.exist?(leak)
     end
 
     # Kills L64 / L65 method_call_removal (`unless read_io.nil?` -> `unless

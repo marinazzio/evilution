@@ -48,6 +48,11 @@ class Evilution::Isolation::Fork
   def fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
     ::Process.fork do
       ENV["TMPDIR"] = sandbox_dir
+      # Path-relativizing mutations (e.g. File.join(dir, name) -> name) would
+      # otherwise write into the parent's CWD (typically the repo root) and
+      # leak past the run. chdir here keeps such writes inside sandbox_dir,
+      # which the ensure block of #call removes.
+      Dir.chdir(sandbox_dir)
       read_io.close
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks
