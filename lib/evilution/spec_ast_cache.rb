@@ -59,11 +59,28 @@ class Evilution::SpecAstCache
   end
 
   def parse(path)
-    raise Evilution::ParseError.new("file not found: #{path}", file: path) unless File.exist?(path)
+    resolved = resolve_path(path)
+    raise Evilution::ParseError.new("file not found: #{path}", file: path) unless resolved
 
-    source = read_source(path)
-    result = parse_source(path, source)
+    source = read_source(resolved)
+    result = parse_source(resolved, source)
     collect_blocks(source, result, extract_comment_ranges(result))
+  end
+
+  # Accept either a CWD-relative path (historical) or one resolvable against
+  # Evilution::PROJECT_ROOT — needed for isolators chdir'd into a per-mutation
+  # sandbox (EV-wqxu / GH #1278). The PROJECT_ROOT fallback is gated on the
+  # isolated-worker flag so unrelated callers that chdir intentionally (e.g.
+  # tests using a fixture project layout) do not accidentally resolve into
+  # the evilution dev tree.
+  def resolve_path(path)
+    return path if File.exist?(path)
+    return nil unless Evilution.in_isolated_worker?
+
+    expanded = File.expand_path(path, Evilution::PROJECT_ROOT)
+    return expanded if File.exist?(expanded)
+
+    nil
   end
 
   def parse_source(path, source)

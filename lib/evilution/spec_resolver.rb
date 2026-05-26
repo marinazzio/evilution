@@ -16,7 +16,7 @@ class Evilution::SpecResolver
     normalized = normalize_path(source_path)
     candidates = candidate_test_paths(normalized)
     candidates = filter_by_pattern(candidates, spec_pattern) if spec_pattern
-    candidates.find { |path| File.exist?(path) }
+    candidates.find { |path| project_relative_exists?(path) }
   end
 
   def resolve_all(source_paths)
@@ -25,13 +25,27 @@ class Evilution::SpecResolver
 
   private
 
+  # Existence check that succeeds against the current CWD. When the caller
+  # is an isolated worker that chdir'd into a per-mutation sandbox (Evilution
+  # signals this via in_isolated_worker?), also try PROJECT_ROOT so the
+  # sandbox CWD does not break spec resolution (EV-wqxu / GH #1278).
+  def project_relative_exists?(path)
+    return true if File.exist?(path)
+    return false unless Evilution.in_isolated_worker?
+
+    File.exist?(File.expand_path(path, Evilution::PROJECT_ROOT))
+  end
+
   def filter_by_pattern(candidates, pattern)
     candidates.select { |path| File.fnmatch?(pattern, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
   end
 
   def normalize_path(path)
     path = path.delete_prefix("./")
-    path = path.delete_prefix("#{Dir.pwd}/") if path.start_with?("/")
+    if path.start_with?("/")
+      path = path.delete_prefix("#{Dir.pwd}/")
+      path = path.delete_prefix("#{Evilution::PROJECT_ROOT}/") if Evilution.in_isolated_worker?
+    end
     path
   end
 

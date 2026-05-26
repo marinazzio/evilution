@@ -318,5 +318,75 @@ RSpec.describe Evilution::Isolation::InProcess do
 
       expect(result.memory_delta_kb).to be_nil
     end
+
+    # Regression for EV-wqxu / GH #1278: the in-process isolator must sandbox
+    # the working directory around the test command so path-relativizing
+    # mutations cannot pollute the repo. The chdir must restore the parent
+    # CWD even when the test command times out or raises.
+    it "runs the test command in a per-run sandbox CWD and restores the parent CWD" do
+      original_cwd = Dir.pwd
+      observed_cwd = nil
+      test_command = lambda do |_m|
+        observed_cwd = Dir.pwd
+        { passed: false }
+      end
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(observed_cwd).not_to eq(original_cwd)
+      expect(observed_cwd).to match(/evilution-run/)
+      expect(Dir.pwd).to eq(original_cwd)
+    end
+
+    it "cleans up the sandbox CWD after the call so per-call dirs do not accumulate" do
+      observed_cwd = nil
+      test_command = lambda do |_m|
+        observed_cwd = Dir.pwd
+        File.write("leak-probe.tmp", "x")
+        { passed: false }
+      end
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(observed_cwd).not_to be_nil
+      expect(Dir.exist?(observed_cwd)).to be(false)
+    end
+
+    it "restores the parent CWD after a timeout" do
+      original_cwd = Dir.pwd
+      test_command = lambda { |_m|
+        sleep 10
+        { passed: true }
+      }
+
+      isolator.call(mutation:, test_command:, timeout: 0.1)
+
+      expect(Dir.pwd).to eq(original_cwd)
+    end
+
+    it "restores the parent CWD after the test command raises" do
+      original_cwd = Dir.pwd
+      test_command = ->(_m) { raise "boom" }
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(Dir.pwd).to eq(original_cwd)
+    end
+
+    it "does not leak files written to a relative path by the test command into the parent CWD" do
+      parent_cwd = Dir.pwd
+      probe_name = "evilution-in-process-leak-probe-#{Process.pid}-#{rand(1_000_000)}.tmp"
+      test_command = lambda do |_m|
+        File.write(probe_name, "leak")
+        { passed: false }
+      end
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(File.exist?(File.join(parent_cwd, probe_name))).to be(false)
+    ensure
+      leak = File.join(parent_cwd, probe_name) if parent_cwd && probe_name
+      File.delete(leak) if leak && File.exist?(leak)
+    end
   end
 end

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "timeout"
+require "tmpdir"
 require_relative "../memory"
 require_relative "../result/mutation_result"
 
@@ -17,19 +19,34 @@ class Evilution::Isolation::InProcess
   def call(mutation:, test_command:, timeout:)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     rss_before = Evilution::Memory.rss_kb
-    result = execute_with_timeout(mutation, test_command, timeout)
+    sandbox_dir = Dir.mktmpdir("evilution-run")
+    result = execute_with_timeout(mutation, test_command, timeout, sandbox_dir)
     rss_after = Evilution::Memory.rss_kb
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
     delta = compute_memory_delta(rss_before, rss_after, result)
 
     build_mutation_result(mutation, result, duration, rss_before, rss_after, delta)
+  ensure
+    FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
 
   private
 
-  def execute_with_timeout(mutation, test_command, timeout)
+  # The Dir.chdir block is inside the Timeout.timeout block so that a
+  # Timeout::Error raised mid-call still unwinds through Dir.chdir's ensure
+  # and restores the parent CWD before the rescue clause runs. The sandbox
+  # contains any relative-path writes from path-relativizing mutations
+  # (EV-wqxu / GH #1278). Evilution.with_isolated_worker signals the rest of
+  # evilution (SpecResolver/SpecSelector/SpecAstCache/MutationApplier/
+  # SourceEvaluator/Integration) to anchor project-relative paths to
+  # PROJECT_ROOT for the duration of the call.
+  def execute_with_timeout(mutation, test_command, timeout, sandbox_dir)
     result = Timeout.timeout(timeout) do
-      suppress_output { test_command.call(mutation) }
+      Evilution.with_isolated_worker do
+        Dir.chdir(sandbox_dir) do
+          suppress_output { test_command.call(mutation) }
+        end
+      end
     end
     { timeout: false }.merge(result)
   rescue Timeout::Error

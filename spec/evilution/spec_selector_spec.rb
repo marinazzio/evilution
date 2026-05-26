@@ -146,4 +146,37 @@ RSpec.describe Evilution::SpecSelector do
       expect(selector.call(nil)).to be_nil
     end
   end
+
+  # Regression for EV-wqxu / GH #1278: isolators chdir workers into a per-
+  # mutation sandbox to contain path-relativizing mutations. SpecSelector
+  # must still resolve project-relative mappings when the sandbox CWD does
+  # not contain the spec — falling back to Evilution::PROJECT_ROOT only when
+  # the isolated-worker flag is set, so unrelated callers that intentionally
+  # chdir (e.g. tests with fixture project layouts) keep their CWD-only
+  # semantics.
+  describe "isolated worker fallback" do
+    let(:probe_relative_path) { "spec/evilution/spec_selector_spec.rb" }
+
+    around do |example|
+      original = Evilution.instance_variable_get(:@in_isolated_worker)
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@in_isolated_worker, original)
+    end
+
+    it "falls back to PROJECT_ROOT for a project-relative mapping when flagged as isolated" do
+      skip "PROJECT_ROOT spec missing" unless File.exist?(File.join(Evilution::PROJECT_ROOT, probe_relative_path))
+
+      Evilution.in_isolated_worker!
+      selector = build(spec_mappings: { "lib/foo.rb" => [probe_relative_path] })
+
+      expect(selector.call("lib/foo.rb")).to eq([probe_relative_path])
+    end
+
+    it "does not fall back to PROJECT_ROOT when not flagged (preserves CWD-only contract)" do
+      selector = build(spec_mappings: { "lib/foo.rb" => [probe_relative_path] })
+
+      expect(selector.call("lib/foo.rb")).to be_nil
+    end
+  end
 end

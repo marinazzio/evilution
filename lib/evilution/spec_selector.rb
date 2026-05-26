@@ -15,7 +15,7 @@ class Evilution::SpecSelector
 
     mapped = mapping_for(source_path)
     if mapped
-      existing = mapped.select { |path| File.exist?(path) }
+      existing = mapped.select { |path| project_relative_exists?(path) }
       return existing unless existing.empty?
     end
 
@@ -33,7 +33,19 @@ class Evilution::SpecSelector
     return path if path.nil?
 
     normalized = path.to_s
-    normalized = normalized.delete_prefix("#{Dir.pwd}/") if normalized.start_with?("/")
+    if normalized.start_with?("/")
+      normalized = normalized.delete_prefix("#{Dir.pwd}/")
+      normalized = normalized.delete_prefix("#{Evilution::PROJECT_ROOT}/") if Evilution.in_isolated_worker?
+    end
     normalized.delete_prefix("./")
+  end
+
+  # Same semantics as Evilution::SpecResolver#project_relative_exists? — see
+  # that method for the EV-wqxu / GH #1278 rationale.
+  def project_relative_exists?(path)
+    return true if File.exist?(path)
+    return false unless Evilution.in_isolated_worker?
+
+    File.exist?(File.expand_path(path, Evilution::PROJECT_ROOT))
   end
 end
