@@ -70,11 +70,33 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     targets = @example_filter_applier.call(mutation, files)
     return @result_builder.unresolved_example(mutation) if targets.nil?
 
-    args = ["--format", "progress", "--no-color", "--order", "defined", *targets]
+    args = ["--format", "progress", "--no-color", "--order", "defined", *resolve_targets(targets)]
     command = "rspec #{args.join(" ")}"
 
     reset_examples
     execute_run(args, command)
+  end
+
+  # Targets are passed straight through when they resolve against Dir.pwd,
+  # preserving the relative-path contract for callers/tests. When the CWD
+  # cannot find them — workers chdir'd into a per-mutation sandbox by the
+  # isolator (EV-wqxu / GH #1278) — the targets are expanded against
+  # Evilution::PROJECT_ROOT so RSpec::Core::Runner can still load the files.
+  def resolve_targets(targets)
+    targets.map { |target| resolve_target(target) }
+  end
+
+  def resolve_target(target)
+    return target if target.start_with?("/")
+
+    path, _colon, line = target.partition(":")
+    return target if File.exist?(path)
+    return target unless Evilution.in_isolated_worker?
+
+    absolute = File.expand_path(path, Evilution::PROJECT_ROOT)
+    return target unless File.exist?(absolute)
+
+    line.empty? ? absolute : "#{absolute}:#{line}"
   end
 
   def execute_run(args, command)

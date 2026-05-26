@@ -35,11 +35,17 @@ class Evilution::Isolation::InProcess
   # The Dir.chdir block is inside the Timeout.timeout block so that a
   # Timeout::Error raised mid-call still unwinds through Dir.chdir's ensure
   # and restores the parent CWD before the rescue clause runs. The sandbox
-  # contains any relative-path writes from path-relativizing mutations.
+  # contains any relative-path writes from path-relativizing mutations
+  # (EV-wqxu / GH #1278). Evilution.with_isolated_worker signals the rest of
+  # evilution (SpecResolver/SpecSelector/SpecAstCache/MutationApplier/
+  # SourceEvaluator/Integration) to anchor project-relative paths to
+  # PROJECT_ROOT for the duration of the call.
   def execute_with_timeout(mutation, test_command, timeout, sandbox_dir)
     result = Timeout.timeout(timeout) do
-      Dir.chdir(sandbox_dir) do
-        suppress_output { test_command.call(mutation) }
+      Evilution.with_isolated_worker do
+        Dir.chdir(sandbox_dir) do
+          suppress_output { test_command.call(mutation) }
+        end
       end
     end
     { timeout: false }.merge(result)

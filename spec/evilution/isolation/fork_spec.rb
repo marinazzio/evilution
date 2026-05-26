@@ -387,7 +387,7 @@ RSpec.describe Evilution::Isolation::Fork do
         { passed: false }
       end
 
-      isolator.call(mutation: mutation, test_command: test_command, timeout: 5)
+      isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(File.exist?(File.join(parent_cwd, probe_name))).to be(false)
     ensure

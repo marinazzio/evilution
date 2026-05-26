@@ -51,8 +51,12 @@ class Evilution::Isolation::Fork
       # Path-relativizing mutations (e.g. File.join(dir, name) -> name) would
       # otherwise write into the parent's CWD (typically the repo root) and
       # leak past the run. chdir here keeps such writes inside sandbox_dir,
-      # which the ensure block of #call removes.
+      # which the ensure block of #call removes. The in_isolated_worker! flag
+      # signals the rest of evilution (SpecResolver/SpecSelector/SpecAstCache/
+      # MutationApplier/SourceEvaluator/Integration) to anchor project-relative
+      # paths to Evilution::PROJECT_ROOT instead of the sandbox CWD.
       Dir.chdir(sandbox_dir)
+      Evilution.in_isolated_worker!
       read_io.close
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks

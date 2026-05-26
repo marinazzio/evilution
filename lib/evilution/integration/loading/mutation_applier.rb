@@ -75,7 +75,11 @@ class Evilution::Integration::Loading::MutationApplier
   # fork isolation each worker starts from the same pre-`require` snapshot, so
   # without this the whole file scores 0%.
   def mark_feature_loaded(file_path)
-    absolute = File.realpath(File.expand_path(file_path))
+    # When the isolator has chdir'd into a per-mutation sandbox (EV-wqxu /
+    # GH #1278), anchor against PROJECT_ROOT so File.realpath does not chase
+    # file_path into a non-existent /tmp path.
+    base = Evilution.in_isolated_worker? ? Evilution::PROJECT_ROOT : Dir.pwd
+    absolute = File.realpath(File.expand_path(file_path, base))
     $LOADED_FEATURES << absolute unless $LOADED_FEATURES.include?(absolute)
   rescue Errno::ENOENT
     nil

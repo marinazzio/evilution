@@ -129,6 +129,34 @@ require_relative "evilution/disable_comment"
 require_relative "evilution/runner"
 
 module Evilution
+  # Captured at load time, before any isolator can chdir into a per-mutation
+  # sandbox. Used as the anchor for resolving project-relative paths (spec
+  # files, source files for eval) from inside a chdir'd child so the CWD
+  # sandbox (EV-wqxu / GH #1278) cannot break spec resolution or eval __FILE__.
+  PROJECT_ROOT = Dir.pwd.freeze unless defined?(PROJECT_ROOT)
+
+  # Flag set by isolators (Evilution::Isolation::Fork in the forked child,
+  # Evilution::Isolation::InProcess around the test_command) so spec
+  # resolution and source eval anchor relative paths to PROJECT_ROOT instead
+  # of Dir.pwd. Without this gate, a caller that intentionally chdirs to a
+  # different project (e.g. a fixture layout in tests) would have its lookups
+  # inadvertently fall back to the evilution dev tree.
+  def self.in_isolated_worker!
+    @in_isolated_worker = true
+  end
+
+  def self.in_isolated_worker?
+    @in_isolated_worker == true
+  end
+
+  def self.with_isolated_worker
+    previous = @in_isolated_worker
+    @in_isolated_worker = true
+    yield
+  ensure
+    @in_isolated_worker = previous
+  end
+
   class Error < StandardError
     attr_reader :file
 
