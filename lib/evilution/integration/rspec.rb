@@ -86,17 +86,32 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     targets.map { |target| resolve_target(target) }
   end
 
+  # Splits a target into (path, line). RSpec example locations end in
+  # `:LINE` (or `:LINE:LINE...` for nested groups), so the suffix is
+  # anchored to the END of the string — that way path components which
+  # themselves contain colons (e.g. a Windows-style `C:/proj/spec/x.rb`)
+  # are not mis-split by a naive `partition(":")`.
+  TARGET_LINE_SUFFIX = /\A(.+?)(:\d+(?::\d+)*)\z/
+  private_constant :TARGET_LINE_SUFFIX
+
   def resolve_target(target)
     return target if target.start_with?("/")
 
-    path, _colon, line = target.partition(":")
+    if (match = TARGET_LINE_SUFFIX.match(target))
+      path = match[1]
+      line_suffix = match[2]
+    else
+      path = target
+      line_suffix = ""
+    end
+
     return target if File.exist?(path)
     return target unless Evilution.in_isolated_worker?
 
     absolute = File.expand_path(path, Evilution::PROJECT_ROOT)
     return target unless File.exist?(absolute)
 
-    line.empty? ? absolute : "#{absolute}:#{line}"
+    "#{absolute}#{line_suffix}"
   end
 
   def execute_run(args, command)
