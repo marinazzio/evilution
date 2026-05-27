@@ -109,6 +109,46 @@ RSpec.describe Evilution::MCP::MutateTool::SurvivedEnricher do
       expect(spec_file).to be_a(String)
     end
 
+    # Kills EV-vlbh / GH #1191 conditional_negation on
+    # survived_enricher.rb:25 (`explicit_spec ? nil : resolver_for_integration`
+    # -> `false ? nil : ...`). When an explicit spec override is provided the
+    # build_resolver path must NOT instantiate a SpecResolver — explicit_spec
+    # short-circuits resolver lookup in enrich_entry, so creating a resolver
+    # would be wasted work and the test below pins the behavior.
+    it "does not instantiate a SpecResolver when an explicit spec override is provided" do
+      data = { "survived" => [{}] }
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(true)
+      allow(config).to receive(:spec_files).and_return(["spec/custom_spec.rb"])
+      allow(Evilution::SpecResolver).to receive(:new).and_call_original
+
+      described_class.call(data, [result], config)
+
+      expect(Evilution::SpecResolver).not_to have_received(:new)
+      expect(data["survived"].first["spec_file"]).to eq("spec/custom_spec.rb")
+    end
+
+    # Kills EV-vlbh / GH #1191 conditional_negation on
+    # survived_enricher.rb:50 (`unless integration_class` -> `unless false`).
+    # The mutated guard ALWAYS returns the default SpecResolver, bypassing
+    # the integration's own baseline_options[:spec_resolver]. The Minitest
+    # integration registers a custom resolver, so a successful kill shows
+    # the registered resolver is consulted rather than a fresh default.
+    it "uses the integration's configured spec_resolver instead of a fresh default" do
+      data = { "survived" => [{}] }
+      custom_resolver = double("custom_resolver")
+      allow(custom_resolver).to receive(:call).with("lib/foo.rb").and_return("test/foo_test.rb")
+      allow(Evilution::Integration::Minitest)
+        .to receive(:baseline_options).and_return(spec_resolver: custom_resolver)
+      config = double(integration: :minitest)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(false)
+
+      described_class.call(data, [result], config)
+
+      expect(custom_resolver).to have_received(:call).with("lib/foo.rb")
+      expect(data["survived"].first["spec_file"]).to eq("test/foo_test.rb")
+    end
+
     it "falls back to a fresh SpecResolver for an unknown integration" do
       # Guards line 50: an unknown integration has no registered class, so the
       # method must return a usable SpecResolver. If the return is dropped, or

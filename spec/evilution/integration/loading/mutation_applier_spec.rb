@@ -222,5 +222,69 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(result[:passed]).to be(false)
       expect(result[:error_backtrace]).to be_an(Array)
     end
+
+    # Regression for EV-vlbh / GH #1191: mark_feature_loaded anchors relative
+    # file_path expansion at PROJECT_ROOT only when in_isolated_worker? is set
+    # (EV-wqxu / GH #1278 sandbox). The flag's two branches resolve to
+    # observably different absolute paths.
+    describe "isolated-worker anchoring of $LOADED_FEATURES" do
+      around do |example|
+        previous = Evilution.instance_variable_get(:@in_isolated_worker)
+        features_before = $LOADED_FEATURES.dup
+        example.run
+      ensure
+        Evilution.instance_variable_set(:@in_isolated_worker, previous)
+        $LOADED_FEATURES.replace(features_before)
+      end
+
+      let(:relative_mutation) do
+        double("Mutation",
+               file_path: "relative_target.rb",
+               original_source: "class Foo; end\n",
+               mutated_source: "class Bar; end\n",
+               eval_source: "class Baz; end\n")
+      end
+
+      it "registers PROJECT_ROOT-relative absolute path when the flag is set" do
+        Evilution.in_isolated_worker!
+        expected = File.join(Evilution::PROJECT_ROOT, "relative_target.rb")
+        allow(File).to receive(:realpath).and_call_original
+        allow(File).to receive(:realpath).with(expected).and_return(expected)
+
+        injected_applier.call(relative_mutation)
+
+        expect($LOADED_FEATURES).to include(expected)
+      end
+
+      it "registers Dir.pwd-relative absolute path when the flag is unset" do
+        Dir.mktmpdir do |sandbox|
+          Dir.chdir(sandbox) do
+            expected = File.join(sandbox, "relative_target.rb")
+            allow(File).to receive(:realpath).and_call_original
+            allow(File).to receive(:realpath).with(expected).and_return(expected)
+
+            injected_applier.call(relative_mutation)
+
+            expect($LOADED_FEATURES).to include(expected)
+          end
+        end
+      end
+
+      # Kills conditional_negation on mutation_applier.rb:83
+      # (`unless $LOADED_FEATURES.include?(absolute)` -> `unless false`). The
+      # mutated guard appends on every invocation, so a second call duplicates
+      # the entry.
+      it "does not duplicate $LOADED_FEATURES entries across repeat calls" do
+        Evilution.in_isolated_worker!
+        expected = File.join(Evilution::PROJECT_ROOT, "relative_target.rb")
+        allow(File).to receive(:realpath).and_call_original
+        allow(File).to receive(:realpath).with(expected).and_return(expected)
+
+        injected_applier.call(relative_mutation)
+        injected_applier.call(relative_mutation)
+
+        expect($LOADED_FEATURES.count(expected)).to eq(1)
+      end
+    end
   end
 end

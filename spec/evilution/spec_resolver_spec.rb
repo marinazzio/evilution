@@ -333,4 +333,72 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
   end
+
+  # Regression coverage for EV-vlbh / GH #1191: SpecResolver gained a
+  # PROJECT_ROOT fallback used by isolators chdir'd into a per-mutation
+  # sandbox. The fallback is gated on Evilution.in_isolated_worker? so an
+  # unflagged caller never silently resolves against the dev tree. These
+  # specs pin both directions of the flag.
+  describe "isolated-worker fallback" do
+    around do |example|
+      previous = Evilution.instance_variable_get(:@in_isolated_worker)
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@in_isolated_worker, previous)
+    end
+
+    # Kills conditional_negation on spec_resolver.rb:34
+    # (`unless Evilution.in_isolated_worker?` -> `unless true`). With the
+    # mutated guard, project_relative_exists? falls through to a
+    # PROJECT_ROOT lookup even when the flag is unset, silently leaking
+    # the dev tree into unrelated callers.
+    it "returns nil for a CWD-missing spec when the flag is unset (no PROJECT_ROOT fallback)" do
+      probe = "spec/evilution/spec_resolver_spec.rb"
+      skip "PROJECT_ROOT probe missing" unless File.exist?(File.join(Evilution::PROJECT_ROOT, probe))
+
+      # CWD is the per-example mktmpdir; the probe exists at PROJECT_ROOT
+      # but NOT under CWD. With the flag unset, resolution must stop at CWD.
+      expect(resolver.call("lib/evilution/spec_resolver.rb")).to be_nil
+    end
+
+    it "resolves via PROJECT_ROOT when the flag is set and the CWD lookup fails" do
+      probe_source = "lib/evilution/spec_resolver.rb"
+      probe_spec = "spec/evilution/spec_resolver_spec.rb"
+      skip "PROJECT_ROOT probe missing" unless File.exist?(File.join(Evilution::PROJECT_ROOT, probe_spec))
+
+      Evilution.in_isolated_worker!
+
+      expect(resolver.call(probe_source)).to eq(probe_spec)
+    end
+
+    # Kills conditional_negation on spec_resolver.rb:47 (the
+    # `if Evilution.in_isolated_worker?` guard on the PROJECT_ROOT prefix
+    # strip). With the flag unset the prefix must be left in place — the
+    # mutated `if true` would silently strip it for any caller.
+    it "does not strip the PROJECT_ROOT prefix from absolute source paths when the flag is unset" do
+      # SpecResolver builds candidates as `"#{test_dir}/#{normalized_source}"`,
+      # so when the absolute source is left intact the candidate keeps the
+      # leading slash, producing a double-slash join. Both candidates are
+      # created on disk; the resolver picks whichever the (un)stripped path
+      # produces.
+      absolute_source = "#{Evilution::PROJECT_ROOT}/lib/x.rb"
+      raw_candidate = "spec/#{absolute_source.sub(/\.rb\z/, "_spec.rb")}"
+      stripped_candidate = "spec/lib/x_spec.rb"
+      create_file(raw_candidate)
+      create_file(stripped_candidate)
+
+      expect(resolver.call(absolute_source)).to eq(raw_candidate)
+    end
+
+    it "strips the PROJECT_ROOT prefix from absolute source paths when the flag is set" do
+      Evilution.in_isolated_worker!
+      absolute_source = "#{Evilution::PROJECT_ROOT}/lib/x.rb"
+      raw_candidate = "spec/#{absolute_source.sub(/\.rb\z/, "_spec.rb")}"
+      stripped_candidate = "spec/lib/x_spec.rb"
+      create_file(raw_candidate)
+      create_file(stripped_candidate)
+
+      expect(resolver.call(absolute_source)).to eq(stripped_candidate)
+    end
+  end
 end

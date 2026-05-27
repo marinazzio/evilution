@@ -18,6 +18,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
     Evilution::Result::MutationResult.new(mutation: mut, status: :survived, duration: 0.1)
   end
 
+  def timed_out(mut)
+    Evilution::Result::MutationResult.new(mutation: mut, status: :timeout, duration: 5.0, test_command: "c")
+  end
+
   describe "#fetch" do
     it "returns nil when the underlying cache is nil (no caching configured)" do
       expect(described_class.new(nil).fetch(mutation)).to be_nil
@@ -70,6 +74,21 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
                                               killing_test: "t",
                                               test_command: "c")
       described_class.new(backend).store(mut, killed(mut))
+    end
+
+    # Kills EV-vlbh / GH #1191 predicate_replacement on result_cache.rb:34
+    # (`result.killed? || result.timeout?` -> `result.killed? || false`).
+    # Timeout results must be cached just like kills — the mutated guard
+    # silently drops them, so a second run would re-do the timed-out work.
+    it "stores timeout results so they are not re-run on subsequent invocations" do
+      mut = mutation
+      backend = instance_double("Cache")
+      expect(backend).to receive(:store).with(mut,
+                                              status: :timeout,
+                                              duration: 5.0,
+                                              killing_test: nil,
+                                              test_command: "c")
+      described_class.new(backend).store(mut, timed_out(mut))
     end
   end
 
