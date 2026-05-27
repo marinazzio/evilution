@@ -181,6 +181,24 @@ RSpec.describe Evilution::Session::Diff do
         expect(result.summary.base_total).to eq(0)
         expect(result.summary.head_total).to eq(0)
       end
+
+      # Kills EV-2bx6 / GH #1193 index_to_fetch on session/diff.rb:39, 40, 82
+      # (`base_data["survived"]` -> `.fetch(...)`; `data["summary"]` ->
+      # `.fetch("summary")`). The diff engine must tolerate session JSON that
+      # omits these top-level keys — `.fetch` would raise KeyError and break
+      # the diff for legacy or partial session payloads.
+      it "tolerates session data with no 'survived' or 'summary' keys at all" do
+        base = {}
+        head = {}
+
+        result = diff_engine.call(base, head)
+
+        expect(result.fixed).to eq([])
+        expect(result.new_survivors).to eq([])
+        expect(result.persistent).to eq([])
+        expect(result.summary.base_score).to eq(0.0)
+        expect(result.summary.head_score).to eq(0.0)
+      end
     end
 
     context "with nil survived arrays" do
@@ -193,6 +211,45 @@ RSpec.describe Evilution::Session::Diff do
         expect(result.fixed).to eq([])
         expect(result.new_survivors).to eq([])
         expect(result.persistent).to eq([])
+      end
+    end
+
+    # Kills EV-2bx6 / GH #1193 index_to_fetch on session/diff.rb:92
+    # (`mutation["operator"|"file"|"line"|"subject"]` -> `.fetch(...)`).
+    # mutation_key is called for every survived entry; missing fields
+    # historically yield nil (the entries compare as different but valid).
+    # `.fetch` would raise KeyError and crash the whole diff.
+    context "mutation entries with missing identity fields" do
+      it "treats missing operator as nil rather than raising" do
+        partial = { "file" => "lib/foo.rb", "line" => 10, "subject" => "Foo#bar" }
+        base = session_data(score: 0.8, survivors: [partial])
+        head = session_data(score: 0.8, survivors: [partial])
+
+        expect { diff_engine.call(base, head) }.not_to raise_error
+      end
+
+      it "treats missing file as nil rather than raising" do
+        partial = { "operator" => "arithmetic_replacement", "line" => 10, "subject" => "Foo#bar" }
+        base = session_data(score: 0.8, survivors: [partial])
+        head = session_data(score: 0.8, survivors: [partial])
+
+        expect { diff_engine.call(base, head) }.not_to raise_error
+      end
+
+      it "treats missing line as nil rather than raising" do
+        partial = { "operator" => "arithmetic_replacement", "file" => "lib/foo.rb", "subject" => "Foo#bar" }
+        base = session_data(score: 0.8, survivors: [partial])
+        head = session_data(score: 0.8, survivors: [partial])
+
+        expect { diff_engine.call(base, head) }.not_to raise_error
+      end
+
+      it "treats missing subject as nil rather than raising" do
+        partial = { "operator" => "arithmetic_replacement", "file" => "lib/foo.rb", "line" => 10 }
+        base = session_data(score: 0.8, survivors: [partial])
+        head = session_data(score: 0.8, survivors: [partial])
+
+        expect { diff_engine.call(base, head) }.not_to raise_error
       end
     end
 
