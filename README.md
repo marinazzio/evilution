@@ -101,6 +101,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--example-targeting-fallback MODE` | String | `full_file` | Behavior when no example matches: `full_file` (run the whole spec file) or `unresolved` (skip the mutation as `:unresolved`). |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
+| `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
 | `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`). |
@@ -172,6 +173,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # suggest_tests: false     # concrete test code in suggestions (matches integration)
 # save_session: false      # persist results under .evilution/results/
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails)
+# canary: true             # proof-of-life synthetic mutation at session start (false to skip)
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
 # show_disabled: false     # report mutations skipped by disable comments

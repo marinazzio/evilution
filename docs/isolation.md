@@ -103,6 +103,33 @@ the MCP server is a long-lived process that handles runs from different
 projects — preloading one project's Rails stack into a shared process would
 poison subsequent runs.
 
+## Sandboxed working directory
+
+Every isolator runs `test_command.call` inside a per-mutation scratch
+directory (`Dir.mktmpdir("evilution-run")`) that is removed on the way out.
+Mutations that turn an absolute path into a relative one — for example
+`argument_removal` on `File.join(dir, name)` collapsing to `File.write(name,
+…)` — would otherwise drop files into the parent process's CWD (typically
+the repo root) and leak past the run.
+
+Project-relative paths used by `SpecResolver`, `SpecSelector`, the
+`RSpec::Core::Runner` / `Minitest.load` invocation sites, and the mutated
+file's `__FILE__` in `SourceEvaluator` are anchored at
+`Evilution::PROJECT_ROOT` (captured at load time), so the sandbox CWD does
+not break spec lookup or `require_relative` chains inside the mutant.
+
+## Proof-of-life canary
+
+Before any real mutation runs, `Evilution::Runner::Canary` evals a
+synthetic, guaranteed-unobservable mutation through the configured
+integration + isolation. A healthy pipeline must score it `:survived`; any
+other status aborts the run with a diagnostic so the user never sees a
+score produced by a broken pipeline (autoload mismatch, reporter-plugin
+eviction, isolation defect, `fail_if_no_examples` config drift, etc.).
+On by default; toggle with `--[no-]canary` or `canary: true|false` in
+`.evilution.yml`. The canary mirrors the configured `--isolation` so
+isolation-specific defects are caught too.
+
 ## Related flags
 
 - `--timeout N` sets the per-mutation time limit. Under `fork`, this drives
@@ -111,5 +138,6 @@ poison subsequent runs.
 - `--jobs N` runs N workers in parallel. The parallel pool respects the
   configured isolation strategy, so `--jobs 4 --isolation fork` uses fork
   isolation per-mutation inside each worker.
+- `--[no-]canary` toggles the proof-of-life pre-flight check (see above).
 
 [rails-handle-interrupt]: https://github.com/rails/rails/blob/main/activesupport/lib/active_support/concurrency/thread_monitor.rb
