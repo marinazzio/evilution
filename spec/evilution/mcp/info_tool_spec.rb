@@ -136,6 +136,25 @@ RSpec.describe Evilution::MCP::InfoTool do
         integration: "rspec", skip_config: true
       )
     end
+
+    # Kills EV-t1qg / GH #1192 nil_replacement on the kwarg defaults
+    # (`target: nil` / `spec: nil` / `integration: nil` / `skip_config: nil`
+    # mutated to `true`/`false`/`0`/`""`). Omitted kwargs must propagate
+    # as nil into the action so downstream `if target` / `||` checks behave
+    # consistently with how the CLI defaults them.
+    it "forwards nil for every optional kwarg the caller did not supply" do
+      received = nil
+      allow(Evilution::MCP::InfoTool::Actions::Environment).to receive(:call) do |**kwargs|
+        received = kwargs
+      end
+
+      call(action: "environment")
+
+      expect(received[:target]).to be_nil
+      expect(received[:spec]).to be_nil
+      expect(received[:integration]).to be_nil
+      expect(received[:skip_config]).to be_nil
+    end
   end
 
   describe "parse_files invocation" do

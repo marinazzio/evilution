@@ -99,6 +99,118 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(stats["mutations_per_second"]).to eq(3.33)
     end
 
+    # Kills EV-t1qg / GH #1192 integer_literal on the `.round(4)` precision
+    # constants in build_metrics_summary (score / duration / killtime /
+    # efficiency). The values must be rounded to exactly 4 decimals, not 5
+    # or another precision.
+    it "rounds metric fields to exactly 4 decimal places" do
+      precise_mutation = double(
+        "Mutation",
+        operator_name: "comparison_replacement",
+        file_path: "lib/user.rb", line: 1, diff: "- a\n+ b", unified_diff: nil,
+        subject: double("Subject", name: "User#check")
+      )
+      results = Array.new(7) do |i|
+        Evilution::Result::MutationResult.new(
+          mutation: precise_mutation,
+          status: i < 3 ? :killed : :survived,
+          duration: 0.123456 + (i * 0.000001)
+        )
+      end
+      summary_with_precision = Evilution::Result::Summary.new(
+        results: results, duration: 0.987654321
+      )
+
+      parsed = JSON.parse(reporter.call(summary_with_precision))
+      stats = parsed["summary"]
+
+      # 3/7 = 0.428571... -> round(4) = 0.4286, round(5) = 0.42857
+      expect(stats["score"]).to eq(0.4286)
+      # 0.987654321.round(4) = 0.9877, round(5) = 0.98765
+      expect(stats["duration"]).to eq(0.9877)
+
+      # killtime is the sum of all result durations (~0.864213); rounded at
+      # 4 decimals it is 0.8642 — a round(5) mutation would surface 0.86421.
+      expect(stats["killtime"]).to eq(0.8642)
+      expect(stats["killtime"]).not_to eq(0.86421)
+    end
+
+    # Kills EV-t1qg / GH #1192 integer_literal on `.round(4)` for efficiency
+    # specifically — the value must collapse exactly at 4 decimals, not 5.
+    it "rounds efficiency to exactly 4 decimal places" do
+      mut = double("Mutation",
+                   operator_name: "comparison_replacement",
+                   file_path: "lib/u.rb", line: 1, diff: "- a\n+ b", unified_diff: nil,
+                   subject: double("Subject", name: "U#x"))
+      result = Evilution::Result::MutationResult.new(
+        mutation: mut, status: :killed, duration: 0.12345
+      )
+      # efficiency = 0.12345 / 1.0 = 0.12345 -> round(4) = 0.1235,
+      # round(5) = 0.12345
+      summary_eff = Evilution::Result::Summary.new(results: [result], duration: 1.0)
+
+      parsed = JSON.parse(reporter.call(summary_eff))
+
+      expect(parsed["summary"]["efficiency"]).to eq(0.1235)
+      expect(parsed["summary"]["efficiency"]).not_to eq(0.12345)
+    end
+
+    # Kills EV-t1qg / GH #1192 symbol_literal on the
+    # `select(&:timeout?)` / `select(&:error?)` predicates in
+    # derived_categories. `select(&nil)` returns the unfiltered enumerator,
+    # so the timed_out / errors arrays would include every result instead
+    # of only the matching ones.
+    it "isolates timed_out and errors arrays to their matching status" do
+      survived_mut = double("Mutation",
+                            operator_name: "comparison_replacement",
+                            file_path: "lib/a.rb", line: 1, diff: "- a\n+ b",
+                            unified_diff: nil,
+                            subject: double("Subject", name: "A#x"))
+      timed_out_mut = double("Mutation",
+                             operator_name: "method_call_removal",
+                             file_path: "lib/a.rb", line: 2, diff: "- foo\n+ ", unified_diff: nil,
+                             subject: double("Subject", name: "A#y"))
+      error_mut = double("Mutation",
+                         operator_name: "send_mutation",
+                         file_path: "lib/a.rb", line: 3, diff: "- a.b\n+ a.c", unified_diff: nil,
+                         subject: double("Subject", name: "A#z"))
+
+      mixed = Evilution::Result::Summary.new(
+        results: [
+          Evilution::Result::MutationResult.new(mutation: survived_mut, status: :survived, duration: 0.1),
+          Evilution::Result::MutationResult.new(mutation: timed_out_mut, status: :timeout, duration: 0.2),
+          Evilution::Result::MutationResult.new(mutation: error_mut, status: :error, duration: 0.3)
+        ],
+        duration: 0.6
+      )
+
+      parsed = JSON.parse(reporter.call(mixed))
+
+      expect(parsed["timed_out"].map { |m| m["line"] }).to eq([2])
+      expect(parsed["errors"].map { |m| m["line"] }).to eq([3])
+    end
+
+    # Kills EV-t1qg / GH #1192 integer_literal on the per-result
+    # `.round(4)` precision in base_mutation_fields (duration).
+    it "rounds per-mutation duration to exactly 4 decimal places" do
+      precise_mutation = double(
+        "Mutation",
+        operator_name: "comparison_replacement",
+        file_path: "lib/user.rb", line: 1, diff: "- a\n+ b", unified_diff: nil,
+        subject: double("Subject", name: "User#check")
+      )
+      precise_result = Evilution::Result::MutationResult.new(
+        mutation: precise_mutation, status: :killed, duration: 0.987654321
+      )
+      summary_with_precision = Evilution::Result::Summary.new(
+        results: [precise_result], duration: 1.0
+      )
+
+      parsed = JSON.parse(reporter.call(summary_with_precision))
+
+      expect(parsed["killed"].first["duration"]).to eq(0.9877)
+    end
+
     it "includes count fields for all statuses in summary" do
       parsed = JSON.parse(reporter.call(summary))
       stats = parsed["summary"]

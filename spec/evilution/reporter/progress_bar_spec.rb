@@ -227,6 +227,68 @@ RSpec.describe Evilution::Reporter::ProgressBar do
 
       expect(output.string).to include("[#{" " * 10}]")
     end
+
+    # Kills EV-t1qg / GH #1192 string_literal on render's separator string:
+    # the rendered line is `bar | stats | time`, joined by literal " | ", so
+    # collapsing either separator (to "" or "nil") would visibly break the
+    # line. The space after `]` and the ` | ` between `survived` and the
+    # elapsed time both have to be preserved.
+    it "joins bar, stats, and time with the literal '] ' and ' | ' separators" do
+      bar = described_class.new(total: 10, output: output)
+
+      bar.tick(status: :killed)
+
+      expect(output.string).to include("] ")
+      expect(output.string).to include("survived | ")
+      expect(output.string).not_to include("nil")
+    end
+
+    # Kills EV-t1qg / GH #1192 string_literal on stats_string's
+    # " mutations | " segment — both the " mutations " label and the " | "
+    # separator must appear between counts.
+    it "renders the literal ' mutations ' label and ' | ' separators in the stats segment" do
+      bar = described_class.new(total: 10, output: output)
+
+      bar.tick(status: :killed)
+
+      expect(output.string).to include("1/10 mutations")
+      expect(output.string).to include("mutations | ")
+      expect(output.string).to include("killed | ")
+    end
+
+    # Kills EV-t1qg / GH #1192 integer_literal on bar_string's `fraction = 0`
+    # default (mutated to `1`). When @total <= 0, fraction must collapse to
+    # 0, not 1 — otherwise an empty pipeline renders a full bar.
+    it "renders a fully-empty bar when total is zero (fraction defaults to 0)" do
+      bar = described_class.new(total: 0, output: output, width: 10)
+
+      bar.finish
+
+      expect(output.string).to include("[#{" " * 10}]")
+      expect(output.string).not_to include("=")
+    end
+
+    # Kills EV-t1qg / GH #1192 integer_literal on bar_string's
+    # `if filled <= 0` -> `if filled <= 1`. With filled == 1, the partial
+    # branch must run (">" + (@width - 1) spaces), not the empty branch.
+    it "renders the partial '>' marker when exactly one unit is filled" do
+      bar = described_class.new(total: 30, output: output, width: 30)
+
+      bar.tick(status: :killed)
+
+      expect(output.string).to include("[>#{" " * 29}]")
+    end
+
+    # Kills EV-t1qg / GH #1192 integer_literal on estimate_remaining's
+    # `return 0 unless @completed.positive?` -> `return 1`. With no ticks,
+    # remaining time must show 00:00, not 00:01.
+    it "reports remaining time as 00:00 before any tick" do
+      bar = described_class.new(total: 10, output: output)
+
+      bar.finish
+
+      expect(output.string).to include("~00:00 remaining")
+    end
   end
 
   describe ".tty?" do
