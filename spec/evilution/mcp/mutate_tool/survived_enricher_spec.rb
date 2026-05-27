@@ -78,6 +78,28 @@ RSpec.describe Evilution::MCP::MutateTool::SurvivedEnricher do
       expect(entry["next_step"]).to include("the covering test file")
     end
 
+    # Kills EV-2bx6 / GH #1193 index_to_fetch on survived_enricher.rb:16
+    # (`survived_results[index]` -> `survived_results.fetch(index)`). When
+    # there are MORE serialized entries than survived_results — e.g. JSON
+    # was trimmed or survived_results was filtered — `[]` returns nil and
+    # the entry is skipped; `.fetch` would raise IndexError and abort the
+    # whole enrichment loop.
+    it "skips trailing entries whose index exceeds survived_results length" do
+      data = { "survived" => [{}, {}] }
+      resolver = double
+      allow(resolver).to receive(:call).with("lib/foo.rb").and_return("spec/foo_spec.rb")
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(false)
+
+      expect do
+        described_class.call(data, [result], config)
+      end.not_to raise_error
+
+      expect(data["survived"][0]["subject"]).to eq("Foo#bar")
+      expect(data["survived"][1]).to eq({})
+    end
+
     it "skips entries whose survived_result is nil instead of crashing" do
       # Guards `next unless result`: a nil result at an index must be skipped,
       # not dereferenced. The surviving entry is enriched, the nil one is left bare.
