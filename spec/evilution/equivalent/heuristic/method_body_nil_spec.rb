@@ -60,6 +60,17 @@ RSpec.describe Evilution::Equivalent::Heuristic::MethodBodyNil do
     finder.subjects.first
   end
 
+  # Kills EV-vlbh / GH #1191 predicate_replacement on
+  # method_body_nil.rb:15 (`body.body.first.is_a?(Prism::NilNode)` -> `true`).
+  # A single-statement body whose statement is NOT a NilNode must not be
+  # treated as nil-equivalent, so the predicate's return value matters.
+  it "does not match a single-statement body whose statement is not a NilNode" do
+    subj = subject_from("def m\n  42\nend\n")
+    mutation = double("Mutation", operator_name: "method_body_replacement", subject: subj)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
   it "does not match a multi-statement body even when it begins with nil" do
     # The body has two statements (a leading `nil`, then a call). Only a
     # body that is *exactly* a single nil statement is equivalent; the
