@@ -51,12 +51,28 @@ RSpec.describe Evilution::MCP::SessionTool do
     expect(described_class.name_value).to eq("evilution-session")
   end
 
+  # Kills EV-t1qg / GH #1192 string_literal on success_response and
+  # error_response Response content `type: "text"` — MCP clients dispatch on
+  # the type field, so it must be the literal string "text".
+  it "wraps every Response payload in a content element typed as 'text'" do
+    success = call(action: "list", results_dir: results_dir)
+    failure = call
+
+    [success, failure].each do |response|
+      element = response.content.first
+      expect(element[:type]).to eq("text")
+      expect(element[:text]).to be_a(String)
+    end
+  end
+
   describe "action validation" do
     it "returns error when action is missing" do
       response = call
 
       expect(response.error?).to be true
-      expect(response.content.first[:text]).to include("action is required")
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to eq("action is required")
     end
 
     it "returns error when action is unknown" do
@@ -140,6 +156,18 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(response).to be_a(MCP::Tool::Response)
     end
 
+    # Kills EV-t1qg / GH #1192 nil_replacement on the `limit: nil` kwarg
+    # default (-> `limit: false`/`0`/`""`/`true`). The default must behave as
+    # "missing parameter": absence of `limit:` must not produce a
+    # config_error envelope and must not invoke Integer() coercion.
+    it "list without an explicit limit returns a successful (non-error) envelope" do
+      response = call(action: "list", results_dir: results_dir)
+
+      expect(response.error?).to be(false)
+      data = parse_response(response)
+      expect(data).not_to have_key("error")
+    end
+
     it "returns a structured error for a negative limit" do
       response = call(action: "list", results_dir: results_dir, limit: -1)
 
@@ -210,7 +238,9 @@ RSpec.describe Evilution::MCP::SessionTool do
       response = call(action: "show")
 
       expect(response.error?).to be true
-      expect(response.content.first[:text]).to include("path is required")
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to eq("path is required")
     end
 
     it "returns error for non-existent file inside results_dir" do
@@ -219,6 +249,7 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(response.error?).to be true
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("not_found")
+      expect(data["error"]["message"]).to include("session file not found")
     end
 
     it "returns error for corrupt JSON file" do
@@ -230,6 +261,8 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(response.error?).to be true
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("parse_error")
+      expect(data["error"]["message"]).to be_a(String)
+      expect(data["error"]["message"]).not_to be_empty
     end
 
     it "rejects an absolute path outside the results directory" do
@@ -330,7 +363,9 @@ RSpec.describe Evilution::MCP::SessionTool do
       response = call(action: "diff", head: head_path, results_dir: results_dir)
 
       expect(response.error?).to be true
-      expect(response.content.first[:text]).to include("base is required")
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to eq("base is required")
     end
 
     it "returns error when head is not provided" do
@@ -339,7 +374,9 @@ RSpec.describe Evilution::MCP::SessionTool do
       response = call(action: "diff", base: base_path, results_dir: results_dir)
 
       expect(response.error?).to be true
-      expect(response.content.first[:text]).to include("head is required")
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("config_error")
+      expect(data["error"]["message"]).to eq("head is required")
     end
 
     it "returns error for non-existent base file inside results_dir" do
@@ -353,6 +390,55 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(response.error?).to be true
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("not_found")
+      expect(data["error"]["message"]).to include("session file not found")
+    end
+
+    # Kills EV-t1qg / GH #1192 string_literal + argument_nil_substitution on
+    # the parse_error branch of diff_action — neither the error type nor the
+    # underlying parser message has a regression spec without this.
+    it "returns a parse_error envelope when one of the diff sessions is malformed JSON" do
+      base_path = File.join(results_dir, "bad_base.json")
+      File.write(base_path, "{{{invalid")
+      head_path = write_session("head.json", diff_session(score: 0.8, survivors: []))
+
+      response = call(action: "diff", base: base_path, head: head_path, results_dir: results_dir)
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("parse_error")
+      expect(data["error"]["message"]).to be_a(String)
+      expect(data["error"]["message"]).not_to be_empty
+    end
+
+    # Kills EV-t1qg / GH #1192 string_literal + argument_removal +
+    # argument_nil_substitution on the runtime_error branches of show/diff —
+    # SystemCallError is converted to a structured runtime_error envelope
+    # with the OS message preserved.
+    it "returns a runtime_error envelope when reading a session raises SystemCallError" do
+      base_path = write_session("base.json", diff_session(score: 0.8, survivors: []))
+      head_path = write_session("head.json", diff_session(score: 0.8, survivors: []))
+      allow_any_instance_of(Evilution::Session::Store)
+        .to receive(:load).and_raise(Errno::EIO, "disk on fire")
+
+      response = call(action: "diff", base: base_path, head: head_path, results_dir: results_dir)
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("runtime_error")
+      expect(data["error"]["message"]).to include("disk on fire")
+    end
+
+    it "returns a runtime_error envelope for show when reading the session raises SystemCallError" do
+      path = write_session("ok.json", session_summary(timestamp: "2026-03-20T10:00:00+00:00"))
+      allow_any_instance_of(Evilution::Session::Store)
+        .to receive(:load).and_raise(Errno::EIO, "disk on fire")
+
+      response = call(action: "show", path: path, results_dir: results_dir)
+
+      expect(response.error?).to be true
+      data = parse_response(response)
+      expect(data["error"]["type"]).to eq("runtime_error")
+      expect(data["error"]["message"]).to include("disk on fire")
     end
 
     it "rejects base path outside the results directory" do
