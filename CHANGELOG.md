@@ -2,6 +2,17 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.31.0] - 2026-05-27
+
+### Added
+
+- **Proof-of-life canary at session start** — before any real mutation runs, `Evilution::Runner::Canary` evals a synthetic, guaranteed-unobservable mutation through the configured integration + isolation. A healthy pipeline must score it `:survived`; any other status aborts the run with a diagnostic, so the user never sees a score that was produced by a broken pipeline (autoload mismatch, reporter-plugin eviction, isolation defect, `fail_if_no_examples` config drift, etc.). On by default; toggle with `--[no-]canary` or `canary: true|false` in `.evilution.yml`. Mirrors the configured `--isolation` so isolation-specific defects are caught too (EV-kcuf, PR #1268, GH #1233)
+
+### Fixed
+
+- **Mutation children no longer pollute the working tree with files written to relative paths** — every isolator (fork and in_process) now `Dir.chdir`s into a per-mutation sandbox directory for the duration of `test_command.call`, and removes the sandbox on the way out. Any mutation that turns an absolute path into a relative one — `argument_removal` on `File.join(dir, name)`, `method_call_removal` on `File.expand_path(rel, base)`, etc. — used to write `File.write(name, …)` into the parent process's CWD (typically the repo root) and leak past the run; baselining `lib/evilution/runner/canary.rb` deposited 43 stray files (`canary_<pid>_<hex>_spec.rb`, `evilutioncanary_<pid>_<hex>.rb`) before this fix. Spec resolution and source eval anchor project-relative paths to `Evilution::PROJECT_ROOT` (captured at load), so the sandbox CWD does not break `SpecResolver`, `SpecSelector`, `MutationApplier`, `SourceEvaluator`, or the `RSpec::Core::Runner` / `Minitest.load` invocation sites (EV-wqxu, PR #1281, GH #1278)
+- **`MutationApplier` registers the mutation in `$LOADED_FEATURES` BEFORE evaluating the source, not after** — a sibling `require_relative` chain that loops back to the mutated file during the eval itself (e.g. `lib/evilution/mcp/*.rb` tools whose body requires a peer that requires this file back) re-read the *original* source from disk and clobbered the mutation mid-eval. Every such mutation silently survived. The feature-loaded marker now runs immediately before `@source_evaluator.call`, so the in-progress eval is the canonical source any concurrent require sees. Without this, fork workers started from the same pre-`require` snapshot and the whole file scored 0% (EV-ekax, PR #1272, GH #1269)
+
 ## [0.30.4] - 2026-05-16
 
 ### Fixed
