@@ -128,8 +128,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   def execute_minitest(mutation, files, command)
-    base = Evilution.in_isolated_worker? ? Evilution::PROJECT_ROOT : Dir.pwd
-    files.each { |f| load(File.expand_path(f, base)) }
+    files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
 
     detector = reset_crash_detector
     run = run_minitest(build_args(mutation), detector)

@@ -157,6 +157,17 @@ module Evilution
     @in_isolated_worker = previous
   end
 
+  # Base directory for resolving project-relative paths. An isolated worker
+  # has chdir'd into a per-mutation sandbox (EV-wqxu / GH #1278), so callers
+  # in that context must anchor against PROJECT_ROOT rather than Dir.pwd —
+  # otherwise spec files, source eval __FILE__, and $LOAD_PATH entries
+  # resolve into the sandbox and break the run. In any other context (normal
+  # use, tests that intentionally chdir into a fixture project layout, etc.)
+  # the caller's Dir.pwd remains the truth.
+  def self.project_base_dir
+    in_isolated_worker? ? PROJECT_ROOT : Dir.pwd
+  end
+
   class Error < StandardError
     attr_reader :file
 

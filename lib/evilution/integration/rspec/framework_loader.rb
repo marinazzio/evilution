@@ -22,7 +22,11 @@ class Evilution::Integration::RSpec::FrameworkLoader
   private
 
   def add_spec_load_path
-    spec_dir = File.expand_path("spec")
+    # Anchor against PROJECT_ROOT inside an isolated worker (EV-wqxu /
+    # GH #1278) so the project's spec/ dir lands on $LOAD_PATH — otherwise
+    # `require "spec_helper"` resolves to a non-existent sandbox/spec and
+    # every mutation errors as "loaded 0 examples".
+    spec_dir = File.expand_path("spec", Evilution.project_base_dir)
     $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
   end
 end

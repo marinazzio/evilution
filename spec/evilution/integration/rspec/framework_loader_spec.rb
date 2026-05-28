@@ -81,4 +81,55 @@ RSpec.describe Evilution::Integration::RSpec::FrameworkLoader do
       expect($LOAD_PATH.count(spec_dir)).to eq(1)
     end
   end
+
+  # Regression for EV-pyx6 / GH #1290: when an isolator chdir's into a
+  # per-mutation sandbox (EV-wqxu / GH #1278), Dir.pwd is the sandbox.
+  # add_spec_load_path must still register the *project's* spec/ dir on
+  # $LOAD_PATH, not <sandbox>/spec, or `require "spec_helper"` from the
+  # mutation spec fails and every mutation scores :error ("loaded 0
+  # examples"). The fix anchors via Evilution.project_base_dir.
+  describe "isolated-worker spec/ anchoring" do
+    let(:project_spec_dir) { File.expand_path("spec", Evilution::PROJECT_ROOT) }
+    let(:fresh_loader) { described_class.new }
+
+    around do |example|
+      previous_flag = Evilution.instance_variable_get(:@in_isolated_worker)
+      load_path_before = $LOAD_PATH.dup
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@in_isolated_worker, previous_flag)
+      $LOAD_PATH.replace(load_path_before)
+    end
+
+    it "anchors spec/ to Evilution::PROJECT_ROOT (not sandbox CWD) inside an isolated worker" do
+      allow(fresh_loader).to receive(:require).with("rspec/core").and_return(true)
+      allow(Evilution::Integration::CrashDetector).to receive(:register_with_rspec)
+
+      Dir.mktmpdir do |sandbox|
+        sandbox_spec_dir = File.expand_path("spec", sandbox)
+        Dir.chdir(sandbox) do
+          Evilution.in_isolated_worker!
+
+          fresh_loader.call
+
+          expect($LOAD_PATH).to include(project_spec_dir)
+          expect($LOAD_PATH).not_to include(sandbox_spec_dir)
+        end
+      end
+    end
+
+    it "anchors spec/ to Dir.pwd when the isolated-worker flag is unset" do
+      allow(fresh_loader).to receive(:require).with("rspec/core").and_return(true)
+      allow(Evilution::Integration::CrashDetector).to receive(:register_with_rspec)
+
+      Dir.mktmpdir do |sandbox|
+        sandbox_spec_dir = File.expand_path("spec", sandbox)
+        Dir.chdir(sandbox) do
+          fresh_loader.call
+
+          expect($LOAD_PATH).to include(sandbox_spec_dir)
+        end
+      end
+    end
+  end
 end

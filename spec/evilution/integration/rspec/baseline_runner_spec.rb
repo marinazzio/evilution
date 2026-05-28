@@ -37,4 +37,45 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
     runner.call("spec/foo_spec.rb")
     expect($LOAD_PATH).to include(File.expand_path("spec"))
   end
+
+  # Regression for EV-pyx6 / GH #1290: see FrameworkLoader#add_spec_load_path
+  # for context. Under EV-wqxu sandbox CWD the baseline path needs the same
+  # anchoring or the baseline rspec invocation cannot find spec_helper.
+  describe "isolated-worker spec/ anchoring" do
+    let(:project_spec_dir) { File.expand_path("spec", Evilution::PROJECT_ROOT) }
+
+    around do |example|
+      previous_flag = Evilution.instance_variable_get(:@in_isolated_worker)
+      load_path_before = $LOAD_PATH.dup
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@in_isolated_worker, previous_flag)
+      $LOAD_PATH.replace(load_path_before)
+    end
+
+    it "anchors spec/ to Evilution::PROJECT_ROOT (not sandbox CWD) inside an isolated worker" do
+      Dir.mktmpdir do |sandbox|
+        sandbox_spec_dir = File.expand_path("spec", sandbox)
+        Dir.chdir(sandbox) do
+          Evilution.in_isolated_worker!
+
+          runner.call("spec/foo_spec.rb")
+
+          expect($LOAD_PATH).to include(project_spec_dir)
+          expect($LOAD_PATH).not_to include(sandbox_spec_dir)
+        end
+      end
+    end
+
+    it "anchors spec/ to Dir.pwd when the isolated-worker flag is unset" do
+      Dir.mktmpdir do |sandbox|
+        sandbox_spec_dir = File.expand_path("spec", sandbox)
+        Dir.chdir(sandbox) do
+          runner.call("spec/foo_spec.rb")
+
+          expect($LOAD_PATH).to include(sandbox_spec_dir)
+        end
+      end
+    end
+  end
 end
