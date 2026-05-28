@@ -3110,6 +3110,23 @@ RSpec.describe Evilution::Runner do
           expect(File.exist?(stale)).to be(false)
         end
       end
+
+      # Regression for EV-8tmc / GH #1291: fork children chdir into a per-
+      # mutation sandbox (EV-wqxu / GH #1278) before suppress_child_output
+      # runs. A relative quiet_children_dir would then reopen $stdout/$stderr
+      # at <sandbox>/<log_dir>/<pid>.{out,err} — which does not exist — and
+      # the child dies silently with Errno::ENOENT before any result can
+      # marshal back. log_dir must be absolute so the reopen survives chdir.
+      it "stores quiet_children_dir as an absolute path even when passed a relative one" do
+        Dir.mktmpdir do |parent|
+          Dir.chdir(parent) do
+            cco_runner(quiet_children: true, quiet_children_dir: "rel/log").send(:configure_child_output)
+
+            expect(Evilution::ChildOutput.log_dir).to start_with("/")
+            expect(Evilution::ChildOutput.log_dir).to eq(File.expand_path("rel/log", parent))
+          end
+        end
+      end
     end
 
     context "when the quiet_children_dir is not writable" do

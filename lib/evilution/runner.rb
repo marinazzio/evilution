@@ -154,7 +154,12 @@ class Evilution::Runner
       return
     end
 
-    dir = config.quiet_children_dir
+    # Resolve to absolute now — fork children chdir into a per-mutation
+    # sandbox (EV-wqxu / GH #1278) before suppress_child_output runs, so a
+    # relative log_dir would reopen $stdout/$stderr at <sandbox>/<log_dir>
+    # which does not exist and the child dies with Errno::ENOENT before
+    # marshaling any result back.
+    dir = File.expand_path(config.quiet_children_dir)
     begin
       FileUtils.rm_rf(dir)
       FileUtils.mkdir_p(dir)
