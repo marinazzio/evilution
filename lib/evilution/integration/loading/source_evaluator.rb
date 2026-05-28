@@ -16,8 +16,7 @@ class Evilution::Integration::Loading::SourceEvaluator
     # When the isolator has chdir'd into a per-mutation sandbox (EV-wqxu /
     # GH #1278), anchor the eval __FILE__ against PROJECT_ROOT so siblings
     # `require_relative` can find each other from the real source tree.
-    base = Evilution.in_isolated_worker? ? Evilution::PROJECT_ROOT : Dir.pwd
-    absolute = File.expand_path(file_path, base)
+    absolute = File.expand_path(file_path, Evilution.project_base_dir)
     eval(source, TOPLEVEL_BINDING, absolute, 1)
   end
 end

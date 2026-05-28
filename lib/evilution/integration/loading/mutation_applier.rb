@@ -78,8 +78,7 @@ class Evilution::Integration::Loading::MutationApplier
     # When the isolator has chdir'd into a per-mutation sandbox (EV-wqxu /
     # GH #1278), anchor against PROJECT_ROOT so File.realpath does not chase
     # file_path into a non-existent /tmp path.
-    base = Evilution.in_isolated_worker? ? Evilution::PROJECT_ROOT : Dir.pwd
-    absolute = File.realpath(File.expand_path(file_path, base))
+    absolute = File.realpath(File.expand_path(file_path, Evilution.project_base_dir))
     $LOADED_FEATURES << absolute unless $LOADED_FEATURES.include?(absolute)
   rescue Errno::ENOENT
     nil
