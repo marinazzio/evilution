@@ -38,7 +38,7 @@ dirs.each do |dir|
   end
 
   log = File.join(LOG_DIR, "#{dir}.self.log")
-  cmd = [WRAPPER, "--strict", "--jobs=4", "--timeout=15", "--quiet-children", *files]
+  cmd = [WRAPPER, "--strict", "--jobs=4", "--timeout=15", "--quiet-children", "--isolation=fork", *files]
   puts "==> #{dir} (#{files.length} files)"
   pid = spawn(*cmd, out: log, err: %i[child out])
   Process.wait(pid)
