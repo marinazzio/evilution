@@ -2,6 +2,7 @@
 
 require "stringio"
 require_relative "base"
+require_relative "../spec_resolver"
 
 require_relative "../integration"
 
@@ -16,6 +17,23 @@ require_relative "../integration"
 class Evilution::Integration::TestUnit < Evilution::Integration::Base
   def self.baseline_runner
     ->(test_file) { run_baseline_test_file(test_file) }
+  end
+
+  # SpecResolver tuned for the dominant Test::Unit layout: tests live under
+  # test/, named with the _test.rb suffix (the same convention Minitest uses).
+  # Rails plugins on the test-unit gem (e.g. kaminari-core) follow this layout.
+  # The test/test_<name>.rb prefix-style convention is rare enough in practice
+  # that we defer support to a follow-up if a project surfaces needing it.
+  def self.spec_resolver
+    Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+  end
+
+  def self.baseline_options
+    {
+      runner: baseline_runner,
+      spec_resolver: spec_resolver,
+      fallback_dir: "test"
+    }
   end
 
   def self.run_baseline_test_file(test_file)
