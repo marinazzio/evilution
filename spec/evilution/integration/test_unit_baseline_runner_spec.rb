@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
 require "evilution/integration/test_unit"
 
 RSpec.describe Evilution::Integration::TestUnit, "baseline runner (EV-uv11)" do

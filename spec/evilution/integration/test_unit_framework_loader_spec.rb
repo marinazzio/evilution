@@ -68,5 +68,30 @@ RSpec.describe Evilution::Integration::TestUnit, "framework loader (EV-8qiy)" do
         Evilution::Error, /test-unit is required but not available.*cannot load such file -- test-unit/
       )
     end
+
+    it "fires :setup_integration_pre and :setup_integration_post hooks around framework load" do
+      hooks = instance_double(Evilution::Hooks)
+      allow(hooks).to receive(:fire)
+      integration = described_class.new(hooks: hooks)
+      allow(integration).to receive(:require).with("test-unit").and_return(true)
+      allow(described_class).to receive(:stub_autorun!)
+
+      integration.send(:ensure_framework_loaded)
+
+      expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit).ordered
+      expect(hooks).to have_received(:fire).with(:setup_integration_post, integration: :test_unit).ordered
+    end
+
+    it "does not fire :setup_integration_post when framework load raises LoadError" do
+      hooks = instance_double(Evilution::Hooks)
+      allow(hooks).to receive(:fire)
+      integration = described_class.new(hooks: hooks)
+      allow(integration).to receive(:require).with("test-unit").and_raise(LoadError, "missing")
+
+      expect { integration.send(:ensure_framework_loaded) }.to raise_error(Evilution::Error)
+
+      expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit)
+      expect(hooks).not_to have_received(:fire).with(:setup_integration_post, integration: :test_unit)
+    end
   end
 end

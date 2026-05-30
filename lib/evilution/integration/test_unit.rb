@@ -5,6 +5,14 @@ require_relative "base"
 
 require_relative "../integration"
 
+# Test::Unit integration. Implementation is split across the EV-d7re epic:
+# this file covers EV-8qiy (framework loader + autorun stub) and EV-uv11
+# (baseline_runner + run_baseline_test_file). The Base contract methods
+# #run_tests / #build_args / #reset_state land in EV-vumz; until then,
+# instantiating this class and invoking #call will raise NotImplementedError
+# from Evilution::Integration::Base. Registration in
+# Evilution::Runner::INTEGRATIONS / CLI / MCP is intentionally deferred to
+# EV-zhqc / EV-akt2 so partial functionality is not exposed to end users.
 class Evilution::Integration::TestUnit < Evilution::Integration::Base
   def self.baseline_runner
     ->(test_file) { run_baseline_test_file(test_file) }
@@ -61,9 +69,11 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
   def ensure_framework_loaded
     return if @test_unit_loaded
 
+    fire_hook(:setup_integration_pre, integration: :test_unit)
     require "test-unit"
     self.class.stub_autorun!
     @test_unit_loaded = true
+    fire_hook(:setup_integration_post, integration: :test_unit)
   rescue LoadError => e
     raise Evilution::Error, "test-unit is required but not available: #{e.message}"
   end
