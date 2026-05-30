@@ -288,6 +288,44 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity err
     end
   end
 
+  # EV-04sc / GH #1300: Line 55 — `entries.first(ERROR_SAMPLE_LIMIT)` mutated
+  # to `entries.last(...)` returns a different slice. Assert the sample comes
+  # from the FRONT of the errors array, not the back.
+  it "samples the FIRST N errors (not the last N) at minimal verbosity" do
+    json = JSON.generate({
+                           "summary" => { "total" => 6, "errors" => 6 },
+                           "survived" => [],
+                           "errors" => Array.new(6) do |i|
+                             {
+                               "operator" => "method_call_removal", "file" => "lib/foo.rb", "line" => i,
+                               "error_message" => "boom #{i}", "error_class" => "RuntimeError",
+                               "error_backtrace" => long_backtrace
+                             }
+                           end
+                         })
+    out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out["errors"].map { |e| e["error_message"] }).to eq(["boom 0", "boom 1", "boom 2"])
+  end
+
+  # EV-04sc / GH #1300: Line 62 — `backtrace.first(ERROR_BACKTRACE_HEAD_LINES)`
+  # mutated to `backtrace.last(...)` returns the tail instead. Assert the
+  # backtrace head appears in the trimmed entry.
+  it "trims backtrace to the FIRST N lines (not the last N) for each sampled error" do
+    json = JSON.generate({
+                           "summary" => { "total" => 1, "errors" => 1 },
+                           "survived" => [],
+                           "errors" => [{
+                             "operator" => "method_call_removal", "file" => "lib/foo.rb", "line" => 1,
+                             "error_message" => "boom", "error_class" => "RuntimeError",
+                             "error_backtrace" => long_backtrace
+                           }]
+                         })
+    out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out["errors"].first["error_backtrace"]).to eq(long_backtrace.first(5))
+  end
+
   it "does not add an errors field when no errors are present" do
     json = JSON.generate({ "summary" => { "total" => 1, "errors" => 0 }, "survived" => [], "errors" => [] })
     out = JSON.parse(described_class.call(json, verbosity: "minimal", survived_results: [], config: nil, enricher: noop_enricher))

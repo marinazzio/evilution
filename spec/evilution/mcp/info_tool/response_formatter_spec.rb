@@ -53,6 +53,23 @@ RSpec.describe Evilution::MCP::InfoTool::ResponseFormatter do
       result = described_class.send(:inject_schema_version, "raw")
       expect(result).to eq("raw")
     end
+
+    # EV-04sc / GH #1300: Line 16 — `type: "text"` mutated to `type: ""`. MCP
+    # clients dispatch on the type field; the literal "text" must appear.
+    it "tags the response content element with type: 'text' (not empty string)" do
+      response = described_class.success("ok" => true)
+
+      expect(response.content.first[:type]).to eq("text")
+    end
+  end
+
+  describe ".error (content element shape)" do
+    # EV-04sc / GH #1300: Line 29 — `type: "text"` mutated to `type: ""`.
+    it "tags the error content element with type: 'text' (not empty string)" do
+      response = described_class.error("config_error", "missing")
+
+      expect(response.content.first[:type]).to eq("text")
+    end
   end
 
   describe ".error" do
@@ -83,6 +100,19 @@ RSpec.describe Evilution::MCP::InfoTool::ResponseFormatter do
     it "maps generic Evilution::Error to runtime_error" do
       response = described_class.error_for(Evilution::Error.new("oops"))
       expect(parse_body(response)).to eq("error" => { "type" => "runtime_error", "message" => "oops" })
+    end
+
+    # EV-04sc / GH #1300: Line 35 — `error(type, exception.message)` mutated to
+    # `error(type, exception)`. The serialized message must be the String
+    # message, not a serialization of the Exception object itself.
+    it "passes the exception's #message string (not the exception object) to error" do
+      exception = Evilution::Error.new("specific-evilution-marker")
+
+      response = described_class.error_for(exception)
+      body = parse_body(response)
+
+      expect(body["error"]["message"]).to eq("specific-evilution-marker")
+      expect(body["error"]["message"]).to be_a(String)
     end
   end
 end
