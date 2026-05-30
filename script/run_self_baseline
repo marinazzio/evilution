@@ -53,7 +53,7 @@ toplevel_files = Dir.glob(File.join(ROOT, "lib", "evilution", "*.rb"))
 toplevel_files.reject! { |f| SKIP_FILES.include?(f) }
 unless toplevel_files.empty?
   log = File.join(LOG_DIR, "toplevel.self.log")
-  cmd = [WRAPPER, "--strict", "--jobs=4", "--timeout=15", "--quiet-children", *toplevel_files]
+  cmd = [WRAPPER, "--strict", "--jobs=4", "--timeout=15", "--quiet-children", "--isolation=fork", *toplevel_files]
   puts "==> toplevel (#{toplevel_files.length} files)"
   pid = spawn(*cmd, out: log, err: %i[child out])
   Process.wait(pid)
