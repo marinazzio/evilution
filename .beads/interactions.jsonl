@@ -399,3 +399,5 @@
 {"id":"int-df2bd661","kind":"field_change","created_at":"2026-05-30T15:56:24.686504141Z","actor":"Denis Kiselev","issue_id":"EV-9d62","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-6a1dc0ce","kind":"field_change","created_at":"2026-05-30T15:56:25.04815512Z","actor":"Denis Kiselev","issue_id":"EV-unar","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-defdc095","kind":"field_change","created_at":"2026-05-30T15:56:25.406639346Z","actor":"Denis Kiselev","issue_id":"EV-04sc","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-bc5a7747","kind":"field_change","created_at":"2026-05-30T17:33:33.191722982Z","actor":"Denis Kiselev","issue_id":"EV-8qiy","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-796e3efc","kind":"field_change","created_at":"2026-05-30T17:33:34.539604057Z","actor":"Denis Kiselev","issue_id":"EV-uv11","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
