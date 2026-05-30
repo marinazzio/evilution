@@ -5,8 +5,8 @@ require_relative "../integration"
 # Test::Unit analog of Evilution::Integration::MinitestCrashDetector. Tracks
 # whether a Test::Unit test run produced only crashes (exceptions captured as
 # Test::Unit::Error) vs assertion failures (Test::Unit::Failure). When only
-# crashes occur, the mutation result is classified :error rather than :killed
-# — see classify_status / Result::MutationResult.
+# crashes occur, the mutation result can carry crash details while remaining
+# classified as :killed — see classify_status / Result::MutationResult.
 #
 # Hook the detector into a Test::Unit::TestResult via .attach(result), or
 # call #record(fault) directly when iterating a finished result's #faults.
