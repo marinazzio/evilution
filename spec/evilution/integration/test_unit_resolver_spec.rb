@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
 require "evilution/integration/test_unit"
 require "evilution/spec_resolver"
 
