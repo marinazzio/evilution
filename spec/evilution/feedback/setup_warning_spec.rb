@@ -161,7 +161,7 @@ RSpec.describe Evilution::Feedback::SetupWarning do
       expect(described_class.send(:dominant_error_class, errored)).to eq("NameError")
     end
 
-    # Line 52 — confirms ratios above 0.8 return the class.
+    # Line 52 — ratios below the threshold return nil (no dominant class).
     it "returns nil when no class clusters above the threshold" do
       # 5 NameError of 10 = 0.5 < 0.8 → no dominant class
       errored = Array.new(5) { errored_result(error_class: "NameError") } +

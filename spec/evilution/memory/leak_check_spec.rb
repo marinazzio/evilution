@@ -244,20 +244,34 @@ RSpec.describe Evilution::Memory::LeakCheck do
     end
 
     # Line 56: `((i + 1) % sample_interval).zero?` — mutated to `(i - 1)`.
-    # Sample at iter index when (i+1) % interval == 0; mutated sample at
-    # different indices. Pick iterations such that sample positions differ.
+    # With sample_interval=1 the mutation is observationally identical (both
+    # match every i), so we need an interval > 1. Use iterations=30 →
+    # sample_interval = max(30/10, 1) = 3. Then sample-fires happen at:
+    #   original (i+1)%3==0 → i ∈ {2, 5, 8, ..., 29}  → values RSS[2,5,8,...]
+    #   mutated  (i-1)%3==0 → i ∈ {1, 4, 7, ...,  28} → different values
+    # We make rss_kb depend on i via a counter so the captured samples differ
+    # between the original and the mutated arithmetic. Call `measure` directly
+    # so the warmup block doesn't perturb the counter or sample list.
     it "samples at (i + 1) % sample_interval == 0 (not i - 1)" do
-      rss = [200, 300, 400, 500, 600]
-      allow(Evilution::Memory).to receive(:rss_kb) { rss.shift || 600 }
-      # iterations=20 → sample_interval = max(20/10, 1) = 2
-      # measure: initial sample + sampled at i=1,3,5,...,19 (i+1=2,4,...,20 % 2 == 0)
-      # iterations % interval = 20 % 2 = 0 → take_final_sample skips
-      check = described_class.new(iterations: 4, max_growth_kb: 50_000)
-      # iter=4: interval = max(4/10, 1) = 1, all sampled
-      # initial(1) + 4 interval samples + 0 final = 5 samples
-      check.run { nil }
+      counter = -1
+      allow(Evilution::Memory).to receive(:rss_kb) do
+        counter += 1
+        counter * 100
+      end
+      check = described_class.new(iterations: 30, max_growth_kb: 50_000)
+      check.send(:measure) { nil }
 
-      expect(check.samples.length).to eq(5)
+      # Initial sample captured at counter=0 → 0.
+      # Then for each i ∈ {2, 5, 8, 11, 14, 17, 20, 23, 26, 29} (10 values),
+      # a sample is captured with monotonically increasing counter.
+      # 30 % 3 == 0 → take_final_sample skips → 11 samples total.
+      expect(check.samples.length).to eq(11)
+      expect(check.samples.first).to eq(0)
+      # The interval samples (post-initial) are the captured counter values
+      # 100, 200, ..., 1000. Mutated arithmetic would still produce ten
+      # post-initial samples but at different counter values — what matters
+      # for kill is that the actual sequence isn't (0, 100, 200, ..., 1000).
+      expect(check.samples).to eq([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000])
     end
 
     # Line 58: GC.start during measure interval sampling.
@@ -319,20 +333,17 @@ RSpec.describe Evilution::Memory::LeakCheck do
       expect(check.samples.last).to be > 0
     end
 
-    # Line 73: `[@iterations / 10, 1].max` — divisor 10. Mutated divisor 11
-    # gives different sample_interval for iterations in [11, 19]. Pick 11.
+    # Line 73: `[@iterations / 10, 1].max` — divisor 10. Iterations=20 gives
+    # interval=2 with the original (20/10=2); the divisor-11 mutation gives
+    # interval=1 (20/11=1), which produces a different sample count.
     it "computes sample_interval as iterations / 10 (floor) capped at 1 minimum" do
       allow(Evilution::Memory).to receive(:rss_kb).and_return(100_000)
-      described_class.new(iterations: 11, max_growth_kb: 50_000)
-      # 11 / 10 = 1, max(1, 1) = 1 → all iterations sampled
-      # 11 / 11 = 1 too (same) — pick a value where they differ
-      # Try 20: 20/10 = 2, 20/11 = 1 → different interval
-      # With interval=2 for iter=20: samples = 1 + 10 + 0 = 11
-      # With interval=1 for iter=20: samples = 1 + 20 + 0 = 21
-      check_v = described_class.new(iterations: 20, max_growth_kb: 50_000)
-      check_v.run { nil }
+      check = described_class.new(iterations: 20, max_growth_kb: 50_000)
+      # interval=2 (original): initial(1) + 10 interval samples + 0 final = 11
+      # interval=1 (mutated):  initial(1) + 20 interval samples + 0 final = 21
+      check.run { nil }
 
-      expect(check_v.samples.length).to eq(11)
+      expect(check.samples.length).to eq(11)
     end
 
     # Line 80: `growth_kb / 1024.0` — mutation to `*`.
