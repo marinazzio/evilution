@@ -136,5 +136,77 @@ RSpec.describe Evilution::Feedback::SetupWarning do
                 [errored_result(error_class: "LoadError")]
       expect(described_class.send(:dominant_error_class, errored)).to eq("NameError")
     end
+
+    # EV-unar / GH #1299 — kill survivors from EV-j2kz 2026-05-30 baseline.
+
+    # Line 44: `return nil if errored_results.empty?` — direct unit test on the
+    # private method asserts exact-nil return when given an empty array.
+    it "returns nil from dominant_error_class for empty errored_results" do
+      expect(described_class.send(:dominant_error_class, [])).to be_nil
+    end
+
+    # Line 49: `return nil if counts.empty?` — when all errored results have
+    # nil error_class, counts remain empty and the method returns nil.
+    it "returns nil from dominant_error_class when all errored have nil error_class" do
+      errored = Array.new(5) { errored_result(error_class: nil) }
+      expect(described_class.send(:dominant_error_class, errored)).to be_nil
+    end
+
+    # Line 52: `<` strict — boundary at exactly 0.8 ratio. Strict-less keeps
+    # the class when ratio == 0.8; `<=` would discard it.
+    it "returns the dominant class when ratio equals the threshold exactly" do
+      # 8 NameError of 10 errored = 0.8 == ERROR_CLASS_CLUSTER_THRESHOLD
+      errored = Array.new(8) { errored_result(error_class: "NameError") } +
+                Array.new(2) { errored_result(error_class: "LoadError") }
+      expect(described_class.send(:dominant_error_class, errored)).to eq("NameError")
+    end
+
+    # Line 52 — ratios below the threshold return nil (no dominant class).
+    it "returns nil when no class clusters above the threshold" do
+      # 5 NameError of 10 = 0.5 < 0.8 → no dominant class
+      errored = Array.new(5) { errored_result(error_class: "NameError") } +
+                Array.new(5) { errored_result(error_class: "LoadError") }
+      expect(described_class.send(:dominant_error_class, errored)).to be_nil
+    end
+  end
+
+  describe ".call (specific hint substring assertions)" do
+    # Line 74: `when "LoadError"` mutated to `when ""`. The generic-template
+    # message contains "LoadError" via interpolation, so just `include` is too
+    # loose. Assert hint-specific phrases that appear only in LOAD_ERROR_HINT
+    # (and assert the generic-template phrase does NOT appear).
+    it "returns the LoadError hint (not the generic template) when klass is LoadError" do
+      results = Array.new(10) { errored_result(error_class: "LoadError") }
+      message = described_class.call(summary_with(results))
+
+      # LOAD_ERROR_HINT-specific phrase:
+      expect(message).to include("A `require` in the mutated source")
+      # Generic template phrase that must NOT appear:
+      expect(message).not_to include("The mutation score reflects this setup failure")
+    end
+
+    # Line 73 equivalent — same approach for NameError, killing the
+    # `when "NameError"` removal mutation.
+    it "returns the NameError hint (not the generic template) when klass is NameError" do
+      results = Array.new(10) { errored_result(error_class: "NameError") }
+      message = described_class.call(summary_with(results))
+
+      # NAME_ERROR_HINT-specific phrase:
+      expect(message).to include("autoloaded constants")
+      # Generic template phrase that must NOT appear:
+      expect(message).not_to include("The mutation score reflects this setup failure")
+    end
+
+    # Line 75 — generic template phrase appears for unmapped classes.
+    it "returns the generic template hint for unmapped error classes" do
+      results = Array.new(10) { errored_result(error_class: "Foo::Custom") }
+      message = described_class.call(summary_with(results))
+
+      # Generic template phrase:
+      expect(message).to include("The mutation score reflects this setup failure")
+      # Specific-hint phrases must NOT appear:
+      expect(message).not_to include("autoloaded constants")
+      expect(message).not_to include("A `require` in the mutated source")
+    end
   end
 end

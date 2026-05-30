@@ -83,6 +83,15 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(data["error"]["type"]).to eq("config_error")
       expect(data["error"]["message"]).to include("unknown action")
     end
+
+    # EV-04sc / GH #1300: Line 61 string_interpolation mutation drops the
+    # action name from the message. Assert the offending action appears.
+    it "interpolates the offending action name into the unknown-action error" do
+      response = call(action: "frobnicate-zoo-42")
+
+      data = parse_response(response)
+      expect(data["error"]["message"]).to include("frobnicate-zoo-42")
+    end
   end
 
   describe "action: list" do
@@ -177,6 +186,18 @@ RSpec.describe Evilution::MCP::SessionTool do
       expect(data["error"]["message"]).to include("limit must be a non-negative integer")
     end
 
+    # EV-04sc / GH #1300: Line 74 argument_method_call_replacement —
+    # `error_response("config_error", result.error)` mutated to pass `result`
+    # (the LimitResult struct) instead of `result.error` (a String). The
+    # serialized JSON would contain LimitResult#inspect-like output. Assert
+    # the message is the exact error string, not the struct's inspect.
+    it "uses the LimitResult#error string (not the struct) as the error message" do
+      response = call(action: "list", results_dir: results_dir, limit: -42)
+
+      data = parse_response(response)
+      expect(data["error"]["message"]).to eq("limit must be a non-negative integer")
+    end
+
     it "returns a structured error for a non-integer limit" do
       response = call(action: "list", results_dir: results_dir, limit: "abc")
 
@@ -250,6 +271,47 @@ RSpec.describe Evilution::MCP::SessionTool do
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("not_found")
       expect(data["error"]["message"]).to include("session file not found")
+    end
+
+    # EV-04sc / GH #1300: Lines 107/109/111 argument_method_call_replacement —
+    # `error_response("not_found", e.message)` mutated to pass `e` (the
+    # exception) instead of `e.message` (the String). JSON-encoding an
+    # Exception would produce a different message. Assert the actual error
+    # message string appears.
+    it "uses the original Errno message in runtime_error responses for show" do
+      path = write_session("ok.json", session_summary(timestamp: "2026-03-20T10:00:00+00:00"))
+      allow_any_instance_of(Evilution::Session::Store)
+        .to receive(:load).and_raise(Errno::EIO, "evilution-specific-io-marker")
+
+      response = call(action: "show", path: path, results_dir: results_dir)
+      data = parse_response(response)
+
+      expect(data["error"]["message"]).to include("evilution-specific-io-marker")
+    end
+
+    # Same mutation on the not_found path (Evilution::Error rescue).
+    it "uses the Evilution::Error message in not_found responses for show" do
+      path = File.join(results_dir, "fictitious-file-xy.json")
+
+      response = call(action: "show", path: path, results_dir: results_dir)
+      data = parse_response(response)
+
+      # The not_found message must be a String, not an inspect-stringified
+      # Evilution::Error object (which would start with #<...>).
+      expect(data["error"]["message"]).to be_a(String)
+      expect(data["error"]["message"]).not_to start_with("#<")
+    end
+
+    # Same mutation on the parse_error path (JSON::ParserError rescue).
+    it "uses the JSON::ParserError message in parse_error responses for show" do
+      path = File.join(results_dir, "bad.json")
+      File.write(path, "{{{invalid")
+
+      response = call(action: "show", path: path, results_dir: results_dir)
+      data = parse_response(response)
+
+      expect(data["error"]["message"]).to be_a(String)
+      expect(data["error"]["message"]).not_to start_with("#<")
     end
 
     it "returns error for corrupt JSON file" do
