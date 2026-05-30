@@ -161,6 +161,17 @@ RSpec.describe Evilution::Feedback::SetupWarning do
       expect(described_class.send(:dominant_error_class, errored)).to eq("NameError")
     end
 
+    # Line 46: `Hash.new(0)` mutated to `Hash.new(1)` — the default seeds
+    # `acc[k] += 1` differently: 0+1 → 1 (original), 1+1 → 2 (mutated). With
+    # a 7/3 NameError split the original ratio 7/10=0.7 falls just below the
+    # 0.8 threshold (returns nil), while the mutated ratio 8/10=0.8 clears it
+    # (returns the class). Existing 5/5 / 8/2 / 9/1 cases don't distinguish.
+    it "uses 0 as the default count seed (not 1) when computing dominance ratios" do
+      errored = Array.new(7) { errored_result(error_class: "NameError") } +
+                Array.new(3) { errored_result(error_class: "LoadError") }
+      expect(described_class.send(:dominant_error_class, errored)).to be_nil
+    end
+
     # Line 52 — ratios below the threshold return nil (no dominant class).
     it "returns nil when no class clusters above the threshold" do
       # 5 NameError of 10 = 0.5 < 0.8 → no dominant class
