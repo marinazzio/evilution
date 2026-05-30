@@ -4,7 +4,7 @@ require "fileutils"
 require "tmpdir"
 require "evilution/integration/test_unit"
 
-RSpec.describe Evilution::Integration::TestUnit, "baseline runner (EV-uv11)" do
+RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
   let(:tmpdir) { Dir.mktmpdir("test_unit_baseline_spec") }
 
   after { FileUtils.rm_rf(tmpdir) }

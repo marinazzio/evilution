@@ -2,7 +2,7 @@
 
 require "evilution/integration/test_unit"
 
-RSpec.describe Evilution::Integration::TestUnit, "framework loader (EV-8qiy)" do
+RSpec.describe Evilution::Integration::TestUnit, "framework loader" do
   describe ".stub_autorun!" do
     around do |example|
       previous = nil
