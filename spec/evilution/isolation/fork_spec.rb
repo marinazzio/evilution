@@ -244,6 +244,41 @@ RSpec.describe Evilution::Isolation::Fork do
       pid_file&.unlink
     end
 
+    # Regression for EV-dgjv / GH #1295:
+    # A grandchild that inherits write_io can write bytes that look like a
+    # valid length-prefixed payload (header + body) to the parent's pipe.
+    # The parent reads the payload, then reap_and_decode calls Process.wait(pid).
+    # If the per-mutation child is still alive (stuck in execute_in_child waiting
+    # on subject grandchildren that the mutation broke), Process.wait blocks
+    # forever — the per-mutation timeout cannot fire because wait_for_result
+    # already returned. The dispatcher item_timeout then kills the pool worker.
+    # Fix: reap_and_decode bounds Process.wait by a deadline; if pid hasn't
+    # exited, force-terminate via the same TERM/KILL ladder used on timeout.
+    it "bounds reap_and_decode so a child that hasn't exited can't hang the parent" do
+      pid = Process.fork { sleep 60 }
+      payload = Marshal.dump(passed: true)
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      Timeout.timeout(8) do
+        isolator.send(:reap_and_decode, pid, payload)
+      end
+
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+      expect(elapsed).to be < 5
+      expect { Process.kill(0, pid) }.to raise_error(Errno::ESRCH)
+    ensure
+      begin
+        Process.kill("KILL", pid) if pid
+      rescue Errno::ESRCH
+        nil
+      end
+      begin
+        Process.waitpid(pid) if pid
+      rescue Errno::ECHILD
+        nil
+      end
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 

@@ -11,6 +11,7 @@ require_relative "../isolation"
 
 class Evilution::Isolation::Fork
   GRACE_PERIOD = 2
+  REAP_DEADLINE = 1.0
 
   def initialize(hooks: nil)
     @hooks = hooks
@@ -130,8 +131,23 @@ class Evilution::Isolation::Fork
     end
   end
 
+  # Process.wait without a deadline can hang the parent indefinitely. The
+  # per-mutation child may already have written a payload (or a grandchild may
+  # have written garbage that looks like one) while the child itself is stuck
+  # in execute_in_child waiting on a subject grandchild the mutation broke.
+  # wait_for_result has already returned by this point, so the per-mutation
+  # timeout cannot fire. Bound the wait and fall back to the TERM/KILL ladder.
   def reap_and_decode(pid, payload)
-    ::Process.wait(pid)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + REAP_DEADLINE
+    loop do
+      break if ::Process.waitpid(pid, ::Process::WNOHANG)
+
+      if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+        terminate_child(pid)
+        break
+      end
+      sleep 0.05
+    end
     decode_payload(payload)
   end
 
