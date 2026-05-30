@@ -12,4 +12,5 @@ group :development, :test do
   gem "rake", "~> 13.4"
   gem "rspec", "~> 3.0"
   gem "rubocop", "~> 1.86"
+  gem "test-unit", "~> 3.6"
 end

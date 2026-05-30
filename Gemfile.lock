@@ -41,6 +41,7 @@ GEM
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
+    power_assert (3.0.1)
     pp (0.6.3)
       prettyprint
     prettyprint (0.2.0)
@@ -88,6 +89,8 @@ GEM
       prism (~> 1.7)
     ruby-progressbar (1.13.0)
     stringio (3.2.0)
+    test-unit (3.7.7)
+      power_assert
     thor (1.5.0)
     tsort (0.2.0)
     unicode-display_width (3.2.0)
@@ -106,6 +109,7 @@ DEPENDENCIES
   rake (~> 13.4)
   rspec (~> 3.0)
   rubocop (~> 1.86)
+  test-unit (~> 3.6)
 
 CHECKSUMS
   addressable (2.9.0) sha256=7fdf6ac3660f7f4e867a0838be3f6cf722ace541dd97767fa42bc6cfa980c7af
@@ -127,6 +131,7 @@ CHECKSUMS
   minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
   parallel (2.1.0) sha256=b35258865c2e31134c5ecb708beaaf6772adf9d5efae28e93e99260877b09356
   parser (3.3.11.1) sha256=d17ace7aabe3e72c3cc94043714be27cc6f852f104d81aa284c2281aecc65d54
+  power_assert (3.0.1) sha256=8ce9876716cc74e863fcd4cdcdc52d792bd983598d1af3447083a3a9a4d34103
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
   prettyprint (0.2.0) sha256=2bc9e15581a94742064a3cc8b0fb9d45aae3d03a1baa6ef80922627a0766f193
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
@@ -147,6 +152,7 @@ CHECKSUMS
   rubocop-ast (1.49.1) sha256=4412f3ee70f6fe4546cc489548e0f6fcf76cafcfa80fa03af67098ffed755035
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
+  test-unit (3.7.7) sha256=3c89d5ff0690a16bef9946156c4624390402b9d54dfcf4ce9cbd5b06bead1e45
   thor (1.5.0) sha256=e3a9e55fe857e44859ce104a84675ab6e8cd59c650a49106a05f55f136425e73
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
