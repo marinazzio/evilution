@@ -131,6 +131,39 @@ RSpec.describe Evilution::MCP::MutateTool::SurvivedEnricher do
       expect(spec_file).to be_a(String)
     end
 
+    # EV-04sc / GH #1300: Line 44 — `files.first` mutated to `files.last`. With
+    # multiple spec_files, the FIRST entry must win as the explicit override.
+    it "picks the first spec_files entry (not the last) as the explicit override" do
+      data = { "survived" => [{}] }
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(true)
+      allow(config).to receive(:spec_files).and_return(
+        ["spec/first_spec.rb", "spec/second_spec.rb", "spec/third_spec.rb"]
+      )
+
+      described_class.call(data, [result], config)
+
+      expect(data["survived"].first["spec_file"]).to eq("spec/first_spec.rb")
+    end
+
+    # EV-04sc / GH #1300: Line 43 — `.compact` mutated to `.flatten`. Compact
+    # removes nil entries; flatten keeps them. With a nil entry, mutated code
+    # would crash on `nil.to_s` (returns "") then reject empties → same result
+    # for nil. But with nested array entries, flatten unrolls them while
+    # compact does not. Test that a nested array stays as an array entry and
+    # is rejected by .empty? (Array doesn't answer #empty? as String does, so
+    # this asserts the compact path doesn't unroll).
+    it "uses compact (not flatten) so nil spec_files entries are dropped without unrolling" do
+      data = { "survived" => [{}] }
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(true)
+      allow(config).to receive(:spec_files).and_return([nil, "spec/keeper_spec.rb"])
+
+      described_class.call(data, [result], config)
+
+      expect(data["survived"].first["spec_file"]).to eq("spec/keeper_spec.rb")
+    end
+
     # Kills EV-vlbh / GH #1191 conditional_negation on
     # survived_enricher.rb:25 (`explicit_spec ? nil : resolver_for_integration`
     # -> `false ? nil : ...`). When an explicit spec override is provided the
