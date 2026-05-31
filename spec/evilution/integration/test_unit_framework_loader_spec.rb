@@ -2,96 +2,50 @@
 
 require "evilution/integration/test_unit"
 
-RSpec.describe Evilution::Integration::TestUnit, "framework loader" do
-  describe ".stub_autorun!" do
-    around do |example|
-      previous = nil
-      previous = Test::Unit::AutoRunner.need_auto_run? if defined?(Test::Unit::AutoRunner)
-      example.run
-    ensure
-      Test::Unit::AutoRunner.need_auto_run = previous if defined?(Test::Unit::AutoRunner) && !previous.nil?
-    end
+# Tests the orchestrator-level wiring of TestUnit#ensure_framework_loaded.
+# The framework load itself is covered by
+# spec/evilution/integration/test_unit/framework_loader_spec.rb.
+RSpec.describe Evilution::Integration::TestUnit, "#ensure_framework_loaded" do
+  it "fires :setup_integration_pre and :setup_integration_post hooks around framework load" do
+    hooks = instance_double(Evilution::Hooks)
+    allow(hooks).to receive(:fire)
+    integration = described_class.new(hooks: hooks)
+    framework_loader = integration.instance_variable_get(:@framework_loader)
+    allow(framework_loader).to receive(:call)
+    allow(framework_loader).to receive(:loaded?).and_return(false)
 
-    it "disables Test::Unit::AutoRunner so its at_exit handler does not fire on evilution exit" do
-      require "test-unit"
-      Test::Unit::AutoRunner.need_auto_run = true
+    integration.send(:ensure_framework_loaded)
 
-      described_class.stub_autorun!
-
-      expect(Test::Unit::AutoRunner.need_auto_run?).to be false
-    end
-
-    it "is idempotent: calling twice keeps need_auto_run? false" do
-      require "test-unit"
-      described_class.stub_autorun!
-      described_class.stub_autorun!
-
-      expect(Test::Unit::AutoRunner.need_auto_run?).to be false
-    end
-
-    it "does not raise when test-unit has not been required yet" do
-      # If test-unit was previously required in this process it stays loaded.
-      # The stub should noop (and not raise) when AutoRunner isn't loaded.
-      expect { described_class.stub_autorun! }.not_to raise_error
-    end
+    expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit).ordered
+    expect(hooks).to have_received(:fire).with(:setup_integration_post, integration: :test_unit).ordered
+    expect(framework_loader).to have_received(:call)
   end
 
-  describe "#ensure_framework_loaded (private)" do
-    let(:integration) { described_class.allocate }
+  it "skips firing hooks when the loader reports already-loaded" do
+    hooks = instance_double(Evilution::Hooks)
+    allow(hooks).to receive(:fire)
+    integration = described_class.new(hooks: hooks)
+    framework_loader = integration.instance_variable_get(:@framework_loader)
+    allow(framework_loader).to receive(:loaded?).and_return(true)
+    allow(framework_loader).to receive(:call)
 
-    it "requires test-unit and stubs autorun on first call" do
-      allow(integration).to receive(:require).with("test-unit").and_return(true)
-      allow(described_class).to receive(:stub_autorun!)
+    integration.send(:ensure_framework_loaded)
 
-      integration.send(:ensure_framework_loaded)
+    expect(hooks).not_to have_received(:fire)
+    expect(framework_loader).not_to have_received(:call)
+  end
 
-      expect(integration).to have_received(:require).with("test-unit")
-      expect(described_class).to have_received(:stub_autorun!)
-    end
+  it "does not fire :setup_integration_post when the loader raises" do
+    hooks = instance_double(Evilution::Hooks)
+    allow(hooks).to receive(:fire)
+    integration = described_class.new(hooks: hooks)
+    framework_loader = integration.instance_variable_get(:@framework_loader)
+    allow(framework_loader).to receive(:loaded?).and_return(false)
+    allow(framework_loader).to receive(:call).and_raise(Evilution::Error, "boom")
 
-    it "is idempotent: second call does not re-require test-unit" do
-      allow(integration).to receive(:require).with("test-unit").and_return(true)
-      allow(described_class).to receive(:stub_autorun!)
+    expect { integration.send(:ensure_framework_loaded) }.to raise_error(Evilution::Error)
 
-      integration.send(:ensure_framework_loaded)
-      integration.send(:ensure_framework_loaded)
-
-      expect(integration).to have_received(:require).with("test-unit").once
-      expect(described_class).to have_received(:stub_autorun!).once
-    end
-
-    it "translates LoadError into Evilution::Error with the test-unit gem name" do
-      fresh = described_class.allocate
-      allow(fresh).to receive(:require).with("test-unit").and_raise(LoadError, "cannot load such file -- test-unit")
-
-      expect { fresh.send(:ensure_framework_loaded) }.to raise_error(
-        Evilution::Error, /test-unit is required but not available.*cannot load such file -- test-unit/
-      )
-    end
-
-    it "fires :setup_integration_pre and :setup_integration_post hooks around framework load" do
-      hooks = instance_double(Evilution::Hooks)
-      allow(hooks).to receive(:fire)
-      integration = described_class.new(hooks: hooks)
-      allow(integration).to receive(:require).with("test-unit").and_return(true)
-      allow(described_class).to receive(:stub_autorun!)
-
-      integration.send(:ensure_framework_loaded)
-
-      expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit).ordered
-      expect(hooks).to have_received(:fire).with(:setup_integration_post, integration: :test_unit).ordered
-    end
-
-    it "does not fire :setup_integration_post when framework load raises LoadError" do
-      hooks = instance_double(Evilution::Hooks)
-      allow(hooks).to receive(:fire)
-      integration = described_class.new(hooks: hooks)
-      allow(integration).to receive(:require).with("test-unit").and_raise(LoadError, "missing")
-
-      expect { integration.send(:ensure_framework_loaded) }.to raise_error(Evilution::Error)
-
-      expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit)
-      expect(hooks).not_to have_received(:fire).with(:setup_integration_post, integration: :test_unit)
-    end
+    expect(hooks).to have_received(:fire).with(:setup_integration_pre, integration: :test_unit)
+    expect(hooks).not_to have_received(:fire).with(:setup_integration_post, integration: :test_unit)
   end
 end
