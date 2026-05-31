@@ -282,6 +282,21 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "accepts integration='test-unit' (hyphenated, gem-name form) and normalizes to :test_unit" do
+      described_class.call(files: ["lib/foo.rb"], integration: "test-unit", server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(integration: :test_unit)
+      )
+    end
+
+    it "advertises test-unit in the JSON schema enum so MCP clients surface it as a valid choice" do
+      schema = described_class.input_schema.to_h
+
+      expect(schema[:properties][:integration][:enum]).to include("test-unit")
+    end
+
     it "passes isolation option to config" do
       described_class.call(files: ["lib/foo.rb"], isolation: "fork", server_context: nil)
 
