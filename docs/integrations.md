@@ -85,8 +85,12 @@ suggestion text. Adding test-unit templates is a small follow-up.
 
 ## Behind the scenes
 
-Each integration lives under `lib/evilution/integration/<name>/`. The
-test-unit integration is split into:
+Each integration has an orchestrator class at
+`lib/evilution/integration/<name>.rb`. RSpec and Test::Unit additionally
+decompose their collaborators into a sibling directory of the same name
+(`lib/evilution/integration/rspec/...`,
+`lib/evilution/integration/test_unit/...`); Minitest remains a single file.
+The test-unit collaborators are:
 
 - `framework_loader.rb` — `require "test-unit"` + disables the at_exit
   auto-run handler so it doesn't fire on evilution exit.
