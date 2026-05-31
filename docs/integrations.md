@@ -83,6 +83,26 @@ mutations. Concrete templates currently exist for **rspec** and **minitest**
 only; the **test-unit** integration falls back to the generic operator-level
 suggestion text. Adding test-unit templates is a small follow-up.
 
+## Other Ruby test frameworks
+
+No additional integrations are planned at the moment. The three integrations
+above cover the overwhelming majority of Ruby projects with unit / integration
+test suites. Frameworks we considered and deferred:
+
+- **Cucumber / Spinach** — BDD scenarios over Gherkin step definitions, a
+  fundamentally coarser granularity than mutation testing rewards. Not a
+  natural fit; no plans to add.
+- **Sus** — Socketry's async-focused framework, small but actively maintained
+  user base. Could be added under the same orchestrator/collaborator pattern
+  if a real project surfaces needing it.
+- **Bacon, Test::Spec** — early RSpec-style clones, effectively dormant.
+- **Minitest::Spec** — already covered by the `minitest` integration.
+
+If you maintain a project on another framework and would benefit from
+mutation-testing it through evilution, open an issue describing the project
+and the framework's dispatch entry-point — the existing integration layout
+makes new entries cheap to add.
+
 ## Behind the scenes
 
 Each integration has an orchestrator class at
