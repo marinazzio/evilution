@@ -58,8 +58,8 @@ class Evilution::MCP::InfoTool < MCP::Tool
       },
       integration: {
         type: "string",
-        description: "[subjects, tests] Test integration (rspec, minitest) — 'tests' selects " \
-                     "the matching spec resolver (spec/*_spec.rb for rspec, test/*_test.rb for minitest)"
+        description: "[subjects, tests] Test integration (rspec, minitest, test-unit) — 'tests' selects " \
+                     "the matching spec resolver (spec/*_spec.rb for rspec, test/*_test.rb for minitest/test-unit)"
       },
       skip_config: {
         type: "boolean",
