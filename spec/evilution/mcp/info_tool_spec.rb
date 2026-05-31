@@ -137,6 +137,14 @@ RSpec.describe Evilution::MCP::InfoTool do
       )
     end
 
+    # Surfaces the test-unit integration in the schema description so MCP
+    # clients see it as a valid value alongside rspec and minitest.
+    it "advertises test-unit in the integration param description" do
+      schema = described_class.input_schema.to_h
+
+      expect(schema[:properties][:integration][:description]).to include("test-unit")
+    end
+
     # Kills EV-t1qg / GH #1192 nil_replacement on the kwarg defaults
     # (`target: nil` / `spec: nil` / `integration: nil` / `skip_config: nil`
     # mutated to `true`/`false`/`0`/`""`). Omitted kwargs must propagate

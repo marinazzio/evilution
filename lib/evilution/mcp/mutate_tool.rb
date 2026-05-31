@@ -72,8 +72,9 @@ class Evilution::MCP::MutateTool < MCP::Tool
       },
       integration: {
         type: "string",
-        enum: %w[rspec minitest],
-        description: "Test integration to use (default: rspec)"
+        enum: %w[rspec minitest test-unit],
+        description: "Test integration to use (default: rspec). " \
+                     "Use test-unit for projects whose suites run on the test-unit gem."
       },
       isolation: {
         type: "string",
