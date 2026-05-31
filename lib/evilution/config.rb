@@ -139,7 +139,7 @@ class Evilution::Config
       # (default: true). Set false to skip (e.g. for CI speed).
       # canary: true
 
-      # Test integration: rspec, minitest (default: rspec)
+      # Test integration: rspec, minitest, test_unit (default: rspec)
       # integration: rspec
 
       # Number of parallel workers (default: 1)

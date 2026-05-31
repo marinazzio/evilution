@@ -5,6 +5,7 @@ require_relative "../baseline"
 require_relative "../spec_resolver"
 require_relative "../integration/rspec"
 require_relative "../integration/minitest"
+require_relative "../integration/test_unit"
 require_relative "../example_filter"
 require_relative "../spec_ast_cache"
 require_relative "../source_ast_cache"
@@ -12,7 +13,8 @@ require_relative "../source_ast_cache"
 unless defined?(Evilution::Runner::INTEGRATIONS)
   Evilution::Runner::INTEGRATIONS = {
     rspec: Evilution::Integration::RSpec,
-    minitest: Evilution::Integration::Minitest
+    minitest: Evilution::Integration::Minitest,
+    test_unit: Evilution::Integration::TestUnit
   }.freeze
 end
 

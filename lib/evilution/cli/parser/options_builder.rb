@@ -95,7 +95,7 @@ class Evilution::CLI::Parser::OptionsBuilder
   end
 
   def add_runner_mode_options(opts)
-    opts.on("--integration NAME", "Test integration: rspec, minitest (default: rspec)") { |i| @options[:integration] = i }
+    opts.on("--integration NAME", "Test integration: rspec, minitest, test-unit (default: rspec)") { |i| @options[:integration] = i }
     opts.on("--isolation STRATEGY", "Isolation: auto, fork, in_process (default: auto)") { |s| @options[:isolation] = s }
     opts.on("--preload FILE", "Preload FILE in the parent process before forking " \
                               "(default: auto-detect spec/rails_helper.rb -> spec/spec_helper.rb -> " \
