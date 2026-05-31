@@ -1,19 +1,19 @@
 # frozen_string_literal: true
 
-require "stringio"
 require_relative "base"
+require_relative "test_unit_crash_detector"
 require_relative "../spec_resolver"
+require_relative "../spec_selector"
 
 require_relative "../integration"
 
-# Test::Unit integration. Implementation is split across the EV-d7re epic:
-# this file covers EV-8qiy (framework loader + autorun stub) and EV-uv11
-# (baseline_runner + run_baseline_test_file). The Base contract methods
-# #run_tests / #build_args / #reset_state land in EV-vumz; until then,
-# instantiating this class and invoking #call will raise NotImplementedError
-# from Evilution::Integration::Base. Registration in
-# Evilution::Runner::INTEGRATIONS / CLI / MCP is intentionally deferred to
-# EV-zhqc / EV-akt2 so partial functionality is not exposed to end users.
+# Test::Unit integration. Decomposed under lib/evilution/integration/test_unit/
+# mirroring the RSpec integration's layout. This class is the orchestrator:
+# it wires the framework loader, dispatcher, subject-class registry,
+# test-file resolver, and result builder.
+#
+# Registration in Evilution::Runner::INTEGRATIONS / CLI / MCP is intentionally
+# deferred to EV-zhqc / EV-akt2.
 class Evilution::Integration::TestUnit < Evilution::Integration::Base
   def self.baseline_runner
     ->(test_file) { run_baseline_test_file(test_file) }
@@ -37,62 +37,89 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
   end
 
   def self.run_baseline_test_file(test_file)
-    require "test-unit"
-    require "stringio"
-    stub_autorun!
-    before = test_case_subclasses
-    baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
-    new_classes = test_case_subclasses - before
-    run_baseline_test_unit(new_classes)
+    require_relative "test_unit/framework_loader"
+    require_relative "test_unit/subject_class_registry"
+    require_relative "test_unit/dispatcher"
+    FrameworkLoader.new.call
+    new_classes = SubjectClassRegistry.newly_loaded do
+      baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
+    end
+    Dispatcher.call(new_classes, name: "evilution baseline").passed?
   end
 
   def self.baseline_test_files(test_file)
     File.directory?(test_file) ? Dir.glob(File.join(test_file, "**/*_test.rb")) : [test_file]
   end
 
-  # Build a suite from explicitly-loaded test classes and dispatch via the
-  # console runner with output piped to a StringIO. Scoping by loaded class
-  # (rather than letting AutoRunner discover ObjectSpace) keeps stale test
-  # classes from previous baseline calls out of the run — important for tests
-  # that exercise the loader repeatedly, and harmless in production where the
-  # baseline runs once per fork. need_auto_run= is flipped to false so
-  # test-unit's at_exit hook never fires when evilution exits.
-  def self.run_baseline_test_unit(test_case_classes)
-    require "test/unit/ui/console/testrunner"
-    suite = Test::Unit::TestSuite.new("evilution baseline")
-    test_case_classes.each { |klass| suite << klass.suite }
-    out = StringIO.new
-    runner = Test::Unit::UI::Console::TestRunner.new(suite, output: out)
-    result = runner.start
-    result.passed?
-  end
-
-  def self.test_case_subclasses
-    ObjectSpace.each_object(Class).select { |c| c < Test::Unit::TestCase }
-  end
-
-  # User code that `require "test-unit"` (or "test/unit") installs an at_exit
-  # hook that calls Test::Unit::AutoRunner.run when need_auto_run? is true.
-  # At evilution process exit ARGV still holds evilution flags
-  # (--integration, --spec, ...) and the runner prints a misleading banner.
-  # Flipping need_auto_run = false here prevents the handler from firing.
-  def self.stub_autorun!
-    return unless defined?(Test::Unit::AutoRunner)
-
-    Test::Unit::AutoRunner.need_auto_run = false
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil)
+    require_relative "test_unit/framework_loader"
+    require_relative "test_unit/subject_class_registry"
+    require_relative "test_unit/dispatcher"
+    require_relative "test_unit/test_file_resolver"
+    require_relative "test_unit/result_builder"
+    @framework_loader = FrameworkLoader.new
+    @file_resolver = TestFileResolver.new(
+      test_files: test_files,
+      spec_selector: spec_selector || Evilution::SpecSelector.new(spec_resolver: self.class.spec_resolver),
+      fallback_to_full_suite: fallback_to_full_suite
+    )
+    @crash_detector = nil
+    super(hooks: hooks)
   end
 
   private
 
   def ensure_framework_loaded
-    return if @test_unit_loaded
+    return if @framework_loader.loaded?
 
     fire_hook(:setup_integration_pre, integration: :test_unit)
-    require "test-unit"
-    self.class.stub_autorun!
-    @test_unit_loaded = true
+    @framework_loader.call
     fire_hook(:setup_integration_post, integration: :test_unit)
-  rescue LoadError => e
-    raise Evilution::Error, "test-unit is required but not available: #{e.message}"
+  end
+
+  def run_tests(mutation)
+    ensure_framework_loaded
+    reset_state
+    files = @file_resolver.call(mutation.file_path)
+    return ResultBuilder.unresolved(mutation.file_path) if files.nil?
+
+    command = "ruby -Itest #{files.join(" ")}"
+    execute_test_unit(files, command)
+  rescue StandardError => e
+    { passed: false, error: e.message, test_command: command }
+  end
+
+  def execute_test_unit(files, command)
+    new_classes = SubjectClassRegistry.newly_loaded do
+      files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
+    end
+    return ResultBuilder.no_tests_ran(command) if Dispatcher.test_method_count(new_classes).zero?
+
+    detector = reset_crash_detector
+    result = Dispatcher.call(new_classes, name: "evilution-mutation")
+    result.faults.each { |fault| detector.record(fault) }
+    ResultBuilder.call(passed: result.passed?, command: command, detector: detector)
+  end
+
+  # Test::Unit has no public registry-clear analogous to
+  # Minitest::Runnable.runnables.clear. SubjectClassRegistry's newly_loaded
+  # block scopes each dispatch to classes loaded in *this* round, so stale
+  # classes from prior mutations sit dormant on ObjectSpace without polluting
+  # the run. #reset_state stays as a contract no-op for parity with Minitest.
+  def reset_state
+    # no-op — see comment above
+  end
+
+  def build_args(_mutation)
+    []
+  end
+
+  def reset_crash_detector
+    if @crash_detector
+      @crash_detector.reset
+    else
+      @crash_detector = Evilution::Integration::TestUnitCrashDetector.new
+    end
+    @crash_detector
   end
 end
