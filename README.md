@@ -104,10 +104,10 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
-| `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`). |
+| `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`; falls back to generic phrasing for `test-unit`). |
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
-| `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec`, `minitest`, or `test-unit`.  |
+| `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec`, `minitest`, or `test-unit`. See [docs/integrations.md](docs/integrations.md). |
 | `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
@@ -517,7 +517,7 @@ These fields are added in addition to the existing `operator`, `file`, `line`, `
 
 The `evilution-mutate` tool accepts a `suggest_tests` boolean parameter (default: `false`). When enabled, survived mutation suggestions contain concrete test code that an agent can drop into a test file, instead of static description text. It currently generates RSpec-style suggestions (`it`/`expect` blocks).
 
-Pass `suggest_tests: true` in the `evilution-mutate` call to activate this mode. The CLI also supports `--suggest-tests`; when using the CLI, generated suggestions match the `--integration` setting (RSpec `it`/`expect` blocks or Minitest `def test_`/`assert_equal` methods).
+Pass `suggest_tests: true` in the `evilution-mutate` call to activate this mode. The CLI also supports `--suggest-tests`; when using the CLI, generated suggestions match the `--integration` setting (RSpec `it`/`expect` blocks or Minitest `def test_`/`assert_equal` methods). Concrete templates for `test-unit` are not yet implemented — `test-unit` runs fall back to generic suggestion text.
 
 ### Project Config File
 
@@ -774,7 +774,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
 4. **Mutate** — 74 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects and fork for Rails projects (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
-6. **Test** — The configured test framework (RSpec or Minitest) executes against the mutated source
+6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
 
