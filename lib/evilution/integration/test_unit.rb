@@ -10,10 +10,9 @@ require_relative "../integration"
 # Test::Unit integration. Decomposed under lib/evilution/integration/test_unit/
 # mirroring the RSpec integration's layout. This class is the orchestrator:
 # it wires the framework loader, dispatcher, subject-class registry,
-# test-file resolver, and result builder.
-#
-# Registration in Evilution::Runner::INTEGRATIONS / CLI / MCP is intentionally
-# deferred to EV-zhqc / EV-akt2.
+# test-file resolver, and result builder. The class is registered under
+# Evilution::Runner::INTEGRATIONS[:test_unit] and reachable via the
+# `--integration test-unit` CLI flag.
 class Evilution::Integration::TestUnit < Evilution::Integration::Base
   def self.baseline_runner
     ->(test_file) { run_baseline_test_file(test_file) }

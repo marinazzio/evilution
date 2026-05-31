@@ -21,6 +21,11 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       expect(runner.integration_class).to eq(Evilution::Integration::Minitest)
     end
 
+    it "returns the TestUnit integration class when config.integration is :test_unit" do
+      runner = described_class.new(config(integration: :test_unit))
+      expect(runner.integration_class).to eq(Evilution::Integration::TestUnit)
+    end
+
     it "raises Evilution::Error for an unknown integration" do
       cfg = Evilution::Config.allocate
       cfg.instance_variable_set(:@integration, :bogus)

@@ -107,7 +107,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`). |
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
-| `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec` or `minitest`.  |
+| `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec`, `minitest`, or `test-unit`.  |
 | `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
@@ -169,7 +169,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # timeout: 30              # seconds per mutation
 # format: text             # text | json | html
 # min_score: 0.0           # 0.0–1.0
-# integration: rspec       # test framework: rspec, minitest
+# integration: rspec       # test framework: rspec, minitest, test_unit
 # suggest_tests: false     # concrete test code in suggestions (matches integration)
 # save_session: false      # persist results under .evilution/results/
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails)
@@ -213,7 +213,7 @@ All keys recognised under `schema_version: 1`:
 | `format`                     | String                        | `text`                                 | Output format: `text`, `json`, `html`.                                                                                                   |
 | `target`                     | String / null                 | `null`                                 | Filter expression: method (`Foo#bar`), class (`Foo`), namespace (`Foo*`), descendants (`descendants:Foo`), source glob (`source:**/*.rb`). |
 | `min_score`                  | Float                         | `0.0`                                  | Minimum mutation score (0.0–1.0) for exit code 0.                                                                                        |
-| `integration`                | String                        | `rspec`                                | Test framework: `rspec` or `minitest`.                                                                                                   |
+| `integration`                | String                        | `rspec`                                | Test framework: `rspec`, `minitest`, or `test_unit`.                                                                                     |
 | `verbose`                    | Boolean                       | `false`                                | Verbose output (RSS/GC stats per phase, error details for errored mutations).                                                            |
 | `quiet`                      | Boolean                       | `false`                                | Suppress output.                                                                                                                         |
 | `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
@@ -532,7 +532,7 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 | Parameter | Purpose |
 |---|---|
 | `incremental` | Cache killed/timeout results across runs — set `true` when iterating on the same files |
-| `integration` | `rspec` or `minitest` |
+| `integration` | `rspec`, `minitest`, or `test_unit` |
 | `isolation` | `auto`, `fork`, or `in_process` |
 | `baseline` | `false` to skip the baseline suite check when you already know it's green |
 | `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
