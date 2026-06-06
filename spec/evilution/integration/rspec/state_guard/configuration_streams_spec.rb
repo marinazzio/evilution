@@ -37,17 +37,31 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ConfigurationStreams d
 
   it "release restores all three ivars after they are mutated" do
     orig_out = StringIO.new
+    orig_err = StringIO.new
     config.instance_variable_set(:@color_mode, :on)
     config.instance_variable_set(:@output_stream, orig_out)
+    config.instance_variable_set(:@error_stream, orig_err)
 
     snap = strategy.snapshot
     config.instance_variable_set(:@color_mode, :off)
     config.instance_variable_set(:@output_stream, StringIO.new)
+    config.instance_variable_set(:@error_stream, StringIO.new)
 
     strategy.release(snap)
 
     expect(config.instance_variable_get(:@color_mode)).to eq(:on)
     expect(config.instance_variable_get(:@output_stream)).to equal(orig_out)
+    expect(config.instance_variable_get(:@error_stream)).to equal(orig_err)
+  end
+
+  it "release removes an ivar that was undefined before the run but created during it" do
+    guarded_ivars.each { |iv| config.remove_instance_variable(iv) if config.instance_variable_defined?(iv) }
+    snap = strategy.snapshot # {} -- nothing defined
+    config.instance_variable_set(:@output_stream, StringIO.new) # created "during the run"
+
+    strategy.release(snap)
+
+    expect(config.instance_variable_defined?(:@output_stream)).to be(false)
   end
 
   it "restores via the ivar so the guarded output_stream= setter cannot block it" do

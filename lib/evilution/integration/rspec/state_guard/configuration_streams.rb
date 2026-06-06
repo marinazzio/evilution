@@ -27,10 +27,19 @@ class Evilution::Integration::RSpec::StateGuard::ConfigurationStreams
     end
   end
 
+  # Restore exactly the pre-run state: ivars present at snapshot get their value
+  # back; ivars that were absent before but created by the run are removed, so a
+  # newly-defined ivar can't leak into the host either.
   def release(captured)
     return unless captured
 
     config = ::RSpec.configuration
-    captured.each { |ivar, value| config.instance_variable_set(ivar, value) }
+    IVARS.each do |ivar|
+      if captured.key?(ivar)
+        config.instance_variable_set(ivar, captured[ivar])
+      elsif config.instance_variable_defined?(ivar)
+        config.remove_instance_variable(ivar)
+      end
+    end
   end
 end
