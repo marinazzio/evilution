@@ -8,8 +8,8 @@ require_relative "channel/frame"
 class Evilution::Parallel::WorkQueue::Worker
   Timing = Data.define(:busy, :wall)
 
-  attr_reader :pid, :worker_index
-  attr_accessor :items_completed, :pending, :busy_time, :wall_time
+  attr_reader :pid, :worker_index, :in_flight_indices
+  attr_accessor :items_completed, :pending, :busy_time, :wall_time, :deadline
 
   def self.spawn(worker_index:, hooks:, &block)
     cmd_read, cmd_write = IO.pipe
@@ -46,6 +46,8 @@ class Evilution::Parallel::WorkQueue::Worker
     @pending = 0
     @busy_time = 0.0
     @wall_time = 0.0
+    @in_flight_indices = []
+    @deadline = nil
   end
 
   def res_io
@@ -55,6 +57,7 @@ class Evilution::Parallel::WorkQueue::Worker
   def send_item(index, item)
     Evilution::Parallel::WorkQueue::Channel.write(@cmd_write, [index, item])
     @pending += 1
+    @in_flight_indices << index
   end
 
   def read_result

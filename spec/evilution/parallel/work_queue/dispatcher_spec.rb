@@ -72,23 +72,20 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
   end
 
   describe "#run on item_timeout" do
-    it "kills stuck workers and sets first_error" do
-      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { sleep 5 }
+    it "marks the stuck item TIMED_OUT and does not set first_error" do
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { sleep 30 }
       dispatcher = described_class.new(
         workers: [worker], items: [1], prefetch: 1,
         item_timeout: 0.2, worker_max_items: nil,
         recycle_factory: ->(_) { raise "no recycle" }
       )
-      dispatcher.run
-      expect(dispatcher.first_error).to be_a(Evilution::Error)
-      expect(dispatcher.first_error.message).to match(/worker timed out/)
+      run_result = dispatcher.run
+
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::TIMED_OUT])
+      expect(dispatcher.first_error).to be_nil
+      expect(run_result.retired.length).to eq(1)
 
       worker.close_pipes
-      begin
-        Process.wait(worker.pid)
-      rescue Errno::ECHILD
-        nil
-      end
     end
 
     it "actually terminates the stuck worker process" do
@@ -98,15 +95,7 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
         item_timeout: 0.2, worker_max_items: nil,
         recycle_factory: ->(_) { raise "no recycle" }
       )
-      dispatcher.run
-
-      reaped = nil
-      begin
-        Timeout.timeout(5) { reaped = Process.wait(worker.pid) }
-      rescue Errno::ECHILD
-        reaped = worker.pid
-      end
-      expect(reaped).to eq(worker.pid)
+      Timeout.timeout(5) { dispatcher.run }
 
       alive = begin
         Process.kill(0, worker.pid)
@@ -117,6 +106,65 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
       expect(alive).to be(false)
 
       worker.close_pipes
+    end
+
+    it "recycles the stuck worker and finishes the remaining items" do
+      recycle_calls = 0
+      replacement = nil
+      factory = lambda do |old|
+        recycle_calls += 1
+        replacement = Evilution::Parallel::WorkQueue::Worker.spawn(
+          worker_index: old.worker_index, hooks: nil
+        ) { |x| x }
+      end
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) do |x|
+        sleep 30 if x.zero?
+        x
+      end
+      dispatcher = described_class.new(
+        workers: [worker], items: [0, 1], prefetch: 1,
+        item_timeout: 0.3, worker_max_items: nil,
+        recycle_factory: factory
+      )
+      run_result = Timeout.timeout(10) { dispatcher.run }
+
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::TIMED_OUT, 1])
+      expect(recycle_calls).to eq(1)
+      expect(dispatcher.first_error).to be_nil
+
+      worker.close_pipes
+      if replacement
+        replacement.shutdown
+        replacement.close_pipes
+        replacement.reap
+      end
+    end
+
+    it "times out only the stuck worker, leaving healthy workers' results intact" do
+      workers = [0, 1].map do |i|
+        Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: i, hooks: nil) do |x|
+          sleep 30 if x.zero?
+          x
+        end
+      end
+      dispatcher = described_class.new(
+        workers: workers, items: [0, 10, 20, 30], prefetch: 1,
+        item_timeout: 0.5, worker_max_items: nil,
+        recycle_factory: ->(_) { raise "no recycle expected once items exhausted" }
+      )
+      run_result = Timeout.timeout(10) { dispatcher.run }
+
+      expect(run_result.results[0]).to eq(Evilution::Parallel::WorkQueue::TIMED_OUT)
+      expect(run_result.results[1..]).to eq([10, 20, 30])
+      expect(dispatcher.first_error).to be_nil
+
+      # The dispatcher already reaped the stuck worker; shut down and reap any
+      # healthy survivors so the spec leaves no zombies.
+      workers.each do |w|
+        w.shutdown
+        w.close_pipes
+        w.reap
+      end
     end
   end
 
@@ -141,7 +189,7 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
   end
 
   describe "#run when a worker process dies without replying" do
-    it "records an unexpected-exit error and finishes" do
+    it "marks the in-flight item DIED, recycles, and finishes without first_error" do
       worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { exit!(0) }
       dispatcher = described_class.new(
         workers: [worker], items: [1], prefetch: 1,
@@ -152,16 +200,42 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
       run_result = nil
       expect { Timeout.timeout(5) { run_result = dispatcher.run } }.not_to raise_error
 
-      expect(dispatcher.first_error).to be_a(Evilution::Error)
-      expect(dispatcher.first_error.message).to match(/exited unexpectedly/)
-      expect(run_result.results).to eq([nil])
-      expect(run_result.retired).to be_empty
+      expect(dispatcher.first_error).to be_nil
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::DIED])
+      expect(run_result.retired.length).to eq(1)
 
       worker.close_pipes
-      begin
-        Process.wait(worker.pid)
-      rescue Errno::ECHILD
-        nil
+    end
+
+    it "recycles the dead worker and finishes the remaining items" do
+      recycle_calls = 0
+      replacement = nil
+      factory = lambda do |old|
+        recycle_calls += 1
+        replacement = Evilution::Parallel::WorkQueue::Worker.spawn(
+          worker_index: old.worker_index, hooks: nil
+        ) { |x| x }
+      end
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) do |x|
+        exit!(0) if x.zero?
+        x
+      end
+      dispatcher = described_class.new(
+        workers: [worker], items: [0, 1], prefetch: 1,
+        item_timeout: 5, worker_max_items: nil,
+        recycle_factory: factory
+      )
+      run_result = Timeout.timeout(10) { dispatcher.run }
+
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::DIED, 1])
+      expect(recycle_calls).to eq(1)
+      expect(dispatcher.first_error).to be_nil
+
+      worker.close_pipes
+      if replacement
+        replacement.shutdown
+        replacement.close_pipes
+        replacement.reap
       end
     end
   end

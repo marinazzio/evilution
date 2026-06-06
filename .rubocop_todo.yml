@@ -12,6 +12,7 @@ Metrics/ClassLength:
     - "lib/evilution/isolation/fork.rb"
     - "lib/evilution/integration/minitest.rb"
     - "lib/evilution/mcp/mutate_tool.rb"
+    - "lib/evilution/parallel/work_queue/dispatcher.rb"
     - "lib/evilution/runner.rb"
     - "lib/evilution/runner/isolation_resolver.rb"
 

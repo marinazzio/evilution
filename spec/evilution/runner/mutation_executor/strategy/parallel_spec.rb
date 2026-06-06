@@ -9,6 +9,7 @@ require "evilution/runner/mutation_executor/result_packer"
 require "evilution/runner/mutation_executor/result_notifier"
 require "evilution/runner/mutation_executor/neutralization_pipeline"
 require "evilution/runner/mutation_executor/strategy/parallel"
+require "evilution/parallel/work_queue"
 
 RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
   let(:cfg) do
@@ -63,6 +64,59 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
 
     expect(execution.results.map(&:status)).to eq(%i[killed killed])
     expect(execution.truncated).to be false
+  end
+
+  it "translates a TIMED_OUT pool sentinel into a :timeout result" do
+    m1 = mutation("m1")
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    isolator = double(:isolator)
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map).and_return([Evilution::Parallel::WorkQueue::TIMED_OUT])
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier,
+      pool_factory: -> { pool },
+      config: cfg
+    )
+
+    execution = strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    result = execution.results.first
+    expect(result.status).to eq(:timeout)
+    expect(result.mutation).to eq(m1)
+    # Duration reflects the item_timeout the stuck worker exhausted (config
+    # timeout 30 * 2), not a misleading 0.0 that would be cached/reported.
+    expect(result.duration).to eq(60.0)
+  end
+
+  it "translates a DIED pool sentinel into an :error result" do
+    m1 = mutation("m1")
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    isolator = double(:isolator)
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map).and_return([Evilution::Parallel::WorkQueue::DIED])
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier,
+      pool_factory: -> { pool },
+      config: cfg
+    )
+
+    execution = strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    result = execution.results.first
+    expect(result.status).to eq(:error)
+    expect(result.error_message).to match(/worker process exited unexpectedly/)
   end
 
   it "uses cached results in place of pool execution and preserves batch order" do

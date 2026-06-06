@@ -1,8 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "../strategy"
+require_relative "../../../parallel/work_queue"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
+  # Compact result for a worker that exited unexpectedly (:error is not cached,
+  # so the 0.0 duration is never persisted).
+  DIED_COMPACT = {
+    status: :error,
+    duration: 0.0,
+    error_message: "worker process exited unexpectedly",
+    error_class: "Evilution::Error"
+  }.freeze
+
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil)
     @cache = cache
     @isolator = isolator
@@ -71,11 +81,28 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     return [] if uncached_indices.empty?
 
     uncached = uncached_indices.map { |i| batch[i] }
-    pool.map(uncached) do |mutation|
+    worker_results = pool.map(uncached) do |mutation|
       test_command = ->(m) { integration.call(m) }
       result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
       @packer.compact(result)
     end
+    worker_results.map { |r| unpack_unfinished(r) }
+  end
+
+  def unpack_unfinished(result)
+    return result unless result.is_a?(Evilution::Parallel::WorkQueue::Unfinished)
+
+    case result.reason
+    when :timeout then timeout_compact
+    when :died then DIED_COMPACT
+    end
+  end
+
+  # A :timeout result is cacheable, so give it a realistic duration: the stuck
+  # worker exhausted the dispatcher's item_timeout (config.timeout * 2) before
+  # being killed. A 0.0 here would be cached and skew summaries/reuse.
+  def timeout_compact
+    { status: :timeout, duration: @config.timeout * 2.0 }
   end
 
   def merge(batch, uncached_indices, cached_results, worker_results)
