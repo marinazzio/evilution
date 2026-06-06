@@ -6,6 +6,54 @@ require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
 
 RSpec.describe Evilution::Parallel::WorkQueue::Worker do
+  def process_alive?(pid)
+    Process.kill(0, pid)
+    true
+  rescue Errno::ESRCH
+    false
+  rescue Errno::EPERM
+    true
+  end
+
+  def wait_until(timeout: 8)
+    Timeout.timeout(timeout) do
+      sleep(0.05) until yield
+    end
+  end
+
+  describe "#kill reaps the whole process group" do
+    it "kills grandchildren forked by the worker block, not just the worker" do
+      Dir.mktmpdir do |dir|
+        pidfile = File.join(dir, "grandchild.pid")
+        gpid = nil
+        begin
+          worker = described_class.spawn(worker_index: 0, hooks: nil) do |_x|
+            grandchild = fork { sleep 60 }
+            File.write(pidfile, grandchild.to_s)
+            sleep 60
+          end
+          worker.send_item(0, :go)
+
+          wait_until { File.exist?(pidfile) && !File.empty?(pidfile) }
+          gpid = File.read(pidfile).to_i
+          expect(process_alive?(gpid)).to be(true)
+
+          worker.kill
+          worker.reap
+
+          wait_until { !process_alive?(gpid) }
+          expect(process_alive?(gpid)).to be(false)
+        ensure
+          begin
+            Process.kill("KILL", gpid) if gpid
+          rescue Errno::ESRCH
+            nil
+          end
+        end
+      end
+    end
+  end
+
   describe ".spawn + lifecycle" do
     it "forks a child, processes one item, retires cleanly" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x * 2 }

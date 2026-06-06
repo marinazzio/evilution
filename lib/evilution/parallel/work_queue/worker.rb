@@ -17,6 +17,16 @@ class Evilution::Parallel::WorkQueue::Worker
     [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
 
     pid = Process.fork do
+      # EV-cnx8 / GH #1324: make the worker its own process-group leader so
+      # #kill can signal the whole subtree. A mutation's spec may fork a
+      # grandchild that blocks (e.g. ConditionVariable#wait); when the
+      # dispatcher SIGKILLs a stuck worker, that grandchild must die with it
+      # rather than orphan to init holding memory/fds/connections.
+      begin
+        Process.setpgid(0, 0)
+      rescue SystemCallError
+        nil
+      end
       cmd_write.close
       res_read.close
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
@@ -70,7 +80,16 @@ class Evilution::Parallel::WorkQueue::Worker
     nil
   end
 
+  # SIGKILL the worker's whole process group (negative pid), reaping any
+  # grandchildren it forked. Falls back to the single pid if the group is gone
+  # -- already reaped, or setpgid did not take in the child.
   def kill
+    Process.kill("KILL", -@pid)
+  rescue Errno::ESRCH
+    kill_pid
+  end
+
+  def kill_pid
     Process.kill("KILL", @pid)
   rescue Errno::ESRCH
     nil
