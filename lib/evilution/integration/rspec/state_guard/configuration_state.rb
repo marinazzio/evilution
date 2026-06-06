@@ -18,8 +18,8 @@ require_relative "../../rspec"
 # the in-process isolation path mutates the host's own configuration.
 #
 # @preferred_options is mutated in place, so it is snapshotted by DUP and put
-# back by replacing the ivar; the stream ivars are reassigned by their setters,
-# so capturing the reference is enough.
+# back by replacing the ivar; the stream ivars are reassigned during the run,
+# so capturing the original references is enough.
 class Evilution::Integration::RSpec::StateGuard::ConfigurationState
   PREFERRED_OPTIONS = :@preferred_options
   STREAM_IVARS = %i[@output_stream @error_stream].freeze
