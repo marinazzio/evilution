@@ -243,17 +243,24 @@ RSpec.describe Evilution::Isolation::Fork do
       pid_path = pid_file.path
       pid_file.close
 
+      # The child forks the grandchild and records its pid as its first action,
+      # then blocks. The timeout (deliberately generous, not racing the child's
+      # fork/startup) fires while it blocks. The pid is written atomically via
+      # rename so a read can never observe a partial value.
       test_command = lambda { |_m|
         grandchild_pid = Process.fork { sleep 60 }
-        File.write(pid_path, grandchild_pid.to_s)
+        tmp = "#{pid_path}.tmp"
+        File.write(tmp, grandchild_pid.to_s)
+        File.rename(tmp, pid_path)
         sleep 60
         { passed: true }
       }
 
-      result = isolator.call(mutation:, test_command:, timeout: 0.3)
-      grandchild_pid = File.read(pid_path).strip.to_i
+      result = isolator.call(mutation:, test_command:, timeout: 3)
 
       expect(result).to be_timeout
+      expect(File.size?(pid_path)).to be_truthy
+      grandchild_pid = File.read(pid_path).strip.to_i
       expect(grandchild_pid).to be > 0
       wait_until { !process_alive?(grandchild_pid) }
       expect(process_alive?(grandchild_pid)).to be(false)
