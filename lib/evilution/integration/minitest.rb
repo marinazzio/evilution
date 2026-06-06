@@ -3,6 +3,7 @@
 require "stringio"
 require_relative "base"
 require_relative "minitest_crash_detector"
+require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 
@@ -18,7 +19,9 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     require "stringio"
     stub_autorun!
     ::Minitest::Runnable.runnables.clear
-    baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
+    files = baseline_test_files(test_file)
+    Evilution::Integration::Loading::TestLoadPath.add!(files)
+    files.each { |f| load(File.expand_path(f)) }
     run_baseline_minitest
   end
 
@@ -128,6 +131,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   def execute_minitest(mutation, files, command)
+    Evilution::Integration::Loading::TestLoadPath.add!(files)
     files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
 
     detector = reset_crash_detector

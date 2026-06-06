@@ -2,6 +2,7 @@
 
 require_relative "base"
 require_relative "test_unit_crash_detector"
+require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 
@@ -40,8 +41,10 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
     require_relative "test_unit/subject_class_registry"
     require_relative "test_unit/dispatcher"
     FrameworkLoader.new.call
+    files = baseline_test_files(test_file)
+    Evilution::Integration::Loading::TestLoadPath.add!(files)
     new_classes = SubjectClassRegistry.newly_loaded do
-      baseline_test_files(test_file).each { |f| load(File.expand_path(f)) }
+      files.each { |f| load(File.expand_path(f)) }
     end
     Dispatcher.call(new_classes, name: "evilution baseline").passed?
   end
@@ -89,15 +92,20 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
   end
 
   def execute_test_unit(files, command)
-    new_classes = SubjectClassRegistry.newly_loaded do
-      files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
-    end
+    new_classes = load_test_classes(files)
     return ResultBuilder.no_tests_ran(command) if Dispatcher.test_method_count(new_classes).zero?
 
     detector = reset_crash_detector
     result = Dispatcher.call(new_classes, name: "evilution-mutation")
     result.faults.each { |fault| detector.record(fault) }
     ResultBuilder.call(passed: result.passed?, command: command, detector: detector)
+  end
+
+  def load_test_classes(files)
+    Evilution::Integration::Loading::TestLoadPath.add!(files)
+    SubjectClassRegistry.newly_loaded do
+      files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
+    end
   end
 
   # Test::Unit has no public registry-clear analogous to

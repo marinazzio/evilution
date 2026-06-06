@@ -940,4 +940,46 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(received).to eq({ integration: :minitest })
     end
   end
+
+  # Regression for EV-52hf / GH #1326: a Minitest test doing the near-universal
+  # `require "test_helper"` (relying on -Itest) must load without LoadError.
+  # evilution loads test files in-process, so the test root must be put on
+  # $LOAD_PATH explicitly; otherwise every mutation errored with
+  # "cannot load such file -- test_helper" and the score was 0.0.
+  describe "loading a test that requires a bare test_helper (EV-52hf)" do
+    around do |example|
+      saved = $LOAD_PATH.dup
+      example.run
+      $LOAD_PATH.replace(saved)
+      Minitest::Runnable.runnables.clear
+    end
+
+    it "resolves require \"test_helper\" via the test root on $LOAD_PATH" do
+      Dir.mktmpdir do |base|
+        FileUtils.mkdir_p(File.join(base, "test", "unit"))
+        helper = File.join(base, "test", "test_helper.rb")
+        File.write(helper, "EV52HF_HELPER_LOADED = true\n")
+        test_rel = "test/unit/calc_test.rb"
+        File.write(File.join(base, test_rel), <<~RUBY)
+          require "test_helper"
+          require "minitest"
+          class Ev52hfCalcTest < Minitest::Test
+            def test_truth = assert(true)
+          end
+        RUBY
+
+        allow(Evilution).to receive(:project_base_dir).and_return(base)
+        custom = described_class.new(test_files: [test_rel])
+
+        result = nil
+        expect { result = custom.call(mutation) }.not_to raise_error
+        expect(result[:error]).to be_nil
+        expect(result[:passed]).to be(true)
+        expect(defined?(EV52HF_HELPER_LOADED)).to eq("constant")
+      ensure
+        $LOADED_FEATURES.delete(helper)
+        Object.send(:remove_const, :EV52HF_HELPER_LOADED) if defined?(EV52HF_HELPER_LOADED)
+      end
+    end
+  end
 end
