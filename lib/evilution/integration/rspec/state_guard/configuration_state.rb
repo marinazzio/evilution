@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "../../rspec"
-require_relative "internals"
 
 # Restores the RSpec.configuration state that ::RSpec::Core::Runner.run mutates
 # on the shared singleton during an in-process mutation run (EV-dwqw / GH #1343).
