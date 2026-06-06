@@ -26,7 +26,25 @@ class Evilution::Parallel::WorkQueue::Worker
 
     cmd_read.close
     res_write.close
-    new(pid: pid, cmd_write: cmd_write, res_read: res_read, worker_index: worker_index)
+    isolate_process_group(pid)
+    new(pid:, cmd_write:, res_read:, worker_index:)
+  end
+
+  # EV-cnx8 / GH #1324: make the worker its own process-group leader so #kill
+  # can signal the whole subtree. A mutation's spec may fork a grandchild that
+  # blocks (e.g. ConditionVariable#wait); when the dispatcher SIGKILLs a stuck
+  # worker, that grandchild must die with it rather than orphan to init holding
+  # memory/fds/connections. Done parent-side (before the child forks anything)
+  # so a failure is visible here instead of being swallowed in the child.
+  def self.isolate_process_group(pid)
+    Process.setpgid(pid, pid)
+  rescue Errno::EACCES, Errno::ESRCH
+    # EACCES: child already exec'd/changed group; ESRCH: child already exited.
+    # Both are benign -- reaping handles the child either way.
+    nil
+  rescue SystemCallError => e
+    warn "evilution: could not isolate worker #{pid} into its own process " \
+         "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
   end
 
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
@@ -70,7 +88,16 @@ class Evilution::Parallel::WorkQueue::Worker
     nil
   end
 
+  # SIGKILL the worker's whole process group (negative pid), reaping any
+  # grandchildren it forked. Falls back to the single pid if the group is gone
+  # -- already reaped, or setpgid did not take in the child.
   def kill
+    Process.kill("KILL", -@pid)
+  rescue Errno::ESRCH
+    kill_pid
+  end
+
+  def kill_pid
     Process.kill("KILL", @pid)
   rescue Errno::ESRCH
     nil
