@@ -21,7 +21,7 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
     end
   end
 
-  describe "#kill reaps the whole process group" do
+  describe "#kill terminates the whole process group" do
     it "kills grandchildren forked by the worker block, not just the worker" do
       Dir.mktmpdir do |dir|
         pidfile = File.join(dir, "grandchild.pid")
