@@ -9,6 +9,14 @@ class Evilution::Parallel::WorkQueue
 
   TIMING_GRACE_PERIOD = 5
 
+  # Sentinel results for items whose worker never produced a value. The
+  # dispatcher writes these into the results array (instead of aborting the
+  # whole run) so a single stuck/dead worker only loses its own in-flight
+  # item(s). Mutation-aware callers translate the reason into a status.
+  Unfinished = Data.define(:reason)
+  TIMED_OUT = Unfinished.new(reason: :timeout)
+  DIED = Unfinished.new(reason: :died)
+
   def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
     Validators::PositiveInt.call!(:size, size)
     Validators::PositiveInt.call!(:prefetch, prefetch)

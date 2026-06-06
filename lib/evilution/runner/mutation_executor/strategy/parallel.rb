@@ -1,8 +1,22 @@
 # frozen_string_literal: true
 
 require_relative "../strategy"
+require_relative "../../../parallel/work_queue"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
+  # The pool returns an Unfinished sentinel for items whose worker timed out or
+  # died (instead of aborting the whole run). Translate each into a compact
+  # result hash so the packer rebuilds a normal MutationResult.
+  UNFINISHED_COMPACT = {
+    timeout: { status: :timeout, duration: 0.0 }.freeze,
+    died: {
+      status: :error,
+      duration: 0.0,
+      error_message: "worker process exited unexpectedly",
+      error_class: "Evilution::Error"
+    }.freeze
+  }.freeze
+
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil)
     @cache = cache
     @isolator = isolator
@@ -71,11 +85,18 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     return [] if uncached_indices.empty?
 
     uncached = uncached_indices.map { |i| batch[i] }
-    pool.map(uncached) do |mutation|
+    worker_results = pool.map(uncached) do |mutation|
       test_command = ->(m) { integration.call(m) }
       result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
       @packer.compact(result)
     end
+    worker_results.map { |r| unpack_unfinished(r) }
+  end
+
+  def unpack_unfinished(result)
+    return result unless result.is_a?(Evilution::Parallel::WorkQueue::Unfinished)
+
+    UNFINISHED_COMPACT.fetch(result.reason)
   end
 
   def merge(batch, uncached_indices, cached_results, worker_results)

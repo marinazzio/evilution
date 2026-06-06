@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tmpdir"
+require "timeout"
 require "evilution/parallel/work_queue"
 require "evilution/hooks"
 
@@ -72,15 +73,18 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end.to raise_error(RuntimeError, "boom")
     end
 
-    it "raises a timeout error when an item exceeds item_timeout" do
-      queue = described_class.new(size: 1, item_timeout: 1)
+    it "marks a stuck item with the TIMED_OUT sentinel instead of aborting the run" do
+      queue = described_class.new(size: 2, item_timeout: 1)
 
-      expect do
-        queue.map([1]) do |_n|
-          sleep 60
-          :done
+      results = Timeout.timeout(15) do
+        queue.map([0, 10, 20]) do |n|
+          sleep 60 if n.zero?
+          n
         end
-      end.to raise_error(Evilution::Error, /timed out/)
+      end
+
+      expect(results[0]).to eq(Evilution::Parallel::WorkQueue::TIMED_OUT)
+      expect(results[1..]).to eq([10, 20])
     end
 
     it "recycles workers after worker_max_items items are completed" do
