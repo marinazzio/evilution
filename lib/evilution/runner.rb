@@ -178,6 +178,11 @@ class Evilution::Runner
   def install_signal_handler(sig)
     prev_handler = Signal.trap(sig) do
       Evilution::TempDirTracker.cleanup_all
+      # EV-jwao / GH #1332: workers are their own process-group leaders, so a
+      # terminal Ctrl-C reaches only the parent's group. Forward to each worker
+      # group here -- the parent's fatal-signal death skips work_queue#map's
+      # `ensure cleanup_workers`, so this trap is the reliable forwarding hook.
+      Evilution::Parallel::WorkQueue::WorkerRegistry.signal_all(sig)
 
       case prev_handler
       when Proc, Method
@@ -226,6 +231,7 @@ require_relative "result/summary"
 require_relative "baseline"
 require_relative "cache"
 require_relative "parallel/pool"
+require_relative "parallel/work_queue/worker_registry"
 require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"

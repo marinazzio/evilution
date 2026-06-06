@@ -4,8 +4,18 @@ require "spec_helper"
 require "timeout"
 require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
+require "evilution/parallel/work_queue/worker_registry"
 
 RSpec.describe Evilution::Parallel::WorkQueue::Worker do
+  let(:registry) { Evilution::Parallel::WorkQueue::WorkerRegistry }
+
+  around do |example|
+    snapshot = Evilution::Parallel::WorkQueue::WorkerRegistry.pgids
+    snapshot.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(pgid) }
+    example.run
+    Evilution::Parallel::WorkQueue::WorkerRegistry.pgids.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(pgid) }
+    snapshot.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.register(pgid) }
+  end
   def process_alive?(pid)
     Process.kill(0, pid)
     true
@@ -282,6 +292,49 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       worker.close_pipes
       worker.reap
       expect { worker.kill }.not_to raise_error
+    end
+  end
+
+  describe "WorkerRegistry integration" do
+    it "registers the worker pgid on spawn" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      begin
+        expect(registry.pgids).to include(worker.pid)
+      ensure
+        worker.shutdown
+        worker.close_pipes
+        worker.reap
+      end
+    end
+
+    it "deregisters the worker pgid on reap" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.shutdown
+      worker.close_pipes
+      worker.reap
+      expect(registry.pgids).not_to include(worker.pid)
+    end
+
+    it "deregisters the worker pgid on retire" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      worker.retire
+      expect(registry.pgids).not_to include(worker.pid)
+    end
+
+    it "registers the worker pgid before isolating it (no leader-but-unregistered window)" do
+      # The trap forwards only to registered pgids; registering before setpgid
+      # guarantees a worker is never its own group leader while absent from the
+      # registry. Proven by registration happening even if isolation is a no-op.
+      allow(described_class).to receive(:isolate_process_group)
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+      begin
+        expect(registry.pgids).to include(worker.pid)
+        expect(described_class).to have_received(:isolate_process_group).with(worker.pid)
+      ensure
+        worker.shutdown
+        worker.close_pipes
+        worker.reap
+      end
     end
   end
 

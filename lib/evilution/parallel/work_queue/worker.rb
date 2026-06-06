@@ -4,6 +4,7 @@ require_relative "../work_queue"
 require_relative "../../child_output"
 require_relative "channel"
 require_relative "channel/frame"
+require_relative "worker_registry"
 
 class Evilution::Parallel::WorkQueue::Worker
   Timing = Data.define(:busy, :wall)
@@ -26,6 +27,17 @@ class Evilution::Parallel::WorkQueue::Worker
 
     cmd_read.close
     res_write.close
+    # Register BEFORE isolating so the trap can never observe a worker that is
+    # already its own group leader yet missing from the registry (EV-jwao race,
+    # GH #1333 review): the spawn runs on the same main thread the trap
+    # interrupts, so a signal arriving between setpgid and register would
+    # otherwise leak a leader the trap cannot reach. Ordering register first
+    # leaves only safe windows -- pre-setpgid the child still shares the parent
+    # group and receives the terminal signal directly; once it is its own
+    # leader the registry already lists it. Registering unconditionally is safe
+    # because signal_all's kill(-pid) is a no-op (Errno::ESRCH) for a pid that
+    # never became a group leader (setpgid failed).
+    Evilution::Parallel::WorkQueue::WorkerRegistry.register(pid)
     isolate_process_group(pid)
     new(pid:, cmd_write:, res_read:, worker_index:)
   end
@@ -112,6 +124,10 @@ class Evilution::Parallel::WorkQueue::Worker
     Process.wait(@pid)
   rescue Errno::ECHILD
     nil
+  ensure
+    # Drop the pgid once the leader is reaped so the trap never signals a group
+    # whose pid the OS may have recycled. No-op if it was never registered.
+    Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(@pid)
   end
 
   def retire
