@@ -950,6 +950,7 @@ RSpec.describe Evilution::Integration::Minitest do
     around do |example|
       saved = $LOAD_PATH.dup
       example.run
+    ensure
       $LOAD_PATH.replace(saved)
       Minitest::Runnable.runnables.clear
     end

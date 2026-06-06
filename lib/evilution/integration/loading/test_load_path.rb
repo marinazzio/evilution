@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../../integration"
+require_relative "../loading"
 
 # Mirrors `ruby -Itest` / `-Ispec` for in-process test loading.
 #
@@ -20,8 +20,10 @@ module Evilution::Integration::Loading::TestLoadPath
   module_function
 
   # Prepend every relevant test directory to $LOAD_PATH (idempotently).
+  # Iterate in reverse so the first entry from #dirs_for ends up frontmost,
+  # preserving its order (mirrors how `ruby -Ia -Ib` lands a before b).
   def add!(files, base: Evilution.project_base_dir)
-    dirs_for(files, base).each do |dir|
+    dirs_for(files, base).reverse_each do |dir|
       $LOAD_PATH.unshift(dir) unless $LOAD_PATH.include?(dir)
     end
   end

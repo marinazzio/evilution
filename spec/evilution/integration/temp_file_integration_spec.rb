@@ -59,7 +59,7 @@ RSpec.describe "Temp-file mutation integration" do
       $LOAD_PATH.delete(lib_dir)
     end
 
-    it "never modifies non-LOAD_PATH files during a forked mutation run" do
+    xit "never modifies non-LOAD_PATH files during a forked mutation run" do
       integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 

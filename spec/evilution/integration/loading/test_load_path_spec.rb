@@ -7,6 +7,7 @@ RSpec.describe Evilution::Integration::Loading::TestLoadPath do
   around do |example|
     saved = $LOAD_PATH.dup
     example.run
+  ensure
     $LOAD_PATH.replace(saved)
   end
 

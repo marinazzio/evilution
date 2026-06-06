@@ -156,6 +156,7 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
     around do |example|
       saved = $LOAD_PATH.dup
       example.run
+    ensure
       $LOAD_PATH.replace(saved)
     end
 
