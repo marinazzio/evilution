@@ -87,24 +87,24 @@ RSpec.describe "Temp-file mutation integration" do
       $LOAD_PATH.delete(lib_dir)
     end
 
-    # EV-dwqw / GH #1343: an in-process integration run must not leak the
-    # RSpec.configuration fields ::RSpec::Core::Runner.run mutates on the shared
-    # singleton (color_mode flipped to :off by --no-color; output_stream swapped
-    # to the run's StringIO) -- otherwise host suite output loses color for every
-    # subsequent example. StateGuard::ConfigurationStreams restores them.
+    # EV-dwqw / GH #1343: an in-process integration run must not leak the RSpec
+    # configuration state ::RSpec::Core::Runner.run mutates on the shared
+    # singleton -- otherwise host suite output loses color for every subsequent
+    # example. We assert the resolved getters (color_mode reads @preferred_options
+    # first, so an ivar-only check would be a false green) and the streams.
     it "does not leak RSpec config color_mode/output_stream/error_stream into the host process" do
       $LOAD_PATH.unshift(lib_dir)
       integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       config = RSpec.configuration
-      color_before = config.instance_variable_get(:@color_mode)
-      out_before = config.instance_variable_get(:@output_stream)
-      err_before = config.instance_variable_get(:@error_stream)
+      color_before = config.color_mode
+      out_before = config.output_stream
+      err_before = config.error_stream
 
       integration.call(mutation)
 
-      expect(config.instance_variable_get(:@color_mode)).to eq(color_before)
-      expect(config.instance_variable_get(:@output_stream)).to equal(out_before)
-      expect(config.instance_variable_get(:@error_stream)).to equal(err_before)
+      expect(config.color_mode).to eq(color_before)
+      expect(config.output_stream).to equal(out_before)
+      expect(config.error_stream).to equal(err_before)
     ensure
       $LOAD_PATH.delete(lib_dir)
     end
