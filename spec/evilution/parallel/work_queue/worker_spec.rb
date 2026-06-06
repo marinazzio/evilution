@@ -321,11 +321,15 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       expect(registry.pgids).not_to include(worker.pid)
     end
 
-    it "does not register a pgid when process-group isolation fails" do
-      allow(described_class).to receive(:isolate_process_group).and_return(false)
+    it "registers the worker pgid before isolating it (no leader-but-unregistered window)" do
+      # The trap forwards only to registered pgids; registering before setpgid
+      # guarantees a worker is never its own group leader while absent from the
+      # registry. Proven by registration happening even if isolation is a no-op.
+      allow(described_class).to receive(:isolate_process_group)
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
       begin
-        expect(registry.pgids).not_to include(worker.pid)
+        expect(registry.pgids).to include(worker.pid)
+        expect(described_class).to have_received(:isolate_process_group).with(worker.pid)
       ensure
         worker.shutdown
         worker.close_pipes

@@ -27,10 +27,18 @@ class Evilution::Parallel::WorkQueue::Worker
 
     cmd_read.close
     res_write.close
-    # Only register the pgid when isolation took: an unisolated worker stays in
-    # the parent's group and already receives the terminal SIGINT/SIGTERM, so
-    # the trap must not also kill(-pid) -- pid is not a group leader there.
-    Evilution::Parallel::WorkQueue::WorkerRegistry.register(pid) if isolate_process_group(pid)
+    # Register BEFORE isolating so the trap can never observe a worker that is
+    # already its own group leader yet missing from the registry (EV-jwao race,
+    # GH #1333 review): the spawn runs on the same main thread the trap
+    # interrupts, so a signal arriving between setpgid and register would
+    # otherwise leak a leader the trap cannot reach. Ordering register first
+    # leaves only safe windows -- pre-setpgid the child still shares the parent
+    # group and receives the terminal signal directly; once it is its own
+    # leader the registry already lists it. Registering unconditionally is safe
+    # because signal_all's kill(-pid) is a no-op (Errno::ESRCH) for a pid that
+    # never became a group leader (setpgid failed).
+    Evilution::Parallel::WorkQueue::WorkerRegistry.register(pid)
+    isolate_process_group(pid)
     new(pid:, cmd_write:, res_read:, worker_index:)
   end
 
@@ -40,20 +48,15 @@ class Evilution::Parallel::WorkQueue::Worker
   # worker, that grandchild must die with it rather than orphan to init holding
   # memory/fds/connections. Done parent-side (before the child forks anything)
   # so a failure is visible here instead of being swallowed in the child.
-  #
-  # Returns true when the worker is now its own group leader, false otherwise --
-  # the caller registers the pgid for signal forwarding (EV-jwao) only on true.
   def self.isolate_process_group(pid)
     Process.setpgid(pid, pid)
-    true
   rescue Errno::EACCES, Errno::ESRCH
     # EACCES: child already exec'd/changed group; ESRCH: child already exited.
     # Both are benign -- reaping handles the child either way.
-    false
+    nil
   rescue SystemCallError => e
     warn "evilution: could not isolate worker #{pid} into its own process " \
          "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
-    false
   end
 
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
