@@ -158,7 +158,13 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
       expect(run_result.results[1..]).to eq([10, 20, 30])
       expect(dispatcher.first_error).to be_nil
 
-      workers.each(&:close_pipes)
+      # The dispatcher already reaped the stuck worker; shut down and reap any
+      # healthy survivors so the spec leaves no zombies.
+      workers.each do |w|
+        w.shutdown
+        w.close_pipes
+        w.reap
+      end
     end
   end
 

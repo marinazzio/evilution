@@ -86,8 +86,12 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
 
     execution = strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
 
-    expect(execution.results.map(&:status)).to eq(%i[timeout])
-    expect(execution.results.first.mutation).to eq(m1)
+    result = execution.results.first
+    expect(result.status).to eq(:timeout)
+    expect(result.mutation).to eq(m1)
+    # Duration reflects the item_timeout the stuck worker exhausted (config
+    # timeout 30 * 2), not a misleading 0.0 that would be cached/reported.
+    expect(result.duration).to eq(60.0)
   end
 
   it "translates a DIED pool sentinel into an :error result" do

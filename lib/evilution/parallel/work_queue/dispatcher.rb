@@ -40,9 +40,9 @@ class Evilution::Parallel::WorkQueue::Dispatcher
 
   # Each worker carries its own deadline (set when it goes busy, refreshed on
   # every result). The select blocks only until the nearest worker deadline,
-  # so a single stuck worker is reaped in isolation -- its in-flight item is
-  # marked :timed_out and the worker recycled -- instead of the old pool-wide
-  # watchdog that SIGKILLed every worker and aborted the whole run.
+  # so a single stuck worker is reaped in isolation -- its in-flight item gets
+  # the WorkQueue::TIMED_OUT sentinel and the worker is recycled -- instead of
+  # the old pool-wide watchdog that SIGKILLed every worker and aborted the run.
   def collect
     io_to_worker = @workers.to_h { |w| [w.res_io, w] }
     result_ios = io_to_worker.keys
