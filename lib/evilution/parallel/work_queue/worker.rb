@@ -4,6 +4,7 @@ require_relative "../work_queue"
 require_relative "../../child_output"
 require_relative "channel"
 require_relative "channel/frame"
+require_relative "worker_registry"
 
 class Evilution::Parallel::WorkQueue::Worker
   Timing = Data.define(:busy, :wall)
@@ -26,7 +27,10 @@ class Evilution::Parallel::WorkQueue::Worker
 
     cmd_read.close
     res_write.close
-    isolate_process_group(pid)
+    # Only register the pgid when isolation took: an unisolated worker stays in
+    # the parent's group and already receives the terminal SIGINT/SIGTERM, so
+    # the trap must not also kill(-pid) -- pid is not a group leader there.
+    Evilution::Parallel::WorkQueue::WorkerRegistry.register(pid) if isolate_process_group(pid)
     new(pid:, cmd_write:, res_read:, worker_index:)
   end
 
@@ -36,15 +40,20 @@ class Evilution::Parallel::WorkQueue::Worker
   # worker, that grandchild must die with it rather than orphan to init holding
   # memory/fds/connections. Done parent-side (before the child forks anything)
   # so a failure is visible here instead of being swallowed in the child.
+  #
+  # Returns true when the worker is now its own group leader, false otherwise --
+  # the caller registers the pgid for signal forwarding (EV-jwao) only on true.
   def self.isolate_process_group(pid)
     Process.setpgid(pid, pid)
+    true
   rescue Errno::EACCES, Errno::ESRCH
     # EACCES: child already exec'd/changed group; ESRCH: child already exited.
     # Both are benign -- reaping handles the child either way.
-    nil
+    false
   rescue SystemCallError => e
     warn "evilution: could not isolate worker #{pid} into its own process " \
          "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
+    false
   end
 
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
@@ -112,6 +121,10 @@ class Evilution::Parallel::WorkQueue::Worker
     Process.wait(@pid)
   rescue Errno::ECHILD
     nil
+  ensure
+    # Drop the pgid once the leader is reaped so the trap never signals a group
+    # whose pid the OS may have recycled. No-op if it was never registered.
+    Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(@pid)
   end
 
   def retire
