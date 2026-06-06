@@ -22,6 +22,21 @@ RSpec.describe Evilution::Isolation::Fork do
     tmpfile.unlink
   end
 
+  def process_alive?(pid)
+    Process.kill(0, pid)
+    true
+  rescue Errno::ESRCH
+    false
+  rescue Errno::EPERM
+    true
+  end
+
+  def wait_until(timeout: 8)
+    Timeout.timeout(timeout) do
+      sleep(0.05) until yield
+    end
+  end
+
   describe "#call" do
     it "returns killed when test command fails" do
       test_command = ->(_m) { { passed: false } }
@@ -193,6 +208,62 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(File.read(marker_path)).to eq("received-term")
     ensure
       File.delete(marker_path) if marker_path && File.exist?(marker_path)
+    end
+
+    # Regression for EV-2sh8 / GH #1330:
+    # The mutation child must be its own process-group leader so terminate_child
+    # can group-kill its whole subtree. Proven by the child observing that its
+    # process-group id equals its own pid.
+    it "runs the mutation child as its own process-group leader" do
+      info_file = Tempfile.new("pgid_info")
+      info_path = info_file.path
+      info_file.close
+
+      test_command = lambda { |_m|
+        File.write(info_path, "#{Process.pid}:#{Process.getpgrp}")
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+      pid, pgrp = File.read(info_path).split(":").map(&:to_i)
+
+      expect(result).to be_survived
+      expect(pgrp).to eq(pid)
+    ensure
+      info_file&.unlink
+    end
+
+    # Regression for EV-2sh8 / GH #1330:
+    # When the test command forks a grandchild and the mutation child times out,
+    # the grandchild must die with it. Before the fix the mutation child had no
+    # process-group isolation and terminate_child killed only the child pid, so
+    # a blocking grandchild orphaned to init and survived the rest of the run.
+    it "kills a blocking grandchild when the mutation child times out" do
+      pid_file = Tempfile.new("grandchild_pid")
+      pid_path = pid_file.path
+      pid_file.close
+
+      test_command = lambda { |_m|
+        grandchild_pid = Process.fork { sleep 60 }
+        File.write(pid_path, grandchild_pid.to_s)
+        sleep 60
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 0.3)
+      grandchild_pid = File.read(pid_path).strip.to_i
+
+      expect(result).to be_timeout
+      expect(grandchild_pid).to be > 0
+      wait_until { !process_alive?(grandchild_pid) }
+      expect(process_alive?(grandchild_pid)).to be(false)
+    ensure
+      begin
+        Process.kill("KILL", grandchild_pid) if grandchild_pid&.positive?
+      rescue Errno::ESRCH
+        nil
+      end
+      pid_file&.unlink
     end
 
     it "returns error when child writes empty result" do

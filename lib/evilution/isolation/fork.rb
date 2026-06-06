@@ -48,6 +48,7 @@ class Evilution::Isolation::Fork
 
   def fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
     ::Process.fork do
+      isolate_into_own_process_group
       ENV["TMPDIR"] = sandbox_dir
       # Path-relativizing mutations (e.g. File.join(dir, name) -> name) would
       # otherwise write into the parent's CWD (typically the repo root) and
@@ -68,6 +69,21 @@ class Evilution::Isolation::Fork
       write_io.close
       exit!(result[:passed] ? 0 : 1)
     end
+  end
+
+  # EV-2sh8 / GH #1330: make the mutation child its own process-group leader as
+  # its very first act, before it runs test_command (which may fork blocking
+  # grandchildren -- e.g. connection_pool / ractor / thread subject specs).
+  # Grandchildren then inherit this group, so terminate_child can group-kill the
+  # whole subtree on timeout. Without it, a blocking grandchild orphans to init
+  # and survives the rest of the run -- the inner path never SIGKILLs the worker,
+  # so EV-cnx8's outer process-group kill never sweeps it. Done child-side (not
+  # parent-side as in Worker) because the per-mutation timeout fires seconds
+  # later, long after this line has run, so no fork-before-setpgid race exists.
+  def isolate_into_own_process_group
+    ::Process.setpgid(0, 0)
+  rescue SystemCallError
+    nil
   end
 
   def cleanup_resources(read_io, write_io, pid, sandbox_dir)
@@ -216,7 +232,7 @@ class Evilution::Isolation::Fork
   end
 
   def terminate_child(pid)
-    Evilution::ProcessCleanup.safe_kill("TERM", pid)
+    signal_tree("TERM", pid)
     _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
     return if status
 
@@ -224,8 +240,18 @@ class Evilution::Isolation::Fork
     _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
     return if status
 
-    Evilution::ProcessCleanup.safe_kill("KILL", pid)
+    signal_tree("KILL", pid)
     Evilution::ProcessCleanup.safe_wait(pid)
+  end
+
+  # Signal the child's whole process group (-pid) to sweep any grandchildren it
+  # forked, then the bare pid as a fallback for the case where setpgid failed
+  # (no group exists, so the group signal is a harmless Errno::ESRCH). Only the
+  # leader pid is reaped here -- group-killed grandchildren are not our direct
+  # children, so init reaps them once they die.
+  def signal_tree(sig, pid)
+    Evilution::ProcessCleanup.safe_kill(sig, -pid)
+    Evilution::ProcessCleanup.safe_kill(sig, pid)
   end
 
   def classify_status(result)
