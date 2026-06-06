@@ -59,7 +59,7 @@ RSpec.describe "Temp-file mutation integration" do
       $LOAD_PATH.delete(lib_dir)
     end
 
-    xit "never modifies non-LOAD_PATH files during a forked mutation run" do
+    it "never modifies non-LOAD_PATH files during a forked mutation run" do
       integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
       isolator = Evilution::Isolation::Fork.new
 
@@ -83,6 +83,25 @@ RSpec.describe "Temp-file mutation integration" do
       integration.call(mutation)
 
       expect(File.read(source_path)).to eq(original_source)
+    ensure
+      $LOAD_PATH.delete(lib_dir)
+    end
+
+    # EV-dwqw / GH #1343: an in-process integration run must not leak the
+    # RSpec.configuration fields ::RSpec::Core::Runner.run mutates on the shared
+    # singleton (color_mode flipped to :off by --no-color; output_stream swapped
+    # to the run's StringIO) -- otherwise host suite output loses color for every
+    # subsequent example. StateGuard::ConfigurationStreams restores them.
+    it "does not leak RSpec config color_mode/output_stream into the host process" do
+      $LOAD_PATH.unshift(lib_dir)
+      integration = Evilution::Integration::RSpec.new(test_files: [dummy_spec])
+      color_before = RSpec.configuration.instance_variable_get(:@color_mode)
+      out_before = RSpec.configuration.instance_variable_get(:@output_stream)
+
+      integration.call(mutation)
+
+      expect(RSpec.configuration.instance_variable_get(:@color_mode)).to eq(color_before)
+      expect(RSpec.configuration.instance_variable_get(:@output_stream)).to equal(out_before)
     ensure
       $LOAD_PATH.delete(lib_dir)
     end

@@ -7,6 +7,7 @@ require_relative "state_guard/world_sources_by_path"
 require_relative "state_guard/world_filtered_examples"
 require_relative "state_guard/reporter_arrays"
 require_relative "state_guard/example_groups_constants"
+require_relative "state_guard/configuration_streams"
 
 class Evilution::Integration::RSpec::StateGuard
   DEFAULT_STRATEGIES = [
@@ -15,7 +16,8 @@ class Evilution::Integration::RSpec::StateGuard
     WorldSourcesByPath.new,
     WorldFilteredExamples.new,
     ReporterArrays.new,
-    ExampleGroupsConstants.new
+    ExampleGroupsConstants.new,
+    ConfigurationStreams.new
   ].freeze
 
   def initialize(strategies: DEFAULT_STRATEGIES)
