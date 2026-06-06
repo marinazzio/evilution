@@ -113,19 +113,27 @@ RSpec.describe Evilution::Isolation::Fork do
     end
 
     it "cleans up sandbox temp directory after child timeout" do
-      dirs_before = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
+      # Capture THIS call's sandbox (the child's TMPDIR, set by fork_child to the
+      # evilution-run sandbox) via a marker outside the sandbox, then assert that
+      # exact dir is gone. Globbing the shared /tmp for evilution-run* was flaky:
+      # it picked up sandboxes from other examples/stale runs (EV-dlnn).
+      marker = Tempfile.new("sandbox_marker")
+      marker_path = marker.path
+      marker.close
 
       test_command = lambda { |_m|
-        Dir.mktmpdir("evilution")
+        File.write(marker_path, ENV.fetch("TMPDIR", ""))
         sleep 10
         { passed: true }
       }
 
       isolator.call(mutation:, test_command:, timeout: 0.1)
 
-      dirs_after = Dir.glob(File.join(Dir.tmpdir, "evilution-run*"))
-      new_dirs = dirs_after - dirs_before
-      expect(new_dirs).to be_empty
+      sandbox = File.read(marker_path)
+      expect(sandbox).not_to be_empty
+      expect(Dir.exist?(sandbox)).to be false
+    ensure
+      marker&.unlink
     end
 
     it "sends SIGTERM before SIGKILL on timeout" do
