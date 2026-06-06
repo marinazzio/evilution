@@ -148,4 +148,41 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
       end
     end
   end
+
+  # Regression for EV-52hf / GH #1326 (shared TestLoadPath fix): a Test::Unit
+  # test doing `require "test_helper"` (relying on -Itest) must load without
+  # LoadError when run in-process.
+  describe "loading a test that requires a bare test_helper (EV-52hf)" do
+    around do |example|
+      saved = $LOAD_PATH.dup
+      example.run
+    ensure
+      $LOAD_PATH.replace(saved)
+    end
+
+    it "resolves require \"test_helper\" via the test root on $LOAD_PATH" do
+      FileUtils.mkdir_p(File.join(tmpdir, "test", "unit"))
+      helper = File.join(tmpdir, "test", "test_helper.rb")
+      File.write(helper, "EV52HF_TU_HELPER = true\n")
+      path = write_test_file("test/unit/tu_helper_test.rb", <<~RUBY)
+        require "test_helper"
+        require "test-unit"
+        class RunTestsHelperReq < Test::Unit::TestCase
+          def test_ok; assert_equal 1, 1; end
+        end
+      RUBY
+
+      # Anchor the project base at the temp project so the helper's test/ root
+      # is added to $LOAD_PATH (real projects keep test files inside the base).
+      allow(Evilution).to receive(:project_base_dir).and_return(tmpdir)
+      result = nil
+      expect { result = build_integration(test_file: path).send(:run_tests, mutation) }.not_to raise_error
+      expect(result[:error]).to be_nil
+      expect(result[:passed]).to be true
+      expect(defined?(EV52HF_TU_HELPER)).to eq("constant")
+    ensure
+      $LOADED_FEATURES.delete(helper)
+      Object.send(:remove_const, :EV52HF_TU_HELPER) if defined?(EV52HF_TU_HELPER)
+    end
+  end
 end
