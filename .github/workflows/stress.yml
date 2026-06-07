@@ -1,0 +1,42 @@
+name: Stress
+
+# Parallel/isolation stress + load suite (EV-axze). Heavy, slow, opt-in -- never
+# run on push. Weekly guardrail catching regressions in the work queue / fork
+# isolation under load (deadlocks, zombies, FD/memory leaks). Also runnable
+# on demand via the Actions "Run workflow" button.
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  stress:
+    runs-on: ubuntu-24.04
+    name: Stress (parallel/isolation)
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - '3.4.9'
+          - '4.0.2'
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run stress suite
+        run: bundle exec rake stress
+        timeout-minutes: 20
+        env:
+          # GitHub standard runners are 2-4 cores; -j4 oversubscribes safely
+          # without the noise of -j8 on a 2-core box.
+          STRESS_JOBS: '4'
+          STRESS_ITEMS: '10000'
+          STRESS_FORK_MUTS: '300'
+          STRESS_RUN_TIMEOUT: '120'
