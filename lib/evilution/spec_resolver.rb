@@ -3,6 +3,11 @@
 class Evilution::SpecResolver
   STRIPPABLE_PREFIXES = %w[lib/ app/].freeze
   CONTROLLER_PREFIX = "controllers/"
+  # Conventional test subdirectories appended to @test_dir. Real-world gems
+  # frequently park specs under spec/unit or spec/lib (test/unit, test/lib)
+  # rather than mirroring the lib/ tree 1:1 (EV-z7f5 / GH #1325).
+  CONVENTIONAL_SUBDIRS = %w[unit lib].freeze
+  MINITEST_SUFFIX = "_test.rb"
 
   def initialize(test_dir: "spec", test_suffix: "_spec.rb", request_dir: "requests")
     @test_dir = test_dir
@@ -23,7 +28,27 @@ class Evilution::SpecResolver
     Array(source_paths).filter_map { |path| call(path) }.uniq
   end
 
+  # Best-guess candidate for an unresolved source, found by basename glob
+  # rather than the deterministic path mirroring used by #call. Used only to
+  # enrich the "no matching test" hint (EV-z7f5 / GH #1325) — never to pick a
+  # test to run — so a fuzzy substring match is acceptable here. Returns the
+  # shallowest match, or nil when nothing resembles the basename.
+  def suggest(source_path)
+    return nil if source_path.nil? || source_path.empty?
+
+    stem = File.basename(normalize_path(source_path), ".rb")
+    return nil if stem.empty?
+
+    suggestion_globs(stem).flat_map { |glob| Dir.glob(glob) }.uniq.min_by(&:length)
+  end
+
   private
+
+  def suggestion_globs(stem)
+    globs = ["#{@test_dir}/**/*#{stem}*#{@test_suffix}"]
+    globs << "#{@test_dir}/**/test_#{stem}.rb" if @test_suffix == MINITEST_SUFFIX
+    globs
+  end
 
   # Existence check that succeeds against the current CWD. When the caller
   # is an isolated worker that chdir'd into a per-mutation sandbox (Evilution
@@ -52,18 +77,55 @@ class Evilution::SpecResolver
   def candidate_test_paths(source_path)
     base = source_path.sub(/\.rb\z/, @test_suffix)
     prefix = STRIPPABLE_PREFIXES.find { |p| source_path.start_with?(p) }
+    stripped = prefix ? base.delete_prefix(prefix) : base
 
-    candidates = if prefix
-                   stripped = base.delete_prefix(prefix)
-                   request_test = controller_to_request_test(stripped)
-                   [request_test, "#{@test_dir}/#{stripped}", "#{@test_dir}/#{base}"].compact
-                 else
-                   ["#{@test_dir}/#{base}"]
-                 end
+    primary = mirror_candidates(stripped)
+    primary.unshift(controller_to_request_test(stripped)) if prefix
+    primary.compact!
 
-    fallbacks = candidates.flat_map { |c| parent_fallback_candidates(c) }.uniq
+    fallbacks = primary.flat_map { |c| parent_fallback_candidates(c) }
 
-    candidates + fallbacks
+    (primary + fallbacks + prefix_convention_candidates(stripped)).uniq
+  end
+
+  # Conventional roots that may hold tests: the mirrored root plus the common
+  # spec/unit, spec/lib (test/unit, test/lib) buckets.
+  def roots
+    [@test_dir, *CONVENTIONAL_SUBDIRS.map { |d| "#{@test_dir}/#{d}" }]
+  end
+
+  # Cross every conventional root with every layout variant of the stripped
+  # source path: the full mirror, the mirror with the leading gem-namespace
+  # dir dropped, and the bare basename. Full mirrors rank above dropped ones
+  # so a 1:1 layout always wins when present.
+  def mirror_candidates(stripped)
+    mirror_variants(stripped).flat_map do |variant|
+      roots.map { |root| "#{root}/#{variant}" }
+    end
+  end
+
+  def mirror_variants(stripped)
+    segments = stripped.split("/")
+    variants = [stripped]
+    variants << segments[1..].join("/") if segments.length > 1
+    variants << segments.last if segments.length > 2
+    variants.uniq
+  end
+
+  # Test::Unit / minitest gems frequently name files with a `test_` PREFIX
+  # (test/test_connection_pool.rb) instead of the mirrored `_test.rb` suffix.
+  # Only meaningful when resolving against the minitest suffix.
+  def prefix_convention_candidates(stripped)
+    return [] unless @test_suffix == MINITEST_SUFFIX
+
+    mirror_variants(stripped).flat_map do |variant|
+      dir, _, file = variant.rpartition("/")
+      name = file.delete_suffix(@test_suffix)
+      next [] if name.empty?
+
+      relative = dir.empty? ? "test_#{name}.rb" : "#{dir}/test_#{name}.rb"
+      roots.map { |root| "#{root}/#{relative}" }
+    end
   end
 
   def controller_to_request_test(stripped_path)

@@ -51,6 +51,7 @@ RSpec.describe Evilution::Baseline do
 
     it "treats unresolvable spec files as fallback directory" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
       allow(baseline).to receive(:run_spec_file).with("spec").and_return(false)
 
       result = baseline.call([subject1])
@@ -63,6 +64,7 @@ RSpec.describe Evilution::Baseline do
         spec_resolver: spec_resolver, timeout: 5, fallback_dir: "test"
       )
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
       allow(minitest_baseline).to receive(:run_spec_file).with("test").and_return(false)
 
       result = minitest_baseline.call([subject1])
@@ -72,10 +74,27 @@ RSpec.describe Evilution::Baseline do
 
     it "warns when falling back to full test suite" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
       allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
 
       expect { baseline.call([subject1]) }
-        .to output(%r{no matching test.*lib/user\.rb.*--spec}i).to_stderr
+        .to output(
+          %r{No matching test found for lib/user\.rb, running full suite\. Use --spec to specify the test file\.}
+        ).to_stderr
+    end
+
+    # EV-z7f5 / GH #1325 opt 2: name a likely candidate in the hint when one
+    # is found by basename so the user has a file to pass to --spec.
+    it "names a suggested candidate in the fallback warning when one is found" do
+      allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
+      allow(spec_resolver).to receive(:suggest).with("lib/user.rb")
+                                               .and_return("spec/unit/user_spec.rb")
+      allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
+
+      expect { baseline.call([subject1]) }
+        .to output(
+          %r{No matching test found for lib/user\.rb, running full suite\. Pass --spec spec/unit/user_spec\.rb \(best guess\)}
+        ).to_stderr
     end
 
     context "with explicit test_files (from --spec flag)" do

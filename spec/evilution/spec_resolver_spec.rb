@@ -210,6 +210,91 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
+    # EV-z7f5 / GH #1325: auto-resolution must find specs in the common
+    # real-world layouts that do NOT mirror the lib/ path 1:1 — spec/unit,
+    # spec/lib with the gem-namespace dir dropped, and basename-only matches.
+    context "non-mirrored real-world layouts (EV-z7f5)" do
+      it "resolves spec/unit/<basename> (gem-namespace dropped), e.g. webmock" do
+        create_file("spec/unit/request_pattern_spec.rb")
+
+        expect(resolver.call("lib/webmock/request_pattern.rb"))
+          .to eq("spec/unit/request_pattern_spec.rb")
+      end
+
+      it "resolves spec/lib/<namespace-dropped>, e.g. doorkeeper" do
+        create_file("spec/lib/oauth/client_spec.rb")
+
+        expect(resolver.call("lib/doorkeeper/oauth/client.rb"))
+          .to eq("spec/lib/oauth/client_spec.rb")
+      end
+
+      it "drops only the leading gem-namespace dir for nested paths, e.g. concurrent-ruby" do
+        create_file("spec/concurrent/utility/processor_counter_spec.rb")
+
+        expect(resolver.call("lib/concurrent-ruby/concurrent/utility/processor_counter.rb"))
+          .to eq("spec/concurrent/utility/processor_counter_spec.rb")
+      end
+
+      it "prefers the full path mirror over the namespace-dropped match" do
+        create_file("spec/webmock/request_pattern_spec.rb")
+        create_file("spec/unit/request_pattern_spec.rb")
+
+        expect(resolver.call("lib/webmock/request_pattern.rb"))
+          .to eq("spec/webmock/request_pattern_spec.rb")
+      end
+
+      it "does not match a basename collision when no convention dir holds it" do
+        create_file("spec/unrelated/request_pattern_spec.rb")
+
+        expect(resolver.call("lib/webmock/request_pattern.rb")).to be_nil
+      end
+    end
+
+    # EV-z7f5 / GH #1325 opt 2: when exact resolution fails, #suggest offers a
+    # best-guess candidate by basename glob so the warning can name a file to
+    # pass to --spec instead of a bare "use --spec".
+    describe "#suggest" do
+      it "finds a spec by basename anywhere under the test dir" do
+        create_file("spec/unusual/place/bar_spec.rb")
+
+        expect(resolver.suggest("lib/foo/bar.rb")).to eq("spec/unusual/place/bar_spec.rb")
+      end
+
+      it "matches a substring basename (partial name)" do
+        create_file("spec/weird/my_bar_thing_spec.rb")
+
+        expect(resolver.suggest("lib/foo/my_bar_thing.rb")).to eq("spec/weird/my_bar_thing_spec.rb")
+      end
+
+      it "prefers the shallowest candidate when several match" do
+        create_file("spec/bar_spec.rb")
+        create_file("spec/a/b/bar_spec.rb")
+
+        expect(resolver.suggest("lib/foo/bar.rb")).to eq("spec/bar_spec.rb")
+      end
+
+      it "returns nil when nothing resembles the basename" do
+        create_file("spec/unrelated_spec.rb")
+
+        expect(resolver.suggest("lib/foo/bar.rb")).to be_nil
+      end
+
+      it "returns nil for blank input" do
+        expect(resolver.suggest(nil)).to be_nil
+        expect(resolver.suggest("")).to be_nil
+      end
+
+      context "with the minitest suffix" do
+        subject(:resolver) { described_class.new(test_dir: "test", test_suffix: "_test.rb") }
+
+        it "suggests the test_<name>.rb prefix convention" do
+          create_file("test/test_connection_pool.rb")
+
+          expect(resolver.suggest("lib/connection_pool.rb")).to eq("test/test_connection_pool.rb")
+        end
+      end
+    end
+
     context "path normalization" do
       it "strips leading ./ from paths" do
         create_file("spec/foo/bar_spec.rb")
@@ -275,6 +360,21 @@ RSpec.describe Evilution::SpecResolver do
         create_file("test/src/foo_test.rb")
 
         expect(resolver.call("src/foo.rb")).to eq("test/src/foo_test.rb")
+      end
+
+      # EV-z7f5 / GH #1325: Test::Unit/minitest gems commonly use a `test_`
+      # filename PREFIX (test_foo.rb) and a test/unit/ root rather than a
+      # mirrored `_test.rb` suffix.
+      it "resolves the test_<name>.rb prefix convention, e.g. connection_pool" do
+        create_file("test/test_connection_pool.rb")
+
+        expect(resolver.call("lib/connection_pool.rb")).to eq("test/test_connection_pool.rb")
+      end
+
+      it "resolves test/unit/<basename> layout" do
+        create_file("test/unit/bar_test.rb")
+
+        expect(resolver.call("lib/foo/bar.rb")).to eq("test/unit/bar_test.rb")
       end
     end
 
