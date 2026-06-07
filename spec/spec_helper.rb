@@ -13,4 +13,9 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  # Stress/load specs spawn many real worker processes and run for a long time.
+  # They are excluded from the default run and only execute when RUN_STRESS is
+  # set (via `rake stress`), mirroring the opt-in memory:check harness.
+  config.filter_run_excluding(:stress) unless ENV["RUN_STRESS"]
 end
