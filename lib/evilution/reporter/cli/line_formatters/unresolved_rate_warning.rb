@@ -13,6 +13,7 @@ require_relative "../line_formatters"
 # Sibling of ErrorRateWarning (EV-nrgw / GH #1168).
 class Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning
   DEFAULT_THRESHOLD = 0.25
+  HINT = "Pass --spec to point evilution at the test file(s)."
 
   def initialize(threshold: DEFAULT_THRESHOLD)
     @threshold = threshold
@@ -25,16 +26,25 @@ class Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning
     rate = summary.unresolved.to_f / summary.total
     return nil if rate <= @threshold
 
-    pct = (rate * 100).round(1)
     fraction = "#{summary.unresolved}/#{summary.total}"
+    pct = (rate * 100).round(1)
+    warning(summary, fraction, pct)
+  end
 
-    if summary.score_denominator.zero?
-      "! No matching tests resolved: #{fraction} mutations unresolved — " \
-        "no mutations were measured, so the score is not meaningful. " \
-        "Pass --spec to point evilution at the test file(s)."
+  private
+
+  def warning(summary, fraction, pct)
+    if summary.unresolved == summary.total
+      "! No matching tests resolved: all #{fraction} mutations unresolved — " \
+        "no mutations were measured, so the score is not meaningful. #{HINT}"
+    elsif summary.score_denominator.zero?
+      # Denominator can also hit zero with a mix of unresolved + errors /
+      # neutral / equivalent, so do not attribute it solely to missing tests.
+      "! No mutations were measured (score not meaningful): " \
+        "#{fraction} (#{pct}%) mutations were unresolved. #{HINT}"
     else
       "! High unresolved rate: #{fraction} (#{pct}%) mutations had no matching " \
-        "test — score may be unreliable. Pass --spec to point evilution at the test file(s)."
+        "test — score may be unreliable. #{HINT}"
     end
   end
 end

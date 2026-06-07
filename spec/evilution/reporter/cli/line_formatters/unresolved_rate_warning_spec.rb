@@ -45,10 +45,25 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning d
       summary = double("s", total: 1250, unresolved: 1250, score_denominator: 0)
       formatted = described_class.new.format(summary)
 
+      expect(formatted).to include("No matching tests resolved")
       expect(formatted).to include("no mutations were measured")
-      expect(formatted).to include("1250/1250")
+      expect(formatted).to include("all 1250/1250")
       expect(formatted).to include("--spec")
       expect(formatted).not_to include("0/0")
+    end
+
+    # A zero denominator can also arise from a mix of unresolved + errors (etc.),
+    # not only an all-unresolved run. The wording must not claim every mutation
+    # was a missing test in that case.
+    it "does not attribute a mixed denominator-zero run solely to missing tests" do
+      summary = double("s", total: 10, unresolved: 6, score_denominator: 0)
+      formatted = described_class.new.format(summary)
+
+      expect(formatted).to include("No mutations were measured")
+      expect(formatted).to include("6/10")
+      expect(formatted).to include("--spec")
+      expect(formatted).not_to include("No matching tests resolved")
+      expect(formatted).not_to match(/\ball\b/)
     end
 
     it "respects a custom threshold" do

@@ -260,10 +260,11 @@ RSpec.describe Evilution::SpecResolver do
         expect(resolver.suggest("lib/foo/bar.rb")).to eq("spec/unusual/place/bar_spec.rb")
       end
 
-      it "matches a substring basename (partial name)" do
+      it "matches when the source basename is a substring of the spec filename" do
         create_file("spec/weird/my_bar_thing_spec.rb")
 
-        expect(resolver.suggest("lib/foo/my_bar_thing.rb")).to eq("spec/weird/my_bar_thing_spec.rb")
+        # source basename "bar" is a substring of "my_bar_thing"
+        expect(resolver.suggest("lib/foo/bar.rb")).to eq("spec/weird/my_bar_thing_spec.rb")
       end
 
       it "prefers the shallowest candidate when several match" do
@@ -499,6 +500,24 @@ RSpec.describe Evilution::SpecResolver do
       create_file(stripped_candidate)
 
       expect(resolver.call(absolute_source)).to eq(stripped_candidate)
+    end
+
+    # #suggest must honour the same PROJECT_ROOT contract as #call: when an
+    # isolated worker is chdir'd into a sandbox, glob against PROJECT_ROOT so
+    # the best-guess hint still finds real project files (EV-z7f5 / GH #1325).
+    it "globs PROJECT_ROOT for suggestions when the flag is set and CWD is empty" do
+      probe_spec = "spec/evilution/spec_resolver_spec.rb"
+      skip "PROJECT_ROOT probe missing" unless File.exist?(File.join(Evilution::PROJECT_ROOT, probe_spec))
+
+      Evilution.in_isolated_worker!
+
+      # CWD is the per-example mktmpdir (no spec files); the match lives at
+      # PROJECT_ROOT and is only reachable via the base: PROJECT_ROOT glob.
+      expect(resolver.suggest("lib/evilution/spec_resolver.rb")).to eq(probe_spec)
+    end
+
+    it "finds no suggestion against an empty CWD when the flag is unset" do
+      expect(resolver.suggest("lib/evilution/spec_resolver.rb")).to be_nil
     end
   end
 end

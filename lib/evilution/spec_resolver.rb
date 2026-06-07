@@ -39,10 +39,20 @@ class Evilution::SpecResolver
     stem = File.basename(normalize_path(source_path), ".rb")
     return nil if stem.empty?
 
-    suggestion_globs(stem).flat_map { |glob| Dir.glob(glob) }.uniq.min_by(&:length)
+    suggestion_globs(stem).flat_map { |glob| glob_relative(glob) }.uniq.min_by(&:length)
   end
 
   private
+
+  # Glob for project-relative paths. Mirrors #call's project_relative_exists?
+  # contract: when run inside an isolated worker chdir'd into a sandbox, glob
+  # against PROJECT_ROOT so suggestions still find real project files. base:
+  # already yields paths relative to the root, matching the CWD-glob shape.
+  def glob_relative(glob)
+    return Dir.glob(glob) unless Evilution.in_isolated_worker?
+
+    Dir.glob(glob, base: Evilution::PROJECT_ROOT)
+  end
 
   def suggestion_globs(stem)
     globs = ["#{@test_dir}/**/*#{stem}*#{@test_suffix}"]
