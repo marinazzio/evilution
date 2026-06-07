@@ -21,10 +21,17 @@ require "evilution/mutator/registry"
 # (sets RUN_STRESS) or `RUN_STRESS=1 rspec spec/evilution/parallel/stress_spec.rb`.
 # Scale knobs are ENV-tunable for slower CI hardware (see StressParams).
 module StressParams
-  JOBS        = Integer(ENV.fetch("STRESS_JOBS", "8"))
-  ITEMS       = Integer(ENV.fetch("STRESS_ITEMS", "10000"))
-  FORK_MUTS   = Integer(ENV.fetch("STRESS_FORK_MUTS", "300"))
-  RUN_TIMEOUT = Integer(ENV.fetch("STRESS_RUN_TIMEOUT", "120"))
+  # Parse at load time but stay resilient: an invalid override (e.g.
+  # STRESS_JOBS=foo) must not raise while the default suite is loading these
+  # examples only to filter them out. Fall back to the default instead.
+  def self.int(key, default)
+    Integer(ENV.fetch(key, default.to_s), exception: false) || default
+  end
+
+  JOBS        = int("STRESS_JOBS", 8)
+  ITEMS       = int("STRESS_ITEMS", 10_000)
+  FORK_MUTS   = int("STRESS_FORK_MUTS", 300)
+  RUN_TIMEOUT = int("STRESS_RUN_TIMEOUT", 120)
 end
 
 RSpec.describe "parallel/isolation stress", :stress do
@@ -42,12 +49,21 @@ RSpec.describe "parallel/isolation stress", :stress do
     Dir.children("/proc/#{Process.pid}/fd").size
   end
 
-  # Every worker the queue ever ran (live + retired) must be reaped: a surviving
-  # entry means a zombie or a process that outlived the run.
+  # Every worker the queue ever ran (live + retired) must be already reaped.
+  # WNOHANG keeps the check non-blocking: a still-alive worker returns nil (the
+  # run never reaped it) and a zombie returns its pid (exited, unreaped) -- both
+  # fail fast, whereas a blocking Process.wait would hang on a live child until
+  # the Actions step timeout. ECHILD is the healthy case: already reaped.
   def expect_no_zombies(pool_or_queue)
     pool_or_queue.worker_stats.each do |stat|
-      expect { Process.wait(stat.pid) }
-        .to raise_error(Errno::ECHILD), "worker pid #{stat.pid} left unreaped (zombie)"
+      reaped =
+        begin
+          Process.waitpid(stat.pid, Process::WNOHANG)
+        rescue Errno::ECHILD
+          :already_reaped
+        end
+      expect(reaped).to eq(:already_reaped),
+                        "worker pid #{stat.pid} left unreaped (still alive or zombie)"
     end
   end
 
@@ -76,8 +92,9 @@ RSpec.describe "parallel/isolation stress", :stress do
     it "does not leak FDs across repeated high-load maps" do
       skip "requires /proc/<pid>/fd" unless proc_fd_supported?
 
-      # Warm up so first-run lazy allocations don't count as a leak.
-      wq.new(size: jobs).map((1..1000).to_a) { |n| n }
+      # Warm up so first-run lazy allocations don't count as a leak. Timeout-
+      # wrapped like the measured runs so an early deadlock fails fast.
+      Timeout.timeout(run_timeout) { wq.new(size: jobs).map((1..1000).to_a) { |n| n } }
       GC.start
       before = open_fd_count
 
@@ -159,7 +176,7 @@ RSpec.describe "parallel/isolation stress", :stress do
 
       run_one = -> { wq.new(size: jobs).map((1..500).to_a) { |n| n * 2 } }
 
-      run_one.call # warm up before baseline
+      Timeout.timeout(run_timeout) { run_one.call } # warm up before baseline
       GC.start
       GC.compact
       before = Evilution::Memory.rss_kb
