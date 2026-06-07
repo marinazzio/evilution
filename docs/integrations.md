@@ -76,6 +76,21 @@ For controllers, the resolver tries the request-spec / integration-test
 location first, then falls back to the controller-spec / controller-test
 location.
 
+### Non-mirrored layouts
+
+Many projects do not mirror the `lib/` tree 1:1 — they park suites under a
+`unit` or `lib` bucket (`spec/unit/foo/bar_spec.rb`, `test/unit/foo/bar_test.rb`,
+`spec/lib/...`, `test/lib/...`). On top of the deterministic mirror above, the
+resolver also tries these conventional sub-directories plus parent-directory
+fallbacks, ranking the full mirror highest and bare-basename guesses lowest. So
+a `spec/unit`-style layout resolves out of the box without `--spec`.
+
+If mutations still cannot be paired with a spec, the run prints an
+**unresolved-rate warning** (and an "unresolved" section in HTML output) with a
+best-guess candidate per source file — so a high unresolved count reads as a
+resolution problem to fix (pass `--spec`, or adjust the layout) rather than a
+silently meaningless 0% score.
+
 ## Suggest-tests caveat
 
 The `--suggest-tests` mode emits ready-to-paste test snippets for survived
