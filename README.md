@@ -375,7 +375,7 @@ Compatibility policy for the `1.x` gem line:
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
 
-Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). They are reported separately so you can act on them (add a test, adjust test naming, or opt in to the full-suite fallback) without inflating the error count.
+Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). The resolver searches both the `lib/`-mirrored path and common non-mirrored buckets (`spec/unit`, `spec/lib`, `test/unit`, `test/lib`), so a high unresolved rate usually means a genuinely missing or unconventionally-placed test; a run that leaves many mutations unresolved prints an unresolved-rate warning with a best-guess spec path per source file. They are reported separately so you can act on them (add a test, adjust test naming, pass `--spec`, or opt in to the full-suite fallback) without inflating the error count.
 
 ## Mutation Operators (74 total)
 

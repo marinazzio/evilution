@@ -130,6 +130,21 @@ On by default; toggle with `--[no-]canary` or `canary: true|false` in
 `.evilution.yml`. The canary mirrors the configured `--isolation` so
 isolation-specific defects are caught too.
 
+## Parallel run resilience (`--jobs N`)
+
+Under `--jobs N` a stuck or crashed worker no longer takes the whole run down.
+The work-queue dispatcher tracks a per-worker deadline: if one mutation blocks
+past its timeout (e.g. a mutation that wedges a child in `ConditionVariable#wait`)
+or a worker exits unexpectedly, only that worker is killed and recycled, its
+single in-flight mutation is recorded as `:timeout` / `:error`, and the run
+continues with the remaining work. A single pathological mutation costs you one
+result, not the entire run.
+
+Each worker is also its own process-group leader, so killing a worker reaps the
+mutation subprocess and any grandchildren it spawned rather than orphaning them,
+and a terminal interrupt (Ctrl-C) is forwarded to every worker group — an
+aborted parallel run leaves no stray worker or mutation processes behind.
+
 ## Related flags
 
 - `--timeout N` sets the per-mutation time limit. Under `fork`, this drives
