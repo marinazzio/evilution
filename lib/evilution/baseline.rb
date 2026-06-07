@@ -113,11 +113,18 @@ class Evilution::Baseline
     warned = Set.new
     subjects.map do |s|
       resolved = @spec_resolver.call(s.file_path)
-      if resolved.nil? && warned.add?(s.file_path)
-        warn "[evilution] No matching test found for #{s.file_path}, running full suite. " \
-             "Use --spec to specify the test file."
-      end
+      warn_no_matching_test(s.file_path) if resolved.nil? && warned.add?(s.file_path)
       resolved || @fallback_dir
     end.uniq
+  end
+
+  def warn_no_matching_test(file_path)
+    suggestion = @spec_resolver.suggest(file_path)
+    hint = if suggestion
+             "Pass --spec #{suggestion} (best guess) or the correct test file."
+           else
+             "Use --spec to specify the test file."
+           end
+    warn "[evilution] No matching test found for #{file_path}, running full suite. #{hint}"
   end
 end
