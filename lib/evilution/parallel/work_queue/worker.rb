@@ -3,6 +3,7 @@
 require_relative "../work_queue"
 require_relative "../../child_output"
 require_relative "../../process_supervisor"
+require_relative "../../temp_dir_tracker"
 require_relative "channel"
 require_relative "channel/frame"
 
@@ -28,6 +29,7 @@ class Evilution::Parallel::WorkQueue::Worker
     handle = supervisor.spawn(isolate_in_child: false) do
       cmd_write.close
       res_read.close
+      install_child_signal_handlers
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
       Evilution::ChildOutput.redirect!
       Loop.run(cmd_read, res_write, hooks: hooks, &block)
@@ -36,6 +38,24 @@ class Evilution::Parallel::WorkQueue::Worker
     cmd_read.close
     res_write.close
     new(handle:, supervisor:, cmd_write:, res_read:, worker_index:)
+  end
+
+  # EV-7a91: a worker is the parent of the inner per-mutation Fork children it
+  # spawns, and those children are their own process-group leaders (EV-2sh8), so
+  # the Runner's group-kill of the worker never reaches them. On a terminal
+  # INT/TERM the worker must therefore tear down AND reap the inner children it
+  # owns before it dies, or they survive as zombies (their parent gone) until an
+  # ancestor exits. cleanup_all clears any per-mutation sandbox dirs the inner
+  # children registered in this worker's TempDirTracker.
+  def self.install_child_signal_handlers
+    %w[INT TERM].each do |sig|
+      Signal.trap(sig) do
+        Evilution::TempDirTracker.cleanup_all
+        Evilution::ProcessSupervisor.kill_and_reap_all
+        Signal.trap(sig, "DEFAULT")
+        Process.kill(sig, Process.pid)
+      end
+    end
   end
 
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
