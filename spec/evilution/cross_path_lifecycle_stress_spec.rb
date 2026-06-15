@@ -25,7 +25,10 @@ require "evilution/parallel/work_queue/worker/loop"
 # .kill_and_reap_all, EV-7a91). The reaping mechanism itself is covered
 # deterministically by the ProcessSupervisor unit specs; this spec asserts the
 # integrated guarantee: after a real interrupt no pid survives on either path.
-RSpec.describe "Cross-path lifecycle under interrupt" do
+# Gated on /proc: the spec asserts the absence of running/zombie pids by reading
+# /proc/<pid>, so it only runs where /proc is mounted (Linux). Elsewhere the
+# pid-state checks are meaningless and would fail spuriously.
+RSpec.describe "Cross-path lifecycle under interrupt", if: File.exist?("/proc/self/status") do
   # /proc/<pid> exists while a process is running OR a zombie, and is gone only
   # once the pid is fully reaped -- so a surviving zombie still counts as present.
   def process_exists?(pid)

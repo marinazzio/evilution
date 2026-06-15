@@ -130,7 +130,10 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
   end
 
-  describe ".kill_and_reap_all" do
+  # Distinguishing a reaped pid from a zombie needs /proc/<pid>/stat, so gate
+  # these on a platform that exposes it (Linux). Elsewhere process_running?
+  # cannot tell the two apart and the assertions would be vacuous.
+  describe ".kill_and_reap_all", if: File.exist?("/proc/self/status") do
     subject(:supervisor) { described_class.new }
 
     it "kills every registered child, reaps the leaders, and empties the registry" do
