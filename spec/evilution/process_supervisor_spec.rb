@@ -144,6 +144,59 @@ RSpec.describe Evilution::ProcessSupervisor do
       end
     end
 
+    it "isolates the child into its own group from the child side by default" do
+      # Neutralize the parent-side setpgid so only child-side isolation can
+      # make the child a group leader.
+      allow(supervisor).to receive(:isolate_child)
+      reader, writer = IO.pipe
+      h = supervisor.spawn do
+        writer.write(Process.getpgrp.to_s)
+        writer.close
+        sleep 60
+      end
+      begin
+        writer.close
+        expect(Integer(reader.read)).to eq(h.pid)
+      ensure
+        reader.close
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
+
+    it "leaves the child in the parent group when isolate_in_child is false" do
+      # Neutralize parent-side setpgid too, so the child can only be isolated if
+      # it self-isolates -- which it must not when isolate_in_child is false.
+      allow(supervisor).to receive(:isolate_child)
+      reader, writer = IO.pipe
+      h = supervisor.spawn(isolate_in_child: false) do
+        writer.write(Process.getpgrp.to_s)
+        writer.close
+        sleep 60
+      end
+      begin
+        writer.close
+        child_pgrp = Integer(reader.read)
+        expect(child_pgrp).to eq(Process.getpgrp)
+        expect(child_pgrp).not_to eq(h.pid)
+      ensure
+        reader.close
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
+
+    it "registers the handle before isolating the child (no leader-but-unregistered window)" do
+      registry_size_at_isolate = nil
+      allow(supervisor).to receive(:isolate_child) do |_pid|
+        registry_size_at_isolate = described_class.registry.size
+      end
+      h = supervisor.spawn(isolate_in_child: false) { sleep 60 }
+      begin
+        expect(registry_size_at_isolate).to eq(1)
+      ensure
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
+
     it "registers the sandbox dir with TempDirTracker" do
       Dir.mktmpdir("supervisor-spawn") do |dir|
         sandbox = File.join(dir, "box")

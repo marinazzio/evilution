@@ -4,18 +4,24 @@ require "spec_helper"
 require "timeout"
 require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
-require "evilution/parallel/work_queue/worker_registry"
+require "evilution/process_supervisor"
 
 RSpec.describe Evilution::Parallel::WorkQueue::Worker do
-  let(:registry) { Evilution::Parallel::WorkQueue::WorkerRegistry }
-
+  # EV-dg69: the worker lifecycle registry is now owned by ProcessSupervisor.
   around do |example|
-    snapshot = Evilution::Parallel::WorkQueue::WorkerRegistry.pgids
-    snapshot.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(pgid) }
+    snapshot = Evilution::ProcessSupervisor.registry
+    snapshot.each { |h| Evilution::ProcessSupervisor.unregister(h) }
     example.run
-    Evilution::Parallel::WorkQueue::WorkerRegistry.pgids.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(pgid) }
-    snapshot.each { |pgid| Evilution::Parallel::WorkQueue::WorkerRegistry.register(pgid) }
+    Evilution::ProcessSupervisor.registry.each { |h| Evilution::ProcessSupervisor.unregister(h) }
+    snapshot.each { |h| Evilution::ProcessSupervisor.register(h) }
   end
+
+  # The trap reaches a worker only if its pid is present in the supervisor's
+  # signal-safe registry snapshot.
+  def registered_pids
+    Evilution::ProcessSupervisor.registry.map(&:pid)
+  end
+
   def process_alive?(pid)
     Process.kill(0, pid)
     true
@@ -295,11 +301,11 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
     end
   end
 
-  describe "WorkerRegistry integration" do
-    it "registers the worker pgid on spawn" do
+  describe "ProcessSupervisor registry integration" do
+    it "registers the worker pid on spawn" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
       begin
-        expect(registry.pgids).to include(worker.pid)
+        expect(registered_pids).to include(worker.pid)
       ensure
         worker.shutdown
         worker.close_pipes
@@ -307,29 +313,31 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       end
     end
 
-    it "deregisters the worker pgid on reap" do
+    it "deregisters the worker pid on reap" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
       worker.shutdown
       worker.close_pipes
       worker.reap
-      expect(registry.pgids).not_to include(worker.pid)
+      expect(registered_pids).not_to include(worker.pid)
     end
 
-    it "deregisters the worker pgid on retire" do
+    it "deregisters the worker pid on retire" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
       worker.retire
-      expect(registry.pgids).not_to include(worker.pid)
+      expect(registered_pids).not_to include(worker.pid)
     end
 
-    it "registers the worker pgid before isolating it (no leader-but-unregistered window)" do
-      # The trap forwards only to registered pgids; registering before setpgid
-      # guarantees a worker is never its own group leader while absent from the
-      # registry. Proven by registration happening even if isolation is a no-op.
-      allow(described_class).to receive(:isolate_process_group)
-      worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x }
+    it "spawns the worker with parent-side isolation so it is registered before becoming a group leader" do
+      # EV-jwao: the worker must never be its own group leader while absent from
+      # the registry. Worker.spawn delegates to ProcessSupervisor#spawn with
+      # isolate_in_child: false, so the child stays in the parent group until
+      # the supervisor has registered it and run the parent-side setpgid.
+      supervisor = Evilution::ProcessSupervisor.new
+      allow(supervisor).to receive(:spawn).and_call_original
+      worker = described_class.spawn(worker_index: 0, hooks: nil, supervisor: supervisor) { |x| x }
       begin
-        expect(registry.pgids).to include(worker.pid)
-        expect(described_class).to have_received(:isolate_process_group).with(worker.pid)
+        expect(supervisor).to have_received(:spawn).with(isolate_in_child: false)
+        expect(registered_pids).to include(worker.pid)
       ensure
         worker.shutdown
         worker.close_pipes

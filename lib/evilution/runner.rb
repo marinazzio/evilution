@@ -182,7 +182,8 @@ class Evilution::Runner
       # terminal Ctrl-C reaches only the parent's group. Forward to each worker
       # group here -- the parent's fatal-signal death skips work_queue#map's
       # `ensure cleanup_workers`, so this trap is the reliable forwarding hook.
-      Evilution::Parallel::WorkQueue::WorkerRegistry.signal_all(sig)
+      # EV-dg69: the signal-safe registry is now owned by ProcessSupervisor.
+      Evilution::ProcessSupervisor.signal_all(sig)
 
       case prev_handler
       when Proc, Method
@@ -231,7 +232,7 @@ require_relative "result/summary"
 require_relative "baseline"
 require_relative "cache"
 require_relative "parallel/pool"
-require_relative "parallel/work_queue/worker_registry"
+require_relative "process_supervisor"
 require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"
