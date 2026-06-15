@@ -54,6 +54,54 @@ class Evilution::ProcessSupervisor
         nil
       end
     end
+
+    # Drop every inherited entry so a freshly forked child starts owning
+    # nothing. A child inherits a COW copy of this registry, but the handles in
+    # it belong to the PARENT (e.g. sibling workers); if the child later
+    # signalled or reaped them -- via signal_all / kill_and_reap_all in its own
+    # signal handler -- it would tear down processes it never spawned. The child
+    # re-registers only what it spawns itself.
+    def reset_for_child!
+      @registry = [].freeze
+    end
+
+    # Trap-safe teardown of every registered child: SIGKILL each process group
+    # (sweeping grandchildren) and the bare leader pid, then reap the leaders so
+    # they cannot zombie, and clear the registry. Reads the COW snapshot once --
+    # no Mutex, safe from a signal handler.
+    #
+    # EV-7a91: a process about to die on a fatal signal must not leave the
+    # children it OWNS behind. The Runner's group-kill reaches only the worker
+    # groups; the inner per-mutation children left those groups (setpgid, EV-2sh8)
+    # and live in the worker's own registry, so only the worker -- their parent --
+    # can kill AND reap them before it dies. Without the reap they survive as
+    # zombies until some ancestor exits and init collects them, which never comes
+    # when evilution runs embedded in a long-lived host process.
+    def kill_and_reap_all
+      snapshot = @registry
+      snapshot.each do |handle|
+        kill_tolerant("KILL", -handle.pgid)
+        kill_tolerant("KILL", handle.pid)
+      end
+      # Reap only after every group has been signalled, so a slow-to-die child
+      # never delays killing the others' subtrees.
+      snapshot.each { |handle| reap_tolerant(handle.pid) } # rubocop:disable Style/CombinableLoops
+      @registry = (@registry - snapshot).freeze
+    end
+
+    private
+
+    def kill_tolerant(sig, target)
+      Process.kill(sig, target)
+    rescue Errno::ESRCH
+      nil
+    end
+
+    def reap_tolerant(pid)
+      Process.waitpid(pid)
+    rescue Errno::ECHILD
+      nil
+    end
   end
 
   # Fork a child that becomes its own process-group leader and runs the block,
@@ -72,6 +120,7 @@ class Evilution::ProcessSupervisor
   # terminal signal directly) until the registry already lists it.
   def spawn(sandbox_dir: nil, fds: [], isolate_in_child: true)
     pid = ::Process.fork do
+      self.class.reset_for_child!
       isolate_self if isolate_in_child
       yield
     end

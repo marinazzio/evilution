@@ -31,6 +31,16 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
   end
 
+  # True only while the process is actually scheduled/running -- a reaped pid is
+  # gone and an unreaped one is a zombie (state "Z"). kill(0) can't tell a
+  # zombie from a live process, so read the proc state directly.
+  def process_running?(pid)
+    state = File.read("/proc/#{pid}/stat").split(") ").last.split.first
+    state != "Z"
+  rescue Errno::ENOENT, Errno::ESRCH
+    false
+  end
+
   def handle(pid: 4242, pgid: 4242, fds: [], sandbox_dir: nil)
     described_class::Handle.new(pid: pid, pgid: pgid, fds: fds, sandbox_dir: sandbox_dir)
   end
@@ -120,6 +130,59 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
   end
 
+  describe ".kill_and_reap_all" do
+    subject(:supervisor) { described_class.new }
+
+    it "kills every registered child, reaps the leaders, and empties the registry" do
+      handles = Array.new(2) { supervisor.spawn { sleep 60 } }
+      pids = handles.map(&:pid)
+
+      described_class.kill_and_reap_all
+
+      # Reaped, not just killed: a zombie would still read from /proc.
+      pids.each do |pid|
+        expect(process_running?(pid)).to be(false)
+        expect(process_alive?(pid)).to be(false)
+      end
+      expect(described_class.registry).to eq([])
+    end
+
+    it "sweeps a grandchild in a registered child's process group" do
+      reader, writer = IO.pipe
+      supervisor.spawn do
+        grandchild = fork { sleep 60 }
+        writer.write("#{grandchild}\n")
+        writer.close
+        sleep 60
+      end
+      writer.close
+      gpid = Integer(reader.read)
+      reader.close
+
+      described_class.kill_and_reap_all
+
+      # The grandchild is not our direct child; it reparents to us when its
+      # leader is reaped, so reap it here and confirm it was signalled dead.
+      wait_until { !process_running?(gpid) }
+      expect(process_running?(gpid)).to be(false)
+      Process.waitpid(gpid)
+    rescue Errno::ECHILD
+      nil
+    end
+
+    it "tolerates an already-exited registered child (ECHILD/ESRCH)" do
+      h = supervisor.spawn { exit!(0) }
+      wait_until { !process_running?(h.pid) }
+      expect { described_class.kill_and_reap_all }.not_to raise_error
+      expect(described_class.registry).to eq([])
+    end
+
+    it "does nothing when the registry is empty" do
+      expect { described_class.kill_and_reap_all }.not_to raise_error
+      expect(described_class.registry).to eq([])
+    end
+  end
+
   describe "#spawn" do
     subject(:supervisor) { described_class.new }
 
@@ -141,6 +204,28 @@ RSpec.describe Evilution::ProcessSupervisor do
         expect(described_class.registry).to include(h)
       ensure
         supervisor.terminate(h, grace: 0.2)
+      end
+    end
+
+    it "gives the forked child a clean registry, not the parent's inherited handles" do
+      # A child must not believe it owns the processes its parent registered
+      # (e.g. sibling workers): acting on those inherited handles -- signalling
+      # or reaping them -- would kill processes it never spawned.
+      sibling = handle(pid: 1_234_567, pgid: 1_234_567)
+      described_class.register(sibling)
+      reader, writer = IO.pipe
+      h = supervisor.spawn(isolate_in_child: false) do
+        writer.write(described_class.registry.size.to_s)
+        writer.close
+        sleep 60
+      end
+      begin
+        writer.close
+        expect(Integer(reader.read)).to eq(0)
+      ensure
+        reader.close
+        supervisor.terminate(h, grace: 0.2)
+        described_class.unregister(sibling)
       end
     end
 
