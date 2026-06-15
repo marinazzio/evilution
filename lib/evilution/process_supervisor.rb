@@ -152,11 +152,17 @@ class Evilution::ProcessSupervisor
 
   def isolate_child(pid)
     ::Process.setpgid(pid, pid)
-  rescue SystemCallError
+  rescue Errno::EACCES, Errno::ESRCH
     # EACCES: child already exec'd/changed group; ESRCH: child already exited.
-    # Any other setpgid failure is benign here -- reaping handles the child
-    # either way, and a group-kill of a never-isolated pid is a harmless ESRCH.
+    # Both are benign -- reaping handles the child either way.
     nil
+  rescue SystemCallError => e
+    # Any other setpgid failure (e.g. EPERM) leaves the child in the parent
+    # group: a later group-kill won't sweep its subtree. Don't raise (spawn
+    # must still return a usable handle), but surface it so the leak is
+    # debuggable rather than silent.
+    warn "evilution: could not isolate process #{pid} into its own process " \
+         "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
   end
 
   # True once the child has been reaped (now or earlier). WNOHANG returns the
