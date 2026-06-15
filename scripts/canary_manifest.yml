@@ -1,0 +1,47 @@
+# Canary manifest for the EV-7ydn validation run of scripts/compare_targeting.
+#
+#   scripts/compare_targeting scripts/canary_manifest.yml --out .artifacts/targeting_validation.md
+#
+# Each repo is run through evilution three times (full_file / lexical / coverage)
+# over the SAME mutation set; the gate is total lost_kills == 0 (coverage must
+# never lose a kill full-file caught) before the default flips to coverage.
+#
+# `dir:` assumes the EV-rxob canary checkout layout (/tmp/ev-canaries/<repo>,
+# already `bundle install`ed). Adjust to your checkout. Per-repo `args` mirror
+# the EV-rxob R2 findings: repos whose specs are NOT lib-mirrored need an
+# explicit --spec (EV-z7f5 / GH #1325), or auto spec-resolution yields 0.0 and
+# the comparison is meaningless.
+#
+# Start with the R2 infra=none tier that ran clean; extend with the DB-tier
+# repos once their services are up.
+
+repos:
+  # --- R2 PASS, lib-mirrored specs (auto-resolution works) ---
+  - name: thoughtbot/factory_bot
+    dir: /tmp/ev-canaries/factory_bot
+    args: ["lib", "--jobs", "4"]
+
+  - name: jnunemaker/httparty
+    dir: /tmp/ev-canaries/httparty
+    args: ["lib", "--jobs", "4"]
+
+  - name: rubocop/rubocop
+    dir: /tmp/ev-canaries/rubocop
+    args: ["lib", "--jobs", "4"]
+
+  - name: rack/rack
+    dir: /tmp/ev-canaries/rack
+    args: ["lib", "--jobs", "4"]
+
+  # --- Non-lib-mirrored specs: explicit --spec required (EV-z7f5 / GH #1325) ---
+  - name: bblimke/webmock
+    dir: /tmp/ev-canaries/webmock
+    args: ["lib", "--spec", "spec/unit", "--jobs", "4"]
+
+  - name: doorkeeper-gem/doorkeeper
+    dir: /tmp/ev-canaries/doorkeeper
+    args: ["lib", "--spec", "spec", "--jobs", "4"]
+
+  - name: ruby-concurrency/concurrent-ruby
+    dir: /tmp/ev-canaries/concurrent-ruby
+    args: ["lib", "--spec", "spec", "--jobs", "4"]
