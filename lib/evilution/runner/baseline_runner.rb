@@ -117,18 +117,28 @@ class Evilution::Runner::BaselineRunner
     targets = config.target_files.map { |file| File.expand_path(file, Evilution::PROJECT_ROOT) }
     return nil if targets.empty?
 
-    store = Evilution::Coverage::MapStore.new
-    return store.load(targets) if store.stale_files(targets).empty?
+    specs = resolved_spec_files
+    return nil if specs.empty? # nothing resolves -> no coverage to capture, lexical handles it
 
-    map = Evilution::Coverage::MapBuilder.new(spec_files: coverage_spec_files, target_files: targets).call
-    store.save(map, targets)
+    store = Evilution::Coverage::MapStore.new
+    cache_inputs = targets + specs
+    return store.load(targets) if store.stale_files(cache_inputs).empty?
+
+    map = Evilution::Coverage::MapBuilder.new(spec_files: specs, target_files: targets).call
+    store.save(map, cache_inputs)
     map
   end
 
-  def coverage_spec_files
-    return config.spec_files unless config.spec_files.empty?
-
-    Dir.glob(File.join(Evilution::PROJECT_ROOT, "spec", "**", "*_spec.rb"))
+  # The RESOLVED spec files for the target sources -- the same lib-mirrored specs
+  # full-file targeting already runs cleanly -- NOT the whole suite. EV-7uui:
+  # capturing and replaying coverage only within these guarantees the covering
+  # examples load in the per-mutation run (cross-file integration specs, which a
+  # whole-suite map would surface, fail to bootstrap in isolation and lose kills).
+  def resolved_spec_files
+    config.target_files
+          .flat_map { |file| Array(config.spec_selector.call(file)) }
+          .map { |spec| File.expand_path(spec, Evilution::PROJECT_ROOT) }
+          .uniq
   end
 
   def log_start

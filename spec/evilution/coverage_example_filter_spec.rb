@@ -48,22 +48,23 @@ RSpec.describe Evilution::CoverageExampleFilter do
     end
   end
 
-  describe "a true coverage gap (file built, line never executed)" do
-    it "returns nil so the mutation is marked :unresolved with zero test runs" do
-      result = filter.call(mutation(file_path: source_rel, line: 5), ["spec/calc_spec.rb"])
-      expect(result).to be_nil
-    end
-  end
-
-  describe "a line executed at load but attributed to no example (e.g. a def line)" do
-    it "delegates to the lexical filter rather than mis-skipping as :unresolved" do
-      mut = mutation(file_path: source_rel, line: 2)
+  describe "a line the map attributes to no example (built file, but no covering example)" do
+    # Accuracy-first: never assert a gap on real repos -- a line can be exercised
+    # indirectly (before(:all)/load/another spec) that the per-example diff missed.
+    # Defer to lexical instead of mis-skipping as :unresolved.
+    it "delegates to lexical for a line with no recorded examples (line 5)" do
+      mut = mutation(file_path: source_rel, line: 5)
       allow(lexical).to receive(:call).with(mut, ["spec/calc_spec.rb"]).and_return(["spec/calc_spec.rb:5"])
 
-      result = filter.call(mut, ["spec/calc_spec.rb"])
-
-      expect(result).to eq(["spec/calc_spec.rb:5"])
+      expect(filter.call(mut, ["spec/calc_spec.rb"])).to eq(["spec/calc_spec.rb:5"])
       expect(lexical).to have_received(:call).with(mut, ["spec/calc_spec.rb"])
+    end
+
+    it "delegates to lexical for a load-covered line with no recorded examples (line 2)" do
+      mut = mutation(file_path: source_rel, line: 2)
+      allow(lexical).to receive(:call).with(mut, ["spec/calc_spec.rb"]).and_return(["spec/calc_spec.rb:9"])
+
+      expect(filter.call(mut, ["spec/calc_spec.rb"])).to eq(["spec/calc_spec.rb:9"])
     end
   end
 

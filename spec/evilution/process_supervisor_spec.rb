@@ -151,26 +151,46 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
 
     it "sweeps a grandchild in a registered child's process group" do
-      reader, writer = IO.pipe
+      info_reader, info_writer = IO.pipe
+      # Only the grandchild keeps `alive_writer` open; when it is swept that fd
+      # closes and `alive_reader` reaches EOF. This liveness signal is immune to
+      # PID reuse and to the grandchild reparenting to init and being reaped
+      # asynchronously -- both of which make a `/proc/<pid>` poll flaky.
+      alive_reader, alive_writer = IO.pipe
       supervisor.spawn do
-        grandchild = fork { sleep 60 }
-        writer.write("#{grandchild}\n")
-        writer.close
+        grandchild = fork do
+          info_reader.close
+          info_writer.close
+          alive_reader.close
+          sleep 60 # holds only alive_writer open until killed
+        end
+        info_writer.write("#{grandchild}\n")
+        info_writer.close
+        alive_reader.close
+        alive_writer.close # the leader must not keep the liveness fd open
         sleep 60
       end
-      writer.close
-      gpid = Integer(reader.read)
-      reader.close
+      info_writer.close
+      alive_writer.close
+      gpid = Integer(info_reader.read)
+      info_reader.close
 
       described_class.kill_and_reap_all
 
-      # The grandchild is not our direct child; it reparents to us when its
-      # leader is reaped, so reap it here and confirm it was signalled dead.
-      wait_until { !process_running?(gpid) }
-      expect(process_running?(gpid)).to be(false)
-      Process.waitpid(gpid)
-    rescue Errno::ECHILD
-      nil
+      expect(alive_reader.wait_readable(10)).to be_truthy # swept -> fd closed -> EOF
+      expect(alive_reader.read).to eq("")
+    ensure
+      [info_reader, info_writer, alive_reader, alive_writer].each { |io| io.close unless io.closed? }
+      begin
+        Process.kill("KILL", gpid) if gpid
+      rescue Errno::ESRCH
+        nil
+      end
+      begin
+        Process.waitpid(gpid) if gpid
+      rescue Errno::ECHILD
+        nil
+      end
     end
 
     it "tolerates an already-exited registered child (ECHILD/ESRCH)" do

@@ -117,6 +117,7 @@ RSpec.describe Evilution::Runner::BaselineRunner do
     it "passes a CoverageExampleFilter for RSpec when the coverage strategy is selected" do
       cfg = config(integration: :rspec, example_targeting: true,
                    example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).and_return(["spec/foo_spec.rb"])
       runner = described_class.new(cfg)
       map = Evilution::Coverage::Map.new(index: {}, built_files: [])
       store = instance_double(Evilution::Coverage::MapStore, stale_files: [], load: map)
@@ -129,9 +130,42 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration
     end
 
+    it "captures coverage over the RESOLVED specs for the target, not the whole suite" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).with("lib/foo.rb").and_return(["spec/foo_spec.rb"])
+      runner = described_class.new(cfg)
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["x"], save: nil)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      builder = instance_double(Evilution::Coverage::MapBuilder,
+                                call: Evilution::Coverage::Map.new(index: {}, built_files: []))
+      allow(Evilution::Coverage::MapBuilder).to receive(:new) do |**kwargs|
+        expect(kwargs[:spec_files]).to eq([File.expand_path("spec/foo_spec.rb", Evilution::PROJECT_ROOT)])
+        builder
+      end
+      allow(Evilution::Integration::RSpec).to receive(:new).and_return(Evilution::Integration::RSpec.allocate)
+
+      runner.build_integration
+      expect(Evilution::Coverage::MapBuilder).to have_received(:new)
+    end
+
+    it "falls back to lexical when the target source resolves to no spec file" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).and_return(nil)
+      runner = described_class.new(cfg)
+
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:example_filter]).to be_a(Evilution::ExampleFilter)
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
     it "falls back to a lexical ExampleFilter when the coverage map build raises" do
       cfg = config(integration: :rspec, example_targeting: true,
                    example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).and_return(["spec/foo_spec.rb"])
       runner = described_class.new(cfg)
       store = instance_double(Evilution::Coverage::MapStore, stale_files: ["/x/lib/foo.rb"])
       allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
