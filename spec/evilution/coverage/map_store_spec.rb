@@ -31,7 +31,8 @@ RSpec.describe Evilution::Coverage::MapStore do
         calc => { 1 => ["spec/calc_spec.rb:5"] },
         util => { 1 => ["spec/util_spec.rb:3"] }
       },
-      built_files: [calc, util]
+      built_files: [calc, util],
+      executed_lines: { calc => [1, 2], util => [1] }
     )
   end
 
@@ -46,6 +47,15 @@ RSpec.describe Evilution::Coverage::MapStore do
       expect(loaded.examples_for(util, 1)).to eq(["spec/util_spec.rb:3"])
       expect(loaded.built?(calc)).to be(true)
       expect(loaded.built?(util)).to be(true)
+    end
+
+    it "preserves executed_lines so a cached map still distinguishes load-covered lines from true gaps" do
+      store.save(map, [calc, util])
+      loaded = store.load([calc, util])
+
+      expect(loaded.executed?(calc, 2)).to be(true) # load-covered -> not a gap
+      expect(loaded.executed?(calc, 99)).to be(false)
+      expect(loaded.executed?(util, 1)).to be(true)
     end
   end
 

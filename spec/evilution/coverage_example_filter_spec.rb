@@ -36,14 +36,15 @@ RSpec.describe Evilution::CoverageExampleFilter do
       expect(result).to eq(["spec/calc_spec.rb:5", "spec/x_spec.rb:9"])
     end
 
-    it "resolves a relative mutation path against the project root to match the map" do
+    it "accepts an already-absolute mutation path that matches the map key" do
       result = filter.call(mutation(file_path: source_abs, line: 3), [])
       expect(result).to eq(["spec/calc_spec.rb:5", "spec/x_spec.rb:9"])
     end
 
     it "does not consult the lexical fallback when coverage answers" do
+      allow(lexical).to receive(:call)
       filter.call(mutation(file_path: source_rel, line: 3), ["spec/calc_spec.rb"])
-      expect(lexical).not_to have_received(:call) if lexical.respond_to?(:call)
+      expect(lexical).not_to have_received(:call)
     end
   end
 
