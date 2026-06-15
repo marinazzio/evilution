@@ -137,10 +137,10 @@ class Evilution::Isolation::Fork
         return reap_and_decode(handle, payload) if payload
       end
 
-      next unless ::Process.waitpid(handle.pid, ::Process::WNOHANG)
+      next unless @supervisor.reap_nonblock(handle)
 
       # Child exited. Drain any final payload that arrived between
-      # wait_readable timeout and waitpid (race) before declaring empty.
+      # wait_readable timeout and the reap (race) before declaring empty.
       final = read_payload(read_io, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.1)
       return decode_payload(final) if final
 
@@ -157,7 +157,7 @@ class Evilution::Isolation::Fork
   def reap_and_decode(handle, payload)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + REAP_DEADLINE
     loop do
-      break if ::Process.waitpid(handle.pid, ::Process::WNOHANG)
+      break if @supervisor.reap_nonblock(handle)
 
       if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
         @supervisor.terminate(handle, grace: GRACE_PERIOD)
