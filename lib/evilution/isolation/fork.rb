@@ -5,7 +5,7 @@ require "tmpdir"
 require_relative "../memory"
 require_relative "../temp_dir_tracker"
 require_relative "../child_output"
-require_relative "../process_cleanup"
+require_relative "../process_supervisor"
 
 require_relative "../isolation"
 
@@ -15,21 +15,25 @@ class Evilution::Isolation::Fork
 
   def initialize(hooks: nil)
     @hooks = hooks
+    # EV-3aw3 / EV-5rrh step 2: the supervisor owns this path's lifecycle --
+    # spawn + process-group isolation, the TERM/grace/KILL ladder, and reap +
+    # sandbox removal. fork.rb keeps only the marshal-pipe read protocol.
+    @supervisor = Evilution::ProcessSupervisor.new
   end
 
   def call(mutation:, test_command:, timeout:)
-    pid = nil
+    handle = nil
     sandbox_dir = Dir.mktmpdir("evilution-run")
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     parent_rss = Evilution::Memory.rss_kb
     read_io, write_io = binary_pipe
-    pid = fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
+    handle = spawn_child(read_io, write_io, sandbox_dir, mutation, test_command)
     write_io.close
-    result = wait_for_result(pid, read_io, timeout)
+    result = wait_for_result(handle, read_io, timeout)
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
     build_mutation_result(mutation, result, duration, parent_rss)
   ensure
-    cleanup_resources(read_io, write_io, pid, sandbox_dir)
+    cleanup_resources(read_io, write_io, handle, sandbox_dir)
   end
 
   private
@@ -46,14 +50,18 @@ class Evilution::Isolation::Fork
     [read_io, write_io]
   end
 
-  def fork_child(read_io, write_io, sandbox_dir, mutation, test_command)
-    ::Process.fork do
-      isolate_into_own_process_group
+  # Supervisor.spawn makes the child its own process-group leader (setpgid)
+  # before this block runs, so any grandchildren test_command forks inherit the
+  # group and the TERM/KILL ladder sweeps the whole subtree on timeout (EV-2sh8
+  # / GH #1330). The block keeps the marshal-pipe protocol: write a
+  # length-prefixed payload, then exit with the pass/fail code.
+  def spawn_child(read_io, write_io, sandbox_dir, mutation, test_command)
+    @supervisor.spawn(sandbox_dir: sandbox_dir) do
       ENV["TMPDIR"] = sandbox_dir
       # Path-relativizing mutations (e.g. File.join(dir, name) -> name) would
       # otherwise write into the parent's CWD (typically the repo root) and
       # leak past the run. chdir here keeps such writes inside sandbox_dir,
-      # which the ensure block of #call removes. The in_isolated_worker! flag
+      # which the supervisor removes on reap. The in_isolated_worker! flag
       # signals the rest of evilution (SpecResolver/SpecSelector/SpecAstCache/
       # MutationApplier/SourceEvaluator/Integration) to anchor project-relative
       # paths to Evilution::PROJECT_ROOT instead of the sandbox CWD.
@@ -71,27 +79,20 @@ class Evilution::Isolation::Fork
     end
   end
 
-  # EV-2sh8 / GH #1330: make the mutation child its own process-group leader as
-  # its very first act, before it runs test_command (which may fork blocking
-  # grandchildren -- e.g. connection_pool / ractor / thread subject specs).
-  # Grandchildren then inherit this group, so terminate_child can group-kill the
-  # whole subtree on timeout. Without it, a blocking grandchild orphans to init
-  # and survives the rest of the run -- the inner path never SIGKILLs the worker,
-  # so EV-cnx8's outer process-group kill never sweeps it. Done child-side (not
-  # parent-side as in Worker) because the per-mutation timeout fires seconds
-  # later, long after this line has run, so no fork-before-setpgid race exists.
-  def isolate_into_own_process_group
-    ::Process.setpgid(0, 0)
-  rescue SystemCallError
-    nil
-  end
-
-  def cleanup_resources(read_io, write_io, pid, sandbox_dir)
+  # The parent owns read_io/write_io (write_io is closed right after spawn so
+  # read_io can see EOF), so they are closed here rather than handed to the
+  # supervisor. The supervisor reaps the child and removes the sandbox dir; on
+  # the early-failure path (binary_pipe raised before spawn) handle is nil, so
+  # the orphaned sandbox is removed directly.
+  def cleanup_resources(read_io, write_io, handle, sandbox_dir)
     read_io.close unless read_io.nil?
     write_io.close unless write_io.nil?
-    ensure_reaped(pid)
+    if handle
+      @supervisor.terminate(handle, grace: GRACE_PERIOD)
+    elsif sandbox_dir
+      FileUtils.rm_rf(sandbox_dir)
+    end
     restore_original_source
-    FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
 
   def restore_original_source
@@ -125,18 +126,18 @@ class Evilution::Isolation::Fork
   # never sees EOF and hangs forever. The length prefix makes payload reads
   # bounded; the waitpid-WNOHANG check inside the poll loop lets us exit
   # promptly when the child died without writing anything.
-  def wait_for_result(pid, read_io, timeout)
+  def wait_for_result(handle, read_io, timeout)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
     loop do
       remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      return timeout_result(pid) if remaining <= 0
+      return timeout_result(handle) if remaining <= 0
 
       if read_io.wait_readable([remaining, 0.5].min)
         payload = read_payload(read_io, deadline)
-        return reap_and_decode(pid, payload) if payload
+        return reap_and_decode(handle, payload) if payload
       end
 
-      next unless ::Process.waitpid(pid, ::Process::WNOHANG)
+      next unless ::Process.waitpid(handle.pid, ::Process::WNOHANG)
 
       # Child exited. Drain any final payload that arrived between
       # wait_readable timeout and waitpid (race) before declaring empty.
@@ -153,13 +154,13 @@ class Evilution::Isolation::Fork
   # in execute_in_child waiting on a subject grandchild the mutation broke.
   # wait_for_result has already returned by this point, so the per-mutation
   # timeout cannot fire. Bound the wait and fall back to the TERM/KILL ladder.
-  def reap_and_decode(pid, payload)
+  def reap_and_decode(handle, payload)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + REAP_DEADLINE
     loop do
-      break if ::Process.waitpid(pid, ::Process::WNOHANG)
+      break if ::Process.waitpid(handle.pid, ::Process::WNOHANG)
 
       if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-        terminate_child(pid)
+        @supervisor.terminate(handle, grace: GRACE_PERIOD)
         break
       end
       sleep 0.05
@@ -210,48 +211,9 @@ class Evilution::Isolation::Fork
     { timeout: false, passed: false, error: "empty result from child" }
   end
 
-  def timeout_result(pid)
-    terminate_child(pid)
+  def timeout_result(handle)
+    @supervisor.terminate(handle, grace: GRACE_PERIOD)
     { timeout: true }
-  end
-
-  # Defensive reap: if normal control flow raised before wait_for_result
-  # reaped the child (e.g. Marshal.load on corrupt payload), the child becomes
-  # a zombie. Reuse terminate_child for the bounded TERM + GRACE_PERIOD + KILL
-  # ladder so this never hangs the ensure path; swallow SystemCallError so
-  # cleanup can't mask the primary failure.
-  def ensure_reaped(pid)
-    return unless pid
-
-    reaped = ::Process.waitpid(pid, ::Process::WNOHANG)
-    return if reaped
-
-    terminate_child(pid)
-  rescue SystemCallError
-    nil
-  end
-
-  def terminate_child(pid)
-    signal_tree("TERM", pid)
-    _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
-    return if status
-
-    sleep(GRACE_PERIOD)
-    _, status = ::Process.waitpid2(pid, ::Process::WNOHANG)
-    return if status
-
-    signal_tree("KILL", pid)
-    Evilution::ProcessCleanup.safe_wait(pid)
-  end
-
-  # Signal the child's whole process group (-pid) to sweep any grandchildren it
-  # forked, then the bare pid as a fallback for the case where setpgid failed
-  # (no group exists, so the group signal is a harmless Errno::ESRCH). Only the
-  # leader pid is reaped here -- group-killed grandchildren are not our direct
-  # children, so init reaps them once they die.
-  def signal_tree(sig, pid)
-    Evilution::ProcessCleanup.safe_kill(sig, -pid)
-    Evilution::ProcessCleanup.safe_kill(sig, pid)
   end
 
   def classify_status(result)
