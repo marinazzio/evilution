@@ -11,14 +11,17 @@ require_relative "coverage/map"
 # Resolution order for the mutated source file F at line L:
 #   - F not fully built in the map (digest miss / partial build) -> delegate to
 #     the lexical filter (safe fallback) with the original spec_paths.
-#   - F built and L covered by examples -> run exactly the covering examples.
-#     These come from the WHOLE suite, so they include cross-file killers the
-#     path-resolver never selected; spec_paths is only a hint for the fallback.
-#   - F built, L attributed to no example, but L DID execute (e.g. a `def` line
-#     covered at load) -> an example may still exercise it indirectly, so fall
-#     back to lexical rather than risk losing a kill.
-#   - F built and L never executed at all -> a true coverage gap: no example can
-#     kill it, so return nil (the mutation is marked :unresolved, zero runs).
+#   - F built and L covered by examples -> run exactly those covering examples
+#     (a SUBSET of what the resolved spec runs, so a strict speedup that cannot
+#     lose a kill full-file would catch).
+#   - F not built, or L attributed to no example -> defer to lexical/full-file.
+#
+# Accuracy-first: coverage ONLY narrows the example set when it positively knows
+# the covering examples. It never marks a mutation :unresolved on "no coverage" --
+# on real repos a line can be exercised indirectly (before(:all), load time, a
+# spec the per-example diff did not attribute), and asserting a gap there loses
+# kills (EV-7uui validation). When coverage has no answer, the proven lexical
+# path decides.
 class Evilution::CoverageExampleFilter
   def initialize(map:, lexical:, project_root: Evilution::PROJECT_ROOT)
     @map = map
@@ -32,7 +35,6 @@ class Evilution::CoverageExampleFilter
 
     examples = @map.examples_for(file, mutation.line)
     return examples unless examples.empty?
-    return nil unless @map.executed?(file, mutation.line)
 
     @lexical.call(mutation, spec_paths)
   end
