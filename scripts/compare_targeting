@@ -1,0 +1,277 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Targeting-mode comparison harness.
+#
+# For each repo in a manifest, runs evilution over the SAME mutation set under
+# three example-targeting modes -- full_file (baseline), lexical (current), and
+# coverage (new) -- joins the per-mutation results, and emits a per-repo table:
+#   score_full / score_lexical / score_coverage,
+#   lost_kills  (mutations full_file KILLED but coverage did NOT -> the gate),
+#   wall_ratio_lexical / wall_ratio_coverage (vs the full_file baseline).
+#
+# The accuracy gate is lost_kills == 0: coverage targeting must never lose a kill
+# the full-file run would catch. Speed is reported, not gated.
+#
+# Usage:
+#   scripts/compare_targeting MANIFEST.yml [--out report.md]
+#
+# MANIFEST.yml:
+#   repos:
+#     - name: acme/foo
+#       dir:  /checkouts/foo        # already bundled
+#       args: ["lib/foo.rb", "--jobs", "4"]
+#
+# The actual canary execution (checkout + bundle over the EV-rxob manifest) is
+# the validation run, EV-7ydn; this harness is the reusable comparison engine.
+
+require "json"
+require "yaml"
+require "open3"
+require "optparse"
+require "digest"
+
+module CompareTargeting
+  MODES = %w[full_file lexical coverage].freeze
+  KEY_FIELDS = %w[file line operator].freeze
+
+  class ConfigError < StandardError; end
+
+  module_function
+
+  # Stable per-mutation identity across modes: only TARGETING differs between
+  # runs, so the same mutation has the same file/line/operator (+ diff to
+  # separate distinct mutations sharing a line+operator).
+  def key_for(detail)
+    base = KEY_FIELDS.map { |field| detail[field] }.join(":")
+    digest = detail["diff"].to_s
+    digest.empty? ? base : "#{base}##{Digest::SHA256.hexdigest(digest)[0, 8]}"
+  end
+
+  # The label shown in lost-kill output: file:line:operator (no diff hash).
+  def label_for(detail)
+    KEY_FIELDS.map { |field| detail[field] }.join(":")
+  end
+
+  # One mode's run, indexed by mutation key.
+  class ModeResult
+    CATEGORIES = %w[killed survived neutral equivalent unresolved unparseable timed_out errors].freeze
+
+    def self.from_json(data)
+      by_key = {}
+      CATEGORIES.each do |category|
+        Array(data[category]).each do |detail|
+          key = CompareTargeting.key_for(detail)
+          by_key[key] ||= {
+            status: detail["status"],
+            duration: (detail["duration"] || 0.0).to_f,
+            label: CompareTargeting.label_for(detail)
+          }
+        end
+      end
+      new(by_key)
+    end
+
+    def initialize(by_key)
+      @by_key = by_key
+    end
+
+    def keys
+      @by_key.keys
+    end
+
+    def status(key)
+      @by_key.dig(key, :status)
+    end
+
+    def label(key)
+      @by_key.dig(key, :label)
+    end
+
+    def killed_count
+      @by_key.count { |_, value| value[:status] == "killed" }
+    end
+
+    # Measurable = the run actually observed a verdict: killed or survived.
+    # unresolved/equivalent/errors/unparseable are excluded from the score.
+    def measurable_count
+      @by_key.count { |_, value| %w[killed survived].include?(value[:status]) }
+    end
+
+    def total_duration
+      @by_key.values.sum { |value| value[:duration] }
+    end
+  end
+
+  # Joins the three modes for one repo and derives the comparison metrics.
+  class Comparison
+    def initialize(full_file:, lexical:, coverage:)
+      @modes = { "full_file" => full_file, "lexical" => lexical, "coverage" => coverage }
+    end
+
+    def score(mode)
+      result = @modes.fetch(mode)
+      return 0.0 if result.measurable_count.zero?
+
+      result.killed_count.to_f / result.measurable_count
+    end
+
+    def wall_ratio(mode)
+      baseline = @modes.fetch("full_file").total_duration
+      return 0.0 if baseline.zero?
+
+      @modes.fetch(mode).total_duration / baseline
+    end
+
+    # Mutation labels that full_file KILLED but `mode` failed to kill -- the
+    # lost kills that must be zero before coverage can become the default.
+    def lost_kills(mode = "coverage")
+      full = @modes.fetch("full_file")
+      other = @modes.fetch(mode)
+      full.keys.select { |key| full.status(key) == "killed" && other.status(key) != "killed" }
+               .map { |key| full.label(key) }
+    end
+
+    def to_row(repo)
+      {
+        repo: repo,
+        score_full: score("full_file"),
+        score_lexical: score("lexical"),
+        score_coverage: score("coverage"),
+        lost_kills: lost_kills("coverage").size,
+        wall_ratio_lexical: wall_ratio("lexical"),
+        wall_ratio_coverage: wall_ratio("coverage")
+      }
+    end
+  end
+
+  # Renders the per-repo rows as a markdown table with a PASS/FAIL gate line.
+  class TableReporter
+    COLUMNS = %w[repo score_full score_lexical score_coverage lost_kills
+                 wall_ratio_lexical wall_ratio_coverage].freeze
+
+    def initialize(rows)
+      @rows = rows
+    end
+
+    def to_markdown
+      (table_lines + ["", gate_line]).join("\n")
+    end
+
+    private
+
+    def table_lines
+      [header_row, separator_row, *@rows.map { |row| data_row(row) }]
+    end
+
+    def header_row
+      "| #{COLUMNS.join(" | ")} |"
+    end
+
+    def separator_row
+      "| #{COLUMNS.map { "---" }.join(" | ")} |"
+    end
+
+    def data_row(row)
+      "| #{COLUMNS.map { |col| format_cell(row[col.to_sym]) }.join(" | ")} |"
+    end
+
+    def gate_line
+      total_lost = @rows.sum { |row| row[:lost_kills] }
+      gate = total_lost.zero? ? "PASS" : "FAIL"
+      "GATE (total lost_kills == 0): #{gate} (#{total_lost} lost kills across #{@rows.size} repos)"
+    end
+
+    def format_cell(value)
+      value.is_a?(Float) ? format("%.3f", value) : value.to_s
+    end
+  end
+
+  # Runs evilution for one (repo, mode) and parses the JSON into a ModeResult.
+  # command_runner is injected so the pure pipeline is testable without a real
+  # mutation run.
+  class ModeRunner
+    # Run the inner `bundle exec evilution` in the TARGET repo's bundler context.
+    # If this harness is itself launched under `bundle exec`, Bundler exports
+    # BUNDLE_GEMFILE/RUBYOPT into the child, which would make the inner bundle
+    # resolve against evilution's Gemfile instead of the target repo's. Strip
+    # that inherited bundler env first.
+    DEFAULT_RUNNER = lambda do |cmd, dir|
+      stdout, stderr, status =
+        if defined?(Bundler)
+          Bundler.with_unbundled_env { Open3.capture3(*cmd, chdir: dir) }
+        else
+          Open3.capture3(*cmd, chdir: dir)
+        end
+      raise ConfigError, "evilution failed in #{dir}: #{stderr}" unless status.success?
+
+      stdout
+    end
+
+    def initialize(command_runner: DEFAULT_RUNNER)
+      @command_runner = command_runner
+    end
+
+    def run(repo_dir:, evilution_args:, mode:)
+      cmd = ["bundle", "exec", "evilution", *evilution_args,
+             "--example-targeting", mode, "--format", "json"]
+      json = @command_runner.call(cmd, repo_dir)
+      ModeResult.from_json(JSON.parse(json))
+    end
+  end
+
+  # Drives the manifest: every repo through every mode, then the table.
+  class Harness
+    def initialize(mode_runner: ModeRunner.new)
+      @mode_runner = mode_runner
+    end
+
+    def call(repos)
+      rows = repos.map { |repo| compare_repo(repo) }
+      TableReporter.new(rows).to_markdown
+    end
+
+    def compare_repo(repo)
+      results = MODES.to_h do |mode|
+        [mode, @mode_runner.run(repo_dir: repo.fetch(:dir), evilution_args: repo.fetch(:args), mode: mode)]
+      end
+      Comparison.new(**results.transform_keys(&:to_sym)).to_row(repo.fetch(:name))
+    end
+  end
+
+  def load_manifest(path)
+    data = YAML.safe_load_file(path, symbolize_names: true)
+    raise ConfigError, "manifest must list repos:" unless data.is_a?(Hash) && data[:repos].is_a?(Array)
+
+    data[:repos]
+  rescue Errno::ENOENT
+    raise ConfigError, "manifest not found: #{path}"
+  rescue Psych::SyntaxError => e
+    raise ConfigError, "manifest is not valid YAML: #{e.message}"
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  out_path = nil
+  parser = OptionParser.new do |opts|
+    opts.banner = "Usage: scripts/compare_targeting MANIFEST.yml [--out report.md]"
+    opts.on("--out PATH", "Write the markdown report to PATH (default: stdout)") { |p| out_path = p }
+  end
+  parser.parse!
+
+  manifest_path = ARGV.first
+  unless manifest_path
+    warn parser.banner
+    exit 2
+  end
+
+  begin
+    repos = CompareTargeting.load_manifest(manifest_path)
+    report = CompareTargeting::Harness.new.call(repos)
+    out_path ? File.write(out_path, report) : puts(report)
+    exit 0
+  rescue CompareTargeting::ConfigError => e
+    warn "Error: #{e.message}"
+    exit 2
+  end
+end
