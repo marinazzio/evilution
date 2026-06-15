@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "tmpdir"
 
 load File.expand_path("../../scripts/compare_targeting", __dir__)
 
@@ -98,6 +99,56 @@ RSpec.describe CompareTargeting do
       rows = [{ repo: "acme/foo", score_full: 0.8, score_lexical: 0.7, score_coverage: 0.7,
                 lost_kills: 2, wall_ratio_lexical: 0.5, wall_ratio_coverage: 0.4 }]
       expect(described_class.new(rows).to_markdown).to match(/GATE.*FAIL/)
+    end
+  end
+
+  describe ".load_manifest" do
+    around do |example|
+      Dir.mktmpdir do |dir|
+        @dir = dir
+        example.run
+      end
+    end
+
+    def write_manifest(content)
+      path = File.join(@dir, "manifest.yml")
+      File.write(path, content)
+      path
+    end
+
+    it "returns the repos array from a valid manifest" do
+      path = write_manifest(<<~YAML)
+        repos:
+          - name: acme/foo
+            dir: /checkouts/foo
+            args: ["lib"]
+      YAML
+      repos = CompareTargeting.load_manifest(path)
+      expect(repos).to be_an(Array)
+      expect(repos.first[:name]).to eq("acme/foo")
+    end
+
+    it "raises ConfigError when repos: is missing" do
+      path = write_manifest("other: 1\n")
+      expect { CompareTargeting.load_manifest(path) }
+        .to raise_error(CompareTargeting::ConfigError, /repos/)
+    end
+
+    it "raises ConfigError when the top level is not a mapping" do
+      path = write_manifest("- just\n- a\n- list\n")
+      expect { CompareTargeting.load_manifest(path) }
+        .to raise_error(CompareTargeting::ConfigError, /repos/)
+    end
+
+    it "raises ConfigError for malformed YAML rather than a raw Psych error" do
+      path = write_manifest("repos: [unterminated\n")
+      expect { CompareTargeting.load_manifest(path) }
+        .to raise_error(CompareTargeting::ConfigError, /YAML/)
+    end
+
+    it "raises ConfigError when the manifest file does not exist" do
+      expect { CompareTargeting.load_manifest(File.join(@dir, "missing.yml")) }
+        .to raise_error(CompareTargeting::ConfigError, /not found/)
     end
   end
 

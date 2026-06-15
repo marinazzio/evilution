@@ -191,8 +191,18 @@ module CompareTargeting
   # command_runner is injected so the pure pipeline is testable without a real
   # mutation run.
   class ModeRunner
+    # Run the inner `bundle exec evilution` in the TARGET repo's bundler context.
+    # If this harness is itself launched under `bundle exec`, Bundler exports
+    # BUNDLE_GEMFILE/RUBYOPT into the child, which would make the inner bundle
+    # resolve against evilution's Gemfile instead of the target repo's. Strip
+    # that inherited bundler env first.
     DEFAULT_RUNNER = lambda do |cmd, dir|
-      stdout, stderr, status = Open3.capture3(*cmd, chdir: dir)
+      stdout, stderr, status =
+        if defined?(Bundler)
+          Bundler.with_unbundled_env { Open3.capture3(*cmd, chdir: dir) }
+        else
+          Open3.capture3(*cmd, chdir: dir)
+        end
       raise ConfigError, "evilution failed in #{dir}: #{stderr}" unless status.success?
 
       stdout
@@ -234,6 +244,10 @@ module CompareTargeting
     raise ConfigError, "manifest must list repos:" unless data.is_a?(Hash) && data[:repos].is_a?(Array)
 
     data[:repos]
+  rescue Errno::ENOENT
+    raise ConfigError, "manifest not found: #{path}"
+  rescue Psych::SyntaxError => e
+    raise ConfigError, "manifest is not valid YAML: #{e.message}"
   end
 end
 
