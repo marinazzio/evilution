@@ -1,0 +1,24 @@
+# Example manifest for scripts/compare_targeting (EV-51d4).
+#
+# Each repo is run through evilution three times -- once per example-targeting
+# mode (full_file, lexical, coverage) -- over the SAME mutation set, and the
+# harness emits a per-repo table with the lost_kills gate and wall-time ratios.
+#
+# Repos must already be checked out and `bundle install`ed; the harness only
+# runs evilution inside them. The real EV-rxob canary list is wired up in the
+# validation run (EV-7ydn).
+#
+#   scripts/compare_targeting scripts/compare_targeting.example.yml --out report.md
+
+repos:
+  - name: thoughtbot/factory_bot
+    dir: /tmp/ev-canaries/factory_bot
+    args: ["lib", "--jobs", "4"]
+
+  - name: bblimke/webmock
+    dir: /tmp/ev-canaries/webmock
+    args: ["lib", "--jobs", "4"]
+
+  - name: rack/rack
+    dir: /tmp/ev-canaries/rack
+    args: ["lib", "--jobs", "4"]
