@@ -69,10 +69,13 @@ class Evilution::ProcessSupervisor
       yield
     end
 
+    # Track the sandbox first thing after fork: if the parent takes a fatal
+    # signal before isolate_child returns, Runner's trap (TempDirTracker
+    # .cleanup_all) can still see and remove it, narrowing the leak window.
+    Evilution::TempDirTracker.register(sandbox_dir) if sandbox_dir
     handle = Handle.new(pid: pid, pgid: pid, fds: fds, sandbox_dir: sandbox_dir)
     self.class.register(handle)
     isolate_child(pid)
-    Evilution::TempDirTracker.register(sandbox_dir) if sandbox_dir
     handle
   end
 
@@ -150,11 +153,17 @@ class Evilution::ProcessSupervisor
     end
   end
 
+  # Remove the sandbox first, then drop it from TempDirTracker only on success.
+  # If removal raises, leave the dir tracked so TempDirTracker.cleanup_all /
+  # at_exit can retry it, and swallow the error so reap's ensure-path still
+  # unregisters the handle (no stale entry in the process-global registry).
   def cleanup_sandbox(handle)
     dir = handle.sandbox_dir
     return unless dir
 
-    Evilution::TempDirTracker.unregister(dir)
     FileUtils.rm_rf(dir)
+    Evilution::TempDirTracker.unregister(dir)
+  rescue StandardError
+    nil
   end
 end

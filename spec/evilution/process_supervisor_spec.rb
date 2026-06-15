@@ -200,8 +200,8 @@ RSpec.describe Evilution::ProcessSupervisor do
           expect(process_alive?(h.pid)).to be(false)
           expect(process_alive?(gpid)).to be(false)
         ensure
-          begin
-            Process.kill("KILL", gpid) if gpid
+          [h.pid, gpid].compact.each do |pid|
+            Process.kill("KILL", pid)
           rescue Errno::ESRCH
             nil
           end
@@ -257,6 +257,22 @@ RSpec.describe Evilution::ProcessSupervisor do
       h = supervisor.spawn { exit!(0) }
       supervisor.reap(h)
       expect { supervisor.reap(h) }.not_to raise_error
+    end
+
+    it "still unregisters the handle and does not raise when sandbox removal fails" do
+      Dir.mktmpdir("supervisor-reap-fail") do |outer|
+        sandbox = File.join(outer, "box")
+        Dir.mkdir(sandbox)
+        h = supervisor.spawn(sandbox_dir: sandbox) { exit!(0) }
+
+        allow(FileUtils).to receive(:rm_rf).and_call_original
+        allow(FileUtils).to receive(:rm_rf).with(sandbox).and_raise(Errno::EACCES)
+
+        expect { supervisor.reap(h) }.not_to raise_error
+        expect(described_class.registry).not_to include(h)
+        # Dir left tracked so a later TempDirTracker.cleanup_all can retry.
+        expect(Evilution::TempDirTracker.tracked_dirs).to include(sandbox)
+      end
     end
   end
 end
