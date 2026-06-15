@@ -2,9 +2,9 @@
 
 require_relative "../work_queue"
 require_relative "../../child_output"
+require_relative "../../process_supervisor"
 require_relative "channel"
 require_relative "channel/frame"
-require_relative "worker_registry"
 
 class Evilution::Parallel::WorkQueue::Worker
   Timing = Data.define(:busy, :wall)
@@ -12,12 +12,20 @@ class Evilution::Parallel::WorkQueue::Worker
   attr_reader :pid, :worker_index, :in_flight_indices
   attr_accessor :items_completed, :pending, :busy_time, :wall_time, :deadline
 
-  def self.spawn(worker_index:, hooks:, &block)
+  # EV-dg69 / EV-5rrh step 3: the supervisor owns the worker's process-group
+  # isolation, signal-safe registry, group-kill and reap. spawn passes
+  # isolate_in_child: false so the worker becomes its own group leader only
+  # parent-side, AFTER the supervisor has registered it -- preserving the
+  # EV-jwao register-before-isolate ordering (the trap can never see a leader
+  # missing from the registry). EV-cnx8 group-leadership (so #kill sweeps the
+  # whole subtree) is still established, now by the supervisor's parent-side
+  # setpgid.
+  def self.spawn(worker_index:, hooks:, supervisor: Evilution::ProcessSupervisor.new, &block)
     cmd_read, cmd_write = IO.pipe
     res_read, res_write = IO.pipe
     [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
 
-    pid = Process.fork do
+    handle = supervisor.spawn(isolate_in_child: false) do
       cmd_write.close
       res_read.close
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
@@ -27,36 +35,7 @@ class Evilution::Parallel::WorkQueue::Worker
 
     cmd_read.close
     res_write.close
-    # Register BEFORE isolating so the trap can never observe a worker that is
-    # already its own group leader yet missing from the registry (EV-jwao race,
-    # GH #1333 review): the spawn runs on the same main thread the trap
-    # interrupts, so a signal arriving between setpgid and register would
-    # otherwise leak a leader the trap cannot reach. Ordering register first
-    # leaves only safe windows -- pre-setpgid the child still shares the parent
-    # group and receives the terminal signal directly; once it is its own
-    # leader the registry already lists it. Registering unconditionally is safe
-    # because signal_all's kill(-pid) is a no-op (Errno::ESRCH) for a pid that
-    # never became a group leader (setpgid failed).
-    Evilution::Parallel::WorkQueue::WorkerRegistry.register(pid)
-    isolate_process_group(pid)
-    new(pid:, cmd_write:, res_read:, worker_index:)
-  end
-
-  # EV-cnx8 / GH #1324: make the worker its own process-group leader so #kill
-  # can signal the whole subtree. A mutation's spec may fork a grandchild that
-  # blocks (e.g. ConditionVariable#wait); when the dispatcher SIGKILLs a stuck
-  # worker, that grandchild must die with it rather than orphan to init holding
-  # memory/fds/connections. Done parent-side (before the child forks anything)
-  # so a failure is visible here instead of being swallowed in the child.
-  def self.isolate_process_group(pid)
-    Process.setpgid(pid, pid)
-  rescue Errno::EACCES, Errno::ESRCH
-    # EACCES: child already exec'd/changed group; ESRCH: child already exited.
-    # Both are benign -- reaping handles the child either way.
-    nil
-  rescue SystemCallError => e
-    warn "evilution: could not isolate worker #{pid} into its own process " \
-         "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
+    new(handle:, supervisor:, cmd_write:, res_read:, worker_index:)
   end
 
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
@@ -67,8 +46,10 @@ class Evilution::Parallel::WorkQueue::Worker
     worker_index.zero? ? "" : (worker_index + 1).to_s
   end
 
-  def initialize(pid:, cmd_write:, res_read:, worker_index:)
-    @pid = pid
+  def initialize(handle:, supervisor:, cmd_write:, res_read:, worker_index:)
+    @handle = handle
+    @supervisor = supervisor
+    @pid = handle.pid
     @cmd_write = cmd_write
     @res_read = res_read
     @worker_index = worker_index
@@ -101,18 +82,10 @@ class Evilution::Parallel::WorkQueue::Worker
   end
 
   # SIGKILL the worker's whole process group (negative pid), reaping any
-  # grandchildren it forked. Falls back to the single pid if the group is gone
-  # -- already reaped, or setpgid did not take in the child.
+  # grandchildren it forked, with the bare pid as a fallback for the case where
+  # the group is gone (already reaped, or setpgid did not take).
   def kill
-    Process.kill("KILL", -@pid)
-  rescue Errno::ESRCH
-    kill_pid
-  end
-
-  def kill_pid
-    Process.kill("KILL", @pid)
-  rescue Errno::ESRCH
-    nil
+    @supervisor.signal_group("KILL", @handle)
   end
 
   def close_pipes
@@ -120,14 +93,11 @@ class Evilution::Parallel::WorkQueue::Worker
     @res_read.close unless @res_read.closed?
   end
 
+  # Reap the leader and drop it from the registry so the trap never signals a
+  # group whose pid the OS may have recycled. ECHILD-tolerant; unregister is a
+  # no-op if it was never registered.
   def reap
-    Process.wait(@pid)
-  rescue Errno::ECHILD
-    nil
-  ensure
-    # Drop the pgid once the leader is reaped so the trap never signals a group
-    # whose pid the OS may have recycled. No-op if it was never registered.
-    Evilution::Parallel::WorkQueue::WorkerRegistry.unregister(@pid)
+    @supervisor.reap(@handle)
   end
 
   def retire

@@ -57,15 +57,22 @@ class Evilution::ProcessSupervisor
   end
 
   # Fork a child that becomes its own process-group leader and runs the block,
-  # returning a Handle. The child calls setpgid(0, 0) before yielding so any
-  # grandchildren it forks join its group and can be swept by a group signal;
-  # the parent repeats setpgid(pid, pid) to close the race where it signals
-  # before the child has isolated itself. The handle is registered BEFORE the
-  # parent-side setpgid so the trap can never observe a child that is already a
-  # group leader yet missing from the registry (EV-jwao race).
-  def spawn(sandbox_dir: nil, fds: [])
+  # returning a Handle. By default the child calls setpgid(0, 0) before
+  # yielding so any grandchildren it forks join its group and can be swept by a
+  # group signal; the parent repeats setpgid(pid, pid) to close the race where
+  # it signals before the child has isolated itself. The handle is registered
+  # BEFORE the parent-side setpgid so the trap can never observe a child that is
+  # already a group leader yet missing from the registry (EV-jwao race).
+  #
+  # isolate_in_child: false suppresses the child-side setpgid for long-lived
+  # workers (the outer path): the child must NOT become its own group leader
+  # until the parent has registered it, otherwise a trap firing between fork and
+  # register would see a leader it cannot signal. With only the parent-side,
+  # post-register setpgid, the child stays in the parent group (reachable by the
+  # terminal signal directly) until the registry already lists it.
+  def spawn(sandbox_dir: nil, fds: [], isolate_in_child: true)
     pid = ::Process.fork do
-      isolate_self
+      isolate_self if isolate_in_child
       yield
     end
 
@@ -146,8 +153,16 @@ class Evilution::ProcessSupervisor
   def isolate_child(pid)
     ::Process.setpgid(pid, pid)
   rescue Errno::EACCES, Errno::ESRCH
-    # EACCES: child already exec'd; ESRCH: child already exited.
+    # EACCES: child already exec'd/changed group; ESRCH: child already exited.
+    # Both are benign -- reaping handles the child either way.
     nil
+  rescue SystemCallError => e
+    # Any other setpgid failure (e.g. EPERM) leaves the child in the parent
+    # group: a later group-kill won't sweep its subtree. Don't raise (spawn
+    # must still return a usable handle), but surface it so the leak is
+    # debuggable rather than silent.
+    warn "evilution: could not isolate process #{pid} into its own process " \
+         "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
   end
 
   # True once the child has been reaped (now or earlier). WNOHANG returns the

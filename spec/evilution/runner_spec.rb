@@ -2886,11 +2886,11 @@ RSpec.describe Evilution::Runner do
         runner.send(:install_signal_handler, "INT")
 
         allow(Evilution::TempDirTracker).to receive(:cleanup_all)
-        allow(Evilution::Parallel::WorkQueue::WorkerRegistry).to receive(:signal_all)
+        allow(Evilution::ProcessSupervisor).to receive(:signal_all)
         handler = Signal.trap("INT", "DEFAULT")
         handler.call
 
-        expect(Evilution::Parallel::WorkQueue::WorkerRegistry).to have_received(:signal_all).with("INT")
+        expect(Evilution::ProcessSupervisor).to have_received(:signal_all).with("INT")
       end
 
       it "re-raises the signal with the default disposition when there was no prior Ruby handler" do

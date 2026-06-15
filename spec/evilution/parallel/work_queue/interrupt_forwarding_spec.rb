@@ -6,7 +6,7 @@ require "tmpdir"
 require "evilution/runner"
 require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
-require "evilution/parallel/work_queue/worker_registry"
+require "evilution/process_supervisor"
 
 # EV-jwao / GH #1332: end-to-end proof that a terminal interrupt is forwarded to
 # worker process groups so an actively-busy worker (and the grandchildren it
