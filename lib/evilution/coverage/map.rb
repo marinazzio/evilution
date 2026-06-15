@@ -12,12 +12,19 @@ class Evilution::Coverage::Map
     index = (hash["index"] || {}).transform_values do |lines|
       lines.transform_keys(&:to_i)
     end
-    new(index: index, built_files: hash["built_files"] || [])
+    executed = (hash["executed_lines"] || {}).transform_values { |lines| lines.map(&:to_i) }
+    new(index: index, built_files: hash["built_files"] || [], executed_lines: executed)
   end
 
-  def initialize(index:, built_files:)
+  # executed_lines records, per file, the lines that ran at all during the build
+  # (including lines covered only at load, e.g. a `def` line, which are
+  # attributed to no single example). It lets a caller tell a TRUE coverage gap
+  # (line never executed) from a load-covered line an example may still exercise
+  # indirectly -- so the latter falls back instead of being mis-skipped.
+  def initialize(index:, built_files:, executed_lines: {})
     @index = deep_freeze_index(index)
     @built_files = built_files.to_a.freeze
+    @executed_lines = deep_freeze_executed(executed_lines)
     freeze
   end
 
@@ -29,8 +36,13 @@ class Evilution::Coverage::Map
     @built_files.include?(file)
   end
 
+  def executed?(file, line)
+    lines = @executed_lines[file]
+    !lines.nil? && lines.include?(line)
+  end
+
   def to_h
-    { "index" => @index, "built_files" => @built_files }
+    { "index" => @index, "built_files" => @built_files, "executed_lines" => @executed_lines }
   end
 
   private
@@ -41,6 +53,12 @@ class Evilution::Coverage::Map
         inner[line] = locs.uniq.sort.freeze
       end
       out[file] = frozen_lines.freeze
+    end.freeze
+  end
+
+  def deep_freeze_executed(executed)
+    executed.each_with_object({}) do |(file, lines), out|
+      out[file] = lines.map(&:to_i).uniq.sort.freeze
     end.freeze
   end
 end

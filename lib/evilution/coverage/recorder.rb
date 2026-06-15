@@ -12,6 +12,7 @@ class Evilution::Coverage::Recorder
     @target_files = target_files.to_a
     @coverage_source = coverage_source
     @index = Hash.new { |h, file| h[file] = Hash.new { |g, line| g[line] = [] } }
+    @executed = Hash.new { |h, file| h[file] = [] }
   end
 
   def around_example(example_location)
@@ -23,7 +24,11 @@ class Evilution::Coverage::Recorder
   end
 
   def to_map(built_files:)
-    Evilution::Coverage::Map.new(index: materialize(@index), built_files: built_files)
+    Evilution::Coverage::Map.new(
+      index: materialize(@index),
+      built_files: built_files,
+      executed_lines: @executed.transform_values(&:uniq)
+    )
   end
 
   private
@@ -37,7 +42,20 @@ class Evilution::Coverage::Recorder
       after_counts = line_counts(after[file])
       next unless after_counts
 
+      record_executed(file, after_counts)
       record_increases(file, line_counts(before[file]) || [], after_counts, example_location)
+    end
+  end
+
+  # Every line with a non-zero count in the after-snapshot has run at least once
+  # by now -- including lines covered only at load (a `def` line is already > 0
+  # in the first example's after-snapshot). Recording them lets the Map tell a
+  # load-covered line from a line that never ran.
+  def record_executed(file, after_counts)
+    after_counts.each_with_index do |count, idx|
+      next if count.nil? || count.zero?
+
+      @executed[file] << (idx + 1)
     end
   end
 

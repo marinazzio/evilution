@@ -5,6 +5,9 @@ require_relative "../baseline"
 require_relative "../spec_resolver"
 require_relative "../integration/rspec"
 require_relative "../integration/minitest"
+require_relative "../coverage_example_filter"
+require_relative "../coverage/map_store"
+require_relative "../coverage/map_builder"
 require_relative "../integration/test_unit"
 require_relative "../example_filter"
 require_relative "../spec_ast_cache"
@@ -82,11 +85,50 @@ class Evilution::Runner::BaselineRunner
   def build_example_filter
     return nil unless config.example_targeting?
 
+    lexical = build_lexical_filter
+    return lexical unless config.coverage_targeting?
+
+    build_coverage_filter(lexical)
+  end
+
+  def build_lexical_filter
     Evilution::ExampleFilter.new(
       cache: Evilution::SpecAstCache.new(**config.example_targeting_cache),
       fallback: config.example_targeting_fallback,
       source_cache: Evilution::SourceAstCache.new
     )
+  end
+
+  # The coverage map is built (or loaded from cache) once here, in the parent,
+  # before any mutation fork. Any failure -- unsupported Ruby, suite error,
+  # corrupt cache that cannot rebuild -- degrades to lexical targeting rather
+  # than aborting the run (design: never abort, never silently mis-skip).
+  def build_coverage_filter(lexical)
+    map = resolve_coverage_map
+    return lexical unless map
+
+    Evilution::CoverageExampleFilter.new(map: map, lexical: lexical)
+  rescue StandardError => e
+    warn "evilution: coverage targeting unavailable (#{e.class}: #{e.message}); using lexical targeting"
+    lexical
+  end
+
+  def resolve_coverage_map
+    targets = config.target_files.map { |file| File.expand_path(file, Evilution::PROJECT_ROOT) }
+    return nil if targets.empty?
+
+    store = Evilution::Coverage::MapStore.new
+    return store.load(targets) if store.stale_files(targets).empty?
+
+    map = Evilution::Coverage::MapBuilder.new(spec_files: coverage_spec_files, target_files: targets).call
+    store.save(map, targets)
+    map
+  end
+
+  def coverage_spec_files
+    return config.spec_files unless config.spec_files.empty?
+
+    Dir.glob(File.join(Evilution::PROJECT_ROOT, "spec", "**", "*_spec.rb"))
   end
 
   def log_start

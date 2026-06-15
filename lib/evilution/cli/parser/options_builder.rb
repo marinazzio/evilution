@@ -66,6 +66,11 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Disable per-mutation example targeting (run all examples in resolved spec files)") do
       @options[:example_targeting] = false
     end
+    opts.on("--example-targeting MODE", %w[lexical coverage full_file],
+            "Per-mutation targeting: lexical (default, name-grep), coverage (run only the",
+            "examples that execute the mutated line), or full_file (run all resolved examples)") do |m|
+      apply_example_targeting_mode(m)
+    end
     opts.on("--example-targeting-fallback MODE", %w[full_file unresolved],
             "Fallback when example targeting finds no match: full_file (default) or unresolved") do |m|
       @options[:example_targeting_fallback] = m
@@ -74,6 +79,18 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Filter: method (Foo#bar), type (Foo#/Foo.), namespace (Foo*),",
             "class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
       @options[:target] = m
+    end
+  end
+
+  # Map the single --example-targeting flag onto the two underlying config axes:
+  # full_file is "targeting off" (run all resolved examples); lexical/coverage
+  # turn targeting on and select the strategy.
+  def apply_example_targeting_mode(mode)
+    if mode == "full_file"
+      @options[:example_targeting] = false
+    else
+      @options[:example_targeting] = true
+      @options[:example_targeting_strategy] = mode.to_sym
     end
   end
 

@@ -60,7 +60,10 @@ class Evilution::Coverage::MapStore
   def pruned_map(raw_map, fresh_files)
     index = (raw_map["index"] || {}).slice(*fresh_files)
     built = (raw_map["built_files"] || []) & fresh_files
-    Evilution::Coverage::Map.from_h("index" => index, "built_files" => built)
+    executed = (raw_map["executed_lines"] || {}).slice(*fresh_files)
+    Evilution::Coverage::Map.from_h(
+      "index" => index, "built_files" => built, "executed_lines" => executed
+    )
   end
 
   def digests_for(source_files)

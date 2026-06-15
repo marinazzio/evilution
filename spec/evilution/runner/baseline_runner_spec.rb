@@ -114,6 +114,37 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration
     end
 
+    it "passes a CoverageExampleFilter for RSpec when the coverage strategy is selected" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      runner = described_class.new(cfg)
+      map = Evilution::Coverage::Map.new(index: {}, built_files: [])
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: [], load: map)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:example_filter]).to be_a(Evilution::CoverageExampleFilter)
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
+    it "falls back to a lexical ExampleFilter when the coverage map build raises" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      runner = described_class.new(cfg)
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["/x/lib/foo.rb"])
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      allow(Evilution::Coverage::MapBuilder).to receive(:new).and_raise(RuntimeError, "boom")
+      allow(runner).to receive(:warn)
+
+      expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
+        expect(kwargs[:example_filter]).to be_a(Evilution::ExampleFilter)
+        Evilution::Integration::RSpec.allocate
+      end
+      runner.build_integration
+    end
+
     it "omits example_filter when example_targeting disabled" do
       cfg = config(integration: :rspec, example_targeting: false)
       runner = described_class.new(cfg)

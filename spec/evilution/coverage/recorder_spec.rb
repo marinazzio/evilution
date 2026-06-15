@@ -77,6 +77,25 @@ RSpec.describe Evilution::Coverage::Recorder do
     end
   end
 
+  context "executed-line tracking (a line covered at load, attributed to no example)" do
+    let(:source) do
+      snapshots(
+        { target => [nil, 1, 0] }, # before: line 2 already ran (loaded), line 3 not
+        { target => [nil, 1, 1] }  # after: line 3 newly ran; line 2 unchanged at 1
+      )
+    end
+
+    it "marks every covered line executed, but only attributes the lines that increased" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target])
+
+      expect(map.examples_for(target, 2)).to eq([]) # not attributed -- no increase
+      expect(map.examples_for(target, 3)).to eq(["spec/calc_spec.rb:5"])
+      expect(map.executed?(target, 2)).to be(true)  # load-covered -> executed, not a gap
+      expect(map.executed?(target, 3)).to be(true)
+    end
+  end
+
   context "two examples touching overlapping lines" do
     let(:source) do
       snapshots(
