@@ -137,8 +137,8 @@ class Evilution::Runner::BaselineRunner
   def resolved_spec_files
     config.target_files
           .flat_map { |file| Array(config.spec_selector.call(file)) }
-          .uniq
           .map { |spec| File.expand_path(spec, Evilution::PROJECT_ROOT) }
+          .uniq
   end
 
   def log_start
