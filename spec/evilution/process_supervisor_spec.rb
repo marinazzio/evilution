@@ -258,6 +258,40 @@ RSpec.describe Evilution::ProcessSupervisor do
       supervisor.reap(h)
       expect { supervisor.reap(h) }.not_to raise_error
     end
+  end
+
+  describe "#reap_nonblock" do
+    subject(:supervisor) { described_class.new }
+
+    it "returns false and keeps the handle registered while the child runs" do
+      h = supervisor.spawn { sleep 60 }
+      begin
+        expect(supervisor.reap_nonblock(h)).to be(false)
+        expect(described_class.registry).to include(h)
+      ensure
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
+
+    it "reaps an exited child, releases it, and drops it from the registry" do
+      sandbox = Dir.mktmpdir("supervisor-reap-nonblock")
+      read_io, write_io = IO.pipe
+      h = supervisor.spawn(fds: [read_io, write_io], sandbox_dir: sandbox) { exit!(0) }
+
+      wait_until { supervisor.reap_nonblock(h) }
+
+      expect(read_io).to be_closed
+      expect(write_io).to be_closed
+      expect(Dir.exist?(sandbox)).to be(false)
+      expect(Evilution::TempDirTracker.tracked_dirs).not_to include(sandbox)
+      expect(described_class.registry).not_to include(h)
+    end
+
+    it "tolerates ECHILD and returns true when already reaped" do
+      h = supervisor.spawn { exit!(0) }
+      wait_until { supervisor.reap_nonblock(h) }
+      expect(supervisor.reap_nonblock(h)).to be(true)
+    end
 
     it "still unregisters the handle and does not raise when sandbox removal fails" do
       Dir.mktmpdir("supervisor-reap-fail") do |outer|

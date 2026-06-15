@@ -104,12 +104,38 @@ class Evilution::ProcessSupervisor
   def reap(handle)
     safe_wait(handle.pid)
   ensure
+    release(handle)
+  end
+
+  # Non-blocking reap for callers that poll a child's liveness as part of a
+  # read protocol (e.g. Isolation::Fork's marshal-pipe loop). Returns false
+  # while the child is still running -- the handle stays registered so a signal
+  # trap can still reach it. Once the child has exited (or was already reaped),
+  # it releases the handle in the same step it reaps, so the process-global
+  # registry never holds a stale, already-reaped pgid.
+  def reap_nonblock(handle)
+    return false unless nonblocking_wait(handle.pid)
+
+    release(handle)
+    true
+  end
+
+  private
+
+  # WNOHANG wait: returns the pid once the child has exited, nil while it is
+  # still running, and -- treating an already-reaped child as exited -- the pid
+  # again on ECHILD so the caller still releases the handle.
+  def nonblocking_wait(pid)
+    ::Process.waitpid(pid, ::Process::WNOHANG)
+  rescue Errno::ECHILD
+    pid
+  end
+
+  def release(handle)
     close_fds(handle)
     cleanup_sandbox(handle)
     self.class.unregister(handle)
   end
-
-  private
 
   def isolate_self
     ::Process.setpgid(0, 0)

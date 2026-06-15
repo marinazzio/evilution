@@ -344,11 +344,14 @@ RSpec.describe Evilution::Isolation::Fork do
     # exited, force-terminate via the same TERM/KILL ladder used on timeout.
     it "bounds reap_and_decode so a child that hasn't exited can't hang the parent" do
       pid = Process.fork { sleep 60 }
+      handle = Evilution::ProcessSupervisor::Handle.new(
+        pid: pid, pgid: pid, fds: [], sandbox_dir: nil
+      )
       payload = Marshal.dump(passed: true)
       start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       Timeout.timeout(8) do
-        isolator.send(:reap_and_decode, pid, payload)
+        isolator.send(:reap_and_decode, handle, payload)
       end
 
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
