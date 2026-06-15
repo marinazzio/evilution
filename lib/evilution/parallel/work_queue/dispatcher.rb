@@ -17,6 +17,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     @recycle_factory = recycle_factory
     @state = Evilution::Parallel::WorkQueue.send(:const_get, :CollectionState).new(items.length)
     @retired = []
+    @deadlines = DeadlineTracker.new(item_timeout: item_timeout, workers: @workers)
   end
 
   def run
@@ -48,7 +49,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     result_ios = io_to_worker.keys
 
     while @state.in_flight.positive?
-      readable, = IO.select(result_ios, nil, nil, select_timeout)
+      readable, = IO.select(result_ios, nil, nil, @deadlines.select_timeout)
       reap_timed_out(io_to_worker, result_ios)
       next if readable.nil?
 
@@ -58,21 +59,8 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     end
   end
 
-  def select_timeout
-    return @item_timeout unless @item_timeout
-
-    deadlines = @workers.filter_map(&:deadline)
-    return @item_timeout if deadlines.empty?
-
-    [deadlines.min - monotonic, 0].max
-  end
-
   def reap_timed_out(io_to_worker, result_ios)
-    return unless @item_timeout
-
-    now = monotonic
-    stuck = @workers.select { |w| w.deadline && w.deadline <= now && w.pending.positive? }
-    stuck.each { |w| time_out_worker(w, io_to_worker, result_ios) }
+    @deadlines.overdue.each { |worker| time_out_worker(worker, io_to_worker, result_ios) }
   end
 
   def time_out_worker(worker, io_to_worker, result_ios)
@@ -106,7 +94,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     worker.pending -= 1
     worker.items_completed += 1
     worker.in_flight_indices.delete(index)
-    worker.deadline = next_deadline(worker)
+    @deadlines.refresh(worker)
   end
 
   # A worker that exited without replying loses only its in-flight item(s)
@@ -187,26 +175,12 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     worker.send_item(@state.next_index, @items[@state.next_index])
     @state.next_index += 1
     @state.in_flight += 1
-    start_deadline(worker)
-  end
-
-  def start_deadline(worker)
-    return unless @item_timeout
-
-    worker.deadline ||= monotonic + @item_timeout
-  end
-
-  def next_deadline(worker)
-    return nil unless @item_timeout && worker.pending.positive?
-
-    monotonic + @item_timeout
+    @deadlines.start(worker)
   end
 
   def more_to_send?
     @state.next_index < @items.length
   end
-
-  def monotonic
-    Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  end
 end
+
+require_relative "dispatcher/deadline_tracker"
