@@ -609,6 +609,38 @@ RSpec.describe Evilution::Config do
     end
   end
 
+  describe "example_targeting_strategy (orchestration)" do
+    it "defaults to :lexical" do
+      config = described_class.new(skip_config_file: true)
+
+      expect(config.example_targeting_strategy).to eq(:lexical)
+      expect(config.coverage_targeting?).to be(false)
+    end
+
+    it "accepts :coverage" do
+      config = described_class.new(example_targeting_strategy: :coverage, skip_config_file: true)
+
+      expect(config.example_targeting_strategy).to eq(:coverage)
+      expect(config.coverage_targeting?).to be(true)
+    end
+
+    it "raises on an unknown strategy" do
+      expect do
+        described_class.new(example_targeting_strategy: :bogus, skip_config_file: true)
+      end.to raise_error(Evilution::ConfigError, /lexical or coverage/)
+    end
+
+    it "loads from YAML" do
+      Dir.mktmpdir do |dir|
+        Dir.chdir(dir) do
+          File.write(".evilution.yml", "example_targeting_strategy: coverage\n")
+
+          expect(described_class.new.example_targeting_strategy).to eq(:coverage)
+        end
+      end
+    end
+  end
+
   describe "example_targeting_cache (orchestration)" do
     it "defaults to { max_files: 50, max_blocks: 10000 }" do
       config = described_class.new(skip_config_file: true)

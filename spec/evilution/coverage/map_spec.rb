@@ -13,8 +13,13 @@ RSpec.describe Evilution::Coverage::Map do
     }
   end
   let(:built_files) { ["lib/calc.rb"] }
+  # Line 2 was executed (e.g. at class load) but is attributed to no example;
+  # line 3 was executed inside examples; line 99 never ran.
+  let(:executed_lines) { { "lib/calc.rb" => [2, 3] } }
 
-  subject(:map) { described_class.new(index: index, built_files: built_files) }
+  subject(:map) do
+    described_class.new(index: index, built_files: built_files, executed_lines: executed_lines)
+  end
 
   it "returns sorted, de-duplicated example locations for a covered line" do
     expect(map.examples_for("lib/calc.rb", 3)).to eq(["spec/calc_spec.rb:5", "spec/calc_spec.rb:9"])
@@ -33,6 +38,13 @@ RSpec.describe Evilution::Coverage::Map do
     expect(map.built?("lib/other.rb")).to be(false)
   end
 
+  it "reports whether a line was executed at all (covered, even if by no single example)" do
+    expect(map.executed?("lib/calc.rb", 2)).to be(true)  # load-covered, no example
+    expect(map.executed?("lib/calc.rb", 3)).to be(true)  # example-covered
+    expect(map.executed?("lib/calc.rb", 99)).to be(false) # never ran -> true gap
+    expect(map.executed?("lib/other.rb", 2)).to be(false)
+  end
+
   it "is frozen" do
     expect(map).to be_frozen
   end
@@ -41,5 +53,7 @@ RSpec.describe Evilution::Coverage::Map do
     restored = described_class.from_h(map.to_h)
     expect(restored.examples_for("lib/calc.rb", 3)).to eq(map.examples_for("lib/calc.rb", 3))
     expect(restored.built?("lib/calc.rb")).to be(true)
+    expect(restored.executed?("lib/calc.rb", 2)).to be(true)
+    expect(restored.executed?("lib/calc.rb", 99)).to be(false)
   end
 end

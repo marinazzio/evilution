@@ -17,7 +17,7 @@ class Evilution::Config
     show_disabled: false, baseline_session: nil, skip_heredoc_literals: false,
     related_specs_heuristic: false, fallback_to_full_suite: false, preload: nil,
     spec_mappings: {}, spec_pattern: nil, example_targeting: true,
-    example_targeting_fallback: :full_file,
+    example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
     profile: :default, canary: true
@@ -30,7 +30,8 @@ class Evilution::Config
               :ignore_patterns, :show_disabled, :baseline_session,
               :skip_heredoc_literals, :related_specs_heuristic,
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
-              :example_targeting, :example_targeting_fallback, :example_targeting_cache,
+              :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
+              :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary
 
   def initialize(**options)
@@ -102,6 +103,10 @@ class Evilution::Config
 
   def example_targeting?
     example_targeting
+  end
+
+  def coverage_targeting?
+    example_targeting && example_targeting_strategy == :coverage
   end
 
   def fallback_to_full_suite?
@@ -186,6 +191,13 @@ class Evilution::Config
       # to run every example in the resolved spec files. You can also disable
       # without editing the file by exporting EV_DISABLE_EXAMPLE_TARGETING=1.
       # example_targeting: true
+
+      # How targeting picks examples (default: lexical).
+      # lexical  - text-grep resolved spec files for the mutated method/class name
+      # coverage - run exactly the examples that EXECUTE the mutated line, from a
+      #            cached full-suite line-coverage map (falls back to lexical for
+      #            any file the map has not fully built)
+      # example_targeting_strategy: lexical
 
       # Behavior when targeting finds no matching example (default: full_file).
       # full_file  - run every example in the resolved spec files
@@ -275,6 +287,7 @@ class Evilution::Config
   def assign_example_targeting(merged)
     @example_targeting          = merged[:example_targeting] ? true : false
     @example_targeting_fallback = Validators::ExampleTargetingFallback.call(merged[:example_targeting_fallback])
+    @example_targeting_strategy = Validators::ExampleTargetingStrategy.call(merged[:example_targeting_strategy])
     @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
   end
 end
@@ -294,6 +307,7 @@ require_relative "config/validators/ignore_patterns"
 require_relative "config/validators/spec_pattern"
 require_relative "config/validators/spec_mappings"
 require_relative "config/validators/example_targeting_fallback"
+require_relative "config/validators/example_targeting_strategy"
 require_relative "config/validators/example_targeting_cache"
 require_relative "config/validators/profile"
 require_relative "config/builders"

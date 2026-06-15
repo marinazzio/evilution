@@ -135,6 +135,23 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:example_targeting_fallback]).to eq("unresolved")
   end
 
+  it "parses --example-targeting coverage to enabled + coverage strategy" do
+    options, = parse(["--example-targeting", "coverage"])
+    expect(options[:example_targeting]).to be(true)
+    expect(options[:example_targeting_strategy]).to eq(:coverage)
+  end
+
+  it "parses --example-targeting lexical to enabled + lexical strategy" do
+    options, = parse(["--example-targeting", "lexical"])
+    expect(options[:example_targeting]).to be(true)
+    expect(options[:example_targeting_strategy]).to eq(:lexical)
+  end
+
+  it "parses --example-targeting full_file to disabled" do
+    options, = parse(["--example-targeting", "full_file"])
+    expect(options[:example_targeting]).to be(false)
+  end
+
   it "captures --against path" do
     options, = parse(["--against=prior.json"])
     expect(options[:against]).to eq("prior.json")
