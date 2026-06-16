@@ -82,6 +82,19 @@ RSpec.describe Evilution::SpecSelector do
       expect(selector.call("lib/missing.rb")).to be_nil
     end
 
+    it "expands a dir-grouped test directory into its files via the resolver" do
+      create_file("test/unit/branch/branch_test.rb")
+      create_file("test/unit/branch/conflict_test.rb")
+      selector = described_class.new(
+        spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb")
+      )
+
+      expect(selector.call("lib/state_machines/branch.rb")).to contain_exactly(
+        "test/unit/branch/branch_test.rb",
+        "test/unit/branch/conflict_test.rb"
+      )
+    end
+
     it "returns nil when spec_pattern excludes all candidates" do
       create_file("spec/foo_spec.rb")
       selector = build(spec_pattern: "spec/requests/**/*_spec.rb")

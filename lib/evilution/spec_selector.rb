@@ -19,8 +19,8 @@ class Evilution::SpecSelector
       return existing unless existing.empty?
     end
 
-    resolved = @spec_resolver.call(source_path, spec_pattern: @spec_pattern)
-    resolved ? [resolved] : nil
+    resolved = @spec_resolver.resolve_specs(source_path, spec_pattern: @spec_pattern)
+    resolved && !resolved.empty? ? resolved : nil
   end
 
   private
