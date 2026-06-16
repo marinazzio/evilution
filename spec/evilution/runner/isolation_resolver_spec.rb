@@ -180,6 +180,27 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       end
     end
 
+    it "does not add the test root to $LOAD_PATH for rspec preload even when test/ exists" do
+      Dir.mktmpdir do |dir|
+        spec_dir = File.join(dir, "spec")
+        test_dir = File.join(dir, "test")
+        FileUtils.mkdir_p(spec_dir)
+        FileUtils.mkdir_p(test_dir)
+        File.write(File.join(spec_dir, "rails_helper.rb"), "# preloaded\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
+        original_load_path = $LOAD_PATH.dup
+
+        begin
+          resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+          resolver.perform_preload
+          expect($LOAD_PATH).to include(File.expand_path(spec_dir))
+          expect($LOAD_PATH).not_to include(File.expand_path(test_dir))
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+        end
+      end
+    end
+
     it "adds the test root to $LOAD_PATH so a minitest test_helper's non-relative require resolves" do
       Dir.mktmpdir do |dir|
         support_dir = File.join(dir, "test", "support")
@@ -189,6 +210,7 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         File.write(File.join(dir, "test", "test_helper.rb"), %(require "support/sentinel"\n))
         allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
         original_load_path = $LOAD_PATH.dup
+        original_features = $LOADED_FEATURES.dup
 
         begin
           Dir.chdir(dir) do
@@ -201,6 +223,7 @@ RSpec.describe Evilution::Runner::IsolationResolver do
           expect(File.read(marker)).to eq("loaded")
         ensure
           $LOAD_PATH.replace(original_load_path)
+          $LOADED_FEATURES.replace(original_features)
         end
       end
     end
@@ -212,6 +235,7 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         File.write(File.join(test_dir, "test_helper.rb"), "# preloaded\n")
         allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
         original_load_path = $LOAD_PATH.dup
+        original_features = $LOADED_FEATURES.dup
 
         begin
           Dir.chdir(dir) do
@@ -224,6 +248,7 @@ RSpec.describe Evilution::Runner::IsolationResolver do
           end
         ensure
           $LOAD_PATH.replace(original_load_path)
+          $LOADED_FEATURES.replace(original_features)
         end
       end
     end

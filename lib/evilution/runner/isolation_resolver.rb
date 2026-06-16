@@ -93,19 +93,41 @@ class Evilution::Runner::IsolationResolver
     @detected_rails_root = Evilution::RailsDetector.rails_root_for_any(target_files)
   end
 
-  # Preload files typically `require` a sibling helper relative to the test
-  # root: spec/rails_helper.rb and spec/spec_helper.rb need spec/ on
-  # $LOAD_PATH, while a minitest/test-unit test/test_helper.rb that does a
-  # non-relative `require "support/..."` needs test/ on $LOAD_PATH (the suite's
-  # own runner satisfies this via -Itest/-Ispec; evilution calls Runner.run
-  # directly so it must mirror that). Route through TestLoadPath -- the same
-  # policy the per-mutation test load uses (EV-52hf) -- so the preload and
-  # mutation paths agree, covering test/ as well as spec/ (EV-5hk5 / GH #1370).
-  # Preloading also uses `RSpec.configure`, which needs rspec/core loaded.
+  # Preload files `require` a sibling helper relative to the test root, which
+  # the suite's own runner satisfies via -Ispec/-Itest; evilution calls
+  # Runner.run directly, so it must mirror that on $LOAD_PATH. The policy is
+  # integration-specific so it does not over-widen the path:
+  # - rspec: spec/rails_helper.rb / spec/spec_helper.rb need spec/ only (and
+  #   rspec/core for RSpec.configure). Kept spec-only to match the RSpec
+  #   FrameworkLoader and avoid prepending test/ ahead of spec/ in apps that
+  #   have both (a bare `require "support/foo"` must still resolve from spec/).
+  # - minitest/test-unit: a test/test_helper.rb doing a non-relative
+  #   `require "support/..."` needs test/ on $LOAD_PATH. Route through
+  #   TestLoadPath -- the same policy the per-mutation test load uses  -- so preload and mutation paths agree.
   def prepare_load_path_for_preload(preload_path)
+    if config.integration == :rspec
+      prepare_rspec_preload_load_path
+    else
+      prepare_test_preload_load_path(preload_path)
+    end
+  end
+
+  def prepare_rspec_preload_load_path
+    spec_dir = File.expand_path(resolve_spec_dir)
+    $LOAD_PATH.unshift(spec_dir) unless $LOAD_PATH.include?(spec_dir)
+    require "rspec/core"
+  end
+
+  def prepare_test_preload_load_path(preload_path)
     base = detected_rails_root || Evilution.project_base_dir
     Evilution::Integration::Loading::TestLoadPath.add!([preload_path], base: base)
-    require "rspec/core" if config.integration == :rspec
+  end
+
+  def resolve_spec_dir
+    root = detected_rails_root
+    return File.join(root, "spec") if root
+
+    "spec"
   end
 
   def resolve_preload_path
