@@ -180,6 +180,54 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       end
     end
 
+    it "adds the test root to $LOAD_PATH so a minitest test_helper's non-relative require resolves" do
+      Dir.mktmpdir do |dir|
+        support_dir = File.join(dir, "test", "support")
+        FileUtils.mkdir_p(support_dir)
+        marker = File.join(dir, "marker")
+        File.write(File.join(support_dir, "sentinel.rb"), "File.write(#{marker.inspect}, 'loaded')\n")
+        File.write(File.join(dir, "test", "test_helper.rb"), %(require "support/sentinel"\n))
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+        original_load_path = $LOAD_PATH.dup
+
+        begin
+          Dir.chdir(dir) do
+            resolver = described_class.new(
+              config(preload: "test/test_helper.rb", integration: :minitest, isolation: :fork),
+              target_files: -> { [] }, hooks: nil
+            )
+            expect { resolver.perform_preload }.not_to raise_error
+          end
+          expect(File.read(marker)).to eq("loaded")
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+        end
+      end
+    end
+
+    it "puts the test root on $LOAD_PATH for a minitest project before requiring the preload file" do
+      Dir.mktmpdir do |dir|
+        test_dir = File.join(dir, "test")
+        FileUtils.mkdir_p(test_dir)
+        File.write(File.join(test_dir, "test_helper.rb"), "# preloaded\n")
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+        original_load_path = $LOAD_PATH.dup
+
+        begin
+          Dir.chdir(dir) do
+            resolver = described_class.new(
+              config(preload: "test/test_helper.rb", integration: :minitest, isolation: :fork),
+              target_files: -> { [] }, hooks: nil
+            )
+            resolver.perform_preload
+            expect($LOAD_PATH).to include(File.expand_path(test_dir))
+          end
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+        end
+      end
+    end
+
     it "raises Evilution::ConfigError when an explicit preload path is missing under :fork with no rails root" do
       resolver = described_class.new(
         config(preload: "/nonexistent/helper.rb", isolation: :fork),
@@ -342,7 +390,18 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         Dir.mktmpdir do |dir|
           markers = file_paths.to_h { |rel| [rel, write_marker_file(dir, rel)] }
           allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(dir)
-          yield(dir, markers)
+          # perform_preload mutates global load state ($LOAD_PATH via TestLoadPath,
+          # $LOADED_FEATURES via require). Restore both so a stale entry pointing
+          # into this (about-to-be-deleted) tmpdir can't poison a later bare
+          # `require "helper"` in another example (string-match against $LOAD_PATH).
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+          begin
+            yield(dir, markers)
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
         end
       end
 
