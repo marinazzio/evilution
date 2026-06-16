@@ -727,6 +727,29 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         end
       end
 
+      it "warns that nothing will be preloaded when no helper and no gem entry exist" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          allow(Evilution::GemDetector).to receive(:gem_entry_for).and_return(nil)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            noisy_config = Evilution::Config.new(isolation: :fork, baseline: false, skip_config_file: true)
+            resolver = described_class.new(
+              noisy_config, target_files: -> { [File.join(dir, "lib", "mygem.rb")] }, hooks: nil
+            )
+
+            expect { resolver.perform_preload }.to output(/nothing will be preloaded/).to_stderr
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
       it "suppresses the test-layout warning when config.quiet is set" do
         Dir.mktmpdir do |dir|
           File.write(File.join(dir, "mygem.gemspec"), "# spec\n")

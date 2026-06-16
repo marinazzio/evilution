@@ -205,8 +205,9 @@ class Evilution::Runner::IsolationResolver
     helper = find_first_existing_gem_helper
     return helper if helper
 
-    warn_unconventional_test_layout if detected_gem_root
-    detected_gem_entry
+    entry = detected_gem_entry
+    warn_unconventional_test_layout(entry) if detected_gem_root
+    entry
   end
 
   def detected_gem_entry
@@ -279,16 +280,26 @@ class Evilution::Runner::IsolationResolver
 
   # A gem was detected but none of the conventional test helpers exist, so the
   # suite likely uses a non-standard layout. Point at the expected locations and
-  # the --preload escape hatch — without a helper, the gem entry alone may not
-  # register example groups and mutations can error with 0 examples.
-  def warn_unconventional_test_layout
+  # the --preload escape hatch. The fallback wording reflects what will actually
+  # happen: preload the gem entry when one was found, otherwise nothing is
+  # preloaded (gem_entry can be nil when the gemspec name has no on-disk lib
+  # entry) — without a helper, the gem entry alone may not register example
+  # groups and mutations can error with 0 examples.
+  def warn_unconventional_test_layout(gem_entry)
     return if config.quiet
+
+    fallback =
+      if gem_entry
+        "Falling back to the gem entry (#{gem_entry})"
+      else
+        "No gem entry found to fall back to, so nothing will be preloaded"
+      end
 
     $stderr.write(
       "[evilution] warning: no conventional test helper found under " \
       "#{detected_gem_root.inspect} (looked for #{GEM_PRELOAD_CANDIDATES.join(", ")}). " \
-      "Preloading the gem entry instead. If mutations error with '0 examples loaded' " \
-      "or NameError, your test layout is non-standard — pass --preload <your helper>.\n"
+      "#{fallback}. If mutations error with '0 examples loaded' or NameError, " \
+      "your test layout is non-standard — pass --preload <your helper>.\n"
     )
   end
 
