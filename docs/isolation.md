@@ -9,7 +9,7 @@ is used.
 
 | Strategy     | What it does                                                           | When to use                                                |
 | ------------ | ---------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `auto`       | Default. Picks `fork` for Rails projects, `in_process` otherwise.      | Leave this on unless you have a specific reason to change. |
+| `auto`       | Default. Picks `fork` for Rails projects and packaged gems, `in_process` otherwise. | Leave this on unless you have a specific reason to change. |
 | `fork`       | Forks a fresh child process per mutant. Parent `SIGKILL`s on timeout.  | Rails / ActiveRecord projects; any code that uses mutexes, monitors, or async-interrupt masks. |
 | `in_process` | Runs the mutant inside the runner process under `Timeout.timeout`.     | Pure-Ruby libraries that do not use async-interrupt masks. |
 
@@ -42,6 +42,15 @@ a Rails project, evilution emits a warning naming the hazard and proceeds
 anyway — sometimes you know the code under test never enters a masked
 section, and that is your call to make.
 
+`auto` also resolves to `fork` when the target files live under a packaged
+gem (a directory containing a `*.gemspec`). A gem's library and test
+framework must be loaded in the parent before forking — see [Automatic
+preload](#automatic-preload) — and `in_process` cannot preload them without
+polluting the host process. A non-Rails gem run under the old `in_process`
+default therefore produced 0 examples / 100% errors out of the box; defaulting
+gems to `fork` lets auto-preload fire (EV-z03y, PR #1375). A plain non-Rails,
+non-gem project (no gemspec) still defaults to `in_process`.
+
 The same hazard applies to any Ruby code that uses
 `Thread.handle_interrupt(... => :never)`: `Mutex#synchronize`, `Monitor#synchronize`,
 `Queue`, `ActiveSupport::Notifications::Fanout` listeners, and custom cleanup
@@ -67,7 +76,27 @@ automatically looks for these files in order and preloads the first one it
 finds:
 
 1. `spec/rails_helper.rb` (RSpec)
-2. `test/test_helper.rb` (Minitest)
+2. `spec/spec_helper.rb` (RSpec)
+3. `test/test_helper.rb` (Minitest)
+
+For a packaged gem (auto-detected via `*.gemspec`, no Rails root), evilution
+preloads the conventional test helper — which loads both the gem's library
+and the suite's framework/support setup so example groups register — in this
+order, falling back to the gem's library entry point (`lib/<gem>.rb`):
+
+1. `spec/spec_helper.rb` (RSpec)
+2. `test/test_helper.rb` (Minitest / Test::Unit)
+3. `test/helper.rb` (flat-layout convention)
+
+When a gem is detected but none of those helpers exist, evilution prints a
+warning naming the locations it looked in and pointing at `--preload`, so a
+non-standard test layout reads as a fixable configuration issue rather than a
+silent 0% (EV-z03y, PR #1375).
+
+Minitest/Test::Unit helpers that `require "test_helper"` (or any non-relative
+`require "support/..."`) work without `-Itest`: evilution puts the test root
+on `$LOAD_PATH` for the preload just as the test runner would (EV-5hk5, PR
+#1373).
 
 No configuration needed.
 
