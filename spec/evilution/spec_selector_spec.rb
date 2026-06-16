@@ -82,6 +82,37 @@ RSpec.describe Evilution::SpecSelector do
       expect(selector.call("lib/missing.rb")).to be_nil
     end
 
+    it "expands a dir-grouped test directory into its files via the resolver" do
+      create_file("test/unit/branch/branch_test.rb")
+      create_file("test/unit/branch/conflict_test.rb")
+      selector = described_class.new(
+        spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb")
+      )
+
+      expect(selector.call("lib/state_machines/branch.rb")).to contain_exactly(
+        "test/unit/branch/branch_test.rb",
+        "test/unit/branch/conflict_test.rb"
+      )
+    end
+
+    it "falls back to a custom resolver that implements only #call (back-compat)" do
+      legacy = Class.new do
+        def call(_source_path, spec_pattern: nil) = "spec/legacy_spec.rb"
+      end.new
+      selector = described_class.new(spec_resolver: legacy)
+
+      expect(selector.call("lib/foo.rb")).to eq(["spec/legacy_spec.rb"])
+    end
+
+    it "returns nil when a call-only custom resolver finds nothing" do
+      legacy = Class.new do
+        def call(_source_path, spec_pattern: nil) = nil
+      end.new
+      selector = described_class.new(spec_resolver: legacy)
+
+      expect(selector.call("lib/foo.rb")).to be_nil
+    end
+
     it "returns nil when spec_pattern excludes all candidates" do
       create_file("spec/foo_spec.rb")
       selector = build(spec_pattern: "spec/requests/**/*_spec.rb")

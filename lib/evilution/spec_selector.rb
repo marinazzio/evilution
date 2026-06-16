@@ -19,11 +19,22 @@ class Evilution::SpecSelector
       return existing unless existing.empty?
     end
 
-    resolved = @spec_resolver.call(source_path, spec_pattern: @spec_pattern)
-    resolved ? [resolved] : nil
+    resolved = resolve_via_resolver(source_path)
+    resolved && !resolved.empty? ? resolved : nil
   end
 
   private
+
+  # Prefer the array-returning #resolve_specs, but fall back to the older single-file #call contract so a custom
+  # resolver that only implements #call keeps working.
+  def resolve_via_resolver(source_path)
+    if @spec_resolver.respond_to?(:resolve_specs)
+      @spec_resolver.resolve_specs(source_path, spec_pattern: @spec_pattern)
+    else
+      file = @spec_resolver.call(source_path, spec_pattern: @spec_pattern)
+      file ? [file] : nil
+    end
+  end
 
   def mapping_for(source_path)
     @spec_mappings[normalize(source_path)]
@@ -40,8 +51,7 @@ class Evilution::SpecSelector
     normalized.delete_prefix("./")
   end
 
-  # Same semantics as Evilution::SpecResolver#project_relative_exists? — see
-  # that method for the EV-wqxu / GH #1278 rationale.
+  # Same semantics as Evilution::SpecResolver#project_relative_exists?
   def project_relative_exists?(path)
     return true if File.exist?(path)
     return false unless Evilution.in_isolated_worker?

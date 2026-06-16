@@ -28,6 +28,22 @@ class Evilution::SpecResolver
     Array(source_paths).filter_map { |path| call(path) }.uniq
   end
 
+  # Like #call, but returns an ARRAY of test files and additionally covers the
+  # dir-grouped layout (a source file's tests live in a directory named after
+  # the source basename, e.g. lib/x/branch.rb -> test/unit/branch/*_test.rb,
+  # rather than a single mirror file). The deterministic file mirror from #call
+  # always wins; only when no mirror file exists is the first matching grouped
+  # directory expanded into its test files (EV-bi41). Returns nil when nothing
+  # resolves.
+  def resolve_specs(source_path, spec_pattern: nil)
+    return nil if source_path.nil? || source_path.empty?
+
+    file = call(source_path, spec_pattern: spec_pattern)
+    return [file] if file
+
+    resolve_grouped_dir(source_path, spec_pattern: spec_pattern)
+  end
+
   # Best-guess candidate for an unresolved source, found by basename glob
   # rather than the deterministic path mirroring used by #call. Used only to
   # enrich the "no matching test" hint (EV-z7f5 / GH #1325) — never to pick a
@@ -73,6 +89,56 @@ class Evilution::SpecResolver
 
   def filter_by_pattern(candidates, pattern)
     candidates.select { |path| File.fnmatch?(pattern, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
+  end
+
+  # Dir-grouped resolution: find the first candidate directory that exists and
+  # expand it into its test files. Ranked below #call's file mirrors (callers
+  # try #call first), so a 1:1 spec always wins when present.
+  def resolve_grouped_dir(source_path, spec_pattern: nil)
+    dir = directory_candidates(normalize_path(source_path)).find { |c| project_relative_dir?(c) }
+    return nil unless dir
+
+    files = test_files_in(dir)
+    files = filter_by_pattern(files, spec_pattern) if spec_pattern
+    files.empty? ? nil : files
+  end
+
+  # The grouped-directory analogue of #mirror_candidates: cross every
+  # conventional root with each layout variant, using the source basename
+  # (suffix dropped) as a DIRECTORY name rather than a test FILE name.
+  def directory_candidates(source_path)
+    stripped = strip_source_prefix(source_path)
+    mirror_variants(stripped).flat_map { |variant| grouped_dir_candidates(variant) }.uniq
+  end
+
+  def grouped_dir_candidates(variant)
+    dir, _, file = variant.rpartition("/")
+    name = file.delete_suffix(@test_suffix)
+    return [] if name.empty?
+
+    relative = dir.empty? ? name : "#{dir}/#{name}"
+    roots.map { |root| "#{root}/#{relative}" }
+  end
+
+  def strip_source_prefix(source_path)
+    base = source_path.sub(/\.rb\z/, @test_suffix)
+    prefix = STRIPPABLE_PREFIXES.find { |p| source_path.start_with?(p) }
+    prefix ? base.delete_prefix(prefix) : base
+  end
+
+  # Every test file under a grouped directory: the mirrored suffix plus, for
+  # minitest/test-unit, the `test_` prefix convention. Sorted for determinism.
+  def test_files_in(dir)
+    globs = ["#{dir}/**/*#{@test_suffix}", ("#{dir}/**/test_*.rb" if @test_suffix == MINITEST_SUFFIX)]
+    globs.compact.flat_map { |glob| glob_relative(glob) }.uniq.sort
+  end
+
+  # Directory analogue of #project_relative_exists?.
+  def project_relative_dir?(path)
+    return true if File.directory?(path)
+    return false unless Evilution.in_isolated_worker?
+
+    File.directory?(File.expand_path(path, Evilution::PROJECT_ROOT))
   end
 
   def normalize_path(path)

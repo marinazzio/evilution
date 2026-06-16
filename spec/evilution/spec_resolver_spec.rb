@@ -520,4 +520,64 @@ RSpec.describe Evilution::SpecResolver do
       expect(resolver.suggest("lib/evilution/spec_resolver.rb")).to be_nil
     end
   end
+
+  describe "#resolve_specs" do
+    it "returns the mirror spec file as a single-element array when it exists" do
+      create_file("spec/foo/bar_spec.rb")
+
+      expect(resolver.resolve_specs("lib/foo/bar.rb")).to eq(["spec/foo/bar_spec.rb"])
+    end
+
+    it "returns nil when neither a mirror file nor a grouped directory exists" do
+      expect(resolver.resolve_specs("lib/foo/bar.rb")).to be_nil
+    end
+
+    context "dir-grouped layout (minitest)" do
+      subject(:resolver) { described_class.new(test_dir: "test", test_suffix: "_test.rb") }
+
+      it "expands a test/unit/<class>/ directory of *_test.rb files into the file list" do
+        create_file("test/unit/branch/branch_test.rb")
+        create_file("test/unit/branch/branch_with_conflict_test.rb")
+
+        expect(resolver.resolve_specs("lib/state_machines/branch.rb")).to contain_exactly(
+          "test/unit/branch/branch_test.rb",
+          "test/unit/branch/branch_with_conflict_test.rb"
+        )
+      end
+
+      it "finds test files nested deeper inside the grouped directory" do
+        create_file("test/unit/branch/sub/nested_test.rb")
+
+        expect(resolver.resolve_specs("lib/state_machines/branch.rb")).to eq(
+          ["test/unit/branch/sub/nested_test.rb"]
+        )
+      end
+
+      it "also matches the test_ prefix convention inside the grouped directory" do
+        create_file("test/unit/branch/test_branch.rb")
+
+        expect(resolver.resolve_specs("lib/state_machines/branch.rb")).to eq(
+          ["test/unit/branch/test_branch.rb"]
+        )
+      end
+
+      it "prefers a mirror test file over a same-named grouped directory" do
+        create_file("test/unit/branch_test.rb")
+        create_file("test/unit/branch/branch_test.rb")
+
+        expect(resolver.resolve_specs("lib/state_machines/branch.rb")).to eq(
+          ["test/unit/branch_test.rb"]
+        )
+      end
+
+      it "honours spec_pattern when expanding a grouped directory" do
+        create_file("test/unit/branch/branch_test.rb")
+        create_file("test/unit/branch/skip_test.rb")
+
+        expect(
+          resolver.resolve_specs("lib/state_machines/branch.rb", spec_pattern: "**/branch_test.rb")
+        ).to eq(["test/unit/branch/branch_test.rb"])
+      end
+    end
+  end
 end
