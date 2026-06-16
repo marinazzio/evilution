@@ -13,6 +13,14 @@ class Evilution::Runner::IsolationResolver
     File.join("spec", "spec_helper.rb"),
     File.join("test", "test_helper.rb")
   ].freeze
+  # Conventional helpers for a non-Rails gem (no rails_helper). Ordered rspec
+  # then minitest/test-unit; test/helper.rb covers the flat-layout convention
+  # (rack, connection_pool, rake).
+  GEM_PRELOAD_CANDIDATES = [
+    File.join("spec", "spec_helper.rb"),
+    File.join("test", "test_helper.rb"),
+    File.join("test", "helper.rb")
+  ].freeze
 
   def initialize(config, target_files:, hooks:)
     @config = config
@@ -83,14 +91,34 @@ class Evilution::Runner::IsolationResolver
       warn_in_process_under_rails if rails_root_detected?
       :in_process
     else # :auto
-      rails_root_detected? ? :fork : :in_process
+      fork_isolation_default? ? :fork : :in_process
     end
+  end
+
+  # Auto-isolation picks :fork for both Rails apps and packaged gems. A gem has
+  # a spec/test suite whose helper (and the gem's own deps) must be preloaded in
+  # the parent before forking; in_process can't preload without polluting the
+  # host, so a plain non-Rails gem run with the in_process default scored 0.0
+  # out-of-box (every mutation errored with 0 examples / NameError). Detecting
+  # the gemspec and defaulting to :fork lets auto-preload fire.
+  def fork_isolation_default?
+    rails_root_detected? || gem_root_detected?
+  end
+
+  def gem_root_detected?
+    !detected_gem_root.nil?
   end
 
   def detected_rails_root
     return @detected_rails_root if defined?(@detected_rails_root)
 
     @detected_rails_root = Evilution::RailsDetector.rails_root_for_any(target_files)
+  end
+
+  def detected_gem_root
+    return @detected_gem_root if defined?(@detected_gem_root)
+
+    @detected_gem_root = Evilution::GemDetector.gem_root_for_any(target_files)
   end
 
   # Preload files `require` a sibling helper relative to the test root, which
@@ -166,21 +194,40 @@ class Evilution::Runner::IsolationResolver
       raise Evilution::ConfigError, autodetect_missing_message
     end
 
+    resolve_autodetected_gem_preload
+  end
+
+  # For a non-Rails gem, prefer the conventional test helper (which loads the
+  # gem's library AND the suite's framework/support setup) over the bare gem
+  # entry, so example groups actually register. Fall back to the gem entry, and
+  # flag a non-standard test layout so the user can pass --preload.
+  def resolve_autodetected_gem_preload
+    helper = find_first_existing_gem_helper
+    return helper if helper
+
+    warn_unconventional_test_layout if detected_gem_root
     detected_gem_entry
   end
 
   def detected_gem_entry
     return @detected_gem_entry if defined?(@detected_gem_entry)
 
-    root = Evilution::GemDetector.gem_root_for_any(target_files)
+    root = detected_gem_root
     @detected_gem_entry = root && Evilution::GemDetector.gem_entry_for(root, target_paths: target_files)
   end
 
   def find_first_existing_candidate
-    root = detected_rails_root
+    find_first_existing_under(detected_rails_root, PRELOAD_CANDIDATES)
+  end
+
+  def find_first_existing_gem_helper
+    find_first_existing_under(detected_gem_root, GEM_PRELOAD_CANDIDATES)
+  end
+
+  def find_first_existing_under(root, candidates)
     return nil unless root
 
-    PRELOAD_CANDIDATES.each do |rel|
+    candidates.each do |rel|
       abs = File.join(root, rel)
       return abs if File.file?(abs)
     end
@@ -227,6 +274,21 @@ class Evilution::Runner::IsolationResolver
     $stderr.write(
       "[evilution] warning: configured preload #{path.inspect} not found; " \
       "falling through to auto-detect chain.\n"
+    )
+  end
+
+  # A gem was detected but none of the conventional test helpers exist, so the
+  # suite likely uses a non-standard layout. Point at the expected locations and
+  # the --preload escape hatch — without a helper, the gem entry alone may not
+  # register example groups and mutations can error with 0 examples.
+  def warn_unconventional_test_layout
+    return if config.quiet
+
+    $stderr.write(
+      "[evilution] warning: no conventional test helper found under " \
+      "#{detected_gem_root.inspect} (looked for #{GEM_PRELOAD_CANDIDATES.join(", ")}). " \
+      "Preloading the gem entry instead. If mutations error with '0 examples loaded' " \
+      "or NameError, your test layout is non-standard — pass --preload <your helper>.\n"
     )
   end
 

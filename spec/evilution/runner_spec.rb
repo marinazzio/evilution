@@ -1901,6 +1901,14 @@ RSpec.describe Evilution::Runner do
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
     end
 
+    # The :auto path picks :fork for Rails apps and packaged gems;
+    # these examples exercise the in_process default for a plain non-Rails,
+    # non-gem project, so stub both detectors to "not detected".
+    before do
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+      allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(nil)
+    end
+
     it "uses InProcess when isolation is :auto and jobs=1" do
       auto_config = Evilution::Config.new(
         target_files: ["lib/example.rb"], jobs: 1, quiet: true,
