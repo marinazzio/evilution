@@ -95,6 +95,24 @@ RSpec.describe Evilution::SpecSelector do
       )
     end
 
+    it "falls back to a custom resolver that implements only #call (back-compat)" do
+      legacy = Class.new do
+        def call(_source_path, spec_pattern: nil) = "spec/legacy_spec.rb"
+      end.new
+      selector = described_class.new(spec_resolver: legacy)
+
+      expect(selector.call("lib/foo.rb")).to eq(["spec/legacy_spec.rb"])
+    end
+
+    it "returns nil when a call-only custom resolver finds nothing" do
+      legacy = Class.new do
+        def call(_source_path, spec_pattern: nil) = nil
+      end.new
+      selector = described_class.new(spec_resolver: legacy)
+
+      expect(selector.call("lib/foo.rb")).to be_nil
+    end
+
     it "returns nil when spec_pattern excludes all candidates" do
       create_file("spec/foo_spec.rb")
       selector = build(spec_pattern: "spec/requests/**/*_spec.rb")
