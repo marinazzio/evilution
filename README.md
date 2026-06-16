@@ -114,8 +114,8 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--quiet-children`           | Boolean | false        | Redirect each forked worker's stdout/stderr to per-pid files under `tmp/evilution_children/<pid>.{out,err}` so noisy app initializers (Datadog, Bullet, etc.) don't merge with parent output. Trade-off: live worker errors only appear in the side files, not the terminal — `tail -f tmp/evilution_children/*.err` to watch them. |
 | `--quiet-children-dir DIR`   | String  | `tmp/evilution_children` | Override the directory used by `--quiet-children`.    |
-| `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects. See [docs/isolation.md](docs/isolation.md). |
-| `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. Errors with the full chain listed if none exist; pass `--no-preload` to opt out. |
+| `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. See [docs/isolation.md](docs/isolation.md). |
+| `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. For non-Rails gems: `spec/spec_helper.rb` → `test/test_helper.rb` → `test/helper.rb`, falling back to the gem entry `lib/<gem>.rb` (with a warning naming the searched paths). Pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
@@ -173,9 +173,9 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # integration: rspec       # test framework: rspec, minitest, test_unit
 # suggest_tests: false     # concrete test code in suggestions (matches integration)
 # save_session: false      # persist results under .evilution/results/
-# isolation: auto          # auto | fork | in_process (auto selects fork for Rails)
+# isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
-# preload: null            # path to preload before forking; false to disable; auto-detects for Rails
+# preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
@@ -220,7 +220,7 @@ All keys recognised under `schema_version: 1`:
 | `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
 | `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
 | `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (marked `:neutral`).                                                             |
-| `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects.                                              |
+| `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`).              |
 | `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
 | `progress`                   | Boolean                       | `true`                                 | TTY progress bar.                                                                                                                        |
@@ -233,7 +233,7 @@ All keys recognised under `schema_version: 1`:
 | `skip_heredoc_literals`      | Boolean                       | `false`                                | Skip string literal mutations inside heredocs.                                                                                           |
 | `related_specs_heuristic`    | Boolean                       | `false`                                | Append related request/integration/feature/system specs for `includes(...)` mutations.                                                   |
 | `fallback_to_full_suite`     | Boolean                       | `false`                                | When no matching spec resolves, run the entire suite instead of marking the mutation `:unresolved`.                                      |
-| `preload`                    | String / Boolean / null       | `null`                                 | File to preload in parent before forking. `false` to disable. `null` to auto-detect for Rails.                                           |
+| `preload`                    | String / Boolean / null       | `null`                                 | File to preload in parent before forking. `false` to disable. `null` to auto-detect for Rails projects and packaged gems.                |
 | `spec_mappings`              | Hash&lt;String, String/Array&gt; | `{}`                                | Custom mapping from source path to spec path(s).                                                                                         |
 | `spec_pattern`               | String / null                 | `null`                                 | Glob restricting resolved spec candidates.                                                                                               |
 | `example_targeting`          | Boolean                       | `true`                                 | Per-mutation example-level targeting.                                                                                                    |
@@ -672,7 +672,7 @@ Use when you know which file was modified and want to verify its test coverage.
 bundle exec evilution run lib/models/user.rb lib/models/account.rb lib/models/order.rb
 ```
 
-Pass multiple file paths on a single invocation to amortise startup cost. The framework (Rails, Sorbet, etc.) and the `preload` chain (`spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`) load **once** in the parent process. When `--isolation=fork` is selected (the default `--isolation=auto` resolves to `fork` on Rails projects), every subsequent mutation across all files forks from that warmed parent — materially faster than scripting a `for f in ...; do bundle exec evilution run "$f"; done` loop, which pays the bootstrap per file. With `--isolation=in_process` (default for non-Rails projects under `auto`), there is no per-mutation fork, but the parent-process boot still runs once instead of N times. Per-file paths and line numbers are preserved in the report (`survived[].file`, HTML grouping by source file).
+Pass multiple file paths on a single invocation to amortise startup cost. The framework (Rails, Sorbet, etc.) and the `preload` chain (`spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`) load **once** in the parent process. When `--isolation=fork` is selected (the default `--isolation=auto` resolves to `fork` on Rails projects and packaged gems), every subsequent mutation across all files forks from that warmed parent — materially faster than scripting a `for f in ...; do bundle exec evilution run "$f"; done` loop, which pays the bootstrap per file. With `--isolation=in_process` (default for non-Rails, non-gem projects under `auto`), there is no per-mutation fork, but the parent-process boot still runs once instead of N times. Per-file paths and line numbers are preserved in the report (`survived[].file`, HTML grouping by source file).
 
 ### 6. Fixing surviving mutants
 
@@ -775,7 +775,7 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
 4. **Mutate** — 74 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
-5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects and fork for Rails projects (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
+5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
 8. **Report** — Results aggregated into text, JSON, or HTML, including efficiency metrics and peak memory usage
