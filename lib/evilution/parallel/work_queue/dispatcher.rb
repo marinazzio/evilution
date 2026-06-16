@@ -12,12 +12,11 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     @workers = workers
     @items = items
     @prefetch = prefetch
-    @item_timeout = item_timeout
     @worker_max_items = worker_max_items
     @recycle_factory = recycle_factory
     @state = Evilution::Parallel::WorkQueue.send(:const_get, :CollectionState).new(items.length)
     @retired = []
-    @deadlines = DeadlineTracker.new(item_timeout: item_timeout, workers: @workers)
+    @deadlines = DeadlineTracker.new(item_timeout:, workers: @workers)
   end
 
   def run
