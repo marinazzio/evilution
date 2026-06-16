@@ -36,6 +36,26 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       expect(resolver.isolator).to be_a(Evilution::Isolation::Fork)
     end
 
+    it "auto-selects Fork when a Ruby gem is detected even without a Rails root" do
+      resolver = described_class.new(
+        config(isolation: :auto), target_files: -> { ["lib/mygem.rb"] }, hooks: nil
+      )
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+      allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return("/some/gem")
+
+      expect(resolver.isolator).to be_a(Evilution::Isolation::Fork)
+    end
+
+    it "auto-selects InProcess when neither Rails nor a gem is detected" do
+      resolver = described_class.new(
+        config(isolation: :auto), target_files: -> { ["scratch/thing.rb"] }, hooks: nil
+      )
+      allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+      allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(nil)
+
+      expect(resolver.isolator).to be_a(Evilution::Isolation::InProcess)
+    end
+
     it "memoizes the isolator instance" do
       resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
       expect(resolver.isolator).to equal(resolver.isolator)
@@ -619,6 +639,139 @@ RSpec.describe Evilution::Runner::IsolationResolver do
 
           expect(File.read(rails_marker)).to eq("rails")
           expect(File.exist?(gem_marker)).to be(false)
+        end
+      end
+
+      it "prefers spec/spec_helper.rb over the gem entry for a non-Rails gem" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          spec_dir = File.join(dir, "spec")
+          FileUtils.mkdir_p(lib_dir)
+          FileUtils.mkdir_p(spec_dir)
+          gem_marker = File.join(dir, "marker_gem")
+          helper_marker = File.join(dir, "marker_helper")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{gem_marker.inspect}, 'gem')\n")
+          File.write(File.join(spec_dir, "spec_helper.rb"), "File.write(#{helper_marker.inspect}, 'helper')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            resolver = described_class.new(
+              config(isolation: :fork), target_files: -> { [File.join(lib_dir, "mygem.rb")] }, hooks: nil
+            )
+            resolver.perform_preload
+
+            expect(File.read(helper_marker)).to eq("helper")
+            expect(File.exist?(gem_marker)).to be(false)
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
+      it "falls back to test/test_helper.rb for a non-Rails minitest gem with no spec_helper" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          test_dir = File.join(dir, "test")
+          FileUtils.mkdir_p(test_dir)
+          helper_marker = File.join(dir, "marker_helper")
+          File.write(File.join(test_dir, "test_helper.rb"), "File.write(#{helper_marker.inspect}, 'th')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            resolver = described_class.new(
+              config(isolation: :fork, integration: :minitest),
+              target_files: -> { [File.join(dir, "lib", "mygem.rb")] }, hooks: nil
+            )
+            resolver.perform_preload
+
+            expect(File.read(helper_marker)).to eq("th")
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
+      it "warns about the test layout and falls back to the gem entry when no conventional helper exists" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          FileUtils.mkdir_p(lib_dir)
+          gem_marker = File.join(dir, "marker_gem")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{gem_marker.inspect}, 'gem')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            noisy_config = Evilution::Config.new(isolation: :fork, baseline: false, skip_config_file: true)
+            resolver = described_class.new(
+              noisy_config, target_files: -> { [File.join(lib_dir, "mygem.rb")] }, hooks: nil
+            )
+
+            expect { resolver.perform_preload }.to output(/spec_helper\.rb.*test_helper\.rb/m).to_stderr
+            expect(File.read(gem_marker)).to eq("gem")
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
+      it "warns that nothing will be preloaded when no helper and no gem entry exist" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          allow(Evilution::GemDetector).to receive(:gem_entry_for).and_return(nil)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            noisy_config = Evilution::Config.new(isolation: :fork, baseline: false, skip_config_file: true)
+            resolver = described_class.new(
+              noisy_config, target_files: -> { [File.join(dir, "lib", "mygem.rb")] }, hooks: nil
+            )
+
+            expect { resolver.perform_preload }.to output(/nothing will be preloaded/).to_stderr
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
+      it "suppresses the test-layout warning when config.quiet is set" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          FileUtils.mkdir_p(lib_dir)
+          File.write(File.join(lib_dir, "mygem.rb"), "# entry\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            resolver = described_class.new(
+              config(isolation: :fork, quiet: true),
+              target_files: -> { [File.join(lib_dir, "mygem.rb")] }, hooks: nil
+            )
+
+            expect { resolver.perform_preload }.not_to output.to_stderr
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
         end
       end
 
