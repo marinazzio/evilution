@@ -807,6 +807,24 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(output.scan("No matching test found").length).to eq(1)
     end
 
+    # behaviour-named layouts stay :unresolved; the warning
+    # must name both recovery paths so the user can opt into a full-suite run.
+    it "suggests --fallback-full-suite when marking unresolved (fallback disabled)" do
+      default = described_class.new(fallback_to_full_suite: false)
+      allow(default).to receive(:load)
+
+      expect { default.call(mutation) }
+        .to output(/marking mutation unresolved.*--fallback-full-suite/m).to_stderr
+    end
+
+    it "does not suggest --fallback-full-suite when already running full suite" do
+      default = described_class.new(fallback_to_full_suite: true)
+      allow(default).to receive(:load)
+      allow(Dir).to receive(:glob).with("test/**/*_test.rb").and_return(["test/x_test.rb"])
+
+      expect { default.call(mutation) }.not_to output(/--fallback-full-suite/).to_stderr
+    end
+
     def capture_warn_count
       original = $stderr
       $stderr = StringIO.new
