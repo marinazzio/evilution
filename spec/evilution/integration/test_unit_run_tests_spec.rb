@@ -147,6 +147,18 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
         expect(result[:test_command]).to include("test/sample_test.rb")
       end
     end
+
+    # EV-ajby / GH #1376: when a source stays :unresolved (e.g. behaviour-named
+    # layouts that never mirror the lib path), the warning must name both
+    # recovery paths so the user can opt into a full-suite run.
+    it "names --fallback-full-suite in the unresolved warning when fallback is disabled" do
+      integration = described_class.new(test_files: nil, fallback_to_full_suite: false)
+      allow_any_instance_of(Evilution::SpecSelector).to receive(:call).and_return(nil)
+
+      expect { integration.send(:run_tests, mutation) }
+        .to output(%r{No matching test found for lib/foo\.rb, marking mutation unresolved.*--fallback-full-suite}m)
+        .to_stderr
+    end
   end
 
   # Regression for EV-52hf / GH #1326 (shared TestLoadPath fix): a Test::Unit

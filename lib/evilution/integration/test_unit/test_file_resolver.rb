@@ -41,8 +41,19 @@ class Evilution::Integration::TestUnit::TestFileResolver
     return if @warned_files.include?(file_path)
 
     @warned_files << file_path
-    action = @fallback_to_full_suite ? "running full suite" : "marking mutation unresolved"
-    warn "[evilution] No matching test found for #{file_path}, #{action}. " \
-         "Use --spec to specify the test file."
+    warn unresolved_message(file_path)
+  end
+
+  # Name both recovery paths when skipping :unresolved; when already falling
+  # back the suite is running, so only the explicit-spec hint applies.
+  # Behaviour-named layouts never auto-resolve (EV-ajby / GH #1376).
+  def unresolved_message(file_path)
+    if @fallback_to_full_suite
+      "[evilution] No matching test found for #{file_path}, running full suite. " \
+        "Use --spec to specify the test file."
+    else
+      "[evilution] No matching test found for #{file_path}, marking mutation unresolved. " \
+        "Use --spec to specify the test file, or --fallback-full-suite to run the whole suite."
+    end
   end
 end

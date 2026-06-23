@@ -687,6 +687,20 @@ For each entry in `survived[]`:
 
 Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
 
+### Unresolved mutations — behaviour-named spec layouts
+
+`SpecResolver` auto-detects mirrored (`spec/foo_spec.rb`), non-mirrored (`spec/unit`, `spec/lib`, `test/unit`), and dir-grouped (`test/unit/<class>/*_test.rb`) layouts. It deliberately does **not** guess for **behaviour-named** layouts — where specs are named by behaviour rather than by lib path, so no path or class name ties a source file to a spec. The canonical example is [aasm](https://github.com/aasm/aasm): `lib/aasm/base.rb` is the central DSL class, but it has no `base_spec.rb`; its behaviour is exercised through the public API by `spec/unit/{event,callbacks,guard,api}_spec.rb`, none of which name `AASM::Base`. Every mutation in such a file resolves to no spec and is reported `:unresolved` (a coverage gap, not a failure — `errors=0`).
+
+This is intentional: a fuzzy content/grep match would pick a wrong-but-plausible spec subset and report a misleading score. `:unresolved` plus the warning is the honest signal. To get a real score, opt into one of the two explicit recovery paths the warning names:
+
+```bash
+# run the resolved subset you know covers the file
+bundle exec evilution mutate lib/aasm/base.rb --spec spec/unit/*.rb
+
+# or run the whole suite per mutation (slower, but correct-by-superset)
+bundle exec evilution mutate lib/aasm/base.rb --fallback-full-suite
+```
+
 ### Long Minitest fork runs — not a hang
 
 Minitest projects under `--isolation=fork` re-bootstrap the test environment (`test_helper.rb`, plugins, runnable state) once per mutation. On constant-heavy files (e.g. Shopify/liquid's `lib/liquid/lexer.rb`, ~270 mutations) the wall-clock cost is dominated by that per-fork bootstrap and any mutations that hit a `--timeout` rather than killing the test fast. A single-worker run (`-j 1`) on a few hundred mutations can take 4+ minutes; combined with `--no-progress` and a non-TTY stderr (CI, redirected logs) the run looks silent the entire time.

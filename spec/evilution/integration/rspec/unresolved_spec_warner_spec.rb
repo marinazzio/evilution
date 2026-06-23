@@ -30,4 +30,18 @@ RSpec.describe Evilution::Integration::RSpec::UnresolvedSpecWarner do
     expect { warner.call("lib/foo.rb", fallback_to_full_suite: false) }
       .to output(/marking mutation unresolved/).to_stderr
   end
+
+  # EV-ajby / GH #1376: behaviour-named layouts (e.g. aasm's lib/aasm/base.rb,
+  # whose specs are named by behaviour, not by lib path) resolve to nothing.
+  # The honest signal stays :unresolved, but the warning must name BOTH escape
+  # hatches so the user can recover a score without guessing.
+  it "suggests --fallback-full-suite when marking unresolved" do
+    expect { warner.call("lib/foo.rb", fallback_to_full_suite: false) }
+      .to output(/--fallback-full-suite/).to_stderr
+  end
+
+  it "does not suggest --fallback-full-suite when already running full suite" do
+    expect { warner.call("lib/foo.rb", fallback_to_full_suite: true) }
+      .not_to output(/--fallback-full-suite/).to_stderr
+  end
 end
