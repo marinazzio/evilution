@@ -694,8 +694,10 @@ Entries in the JSON `errors[]` array represent mutations that raised an exceptio
 This is intentional: a fuzzy content/grep match would pick a wrong-but-plausible spec subset and report a misleading score. `:unresolved` plus the warning is the honest signal. To get a real score, opt into one of the two explicit recovery paths the warning names:
 
 ```bash
-# run the resolved subset you know covers the file
-bundle exec evilution mutate lib/aasm/base.rb --spec spec/unit/*.rb
+# run a directory of specs you know covers the file (--spec-dir globs it)
+bundle exec evilution mutate lib/aasm/base.rb --spec-dir spec/unit
+# or name explicit files as a single comma-separated --spec value (no shell glob)
+bundle exec evilution mutate lib/aasm/base.rb --spec spec/unit/event_spec.rb,spec/unit/callbacks_spec.rb
 
 # or run the whole suite per mutation (slower, but correct-by-superset)
 bundle exec evilution mutate lib/aasm/base.rb --fallback-full-suite
