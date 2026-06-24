@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/evilution-mark.svg" width="160" height="160" alt="Evilution — evil ruby mutant mascot">
+  <img src="https://raw.githubusercontent.com/marinazzio/evilution/main/assets/logo/evilution-mark.svg" width="160" height="160" alt="Evilution — evil ruby mutant mascot">
 </p>
 
 [![Gem Version](https://badge.fury.io/rb/evilution.svg)](https://badge.fury.io/rb/evilution)
