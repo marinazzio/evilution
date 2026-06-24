@@ -161,7 +161,14 @@ class Evilution::SpecResolver
 
     fallbacks = primary.flat_map { |c| parent_fallback_candidates(c) }
 
-    (primary + fallbacks + prefix_convention_candidates(stripped)).uniq
+    (primary + fallbacks + convention_candidates(stripped)).uniq
+  end
+
+  # Non-mirrored Test::Unit/minitest filename conventions: the `test_<name>.rb`
+  # prefix and the flat namespace-prefixed form. Both rank below the mirrored
+  # layouts assembled in #candidate_test_paths.
+  def convention_candidates(stripped)
+    prefix_convention_candidates(stripped) + flat_prefixed_candidates(stripped)
   end
 
   # Conventional roots that may hold tests: the mirrored root plus the common
@@ -202,6 +209,23 @@ class Evilution::SpecResolver
       relative = dir.empty? ? "test_#{name}.rb" : "#{dir}/test_#{name}.rb"
       roots.map { |root| "#{root}/#{relative}" }
     end
+  end
+
+  # Test::Unit / minitest gems sometimes flatten a nested source's path into a
+  # single `test_`-prefixed file at the test root: lib/connection_pool/timed_stack.rb
+  # -> test/test_connection_pool_timed_stack.rb (no test/connection_pool/ subdir).
+  # The lib-relative path is joined with underscores and prefixed with `test_`.
+  # Ranked below the mirrored layouts (appended last) so a 1:1 file always wins.
+  # Only meaningful against the minitest suffix.
+  def flat_prefixed_candidates(stripped)
+    return [] unless @test_suffix == MINITEST_SUFFIX
+
+    mirror_variants(stripped).flat_map do |variant|
+      name = variant.delete_suffix(@test_suffix).tr("/", "_")
+      next [] if name.empty?
+
+      roots.map { |root| "#{root}/test_#{name}.rb" }
+    end.uniq
   end
 
   def controller_to_request_test(stripped_path)

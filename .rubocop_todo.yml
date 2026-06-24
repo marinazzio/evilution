@@ -15,6 +15,7 @@ Metrics/ClassLength:
     - "lib/evilution/runner.rb"
     - "lib/evilution/runner/isolation_resolver.rb"
     - "lib/evilution/cli/parser/options_builder.rb"
+    - "lib/evilution/spec_resolver.rb"
 
 Metrics/MethodLength:
   Exclude:
