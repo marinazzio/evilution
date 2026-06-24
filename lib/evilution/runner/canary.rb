@@ -76,11 +76,28 @@ class Evilution::Runner::Canary
   end
 
   def write_spec(dir)
-    minitest = @config.integration == :minitest
-    name = minitest ? "canary_#{suffix}_test.rb" : "canary_#{suffix}_spec.rb"
-    path = File.join(dir, name)
-    File.write(path, minitest ? minitest_spec_source : rspec_spec_source)
+    path = File.join(dir, spec_filename)
+    File.write(path, spec_source)
     path
+  end
+
+  # minitest and test-unit both live under a `_test.rb` file; rspec uses
+  # `_spec.rb`. Picking the wrong shape makes the integration load nothing (or
+  # raise), so the synthetic mutation scores :error and aborts the run.
+  def spec_filename
+    test_framework? ? "canary_#{suffix}_test.rb" : "canary_#{suffix}_spec.rb"
+  end
+
+  def test_framework?
+    %i[minitest test_unit].include?(@config.integration)
+  end
+
+  def spec_source
+    case @config.integration
+    when :minitest then minitest_spec_source
+    when :test_unit then test_unit_spec_source
+    else rspec_spec_source
+    end
   end
 
   def rspec_spec_source
@@ -98,6 +115,16 @@ class Evilution::Runner::Canary
       class EvilutionCanaryTest_#{suffix} < Minitest::Test
         def test_pipeline_is_alive
           assert true
+        end
+      end
+    RUBY
+  end
+
+  def test_unit_spec_source
+    <<~RUBY
+      class EvilutionCanaryTest_#{suffix} < Test::Unit::TestCase
+        def test_pipeline_is_alive
+          assert(true)
         end
       end
     RUBY

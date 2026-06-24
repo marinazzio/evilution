@@ -222,7 +222,21 @@ class Evilution::Runner::IsolationResolver
   end
 
   def find_first_existing_gem_helper
-    find_first_existing_under(detected_gem_root, GEM_PRELOAD_CANDIDATES)
+    find_first_existing_under(detected_gem_root, GEM_PRELOAD_CANDIDATES) ||
+      find_first_existing_under(detected_gem_root, nested_gem_helper_candidates)
+  end
+
+  # Gems that namespace their suite keep the helper at test/<gem>/helper.rb
+  # (ruby/csv: test/csv/helper.rb) rather than the flat test/helper.rb, so the
+  # conventional chain misses it and autodetect would fall back to the bare gem
+  # entry — which never sets up the test framework, aborting the canary.
+  # Derive the namespace dir from the gem name (dotted for dash-named gems, plus
+  # the flat form).
+  def nested_gem_helper_candidates
+    name = detected_gem_root && Evilution::GemDetector.gem_name(detected_gem_root, target_paths: target_files)
+    return [] unless name
+
+    [name.tr("-", "/"), name].uniq.map { |ns| File.join("test", ns, "helper.rb") }
   end
 
   def find_first_existing_under(root, candidates)

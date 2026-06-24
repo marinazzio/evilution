@@ -215,6 +215,18 @@ RSpec.describe Evilution::Runner::Canary do
       expect(File.basename(spec_path)).to end_with("_test.rb")
     end
 
+    # for test-unit the canary previously wrote an RSpec
+    # spec, which the test-unit integration cannot run -> scored :error ->
+    # aborted every OOB test-unit run. It must emit a Test::Unit test instead.
+    it "writes a test-unit test file when the integration is test_unit" do
+      cfg = Evilution::Config.new(integration: :test_unit, skip_config_file: true)
+      isolator = run_capturing(cfg: cfg)
+      spec_path = recorded_integrations.last.test_files.first
+      expect(File.basename(spec_path)).to end_with("_test.rb")
+      expect(isolator.spec_file_source).to include("Test::Unit::TestCase")
+      expect(isolator.spec_file_source).not_to include("RSpec.describe")
+    end
+
     it "passes the configured hooks through to the integration" do
       hooks = Object.new
       run_capturing(hooks: hooks)
