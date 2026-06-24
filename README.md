@@ -63,6 +63,13 @@ The first command writes a sibling `Gemfile.local.lock`. Decide whether to commi
 
 The evilution gemspec already declares `prism >= 1.5, < 2`, so adding the `gem "prism"` line above is only necessary on stacks that also pin prism in `Gemfile.lock`.
 
+## Migrating from `mutant`
+
+Coming from the commercially-licensed [`mutant`](https://github.com/mbj/mutant) gem? See
+[docs/migration-from-mutant.md](docs/migration-from-mutant.md) for a command/config
+mapping, output-terminology differences, and how to diff the two tools' results with
+`evilution compare` (it ingests mutant session JSON directly).
+
 ## Command Reference
 
 ```
