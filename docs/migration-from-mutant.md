@@ -36,7 +36,7 @@ bundle exec evilution init   # writes a commented .evilution.yml
 ```
 
 There is no separate integration gem to install — RSpec, Minitest, and Test::Unit
-support ship in the core gem.
+support ships in the core gem.
 
 ## 2. The core workflow shift: files, not subjects
 
@@ -74,7 +74,7 @@ bundle exec evilution run lib/ --target 'MyApp::Calculator*'
 | Run mutation testing | `mutant run -- 'Foo'` | `evilution run lib/foo.rb` (alias `mutate`; binary alias `evil`) |
 | Choose framework | `--use rspec` / `mutant-minitest` | `--integration rspec\|minitest\|test-unit` |
 | Parallel workers | `-j N` / `--jobs N` | `-j N` / `--jobs N` |
-| Fail fast | `--fail-fast` | `--fail-fast [N]` (default 1) |
+| Fail fast | `--fail-fast` | `--fail-fast [N]` (off by default; N defaults to 1 when the flag is given without a value) |
 | Coverage gate | `--score` (default `1.0` / 100%) | `--min-score` (default `0.0`) |
 | Preview mutations | `mutant util mutation` / `mutant environment subject list` | `evilution util mutation -e 'a + b'` / `evilution subjects lib/foo.rb` |
 | Set load path / requires | `--include lib --require my_app` | handled by `--preload` (auto-detects `spec/spec_helper.rb` etc.) + Bundler |
@@ -146,6 +146,11 @@ Key-by-key:
 
 Run `evilution init` for a fully commented template, and point your editor at
 `schema/evilution.config.schema.json` for autocomplete/validation.
+
+> **Note:** the `integration` enum in that JSON schema currently lists only `rspec`
+> and `minitest`. `test-unit` (normalized internally to `test_unit`) is fully
+> supported by the runtime, but a schema-aware editor may flag it as invalid until
+> the schema catches up — it will still run.
 
 ## 5. Output differences
 
