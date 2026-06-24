@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/evilution-mark.svg" width="160" height="160" alt="Evilution — evil ruby mutant mascot">
+</p>
+
 [![Gem Version](https://badge.fury.io/rb/evilution.svg)](https://badge.fury.io/rb/evilution)
 
 # Evilution — Mutation Testing for Ruby
