@@ -87,6 +87,7 @@ order, falling back to the gem's library entry point (`lib/<gem>.rb`):
 1. `spec/spec_helper.rb` (RSpec)
 2. `test/test_helper.rb` (Minitest / Test::Unit)
 3. `test/helper.rb` (flat-layout convention)
+4. `test/<gem>/helper.rb` (namespaced suites, e.g. ruby/csv's `test/csv/helper.rb`; the namespace is derived from the gem name, with the dotted form for dash-named gems) (PR #1386)
 
 When a gem is detected but none of those helpers exist, evilution prints a
 warning naming the locations it looked in and pointing at `--preload`, so a
