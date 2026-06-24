@@ -2,6 +2,18 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [0.35.0] - 2026-06-24
+
+### Added
+
+- **Test::Unit now scores out-of-the-box: a dedicated canary spec plus a Test::Unit spec resolver** — `--integration test-unit` shared minitest's runtime but not its file conventions, so two things silently broke. (1) The proof-of-life canary always wrote either an RSpec `_spec.rb` or a minitest `_test.rb` and only ever generated RSpec/minitest source; under `test-unit` the synthetic mutation loaded nothing, scored `:error`, and aborted the run before any real mutation ran. The canary now emits a `Test::Unit::TestCase` subclass into a `_test.rb` file for `test-unit` (and keeps the `_test.rb`/`_spec.rb` split keyed on the integration). (2) The config spec-resolver builder fell through to the default `spec/`/`_spec.rb` resolver for `test-unit`, which resolved nothing for a `test/`-rooted suite; it now reuses minitest's `test/` + `_test.rb` resolver since test-unit gems mirror that layout (PR #1386)
+- **Auto-preload finds namespaced gem test helpers (`test/<gem>/helper.rb`)** — gems that namespace their suite keep the bootstrap at `test/<gem>/helper.rb` (e.g. ruby/csv: `test/csv/helper.rb`) rather than a flat `test/test_helper.rb`. The conventional preload chain missed it, so autodetect fell back to the bare gem entry point (`lib/<gem>.rb`) — which never sets up the test framework — and the canary aborted. The gem-helper search now also looks for the namespaced form, deriving the directory from the gem name (dotted form for dash-named gems plus the flat form): `test/<gem>/helper.rb`. `Evilution::GemDetector.gem_name` is exposed publicly so callers can build these conventional paths (PR #1386)
+
+### Fixed
+
+- **`SpecResolver` resolves flat `test_`-prefixed Test::Unit/minitest files (`test/test_connection_pool_timed_stack.rb`)** — some minitest/Test::Unit gems flatten a nested source's path into a single `test_`-prefixed file at the test root (`lib/connection_pool/timed_stack.rb` → `test/test_connection_pool_timed_stack.rb`, with no `test/connection_pool/` subdir), so the resolver found nothing and scored `:unresolved`. The resolver now derives a flat candidate from the **full** lib-relative path (every segment joined with `_`) — deliberately not from namespace-dropped variants, which would yield bare-basename forms (`test_timed_stack.rb`) that collide across namespaces and are already covered by the existing `test_<name>.rb` convention. Top-level sources produce nothing here, and the flat candidate ranks below the mirrored layouts so a 1:1 file always wins. Minitest suffix only (PR #1385)
+- **Unresolved-mutation warnings now name concrete recovery paths for behaviour-named spec layouts** — `SpecResolver` intentionally does not guess for **behaviour-named** layouts (specs named by behaviour, not by lib path, so nothing ties a source file to a spec — e.g. aasm's `lib/aasm/base.rb`, exercised through the public API by `spec/unit/{event,callbacks,guard,api}_spec.rb`). A fuzzy match there would report a misleading score, so every mutation stays `:unresolved` (a coverage gap, `errors=0`). The minitest, RSpec, and Test::Unit unresolved warnings now spell out the explicit opt-ins — name the covering specs via `--spec`/`--spec-dir`, or run the whole suite per mutation with `--fallback-full-suite` — so a behaviour-named layout reads as a fixable resolution choice rather than a silent 0%. Documented in the README "Unresolved mutations — behaviour-named spec layouts" section (PR #1384)
+
 ## [0.34.0] - 2026-06-16
 
 ### Added
