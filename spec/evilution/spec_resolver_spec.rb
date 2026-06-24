@@ -210,10 +210,10 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
-    # EV-z7f5 / GH #1325: auto-resolution must find specs in the common
+    # auto-resolution must find specs in the common
     # real-world layouts that do NOT mirror the lib/ path 1:1 — spec/unit,
     # spec/lib with the gem-namespace dir dropped, and basename-only matches.
-    context "non-mirrored real-world layouts (EV-z7f5)" do
+    context "non-mirrored real-world layouts" do
       it "resolves spec/unit/<basename> (gem-namespace dropped), e.g. webmock" do
         create_file("spec/unit/request_pattern_spec.rb")
 
@@ -250,7 +250,7 @@ RSpec.describe Evilution::SpecResolver do
       end
     end
 
-    # EV-z7f5 / GH #1325 opt 2: when exact resolution fails, #suggest offers a
+    # when exact resolution fails, #suggest offers a
     # best-guess candidate by basename glob so the warning can name a file to
     # pass to --spec instead of a bare "use --spec".
     describe "#suggest" do
@@ -363,13 +363,47 @@ RSpec.describe Evilution::SpecResolver do
         expect(resolver.call("src/foo.rb")).to eq("test/src/foo_test.rb")
       end
 
-      # EV-z7f5 / GH #1325: Test::Unit/minitest gems commonly use a `test_`
+      # Test::Unit/minitest gems commonly use a `test_`
       # filename PREFIX (test_foo.rb) and a test/unit/ root rather than a
       # mirrored `_test.rb` suffix.
       it "resolves the test_<name>.rb prefix convention, e.g. connection_pool" do
         create_file("test/test_connection_pool.rb")
 
         expect(resolver.call("lib/connection_pool.rb")).to eq("test/test_connection_pool.rb")
+      end
+
+      # nested sources whose tests use a FLAT, namespace-
+      # prefixed filename — the lib-relative path flattened with underscores and
+      # given a `test_` prefix (test/test_connection_pool_timed_stack.rb), with
+      # no test/connection_pool/ subdir. Real case: mperham/connection_pool.
+      it "resolves the flat namespace-prefixed convention, e.g. connection_pool/timed_stack" do
+        create_file("test/test_connection_pool_timed_stack.rb")
+
+        expect(resolver.call("lib/connection_pool/timed_stack.rb"))
+          .to eq("test/test_connection_pool_timed_stack.rb")
+      end
+
+      it "flattens deeper namespaces into the prefixed name" do
+        create_file("test/test_a_b_c.rb")
+
+        expect(resolver.call("lib/a/b/c.rb")).to eq("test/test_a_b_c.rb")
+      end
+
+      it "ranks the mirrored layout above the flat prefixed name when both exist" do
+        create_file("test/connection_pool/timed_stack_test.rb")
+        create_file("test/test_connection_pool_timed_stack.rb")
+
+        expect(resolver.call("lib/connection_pool/timed_stack.rb"))
+          .to eq("test/connection_pool/timed_stack_test.rb")
+      end
+
+      # The flat form is built from the FULL lib-relative path only — not from
+      # namespace-dropped variants — so a namespaced source must NOT resolve to
+      # a basename-flattened name that drops leading segments (collision guard).
+      it "does not flatten namespace-dropped variants into the prefixed name" do
+        create_file("test/test_y_z.rb")
+
+        expect(resolver.call("lib/x/y/z.rb")).to be_nil
       end
 
       it "resolves test/unit/<basename> layout" do
@@ -504,7 +538,7 @@ RSpec.describe Evilution::SpecResolver do
 
     # #suggest must honour the same PROJECT_ROOT contract as #call: when an
     # isolated worker is chdir'd into a sandbox, glob against PROJECT_ROOT so
-    # the best-guess hint still finds real project files (EV-z7f5 / GH #1325).
+    # the best-guess hint still finds real project files.
     it "globs PROJECT_ROOT for suggestions when the flag is set and CWD is empty" do
       probe_spec = "spec/evilution/spec_resolver_spec.rb"
       skip "PROJECT_ROOT probe missing" unless File.exist?(File.join(Evilution::PROJECT_ROOT, probe_spec))
