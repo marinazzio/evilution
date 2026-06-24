@@ -700,6 +700,42 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         end
       end
 
+      # gems that namespace their suite keep the helper at
+      # test/<gem>/helper.rb (ruby/csv: test/csv/helper.rb) — autodetect must
+      # find it rather than falling back to the bare gem entry, which never sets
+      # up the test framework and aborts the proof-of-life canary.
+      it "finds a nested test/<gem>/helper.rb when no conventional helper exists" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib")
+          nested_dir = File.join(dir, "test", "mygem")
+          FileUtils.mkdir_p(lib_dir)
+          FileUtils.mkdir_p(nested_dir)
+          helper_marker = File.join(dir, "marker_helper")
+          gem_marker = File.join(dir, "marker_gem")
+          File.write(File.join(lib_dir, "mygem.rb"), "File.write(#{gem_marker.inspect}, 'gem')\n")
+          File.write(File.join(nested_dir, "helper.rb"), "File.write(#{helper_marker.inspect}, 'nested')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            resolver = described_class.new(
+              config(isolation: :fork, integration: :minitest),
+              target_files: -> { [File.join(lib_dir, "mygem.rb")] }, hooks: nil
+            )
+            resolver.perform_preload
+
+            expect(File.read(helper_marker)).to eq("nested")
+            expect(File.exist?(gem_marker)).to be(false)
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
       it "warns about the test layout and falls back to the gem entry when no conventional helper exists" do
         Dir.mktmpdir do |dir|
           File.write(File.join(dir, "mygem.gemspec"), "# spec\n")

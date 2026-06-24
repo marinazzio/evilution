@@ -43,6 +43,13 @@ module Evilution::GemDetector
       @mutex.synchronize { @cache.clear }
     end
 
+    # Public accessor for the resolved gem name (gemspec basename, disambiguated
+    # by target paths for multi-gemspec roots). Callers use it to derive
+    # conventional paths such as a namespaced test helper (test/<gem>/helper.rb).
+    def gem_name(root, target_paths: nil)
+      gem_name_for(root, target_paths: target_paths)
+    end
+
     private
 
     def starting_dir(path)
