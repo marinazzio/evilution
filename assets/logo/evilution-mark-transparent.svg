@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Evilution — evil ruby mutant mascot">
+  <title>Evilution</title>
+  <defs>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- clawed arms (behind gem) -->
+  <g stroke="#470B13" stroke-width="2.5" stroke-linejoin="round">
+    <path d="M60 124 L40 132 L46 138 L36 142 L48 147 L40 153 L56 150 L64 136 Z" fill="#9A1826"/>
+    <path d="M196 124 L216 132 L210 138 L220 142 L208 147 L216 153 L200 150 L192 136 Z" fill="#7F1420"/>
+  </g>
+
+  <!-- faceted ruby body -->
+  <g stroke="#470B13" stroke-width="2.5" stroke-linejoin="round">
+    <polygon points="98,82 128,82 128,120 88,120" fill="#D5384A"/>
+    <polygon points="128,82 158,82 168,120 128,120" fill="#B91C2C"/>
+    <polygon points="54,120 88,120 98,82" fill="#E2566B"/>
+    <polygon points="168,120 202,120 158,82" fill="#911A28"/>
+    <polygon points="54,120 88,120 128,214" fill="#A81B2A"/>
+    <polygon points="88,120 128,120 128,214" fill="#911A28"/>
+    <polygon points="128,120 168,120 128,214" fill="#7C1320"/>
+    <polygon points="168,120 202,120 128,214" fill="#5E0F18"/>
+  </g>
+  <polygon points="98,82 158,82 202,120 128,214 54,120" fill="none" stroke="#3A0910" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- glowing mutant eyes -->
+  <g filter="url(#glow)">
+    <polygon points="100,99 123,106 118,117 96,110" fill="#22D3EE"/>
+    <polygon points="156,99 133,106 138,117 160,110" fill="#22D3EE"/>
+    <polygon points="110,105 118,107 116,113 108,111" fill="#0E1A2B"/>
+    <polygon points="146,105 138,107 140,113 148,111" fill="#0E1A2B"/>
+  </g>
+
+  <!-- fanged grin -->
+  <path d="M106 138 L150 138 L142 149 L134 144 L128 150 L122 144 L114 149 Z" fill="#1B060C"/>
+  <polygon points="118,138 125,138 122,148" fill="#EAF2F8"/>
+  <polygon points="131,138 138,138 134,148" fill="#EAF2F8"/>
+
+  <!-- mutation cracks leaking binary -->
+  <g filter="url(#glow)" fill="none" stroke="#67E8F9" stroke-width="1.7" stroke-linecap="round" opacity="0.92">
+    <polyline points="166,90 156,106 169,120 159,134"/>
+    <polyline points="82,150 92,160 86,172"/>
+  </g>
+  <g fill="#7FE9F7" font-family="monospace" font-size="11" font-weight="700" opacity="0.85">
+    <text x="170" y="128" transform="rotate(12 170 128)">1</text>
+    <text x="176" y="140" transform="rotate(12 176 140)">0</text>
+    <text x="168" y="150" transform="rotate(12 168 150)">1</text>
+    <text x="78" y="184" transform="rotate(-14 78 184)">0</text>
+  </g>
+</svg>
