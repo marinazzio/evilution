@@ -736,6 +736,40 @@ RSpec.describe Evilution::Runner::IsolationResolver do
         end
       end
 
+      # Dash-named gems map the dash to a directory separator: foo-bar lives at
+      # test/foo/bar/helper.rb. Exercises the name.tr("-", "/") derivation.
+      it "finds a nested test/<a>/<b>/helper.rb for a hyphenated gem name" do
+        Dir.mktmpdir do |dir|
+          File.write(File.join(dir, "foo-bar.gemspec"), "# spec\n")
+          lib_dir = File.join(dir, "lib", "foo")
+          nested_dir = File.join(dir, "test", "foo", "bar")
+          FileUtils.mkdir_p(lib_dir)
+          FileUtils.mkdir_p(nested_dir)
+          helper_marker = File.join(dir, "marker_helper")
+          gem_marker = File.join(dir, "marker_gem")
+          File.write(File.join(lib_dir, "bar.rb"), "File.write(#{gem_marker.inspect}, 'gem')\n")
+          File.write(File.join(nested_dir, "helper.rb"), "File.write(#{helper_marker.inspect}, 'nested')\n")
+          allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+          allow(Evilution::GemDetector).to receive(:gem_root_for_any).and_return(dir)
+          original_load_path = $LOAD_PATH.dup
+          original_features = $LOADED_FEATURES.dup
+
+          begin
+            resolver = described_class.new(
+              config(isolation: :fork, integration: :minitest),
+              target_files: -> { [File.join(lib_dir, "bar.rb")] }, hooks: nil
+            )
+            resolver.perform_preload
+
+            expect(File.read(helper_marker)).to eq("nested")
+            expect(File.exist?(gem_marker)).to be(false)
+          ensure
+            $LOAD_PATH.replace(original_load_path)
+            $LOADED_FEATURES.replace(original_features)
+          end
+        end
+      end
+
       it "warns about the test layout and falls back to the gem entry when no conventional helper exists" do
         Dir.mktmpdir do |dir|
           File.write(File.join(dir, "mygem.gemspec"), "# spec\n")
