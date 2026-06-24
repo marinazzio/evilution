@@ -214,18 +214,20 @@ class Evilution::SpecResolver
   # Test::Unit / minitest gems sometimes flatten a nested source's path into a
   # single `test_`-prefixed file at the test root: lib/connection_pool/timed_stack.rb
   # -> test/test_connection_pool_timed_stack.rb (no test/connection_pool/ subdir).
-  # The lib-relative path is joined with underscores and prefixed with `test_`.
-  # Ranked below the mirrored layouts (appended last) so a 1:1 file always wins.
-  # Only meaningful against the minitest suffix.
+  # Built from the FULL lib-relative path only (every segment joined with `_`),
+  # NOT from namespace-dropped variants — dropping segments would yield bare
+  # basename forms (test_timed_stack.rb) that collide across namespaces and are
+  # already covered by #prefix_convention_candidates. Top-level sources have no
+  # namespace to flatten, so they produce nothing here. Ranked below the mirrored
+  # layouts (appended last) so a 1:1 file always wins. Minitest suffix only.
   def flat_prefixed_candidates(stripped)
     return [] unless @test_suffix == MINITEST_SUFFIX
+    return [] unless stripped.include?("/")
 
-    mirror_variants(stripped).flat_map do |variant|
-      name = variant.delete_suffix(@test_suffix).tr("/", "_")
-      next [] if name.empty?
+    name = stripped.delete_suffix(@test_suffix).tr("/", "_")
+    return [] if name.empty?
 
-      roots.map { |root| "#{root}/test_#{name}.rb" }
-    end.uniq
+    roots.map { |root| "#{root}/test_#{name}.rb" }
   end
 
   def controller_to_request_test(stripped_path)

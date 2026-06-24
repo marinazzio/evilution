@@ -397,6 +397,15 @@ RSpec.describe Evilution::SpecResolver do
           .to eq("test/connection_pool/timed_stack_test.rb")
       end
 
+      # The flat form is built from the FULL lib-relative path only — not from
+      # namespace-dropped variants — so a namespaced source must NOT resolve to
+      # a basename-flattened name that drops leading segments (collision guard).
+      it "does not flatten namespace-dropped variants into the prefixed name" do
+        create_file("test/test_y_z.rb")
+
+        expect(resolver.call("lib/x/y/z.rb")).to be_nil
+      end
+
       it "resolves test/unit/<basename> layout" do
         create_file("test/unit/bar_test.rb")
 
