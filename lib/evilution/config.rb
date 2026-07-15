@@ -4,6 +4,7 @@ require "yaml"
 require_relative "spec_resolver"
 require_relative "spec_selector"
 
+# @api private
 class Evilution::Config
   CONFIG_FILES = %w[.evilution.yml config/evilution.yml].freeze
   CURRENT_SCHEMA_VERSION = 1

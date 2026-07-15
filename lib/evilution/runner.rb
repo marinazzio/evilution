@@ -3,6 +3,7 @@
 require "fileutils"
 require_relative "../evilution"
 
+# @api private
 class Evilution::Runner
   # Autoloaded: canary.rb subclasses Evilution::Error at class-body eval
   # time, which is not yet defined while evilution.rb is mid-load. Deferring

@@ -7,14 +7,14 @@ This document defines what `evilution` promises across releases.
 | Bump          | Triggered by                                                                 |
 |---------------|-------------------------------------------------------------------------------|
 | MAJOR (`2.0`) | Removing or renaming anything in the public contract; changing semantics; tightening input validation. |
-| MINOR (`1.X`) | Adding a new CLI flag, config key, mutation operator, public Ruby method, or session/MCP field; relaxing validation; adding an operator to the `default` profile (whether brand-new or promoted from `strict`). |
+| MINOR (`1.X`) | Adding a new CLI flag, config key, mutation operator, or session/MCP field; introducing a public Ruby facade where none exists today; relaxing validation; adding an operator to the `default` profile (whether brand-new or promoted from `strict`). |
 | PATCH (`1.X.Y`) | Bug fix, performance improvement, documentation, internal refactor with no observable contract effect. |
 
 ## Public contract surface
 
 The following surfaces are covered by the SemVer guarantees above:
 
-- **Public Ruby API** — classes and methods explicitly documented as public. Everything else is internal and may change in any release.
+- **Public Ruby API** — there is none. The entire `Evilution::` namespace is internal and may change in any release. See [docs/public_api.md](public_api.md).
 - **CLI flags and commands** — the README "Command Reference" tables are the authoritative list.
 - **`.evilution.yml` configuration keys** — see the README "Configuration" section.
 - **Session JSON files** (`.evilution/results/*.json`) — see the README "JSON Output Schema" section.
