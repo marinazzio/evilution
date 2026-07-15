@@ -11,7 +11,7 @@
 * **License**: MIT (free, no commercial restrictions)
 * **Language**: Ruby >= 3.3
 * **Parser**: Prism (Ruby's official AST parser, ships with Ruby 3.3+)
-* **Test frameworks**: RSpec and Minitest
+* **Test frameworks**: RSpec, Minitest, and Test::Unit
 
 ## Installation
 
