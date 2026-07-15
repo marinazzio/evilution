@@ -31,14 +31,12 @@ class Evilution::RelatedSpecHeuristic
   def extract_domain(file_path)
     normalized = normalize_path(file_path)
 
-    # Strip common prefixes and get the relative path under app/ or lib/
     relative = normalized
                .delete_prefix("app/controllers/")
                .delete_prefix("app/models/")
                .delete_prefix("app/")
                .delete_prefix("lib/")
 
-    # Remove .rb extension and _controller suffix
     basename = relative.sub(/\.rb\z/, "")
     basename = basename.sub(/_controller\z/, "")
 
