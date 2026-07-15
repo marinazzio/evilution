@@ -29,7 +29,7 @@ flowchart TD
     RUN --> SUB["SubjectPipeline<br/>AST::Parser → Subject per method"]
     SUB --> BASE["BaselineRunner<br/>record already-failing specs"]
     SUB --> PLAN["MutationPlanner<br/>Mutator::Registry → Mutation objects<br/>dedupe · disable · sig · equivalent"]
-    PLAN --> EXEC["MutationExecutor<br/>jobs=1 Sequential · jobs&gt;1 Parallel::Pool"]
+    PLAN --> EXEC["MutationExecutor<br/>jobs=1 Sequential · jobs>1 Parallel::Pool"]
     BASE --> EXEC
     EXEC --> ISO["Isolation::Fork / InProcess<br/>apply mutation → Integration runs specs"]
     ISO --> STAT["classify_status<br/>killed / survived / error / timeout / unresolved"]
