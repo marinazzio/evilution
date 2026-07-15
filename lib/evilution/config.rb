@@ -117,7 +117,6 @@ class Evilution::Config
     FileLoader.load
   end
 
-  # Generates a default config file template.
   def self.default_template
     <<~YAML
       # Evilution configuration
