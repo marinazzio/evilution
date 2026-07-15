@@ -19,6 +19,7 @@ require_relative "cli/commands/session_gc"
 require_relative "cli/commands/compare"
 require_relative "cli/commands/run"
 
+# @api private
 class Evilution::CLI
   def initialize(argv, stdin: $stdin)
     parsed = Parser.new(argv, stdin: stdin).parse

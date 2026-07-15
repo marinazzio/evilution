@@ -129,6 +129,12 @@ require_relative "evilution/cli"
 require_relative "evilution/disable_comment"
 require_relative "evilution/runner"
 
+# Evilution has no public Ruby API. The entire `Evilution::` namespace is
+# internal and may change in any release, including patches. The stable,
+# SemVer-governed contract is the CLI, `.evilution.yml` config keys, session
+# JSON files, the MCP tool schemas, and process exit codes. See
+# docs/public_api.md and docs/versioning.md.
+# @api private
 module Evilution
   # Captured at load time, before any isolator can chdir into a per-mutation
   # sandbox. Used as the anchor for resolving project-relative paths (spec

@@ -811,6 +811,8 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 
 `evilution` follows [Semantic Versioning](https://semver.org). The full policy — what counts as the public contract, what triggers a major bump, how deprecations work — is documented in [docs/versioning.md](docs/versioning.md).
 
+There is **no public Ruby API**: the entire `Evilution::` namespace is internal and may change in any release. Drive evilution through the CLI, `.evilution.yml`, the MCP tools, or hooks. See [docs/public_api.md](docs/public_api.md).
+
 ## Repository
 
 https://github.com/marinazzio/evilution
