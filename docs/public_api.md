@@ -11,9 +11,11 @@ evilution and call into it programmatically expecting stability; internal
 refactors will break you without warning.
 
 Evilution is consumed through its CLI, its configuration file, its session
-output, and its MCP tools — not as a library you embed. The classes are marked
-`@api private` for YARD, and the top-level `Evilution` module carries the same
-marker.
+output, and its MCP tools — not as a library you embed. The top-level
+`Evilution` module and the primary entry points (`Evilution::Runner`,
+`Evilution::CLI`, `Evilution::Config`) carry an `@api private` YARD marker; the
+namespace as a whole is internal by this declaration, whether or not an
+individual class is tagged.
 
 ## What *is* the public contract
 

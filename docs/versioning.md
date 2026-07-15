@@ -27,7 +27,7 @@ Anything not on this list is internal. It can change in any release without a de
 
 When a feature on the public contract surface is deprecated:
 
-1. It is marked with the YARD `@deprecated` tag (Ruby API), or with a deprecation note in the relevant doc table (CLI flags, config keys, MCP fields).
+1. It is marked with a deprecation note in the relevant doc table (CLI flags, config keys, session/MCP fields).
 2. Where the call site is reachable at runtime, a one-line warning is emitted to stderr.
 3. The deprecated form remains functional for the entire `1.x` line. A feature deprecated in any `1.X` release continues to work in every subsequent `1.X+N` release.
 4. The earliest release that may remove the feature is the next major (`2.0`), per the SemVer table above.
