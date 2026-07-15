@@ -783,6 +783,12 @@ When Evilution detects a parallel run against a SQLite-backed `config/database.y
 
 ## Development
 
+### Architecture
+
+New to the codebase? [docs/architecture.md](docs/architecture.md) is the
+contributor guide: the end-to-end mutation flow (source → result), a module map,
+and step-by-step recipes for adding a mutator, a reporter, or a test integration.
+
 ### Memory leak check
 
 Run before releasing to verify no memory regressions:
@@ -797,6 +803,9 @@ Tests 4 paths (InProcess isolation, Fork isolation, mutation generation + stripp
 - `MEMORY_CHECK_MAX_GROWTH_KB` — maximum allowed RSS growth in KB (default: 10240 = 10 MB)
 
 ## Internals (for context, not for direct use)
+
+For the full contributor architecture — module map, data flow, and extension
+points — see [docs/architecture.md](docs/architecture.md).
 
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
