@@ -2,6 +2,19 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.0.0] - 2026-07-15
+
+First stable release. From `1.0.0` onward evilution follows [Semantic Versioning](https://semver.org): the public contract — CLI commands and flags, `.evilution.yml` configuration keys, session JSON files, the MCP tool schemas, and process exit codes — is frozen and covered by the SemVer guarantees and deprecation cycle in [docs/versioning.md](docs/versioning.md). The `1.0.0` milestone is the culmination of the readiness work that shipped across the `0.31`–`0.35` line (config and session-JSON schema versioning, MCP tool-contract stabilization, the CLI flag deprecation sweep, real-world Rails validation, the parallel/isolation stress suite, and running evilution against its own suite to a mutation-score target).
+
+### Added
+
+- **Contributor architecture guide (`docs/architecture.md`)** — a single internals map for contributors: a high-level flow diagram, a module map of every `Evilution::` namespace, the end-to-end data flow from source file to scored result, and step-by-step recipes for adding a new mutator, reporter, or test integration. Linked from the README "Development" and "Internals" sections (EV-fkw0, PR #1407, GH #863)
+
+### Changed
+
+- **Public Ruby API frozen as internal (`docs/public_api.md`)** — evilution has no public Ruby API. The entire `Evilution::` namespace is internal and may change in any release; the supported, SemVer-governed surface is the CLI, config file, session JSON, MCP tools, and exit codes. The top-level `Evilution` module and the primary entry points (`Runner`, `CLI`, `Config`) carry an `@api private` YARD marker, the new [docs/public_api.md](docs/public_api.md) documents the contract surfaces, and [docs/versioning.md](docs/versioning.md) is updated to match (the MINOR trigger now covers "introducing a public Ruby facade where none exists" and the deprecation cycle no longer references a Ruby `@deprecated` path) (EV-jj18, PR #1406, GH #854)
+- **Dependency bumps** — `mcp` 0.21.0 → 0.24.0 (PRs #1402/#1403), plus CI/tooling updates (`rubocop` 1.88.2, `ruby/setup-ruby` 1.318.0, `actions/checkout` 7)
+
 ## [0.35.0] - 2026-06-24
 
 ### Added
