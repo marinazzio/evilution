@@ -128,8 +128,10 @@ module CompareTargeting
     def lost_kills(mode = "coverage")
       full = @modes.fetch("full_file")
       other = @modes.fetch(mode)
-      full.keys.select { |key| full.status(key) == "killed" && other.status(key) != "killed" }
-               .map { |key| full.label(key) }
+      full
+        .keys
+        .select { |key| full.status(key) == "killed" && other.status(key) != "killed" }
+        .map { |key| full.label(key) }
     end
 
     def to_row(repo)

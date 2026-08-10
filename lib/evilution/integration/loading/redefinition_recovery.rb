@@ -65,7 +65,7 @@ class Evilution::Integration::Loading::RedefinitionRecovery
     msg = error.message
     # `msg` is a String and patterns are substrings, so `include?` is a
     # substring test — `intersect?` would compare array elements, not text.
-    IDEMPOTENCY_PATTERNS.any? { |pat| msg.include?(pat) } # rubocop:disable Style/ArrayIntersect
+    IDEMPOTENCY_PATTERNS.any? { msg.include?(_1) }
   end
 
   def superclass_mismatch?(error)
