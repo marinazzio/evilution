@@ -10,8 +10,8 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - '3.4.9'
-          - '4.0.2'
+          - '3.4.10'
+          - '4.0.6'
 
     steps:
       - name: Checkout
