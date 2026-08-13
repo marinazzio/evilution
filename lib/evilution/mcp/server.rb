@@ -2,6 +2,7 @@
 
 require "mcp"
 require_relative "../version"
+require_relative "complete_result_server"
 require_relative "mutate_tool"
 require_relative "session_tool"
 require_relative "info_tool"
@@ -10,7 +11,7 @@ require_relative "../mcp"
 
 class Evilution::MCP::Server
   def self.build
-    ::MCP::Server.new(
+    Evilution::MCP::CompleteResultServer.new(
       name: "evilution",
       version: Evilution::VERSION,
       tools: [Evilution::MCP::MutateTool, Evilution::MCP::SessionTool, Evilution::MCP::InfoTool]
