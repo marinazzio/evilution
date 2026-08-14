@@ -41,4 +41,38 @@ RSpec.describe Evilution::MCP::Server do
       expect(server.instance_variable_get(:@version)).to eq(Evilution::VERSION)
     end
   end
+
+  # Protocol revision 2026-07-28 makes `resultType` mandatory on list results, but the mcp gem
+  # negotiates that revision without emitting the field, so clients reject the whole list. See GH #1416.
+  describe "list results" do
+    def result_for(method, params = {})
+      response = server.handle(
+        { jsonrpc: "2.0", id: 1, method: method, params: params }
+      )
+
+      response[:result]
+    end
+
+    it "marks tools/list results complete" do
+      expect(result_for("tools/list")[:resultType]).to eq("complete")
+    end
+
+    it "still returns the tools alongside the result type" do
+      result = result_for("tools/list")
+
+      expect(result[:tools].map { |tool| tool[:name] }).to include("evilution-mutate")
+    end
+
+    it "marks prompts/list results complete" do
+      expect(result_for("prompts/list")[:resultType]).to eq("complete")
+    end
+
+    it "marks resources/list results complete" do
+      expect(result_for("resources/list")[:resultType]).to eq("complete")
+    end
+
+    it "marks resources/templates/list results complete" do
+      expect(result_for("resources/templates/list")[:resultType]).to eq("complete")
+    end
+  end
 end
