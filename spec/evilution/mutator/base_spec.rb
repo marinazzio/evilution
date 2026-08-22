@@ -246,6 +246,62 @@ RSpec.describe Evilution::Mutator::Base do
     end
   end
 
+  describe "#add_mutation skip_unparseable" do
+    let(:source) { "def foo(a)\n  a\nend\n" }
+    let(:node) { Prism.parse(source).value.statements.body.first }
+
+    def build_operator
+      operator = described_class.new
+      operator.instance_variable_set(:@file_source, source)
+      operator.instance_variable_set(:@filter, nil)
+      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb"))
+      operator
+    end
+
+    it "keeps an unparseable mutation by default" do
+      operator = build_operator
+
+      operator.send(:add_mutation, offset: 8, length: 1, replacement: "nil", node: node)
+
+      expect(operator.mutations.map(&:parse_status)).to eq([:unparseable])
+    end
+
+    it "drops an unparseable mutation when skip_unparseable is true" do
+      operator = build_operator
+
+      operator.send(:add_mutation, offset: 8, length: 1, replacement: "nil", node: node,
+                                   skip_unparseable: true)
+
+      expect(operator.mutations).to be_empty
+    end
+
+    it "keeps a parseable mutation when skip_unparseable is true" do
+      operator = build_operator
+
+      operator.send(:add_mutation, offset: 13, length: 1, replacement: "nil", node: node,
+                                   skip_unparseable: true)
+
+      expect(operator.mutations.map(&:parse_status)).to eq([:ok])
+    end
+
+    it "returns the mutation it recorded" do
+      operator = build_operator
+
+      result = operator.send(:add_mutation, offset: 13, length: 1, replacement: "nil", node: node)
+
+      expect(result).to eq(operator.mutations.first)
+    end
+
+    it "returns nil when the mutation is skipped" do
+      operator = build_operator
+
+      result = operator.send(:add_mutation, offset: 8, length: 1, replacement: "nil", node: node,
+                                            skip_unparseable: true)
+
+      expect(result).to be_nil
+    end
+  end
+
   describe "#build_eval_source" do
     let(:operator) do
       op = described_class.new

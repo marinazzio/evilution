@@ -3,10 +3,13 @@
 require "prism"
 
 require_relative "../mutator"
+require_relative "primitives"
 require_relative "../integration/loading/body_call_neutralizer"
 require_relative "../ast/heredoc_span"
 
 class Evilution::Mutator::Base < Prism::Visitor
+  include Evilution::Mutator::Primitives
+
   AffectedSlices = Data.define(:original, :mutated)
   private_constant :AffectedSlices
 
@@ -41,7 +44,12 @@ class Evilution::Mutator::Base < Prism::Visitor
 
   private
 
-  def add_mutation(offset:, length:, replacement:, node:)
+  # `skip_unparseable` makes the mutation vanish rather than be recorded when
+  # the surgery does not parse. Off by default: the point operators rely on
+  # unparseable bytes reaching the reporter as their own bucket. The shared
+  # primitives opt in, since a nil-ification or promotion that does not parse
+  # carries no signal.
+  def add_mutation(offset:, length:, replacement:, node:, skip_unparseable: false)
     return if @filter && @filter.skip?(node)
 
     # When the byte range opens a heredoc but stops at its inline anchor,
@@ -67,6 +75,8 @@ class Evilution::Mutator::Base < Prism::Visitor
     surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source, offset: offset, length: length, replacement: replacement
     )
+    return if skip_unparseable && surgery.unparseable?
+
     slices = slice_affected_lines(
       mutated_source: surgery.source,
       offset: offset,
@@ -74,7 +84,9 @@ class Evilution::Mutator::Base < Prism::Visitor
       replacement_bytesize: replacement.bytesize
     )
 
-    @mutations << build_mutation_record(node, surgery, slices)
+    mutation = build_mutation_record(node, surgery, slices)
+    @mutations << mutation
+    mutation
   end
 
   def build_mutation_record(node, surgery, slices)
