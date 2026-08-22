@@ -48,6 +48,12 @@ RSpec.describe Evilution::Mutator::Operator::BooleanOperandPromotion do
       expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly("a", "b")
     end
 
+    it "promotes operands of the keyword `or` form" do
+      muts = mutations_for("word_or?")
+
+      expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly("a", "b")
+    end
+
     it "promotes at every level of a chained expression" do
       muts = mutations_for("chained?")
 

@@ -11,6 +11,10 @@ class OperandPromotionTarget
     a and b
   end
 
+  def word_or?(a, b)
+    a or b
+  end
+
   def chained?(a, b, c)
     a && b && c
   end
