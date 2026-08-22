@@ -41,6 +41,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::SymbolLiteral,
       Evilution::Mutator::Operator::ConditionalNegation,
       Evilution::Mutator::Operator::ConditionalBranch,
+      Evilution::Mutator::Operator::IfBranchSwap,
       Evilution::Mutator::Operator::LastExpressionRemoval,
       Evilution::Mutator::Operator::StatementDeletion,
       Evilution::Mutator::Operator::MethodBodyReplacement,

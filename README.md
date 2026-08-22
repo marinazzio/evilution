@@ -157,7 +157,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 76 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 77 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
@@ -390,7 +390,7 @@ Compatibility policy for the `1.x` gem line:
 
 Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). The resolver searches the `lib/`-mirrored path, common non-mirrored buckets (`spec/unit`, `spec/lib`, `test/unit`, `test/lib`), and the flat `test_`-prefixed Minitest/Test::Unit convention (`test/test_connection_pool_timed_stack.rb`), so a high unresolved rate usually means a genuinely missing or unconventionally-placed test; a run that leaves many mutations unresolved prints an unresolved-rate warning with a best-guess spec path per source file. They are reported separately so you can act on them (add a test, adjust test naming, pass `--spec`, or opt in to the full-suite fallback) without inflating the error count.
 
-## Mutation Operators (76 total)
+## Mutation Operators (77 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -411,6 +411,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
 | `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |
 | `conditional_branch` | Remove if/else branch | Deletes branch body |
+| `if_branch_swap` | Replace the if-branch with the else body, drop the else | `if c; x; else; y; end` -> `if c; y; end` |
 | `conditional_flip` | Flip `if` to `unless` and vice versa | `if cond` -> `unless cond` |
 | `statement_deletion` | Remove statements from method bodies | Deletes a statement |
 | `method_body_replacement` | Replace entire method body | Method body -> `nil`, `self`, `super` |
@@ -812,7 +813,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 76 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 77 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
