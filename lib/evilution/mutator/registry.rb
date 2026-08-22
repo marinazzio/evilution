@@ -30,6 +30,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ArithmeticReplacement,
       Evilution::Mutator::Operator::BooleanOperatorReplacement,
       Evilution::Mutator::Operator::BooleanOperandPromotion,
+      Evilution::Mutator::Operator::BooleanExpressionToNil,
       Evilution::Mutator::Operator::BooleanLiteralReplacement,
       Evilution::Mutator::Operator::NilReplacement,
       Evilution::Mutator::Operator::IntegerLiteral,
