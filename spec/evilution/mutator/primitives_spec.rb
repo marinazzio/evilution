@@ -137,13 +137,26 @@ RSpec.describe Evilution::Mutator::Primitives do
 
     it "overwrites the target's span when target is given" do
       muts = mutations_for("if x\n  a && b\nend") do
-        def visit_and_node(node)
-          promote_child(node, node.right, target: node)
+        def visit_if_node(node)
+          and_node = node.statements.body.first
+          promote_child(node, and_node.right, target: node.statements)
           super
         end
       end
 
       expect(muts.first.mutated_source).to eq("if x\n  b\nend")
+    end
+
+    it "attributes the mutation to the node, not the target" do
+      muts = mutations_for("if x\n  a && b\nend") do
+        def visit_if_node(node)
+          and_node = node.statements.body.first
+          promote_child(node, and_node.right, target: node.statements)
+          super
+        end
+      end
+
+      expect(muts.first.line).to eq(1)
     end
 
     it "skips when the child is absent" do
