@@ -48,7 +48,7 @@ Everything lives under `lib/evilution/`.
 | `Config`, `Config::*` | Merge `.evilution.yml` + CLI flags + env, validate, freeze. | `config.rb`, `config/sources.rb`, `config/validators/*` |
 | `Runner`, `Runner::*` | Orchestrate the whole run. Each stage is its own collaborator. | `runner.rb`, `runner/*` |
 | `AST`, `Subject` | Prism parse, find method subjects, source surgery, pattern matching, heredoc spans. | `ast/parser.rb`, `ast/source_surgeon.rb`, `subject.rb` |
-| `Mutator`, `Mutator::Operator::*` | 75 operators (default profile) that emit byte-edits; registry + profiles. | `mutator/base.rb`, `mutator/registry.rb`, `mutator/operator/*` |
+| `Mutator`, `Mutator::Operator::*` | 76 operators (default profile) that emit byte-edits; registry + profiles. | `mutator/base.rb`, `mutator/registry.rb`, `mutator/operator/*` |
 | `Mutation` | An immutable mutation record (original/mutated sources, slice, location, parse status). | `mutation.rb` |
 | `SpecResolver`, `SpecSelector` | Map a source file to its covering spec files (layout heuristics + explicit mappings). | `spec_resolver.rb`, `spec_selector.rb` |
 | `Isolation::{Fork,InProcess}`, `ProcessSupervisor` | Run one mutation's tests in isolation; process-group lifecycle, sandboxing, TERM/KILL ladder. | `isolation/fork.rb`, `process_supervisor.rb` |
