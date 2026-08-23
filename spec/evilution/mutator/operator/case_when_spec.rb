@@ -109,6 +109,72 @@ RSpec.describe Evilution::Mutator::Operator::CaseWhen do
       end
     end
 
+    context "empty when body raise insertion" do
+      def raise_insertions(muts)
+        muts.select { |m| m.diff.match?(/^\+\s+raise$/) }
+      end
+
+      it "inserts a raise into an empty when body" do
+        muts = mutations_for("case_with_empty_when")
+
+        expect(raise_insertions(muts).map(&:mutated_source)).to match(
+          [a_string_including("when 1\n      raise\n")]
+        )
+      end
+
+      it "inserts after the then keyword when the empty arm uses one" do
+        muts = mutations_for("empty_when_with_then")
+
+        expect(raise_insertions(muts).map(&:mutated_source)).to match(
+          [a_string_including("when 1 then\n      raise\n")]
+        )
+      end
+
+      it "inserts after the last condition of a multi-condition arm" do
+        muts = mutations_for("empty_when_multiple_conditions")
+
+        expect(raise_insertions(muts).map(&:mutated_source)).to match(
+          [a_string_including("when 1, 2\n      raise\n")]
+        )
+      end
+
+      # Branch removal needs two or more arms, so on a lone empty arm the raise
+      # is the only thing proving the arm was selected.
+      it "inserts into a lone empty when arm" do
+        muts = mutations_for("only_empty_when")
+
+        expect(raise_insertions(muts).length).to eq(1)
+      end
+
+      # Scanning must continue past arms that have a body, not stop at the
+      # first one.
+      it "inserts into an empty arm that follows an arm with a body" do
+        muts = mutations_for("empty_when_after_body")
+
+        expect(raise_insertions(muts).map(&:mutated_source)).to match(
+          [a_string_including("when 2\n      raise\n")]
+        )
+      end
+
+      it "leaves arms that already have a body alone" do
+        muts = mutations_for("simple_case")
+
+        expect(raise_insertions(muts)).to be_empty
+      end
+
+      it "indents the raise to match the arm it belongs to" do
+        muts = mutations_from_source(
+          "nested_empty",
+          "class C\n  def nested_empty(x)\n    case x\n    when 1\n      case x\n      " \
+          "when 2\n      end\n    end\n  end\nend\n"
+        )
+
+        expect(raise_insertions(muts).map(&:mutated_source)).to match(
+          [a_string_including("      when 2\n        raise\n")]
+        )
+      end
+    end
+
     it "descends into a case nested inside a when body" do
       muts = mutations_from_source(
         "nested",
