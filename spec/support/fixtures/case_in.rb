@@ -74,4 +74,33 @@ class CaseInExample
       :str
     end
   end
+
+  def empty_else(x)
+    case x
+    in Integer
+      :int
+    else
+    end
+  end
+
+  def multi_statement_else(x)
+    case x
+    in Integer
+      :int
+    else
+      log(x)
+      :other
+    end
+  end
+
+  def single_clause_with_else(x)
+    case x
+    in Integer
+      :int
+    else
+      :other
+    end
+  end
+
+  def log(value) = value
 end
