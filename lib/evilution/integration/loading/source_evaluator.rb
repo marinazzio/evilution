@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../loading"
+require_relative "reeval_warning_filter"
 
 # Evaluate source with __FILE__ set to the absolute original path so that
 # `require_relative` and `__dir__` resolve against the real source tree, where
@@ -17,6 +18,8 @@ class Evilution::Integration::Loading::SourceEvaluator
     # GH #1278), anchor the eval __FILE__ against PROJECT_ROOT so siblings
     # `require_relative` can find each other from the real source tree.
     absolute = File.expand_path(file_path, Evilution.project_base_dir)
-    eval(source, TOPLEVEL_BINDING, absolute, 1)
+    Evilution::Integration::Loading::ReevalWarningFilter.suppress do
+      eval(source, TOPLEVEL_BINDING, absolute, 1)
+    end
   end
 end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../test_unit"
+require_relative "../../diagnostic"
 
 # Resolves the list of test files to load for a given mutation. Encapsulates
 # the explicit-override path, spec-selector lookup, fallback glob, and the
@@ -41,7 +42,7 @@ class Evilution::Integration::TestUnit::TestFileResolver
     return if @warned_files.include?(file_path)
 
     @warned_files << file_path
-    warn unresolved_message(file_path)
+    Evilution::Diagnostic.warn(unresolved_message(file_path))
   end
 
   # Name both recovery paths when skipping :unresolved; when already falling

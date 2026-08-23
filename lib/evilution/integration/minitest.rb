@@ -2,6 +2,7 @@
 
 require "stringio"
 require_relative "base"
+require_relative "../diagnostic"
 require_relative "minitest_crash_detector"
 require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
@@ -276,7 +277,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     return if @warned_files.include?(file_path)
 
     @warned_files << file_path
-    warn unresolved_test_message(file_path)
+    Evilution::Diagnostic.warn(unresolved_test_message(file_path))
   end
 
   # Name both recovery paths when skipping :unresolved; when already falling

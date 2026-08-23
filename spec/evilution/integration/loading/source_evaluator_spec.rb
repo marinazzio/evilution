@@ -43,6 +43,50 @@ RSpec.describe Evilution::Integration::Loading::SourceEvaluator do
       expect { evaluator.call("def broken(", file_path) }.to raise_error(SyntaxError)
     end
 
+    # EV-df7u / GH #1588: re-evaluating a file necessarily redefines its
+    # methods and constants, so Ruby emits "method redefined; discarding old"
+    # and "already initialized constant". Those describe evilution's mechanism,
+    # not the user's code -- and a project that promotes warnings to exceptions
+    # (the `warning` gem with a raising handler, as dry-schema and dry-monads
+    # both configure) would otherwise fail on every single mutation.
+    # EV-df7u / GH #1588: re-evaluating a file necessarily redefines its methods,
+    # and a project that runs with warnings on AND promotes them to exceptions
+    # (dry-schema: `--warnings` in .rspec plus Warning.process { |w| raise w })
+    # would otherwise fail every mutation on a message about our own mechanism.
+    describe "re-eval warnings" do
+      around do |example|
+        previous = $VERBOSE
+        $VERBOSE = true
+        example.run
+      ensure
+        $VERBOSE = previous
+        Object.send(:remove_const, :EvilutionRedefTarget) if defined?(EvilutionRedefTarget)
+      end
+
+      def define_then_redefine
+        source = "class EvilutionRedefTarget\n  def value\n    1\n  end\nend\n"
+        evaluator.call(source, file_path)
+        evaluator.call(source, file_path)
+      end
+
+      it "does not emit redefinition warnings when re-evaluating a file" do
+        expect { define_then_redefine }.not_to output(/method redefined/).to_stderr
+      end
+
+      # Delegated to ReevalWarningFilter, which suppresses only the mechanism
+      # messages -- so the evaluated file still sees the caller's $VERBOSE, and
+      # a warning the mutation itself introduces still reaches the handler.
+      it "suppresses through the filter rather than by muting $VERBOSE" do
+        expect(Evilution::Integration::Loading::ReevalWarningFilter).to receive(:suppress).and_call_original
+
+        evaluator.call("1 + 1", file_path)
+      end
+
+      it "leaves $VERBOSE untouched for the evaluated source" do
+        expect(evaluator.call("$VERBOSE", file_path)).to be(true)
+      end
+    end
+
     # Regression for EV-vlbh / GH #1191: SourceEvaluator anchors the eval
     # __FILE__ against PROJECT_ROOT only when Evilution.in_isolated_worker?
     # is set (EV-wqxu / GH #1278 sandbox flag). The flag's two branches
