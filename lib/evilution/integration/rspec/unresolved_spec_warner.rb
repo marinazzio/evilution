@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../rspec"
+require_relative "../../diagnostic"
 
 class Evilution::Integration::RSpec::UnresolvedSpecWarner
   def initialize
@@ -11,7 +12,7 @@ class Evilution::Integration::RSpec::UnresolvedSpecWarner
     return if @warned.include?(file_path)
 
     @warned << file_path
-    warn message(file_path, fallback_to_full_suite)
+    Evilution::Diagnostic.warn(message(file_path, fallback_to_full_suite))
   end
 
   private

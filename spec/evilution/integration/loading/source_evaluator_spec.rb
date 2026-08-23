@@ -43,6 +43,54 @@ RSpec.describe Evilution::Integration::Loading::SourceEvaluator do
       expect { evaluator.call("def broken(", file_path) }.to raise_error(SyntaxError)
     end
 
+    # EV-df7u / GH #1588: re-evaluating a file necessarily redefines its
+    # methods and constants, so Ruby emits "method redefined; discarding old"
+    # and "already initialized constant". Those describe evilution's mechanism,
+    # not the user's code -- and a project that promotes warnings to exceptions
+    # (the `warning` gem with a raising handler, as dry-schema and dry-monads
+    # both configure) would otherwise fail on every single mutation.
+    describe "re-eval warnings" do
+      # Reproduces the dry-schema setup exactly: `.rspec` carries `--warnings`
+      # (which sets $VERBOSE = true, the only mode in which Ruby emits
+      # redefinition warnings at all) and spec_helper installs
+      # `Warning.process { |w| raise w }`.
+      around do |example|
+        previous = $VERBOSE
+        $VERBOSE = true
+        example.run
+      ensure
+        $VERBOSE = previous
+        Object.send(:remove_const, :EvilutionRedefTarget) if defined?(EvilutionRedefTarget)
+      end
+
+      def define_then_redefine
+        source = "class EvilutionRedefTarget\n  def value\n    1\n  end\nend\n"
+        evaluator.call(source, file_path)
+        evaluator.call(source, file_path)
+      end
+
+      it "does not emit redefinition warnings when re-evaluating a file" do
+        expect { define_then_redefine }.not_to output(/method redefined/).to_stderr
+      end
+
+      it "does not let a raising Warning handler turn re-eval into a failure" do
+        allow(Warning).to receive(:warn).and_raise("promoted to an exception")
+
+        expect { define_then_redefine }.not_to raise_error
+      end
+
+      it "restores the previous $VERBOSE afterwards" do
+        evaluator.call("1 + 1", file_path)
+
+        expect($VERBOSE).to be(true)
+      end
+
+      it "restores $VERBOSE even when the source raises" do
+        expect { evaluator.call("raise 'boom'", file_path) }.to raise_error("boom")
+        expect($VERBOSE).to be(true)
+      end
+    end
+
     # Regression for EV-vlbh / GH #1191: SourceEvaluator anchors the eval
     # __FILE__ against PROJECT_ROOT only when Evilution.in_isolated_worker?
     # is set (EV-wqxu / GH #1278 sandbox flag). The flag's two branches
