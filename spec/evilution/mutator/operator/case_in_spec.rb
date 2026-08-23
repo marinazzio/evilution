@@ -23,6 +23,21 @@ RSpec.describe Evilution::Mutator::Operator::CaseIn do
     end
   end
 
+  # An else removal deletes the `else` keyword; a clause removal never does.
+  def else_removals(muts)
+    muts.select { |m| m.diff.match?(/^-\s+else$/) }
+  end
+
+  def clause_removals(muts)
+    muts - else_removals(muts)
+  end
+
+  # mutated_source is the whole fixture file, and several methods there share
+  # literals, so assertions have to look at the mutated method alone.
+  def mutated_body(mutation, method_name)
+    mutation.mutated_source[/  def #{method_name}\b.*?\n  end\n/m]
+  end
+
   def mutations_from_source(inline_source)
     tmpfile = Tempfile.new(["case_in", ".rb"])
     tmpfile.write(inline_source)
@@ -42,7 +57,7 @@ RSpec.describe Evilution::Mutator::Operator::CaseIn do
     end
 
     it "removes in-clauses without touching the else branch" do
-      muts = mutations_for("with_else")
+      muts = clause_removals(mutations_for("with_else"))
 
       expect(muts.length).to eq(2)
       muts.each do |mutation|
@@ -84,6 +99,47 @@ RSpec.describe Evilution::Mutator::Operator::CaseIn do
       muts = mutations_for("nested")
 
       expect(removed_clauses(muts)).to include("in Symbol; :sym", "in Float; :float")
+    end
+
+    it "removes the else branch of a case/in" do
+      muts = else_removals(mutations_for("with_else"))
+
+      expect(muts.length).to eq(1)
+      expect(mutated_body(muts.first, "with_else")).to eq(
+        "  def with_else(x)\n    case x\n    in Integer\n      :int\n    " \
+        "in String\n      :str\n    \n    end\n  end\n"
+      )
+    end
+
+    it "takes a multi-statement else body with it" do
+      muts = else_removals(mutations_for("multi_statement_else"))
+
+      expect(muts.length).to eq(1)
+      expect(mutated_body(muts.first, "multi_statement_else")).not_to include("log(x)")
+    end
+
+    # A case/when falls through an empty else to nil either way, so CaseWhen
+    # skips that shape. A case/in without an else raises instead, so removing
+    # an empty one is a real behaviour change.
+    it "removes an empty else, which is not a no-op for case/in" do
+      muts = else_removals(mutations_for("empty_else"))
+
+      expect(mutated_body(muts.first, "empty_else")).to eq(
+        "  def empty_else(x)\n    case x\n    in Integer\n      :int\n    \n    end\n  end\n"
+      )
+    end
+
+    it "removes the else even when a lone in-clause blocks clause removal" do
+      muts = mutations_for("single_clause_with_else")
+
+      expect(muts.length).to eq(1)
+      expect(else_removals(muts).length).to eq(1)
+    end
+
+    it "emits no else mutation when there is no else" do
+      muts = else_removals(mutations_for("two_clauses"))
+
+      expect(muts).to be_empty
     end
 
     it "reports the mutation on the line of the clause it removes" do

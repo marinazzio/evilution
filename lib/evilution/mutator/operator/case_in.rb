@@ -16,6 +16,7 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::CaseIn < Evilution::Mutator::Base
   def visit_case_match_node(node)
     remove_in_clauses(node)
+    remove_else_branch(node)
     super
   end
 
@@ -35,5 +36,29 @@ class Evilution::Mutator::Operator::CaseIn < Evilution::Mutator::Base
         node: in_node
       )
     end
+  end
+
+  # Without an else, an unmatched value raises NoMatchingPatternError rather
+  # than falling through, so a survivor means nothing in the suite reaches the
+  # fallback.
+  #
+  # An empty else body is worth removing here, which is where this parts ways
+  # with CaseWhen: a case/when yields nil whether its else is empty or absent,
+  # but an empty case/in else yields nil while an absent one raises. Prism
+  # reports no statements for that shape, so the edit covers the keyword alone.
+  def remove_else_branch(node)
+    else_clause = node.else_clause
+    return if else_clause.nil?
+
+    keyword_location = else_clause.else_keyword_loc
+    statements = else_clause.statements
+    end_offset = statements.nil? ? keyword_location.end_offset : statements.location.end_offset
+
+    add_mutation(
+      offset: keyword_location.start_offset,
+      length: end_offset - keyword_location.start_offset,
+      replacement: "",
+      node: else_clause
+    )
   end
 end
