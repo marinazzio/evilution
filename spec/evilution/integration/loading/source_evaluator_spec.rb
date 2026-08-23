@@ -49,11 +49,11 @@ RSpec.describe Evilution::Integration::Loading::SourceEvaluator do
     # not the user's code -- and a project that promotes warnings to exceptions
     # (the `warning` gem with a raising handler, as dry-schema and dry-monads
     # both configure) would otherwise fail on every single mutation.
+    # EV-df7u / GH #1588: re-evaluating a file necessarily redefines its methods,
+    # and a project that runs with warnings on AND promotes them to exceptions
+    # (dry-schema: `--warnings` in .rspec plus Warning.process { |w| raise w })
+    # would otherwise fail every mutation on a message about our own mechanism.
     describe "re-eval warnings" do
-      # Reproduces the dry-schema setup exactly: `.rspec` carries `--warnings`
-      # (which sets $VERBOSE = true, the only mode in which Ruby emits
-      # redefinition warnings at all) and spec_helper installs
-      # `Warning.process { |w| raise w }`.
       around do |example|
         previous = $VERBOSE
         $VERBOSE = true
@@ -73,21 +73,17 @@ RSpec.describe Evilution::Integration::Loading::SourceEvaluator do
         expect { define_then_redefine }.not_to output(/method redefined/).to_stderr
       end
 
-      it "does not let a raising Warning handler turn re-eval into a failure" do
-        allow(Warning).to receive(:warn).and_raise("promoted to an exception")
+      # Delegated to ReevalWarningFilter, which suppresses only the mechanism
+      # messages -- so the evaluated file still sees the caller's $VERBOSE, and
+      # a warning the mutation itself introduces still reaches the handler.
+      it "suppresses through the filter rather than by muting $VERBOSE" do
+        expect(Evilution::Integration::Loading::ReevalWarningFilter).to receive(:suppress).and_call_original
 
-        expect { define_then_redefine }.not_to raise_error
-      end
-
-      it "restores the previous $VERBOSE afterwards" do
         evaluator.call("1 + 1", file_path)
-
-        expect($VERBOSE).to be(true)
       end
 
-      it "restores $VERBOSE even when the source raises" do
-        expect { evaluator.call("raise 'boom'", file_path) }.to raise_error("boom")
-        expect($VERBOSE).to be(true)
+      it "leaves $VERBOSE untouched for the evaluated source" do
+        expect(evaluator.call("$VERBOSE", file_path)).to be(true)
       end
     end
 
