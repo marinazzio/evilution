@@ -30,4 +30,16 @@ class LoopFlipExample
     end
     i
   end
+
+  def post_form_while(q)
+    begin
+      q.pop
+    end while q.any?
+  end
+
+  def post_form_until(q)
+    begin
+      q.pop
+    end until q.empty?
+  end
 end

@@ -31,6 +31,12 @@ class LoopBodyToRaiseTarget
     end while queue.any?
   end
 
+  def post_form_until(queue)
+    begin
+      queue.pop
+    end until queue.empty?
+  end
+
   def empty_body(flag)
     while flag
     end

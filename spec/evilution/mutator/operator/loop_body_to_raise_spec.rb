@@ -77,6 +77,14 @@ RSpec.describe Evilution::Mutator::Operator::LoopBodyToRaise do
       )
     end
 
+    it "replaces the body of a post-form until without unwrapping it" do
+      muts = mutations_for("post_form_until")
+
+      expect(mutated_bodies(muts, "post_form_until")).to eq(
+        ["  def post_form_until(queue)\n    begin\n      raise\n    end until queue.empty?\n  end\n"]
+      )
+    end
+
     it "emits nothing for an empty loop body" do
       muts = mutations_for("empty_body")
 
