@@ -410,7 +410,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `hash_literal` | Empty the hash | `{k: v}` -> `{}` |
 | `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
 | `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |
-| `conditional_branch` | Remove if/else branch | Deletes branch body |
+| `conditional_branch` | Remove if/unless/else branch | Deletes branch body |
 | `if_branch_swap` | Replace the if-branch with the else body, drop the else | `if c; x; else; y; end` -> `if c; y; end` |
 | `conditional_flip` | Flip `if` to `unless` and vice versa | `if cond` -> `unless cond` |
 | `statement_deletion` | Remove statements from method bodies | Deletes a statement |

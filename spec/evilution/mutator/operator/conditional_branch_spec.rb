@@ -89,6 +89,54 @@ RSpec.describe Evilution::Mutator::Operator::ConditionalBranch do
       expect(muts.first.mutated_source).to match(/if x\s+nil\s+else/)
     end
 
+    context "unless nodes" do
+      it "replaces the body of an unless with nil" do
+        muts = mutations_for("unless_without_else")
+
+        expect(muts.length).to eq(1)
+        expect(muts.first.mutated_source).to match(/unless x > 0\s+nil\s+end/)
+      end
+
+      it "replaces both branches of an unless/else, one at a time" do
+        muts = mutations_for("unless_with_else")
+
+        expect(muts.length).to eq(2)
+        expect(muts.map(&:mutated_source)).to include(
+          a_string_matching(/unless x > 0\s+nil\s+else/),
+          a_string_matching(/else\s+nil\s+end/)
+        )
+      end
+
+      # An empty else body has nothing to blank out, matching how the if
+      # branch of this operator already behaves.
+      it "emits only the body mutation when the else is empty" do
+        muts = mutations_for("unless_with_empty_else")
+
+        expect(muts.length).to eq(1)
+      end
+
+      it "replaces the body of a modifier unless" do
+        muts = mutations_for("unless_modifier")
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to eq(["nil unless x > 0"])
+      end
+
+      # Only an unless inside an unless exercises this operator's own descent
+      # into unless nodes; an unless inside an if rides on visit_if_node.
+      it "reaches an unless nested inside another unless" do
+        muts = mutations_for("unless_nested_in_unless")
+
+        expect(muts.length).to eq(2)
+      end
+
+      it "reaches an unless nested inside an if" do
+        muts = mutations_for("unless_nested_in_if")
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to include("nil")
+        expect(muts.length).to eq(2)
+      end
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
