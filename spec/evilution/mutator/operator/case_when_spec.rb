@@ -109,6 +109,67 @@ RSpec.describe Evilution::Mutator::Operator::CaseWhen do
       end
     end
 
+    context "when condition removal" do
+      # A whole-clause removal replaces the arm with blank, so only a condition
+      # removal leaves a `when` on the added side of the diff.
+      def condition_removals(muts)
+        muts.select { |m| m.diff.match?(/^\+\s+when\s/) }
+      end
+
+      it "drops each condition of a two-condition arm in turn" do
+        muts = condition_removals(mutations_for("two_conditions"))
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly("when 1", "when 2")
+      end
+
+      it "drops each condition of a three-condition arm in turn" do
+        muts = condition_removals(mutations_for("three_conditions"))
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly(
+          "when :b, :c", "when :a, :c", "when :a, :b"
+        )
+      end
+
+      # A one-line `then` arm keeps `when` on the body line too, so this one
+      # asserts against every mutation of the arm rather than filtering.
+      it "keeps the then keyword when shortening the list" do
+        muts = mutations_for("conditions_with_then")
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to include(
+          "when 1 then \"low\"", "when 2 then \"low\""
+        )
+      end
+
+      it "drops a splat condition like any other" do
+        muts = condition_removals(mutations_for("conditions_with_splat"))
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly("when 1", "when *rest")
+      end
+
+      # Scanning must continue past single-condition arms, not stop at the
+      # first one.
+      it "shortens a multi-condition arm that follows a single-condition arm" do
+        muts = condition_removals(mutations_for("single_condition_arm_first"))
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to contain_exactly("when 2", "when 3")
+      end
+
+      it "emits nothing for a single-condition arm" do
+        muts = condition_removals(mutations_for("single_when"))
+
+        expect(muts).to be_empty
+      end
+
+      it "produces valid Ruby when the conditions span several lines" do
+        muts = condition_removals(mutations_for("conditions_across_lines"))
+
+        expect(muts.length).to eq(2)
+        muts.each do |mutation|
+          expect(Prism.parse(mutation.mutated_source).errors).to be_empty
+        end
+      end
+    end
+
     context "empty when body raise insertion" do
       def raise_insertions(muts)
         muts.select { |m| m.diff.match?(/^\+\s+raise$/) }

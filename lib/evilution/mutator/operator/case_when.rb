@@ -5,6 +5,7 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::CaseWhen < Evilution::Mutator::Base
   def visit_case_node(node)
     remove_when_branches(node)
+    remove_when_conditions(node)
     replace_when_bodies(node)
     raise_in_empty_when_bodies(node)
     remove_else_branch(node)
@@ -25,6 +26,39 @@ class Evilution::Mutator::Operator::CaseWhen < Evilution::Mutator::Base
         node: when_node
       )
     end
+  end
+
+  # `when a, b` matches on either value, so dropping the whole arm cannot tell
+  # which of them a test actually exercises. Shortening the list one value at a
+  # time can. WhenNode#conditions holds the values; the enclosing CaseNode's
+  # own #conditions holds the arms.
+  def remove_when_conditions(node)
+    node.conditions.each do |when_node|
+      values = when_node.conditions
+      next if values.length < 2
+
+      values.each_index do |index|
+        offset, length = condition_removal_span(values, index)
+
+        add_mutation(offset: offset, length: length, replacement: "", node: when_node)
+      end
+    end
+  end
+
+  # Each value has to take its separating comma with it, or the arm is left
+  # with a dangling one. The first value owns the comma that follows it; every
+  # later value owns the comma that precedes it. Taking whole byte ranges
+  # between value boundaries also sweeps up any newline the list wraps on.
+  def condition_removal_span(values, index)
+    if index.zero?
+      start_offset = values[0].location.start_offset
+      end_offset = values[1].location.start_offset
+    else
+      start_offset = values[index - 1].location.end_offset
+      end_offset = values[index].location.end_offset
+    end
+
+    [start_offset, end_offset - start_offset]
   end
 
   def replace_when_bodies(node)
