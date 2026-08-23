@@ -142,7 +142,7 @@ class Evilution::Isolation::Fork
       # Child exited. Drain any final payload that arrived between
       # wait_readable timeout and the reap (race) before declaring empty.
       final = read_payload(read_io, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.1)
-      return decode_payload(final) if final
+      return decode_payload(final, handle) if final
 
       return empty_result(handle)
     end

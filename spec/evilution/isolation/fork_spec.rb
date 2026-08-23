@@ -307,6 +307,20 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to eq("child exited 0 without writing a result")
     end
 
+    # The drain read after reap_nonblock can return a zero-length frame -- a
+    # grandchild that inherited the write end and wrote a 0 length prefix. That
+    # decodes as empty, so it has to carry the same status the other paths do.
+    it "keeps the exit status when the drained payload is a zero-length frame" do
+      test_command = ->(_m) { exit!(3) }
+      # First read hits EOF; the drain read then yields the empty frame.
+      allow(isolator).to receive(:read_payload).and_return(nil, "")
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.error_message).to eq("child exited 3 without writing a result")
+    end
+
     it "names the signal when the child dies on one without writing a result" do
       test_command = lambda { |_m|
         Process.kill("KILL", Process.pid)
