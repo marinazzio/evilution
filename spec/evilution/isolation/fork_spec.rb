@@ -283,16 +283,54 @@ RSpec.describe Evilution::Isolation::Fork do
       pid_file&.unlink
     end
 
-    it "returns error when child writes empty result" do
+    # EV-p38o / GH #1580: a child that writes no payload also leaves its
+    # stdout/stderr capture empty, so the exit status is the only evidence of
+    # what happened to it. The message has to carry that or the user has
+    # nothing to act on.
+    it "reports the exit code when the child exits without writing a result" do
       test_command = lambda { |_m|
         # Exit without writing a result, causing the OS to close the pipe
-        exit!(0)
+        exit!(3)
       }
 
       result = isolator.call(mutation:, test_command:, timeout: 5)
 
       expect(result).to be_error
-      expect(result.error_message).to eq("empty result from child")
+      expect(result.error_message).to eq("child exited 3 without writing a result")
+    end
+
+    it "reports a zero exit code rather than treating it as unknown" do
+      test_command = ->(_m) { exit!(0) }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.error_message).to eq("child exited 0 without writing a result")
+    end
+
+    # The drain read after reap_nonblock can return a zero-length frame -- a
+    # grandchild that inherited the write end and wrote a 0 length prefix. That
+    # decodes as empty, so it has to carry the same status the other paths do.
+    it "keeps the exit status when the drained payload is a zero-length frame" do
+      test_command = ->(_m) { exit!(3) }
+      # First read hits EOF; the drain read then yields the empty frame.
+      allow(isolator).to receive(:read_payload).and_return(nil, "")
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.error_message).to eq("child exited 3 without writing a result")
+    end
+
+    it "names the signal when the child dies on one without writing a result" do
+      test_command = lambda { |_m|
+        Process.kill("KILL", Process.pid)
+        sleep 5
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_error
+      expect(result.error_message).to eq("child died on SIGKILL without writing a result")
     end
 
     # Regression for EV-9qh1 / GH #1176:

@@ -30,7 +30,9 @@ class Evilution::ProcessSupervisor
   # One tracked child: leader pid, its process-group id (== pid for a group
   # leader), the parent-side fds to close on reap, and an optional sandbox dir
   # to remove on reap.
-  Handle = Struct.new(:pid, :pgid, :fds, :sandbox_dir, keyword_init: true)
+  # `status` is filled in when the child is reaped, so a caller that got no
+  # payload out of it can still say how it died.
+  Handle = Struct.new(:pid, :pgid, :fds, :sandbox_dir, :status, keyword_init: true)
 
   @registry = [].freeze
 
@@ -158,7 +160,7 @@ class Evilution::ProcessSupervisor
   # release the resources the handle owns: close parent-side fds, remove the
   # sandbox dir, and drop the handle from the registry.
   def reap(handle)
-    safe_wait(handle.pid)
+    handle.status = safe_wait(handle.pid)
   ensure
     release(handle)
   end
@@ -170,21 +172,28 @@ class Evilution::ProcessSupervisor
   # it releases the handle in the same step it reaps, so the process-global
   # registry never holds a stale, already-reaped pgid.
   def reap_nonblock(handle)
-    return false unless nonblocking_wait(handle.pid)
+    outcome = nonblocking_wait(handle.pid)
+    return false unless outcome
 
+    handle.status = outcome if outcome.is_a?(::Process::Status)
     release(handle)
     true
   end
 
   private
 
-  # WNOHANG wait: returns the pid once the child has exited, nil while it is
-  # still running, and -- treating an already-reaped child as exited -- the pid
-  # again on ECHILD so the caller still releases the handle.
+  # WNOHANG wait: returns the child's Process::Status once it has exited, nil
+  # while it is still running, and -- treating an already-reaped child as
+  # exited -- the :already_reaped sentinel on ECHILD so the caller still
+  # releases the handle. The sentinel is deliberately not a status: $? would
+  # then hold some earlier child's, and attributing that one's death to this
+  # child is worse than admitting the status is unknown.
   def nonblocking_wait(pid)
-    ::Process.waitpid(pid, ::Process::WNOHANG)
+    return nil unless ::Process.waitpid(pid, ::Process::WNOHANG)
+
+    ::Process.last_status
   rescue Errno::ECHILD
-    pid
+    :already_reaped
   end
 
   def release(handle)
@@ -229,8 +238,11 @@ class Evilution::ProcessSupervisor
     nil
   end
 
+  # Returns the reaped child's Process::Status, or nil when it was already
+  # reaped elsewhere and the status is no longer attributable.
   def safe_wait(pid)
     ::Process.wait(pid)
+    ::Process.last_status
   rescue Errno::ECHILD
     nil
   end

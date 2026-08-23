@@ -459,6 +459,40 @@ RSpec.describe Evilution::ProcessSupervisor do
       end
     end
 
+    # EV-p38o / GH #1580: the caller may have got no payload out of the child,
+    # in which case the recorded status is the only account of how it died.
+    it "records the exit status of a child that exited on its own" do
+      h = supervisor.spawn { exit!(3) }
+
+      wait_until { supervisor.reap_nonblock(h) }
+
+      expect(h.status).to be_a(Process::Status)
+      expect(h.status.exitstatus).to eq(3)
+      expect(h.status).not_to be_signaled
+    end
+
+    it "records the terminating signal of a child that died on one" do
+      h = supervisor.spawn do
+        Process.kill("KILL", Process.pid)
+        sleep 5
+      end
+
+      wait_until { supervisor.reap_nonblock(h) }
+
+      expect(h.status).to be_signaled
+      expect(Signal.signame(h.status.termsig)).to eq("KILL")
+    end
+
+    # $? would hold some earlier child's status here, and attributing that
+    # death to this child is worse than reporting no status at all.
+    it "leaves the status unset when the child was already reaped elsewhere" do
+      h = handle(pid: 999_999)
+      allow(Process).to receive(:waitpid).with(h.pid, Process::WNOHANG).and_raise(Errno::ECHILD)
+
+      expect(supervisor.reap_nonblock(h)).to be(true)
+      expect(h.status).to be_nil
+    end
+
     it "reaps an exited child, releases it, and drops it from the registry" do
       sandbox = Dir.mktmpdir("supervisor-reap-nonblock")
       read_io, write_io = IO.pipe
