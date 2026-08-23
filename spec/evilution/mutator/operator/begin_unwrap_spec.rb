@@ -119,6 +119,17 @@ RSpec.describe Evilution::Mutator::Operator::BeginUnwrap do
       expect(muts.length).to eq(2)
     end
 
+    # The wrapper of a post-form loop is load-bearing: unwrapping it rewrites
+    # `begin body end while c` as `body while c`, which tests the condition
+    # first and so drops the guaranteed first iteration. That is a real
+    # behaviour change, and therefore a mutation worth emitting.
+    it "unwraps the begin of a post-form loop, dropping its run-once guarantee" do
+      muts = mutations_for("post_form_loop")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("    q.pop while q.any?")
+    end
+
     it "produces no mutation for an empty begin/end and does not raise" do
       src = <<~RUBY
         def empty

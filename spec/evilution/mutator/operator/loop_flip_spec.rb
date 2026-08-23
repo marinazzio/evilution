@@ -79,6 +79,23 @@ RSpec.describe Evilution::Mutator::Operator::LoopFlip do
       expect(muts.length).to eq(2)
     end
 
+    # A post-form loop carries its keyword after the `end`, so the flip has to
+    # land there and leave the begin/end wrapper -- and with it the guaranteed
+    # first iteration -- standing.
+    it "flips a post-form while to until without unwrapping it" do
+      muts = mutations_for("post_form_while")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("begin\n      q.pop\n    end until q.any?")
+    end
+
+    it "flips a post-form until to while without unwrapping it" do
+      muts = mutations_for("post_form_until")
+
+      expect(muts.length).to eq(1)
+      expect(muts.first.mutated_source).to include("begin\n      q.pop\n    end while q.empty?")
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)

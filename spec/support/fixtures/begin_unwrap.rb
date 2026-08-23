@@ -34,4 +34,10 @@ class BeginUnwrapExample
   def no_begin
     do_work
   end
+
+  def post_form_loop(q)
+    begin
+      q.pop
+    end while q.any?
+  end
 end
