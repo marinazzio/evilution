@@ -144,7 +144,7 @@ class Evilution::Isolation::Fork
       final = read_payload(read_io, Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.1)
       return decode_payload(final) if final
 
-      return empty_result
+      return empty_result(handle)
     end
   end
 
@@ -161,11 +161,13 @@ class Evilution::Isolation::Fork
 
       if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
         @supervisor.terminate(handle, grace: GRACE_PERIOD)
-        break
+        # The status now records OUR signal, so it cannot be reported as the
+        # child's own cause of death.
+        return decode_payload(payload, handle, terminated: true)
       end
       sleep 0.05
     end
-    decode_payload(payload)
+    decode_payload(payload, handle)
   end
 
   def read_payload(read_io, deadline)
@@ -201,14 +203,33 @@ class Evilution::Isolation::Fork
     buf
   end
 
-  def decode_payload(data)
-    return empty_result if data.nil? || data.empty?
+  def decode_payload(data, handle = nil, terminated: false)
+    return empty_result(handle, terminated: terminated) if data.nil? || data.empty?
 
     { timeout: false }.merge(Marshal.load(data))
   end
 
-  def empty_result
-    { timeout: false, passed: false, error: "empty result from child" }
+  def empty_result(handle, terminated: false)
+    { timeout: false, passed: false, error: child_death_reason(handle, terminated: terminated) }
+  end
+
+  # A child that wrote no payload has usually left its stdout/stderr capture
+  # empty too, so its termination status is the only evidence of what happened.
+  # Reporting it separates a segfault from an OOM kill from a clean early exit,
+  # all of which reach this path identically.
+  def child_death_reason(handle, terminated: false)
+    return "child was terminated after the reap deadline without writing a result" if terminated
+
+    status = handle.nil? ? nil : handle.status
+    return "empty result from child" unless status.is_a?(Process::Status)
+    return "child exited #{status.exitstatus} without writing a result" unless status.signaled?
+
+    "child died on #{signal_name(status.termsig)} without writing a result"
+  end
+
+  def signal_name(termsig)
+    name = Signal.signame(termsig)
+    name.nil? ? "signal #{termsig}" : "SIG#{name}"
   end
 
   def timeout_result(handle)
