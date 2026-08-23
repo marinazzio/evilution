@@ -34,7 +34,7 @@ class Evilution::Runner::Canary
       test_command: ->(mutation) { build_integration(spec_path).call(mutation) },
       timeout: @config.timeout
     )
-    raise Failed, failure_message(result.status) unless result.status == :survived
+    raise Failed, failure_message(result) unless result.status == :survived
 
     nil
   ensure
@@ -146,12 +146,59 @@ class Evilution::Runner::Canary
     @integration_class.new(test_files: [spec_path], hooks: @hooks)
   end
 
-  def failure_message(status)
+  # When the child reported an error, that error IS the diagnosis -- naming it
+  # beats guessing. The speculative list stays only for the cases that carry no
+  # error at all (:killed, :timeout), where guesses are the only help there is.
+  # Diagnosing GH #1581 meant rebuilding this canary by hand to read the field
+  # this message used to drop, and none of the four guesses was the cause.
+  # EV-65nf / GH #1586.
+  def failure_message(result)
+    "#{failure_preamble(result.status)} #{diagnosis(result)} " \
+      "Re-run with --no-canary to bypass this check."
+  end
+
+  def failure_preamble(status)
     "evilution proof-of-life canary failed: a guaranteed-unobservable synthetic " \
       "mutation was scored #{status.inspect} instead of :survived. The mutation " \
-      "pipeline is misreporting — every score this run would produce is unreliable. " \
-      "Likely causes: Rails/Zeitwerk autoloading breaking child eval; an env-specific " \
+      "pipeline is misreporting — every score this run would produce is unreliable."
+  end
+
+  def diagnosis(result)
+    reported = reported_error(result)
+    return speculative_causes if reported.nil?
+
+    "The child reported: #{reported}"
+  end
+
+  def reported_error(result)
+    message = result.error_message
+    return nil if message.nil? || message.empty?
+
+    described = with_class_prefix(message, result.error_class)
+    frame = first_frame(result)
+    frame.nil? ? described : "#{described} (at #{frame})"
+  end
+
+  # MutationApplier already prefixes the class onto the message it packs
+  # ("#{e.class}: #{e.message}"), while other paths pack the bare message and
+  # leave the class in its own field. Prefixing unconditionally would print
+  # "NameError: NameError: ..." for the former.
+  def with_class_prefix(message, klass)
+    return message if klass.nil? || klass.empty? || message.start_with?("#{klass}:")
+
+    "#{klass}: #{message}"
+  end
+
+  def first_frame(result)
+    backtrace = result.error_backtrace
+    return nil if backtrace.nil? || backtrace.empty?
+
+    backtrace.first
+  end
+
+  def speculative_causes
+    "Likely causes: Rails/Zeitwerk autoloading breaking child eval; an env-specific " \
       "RSpec config (e.g. fail_if_no_examples); a classify_status fallback defect; or " \
-      "an isolation-mode defect. Re-run with --no-canary to bypass this check."
+      "an isolation-mode defect."
   end
 end

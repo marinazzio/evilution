@@ -51,6 +51,21 @@ RSpec.describe Evilution::Runner::Canary do
     )
   end
 
+  def errored_result(message:, klass: "RuntimeError", backtrace: nil)
+    Evilution::Result::MutationResult.new(
+      mutation: instance_double(Evilution::Mutation), status: :error, duration: 0.0,
+      error: Evilution::Result::ErrorInfo.from_fields(
+        message: message, klass: klass, backtrace: backtrace
+      )
+    )
+  end
+
+  def stub_isolator_returning(result)
+    isolator = instance_double(Evilution::Isolation::InProcess)
+    allow(isolator).to receive(:call).and_return(result)
+    isolator
+  end
+
   def stub_isolator(status)
     isolator = instance_double(Evilution::Isolation::InProcess)
     allow(isolator).to receive(:call).and_return(result_with(status))
@@ -107,6 +122,149 @@ RSpec.describe Evilution::Runner::Canary do
       )
 
       expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed)
+    end
+
+    # EV-65nf / GH #1586: the failure previously reported only the status and a
+    # list of four speculative causes, discarding the one field that names what
+    # actually happened. Diagnosing GH #1581 meant rebuilding the canary by hand
+    # to read result.error_message; none of the four guesses was the cause.
+    describe "the underlying error" do
+      it "names the error the child reported" do
+        result = errored_result(
+          message: "DEPRECATION WARNING: Grape::Path is deprecated!",
+          klass: "ActiveSupport::DeprecationException"
+        )
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(
+          Evilution::Runner::Canary::Failed,
+          /ActiveSupport::DeprecationException: DEPRECATION WARNING: Grape::Path is deprecated!/
+        )
+      end
+
+      # MutationApplier packs "#{e.class}: #{e.message}" into the message field
+      # while also filling error_class, so prefixing unconditionally would read
+      # "NameError: NameError: ...".
+      it "does not repeat a class the message already carries" do
+        result = errored_result(
+          message: "NameError: uninitialized constant Foo", klass: "NameError"
+        )
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /NameError: uninitialized constant Foo/) { |error|
+          expect(error.message).not_to include("NameError: NameError")
+        }
+      end
+
+      # The frame is what identified the offending code in GH #1581 --
+      # ConcernStateCleaner#call, which nothing else in the message pointed at.
+      it "includes the first backtrace frame when the child reported one" do
+        result = errored_result(
+          message: "boom",
+          backtrace: ["lib/evilution/integration/loading/concern_state_cleaner.rb:25:in 'call'", "other.rb:1"]
+        )
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /concern_state_cleaner\.rb:25/)
+      end
+
+      it "reports the message alone when the child named no error class" do
+        result = errored_result(message: "boom", klass: nil)
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /The child reported: boom/) { |error|
+          expect(error.message).not_to match(/[A-Z]\w*(Error|Exception): boom/)
+        }
+      end
+
+      it "falls back to the speculative causes when the error carries an empty message" do
+        result = errored_result(message: "", klass: "RuntimeError")
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /Likely causes/)
+      end
+
+      it "omits the frame when the child reported an empty backtrace" do
+        result = errored_result(message: "boom", backtrace: [])
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
+          expect(error.message).not_to include("(at ")
+        }
+      end
+
+      it "omits the frame when the child reported no backtrace at all" do
+        result = errored_result(message: "boom", backtrace: nil)
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
+          expect(error.message).not_to include("(at ")
+        }
+      end
+
+      it "drops the speculative causes once it can name the real one" do
+        result = errored_result(message: "boom")
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
+          expect(error.message).not_to include("Likely causes")
+        }
+      end
+
+      # A :killed or :timeout canary carries no error, and there the guesses are
+      # the only help available.
+      it "keeps the speculative causes when the child reported no error" do
+        canary = described_class.new(
+          config: config, isolator: stub_isolator(:killed),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /Likely causes/)
+      end
+
+      it "still names the status either way" do
+        result = errored_result(message: "boom")
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /scored :error instead of :survived/)
+      end
+
+      it "still points at --no-canary either way" do
+        result = errored_result(message: "boom")
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /--no-canary/)
+      end
     end
 
     it "passes the configured timeout to the isolator" do
