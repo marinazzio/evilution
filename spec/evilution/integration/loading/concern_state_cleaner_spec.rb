@@ -32,6 +32,63 @@ RSpec.describe Evilution::Integration::Loading::ConcernStateCleaner do
     eval("proc {}", TOPLEVEL_BINDING, path, 1) # rubocop:disable Style/EvalWithLocation
   end
 
+  describe "modules that intercept method calls" do
+    # EV-v2rc / GH #1581: ActiveSupport::Deprecation::DeprecatedConstantProxy
+    # subclasses Module and undefines every instance method except __* and
+    # object_id, so ObjectSpace.each_object(Module) yields it and ANY message
+    # it receives lands in method_missing, which emits the deprecation. A
+    # project whose deprecator behaviour is :raise -- grape sets exactly that
+    # in its spec_helper -- turns our sweep into an exception. The sweep must
+    # therefore not send messages to the modules it walks.
+    def deprecation_proxy(touched)
+      klass = Class.new(Module) do
+        instance_methods.each { |m| undef_method(m) unless /^__|^object_id$/.match?(m) }
+
+        define_method(:method_missing) do |name, *_args|
+          touched << name
+          raise "deprecated constant touched via ##{name}"
+        end
+      end
+      klass.new
+    end
+
+    it "does not send messages to a module that intercepts them" do
+      touched = []
+      keep_alive = [deprecation_proxy(touched)]
+
+      Dir.mktmpdir("evilution_concern_proxy") do |dir|
+        target_path = File.join(dir, "concern.rb")
+        File.write(target_path, "")
+
+        expect { cleaner.call(target_path) }.not_to raise_error
+      end
+
+      expect(touched).to be_empty
+      expect(keep_alive.size).to eq(1)
+    end
+
+    it "still clears concern state while such a module is present" do
+      touched = []
+      keep_alive = [deprecation_proxy(touched)]
+
+      Dir.mktmpdir("evilution_concern_proxy_mixed") do |dir|
+        target_path = File.join(dir, "concern.rb")
+        File.write(target_path, "")
+
+        mod = Module.new
+        mod.extend(ActiveSupport::Concern)
+        mod.instance_variable_set(:@_included_block, block_at(target_path))
+
+        cleaner.call(target_path)
+
+        expect(mod.instance_variable_defined?(:@_included_block)).to be(false)
+      end
+
+      expect(touched).to be_empty
+      expect(keep_alive.size).to eq(1)
+    end
+  end
+
   describe "#initialize" do
     it "stores the default subpath resolver as a usable instance" do
       Dir.mktmpdir("evilution_concern_default") do |dir|
