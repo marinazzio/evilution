@@ -466,7 +466,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `loop_body_to_raise` | Replace a loop body with `raise` | `while c; body; end` -> `while c; raise; end` |
 | `string_interpolation` | Replace interpolation content with nil | `"hello #{name}"` -> `"hello #{nil}"` |
 | `retry_removal` | Remove retry statements | `retry` -> `nil` |
-| `case_when` | Remove/replace case/when branches | Remove `when` branch, body -> `nil`, empty body -> `raise`, remove `else` |
+| `case_when` | Remove/replace case/when branches | Remove `when` branch, drop one condition from `when a, b`, body -> `nil`, empty body -> `raise`, remove `else` |
 | `predicate_replacement` | Replace predicate calls with booleans | `x.empty?` -> `true`, `x.empty?` -> `false` |
 | `equality_to_identity` | Replace equality with identity check | `a == b` -> `a.equal?(b)` |
 | `lambda_body` | Replace lambda body with nil | `-> { expr }` -> `-> { nil }` |

@@ -80,4 +80,50 @@ class CaseWhenExample
       # intentionally empty
     end
   end
+
+  def two_conditions(x)
+    case x
+    when 1, 2
+      "low"
+    when 3
+      "high"
+    end
+  end
+
+  def single_condition_arm_first(x)
+    case x
+    when 1
+      "one"
+    when 2, 3
+      "pair"
+    end
+  end
+
+  def three_conditions(x)
+    case x
+    when :a, :b, :c
+      "letter"
+    end
+  end
+
+  def conditions_with_then(x)
+    case x
+    when 1, 2 then "low"
+    end
+  end
+
+  def conditions_with_splat(x, rest)
+    case x
+    when 1, *rest
+      "matched"
+    end
+  end
+
+  def conditions_across_lines(x)
+    case x
+    when 1,
+         2
+      "low"
+    end
+  end
 end
