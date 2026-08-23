@@ -2,6 +2,32 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.1.0] - 2026-08-23
+
+Control-flow and pattern-matching operator expansion: the `default` profile grows from 74 to 80 operators, and three existing operators gain mutations they were silently missing. Adding operators to `default` is a MINOR change under [docs/versioning.md](docs/versioning.md), and mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
+
+### Added
+
+- **Six new mutation operators for control flow and pattern matching (`default` profile: 74 -> 80)** — closing the value-level and branch-level gaps in an operator set that previously mutated control-flow nodes only at the keyword level (epic EV-170m, GH #1418):
+  - **`boolean_operand_promotion`** — drops one side of a compound boolean: `a && b` becomes `a` and `b`, and the same for `||` and the `and` / `or` keyword forms. Kills tests that only ever exercise one side of a condition, which `boolean_operator_replacement` cannot: it swaps the operator but always keeps both operands (EV-170m.2, PR #1565, GH #1431)
+  - **`boolean_expression_to_nil`** — replaces a whole compound boolean with `nil`, targeting conditions that are run for their side effects rather than their value (EV-170m.3, PR #1566, GH #1432)
+  - **`if_branch_swap`** — replaces the if-branch with the else body and drops the else: `if c; x; else; y; end` becomes `if c; y; end`. Both outcomes of the condition change, which is out of reach of `conditional_negation` (pins the predicate to one branch) and `conditional_branch` (blanks one body to `nil`) (EV-170m.5, PR #1567, GH #1434)
+  - **`loop_body_to_raise`** — replaces a `while` / `until` body with a bare `raise`, so a survivor means no test ever enters the loop. The raise ends the loop on its first iteration, so the mutant cannot spin (EV-170m.8, PR #1569, GH #1437)
+  - **`case_in`** — the first operator to visit Ruby's pattern-matching grammar (`Prism::CaseMatchNode`): drops one `in` clause from a `case/in`, or drops its `else`. Input that used to match then falls through to a later arm, to the `else`, or — with neither — raises `NoMatchingPatternError` (EV-170m.14 / EV-170m.15, PRs #1573 / #1574, GH #1443 / #1444)
+  - **`pattern_predicate`** — one-line pattern match to `false`: `x in Integer` becomes `false`. The mutant differs from the original only on inputs the pattern actually matches, so a survivor means no test ever feeds it a matching value (EV-170m.16, PR #1575, GH #1445)
+- **`case_when` covers two more shapes** — an empty `when` arm now gets a `raise` inserted, and a multi-condition arm is shortened one value at a time (`when a, b` becomes `when a` and `when b`). Neither was previously reachable: dropping an empty arm is indistinguishable from falling through to a missing `else`, and whole-arm removal cannot tell which of several listed values a test exercises (EV-170m.11 / EV-170m.12, PRs #1571 / #1572, GH #1440 / #1441)
+
+### Fixed
+
+- **`conditional_branch` ignored `unless` entirely** — the operator defined only `visit_if_node`, so neither `unless c; x; end` nor `unless c; x; else; y; end` received any branch-body mutation, while the equivalent `if` forms received one per branch. Prism gives `unless` its own node type and names the else slot `else_clause` rather than `IfNode`'s `subsequent`; both forms now share the branch handling, so `unless` bodies — including the modifier form — get the same branch-to-`nil` mutants (EV-9mrs, PR #1578, GH #1568)
+- **MCP list responses omitted the mandatory `resultType` field** — protocol revision 2026-07-28 (SEP-2322) makes `resultType` mandatory on list results, and the `mcp` gem echoes back that revision while still omitting the field. Strict clients therefore rejected the whole list and saw a server exposing no tools at all. `Evilution::MCP::CompleteResultServer` now marks every list result `"complete"` (PR #1417)
+
+### Changed
+
+- **Post-form loops (`begin ... end while c`) verified across the loop operators** — `loop_body_to_raise` reaches through the `BeginNode` that Prism reports as the loop's statements, so the wrapper, and with it the guaranteed first iteration, survives the mutation; editing the outer span would have rewritten the loop as `raise while c`, which tests the condition first. `loop_flip` and `begin_unwrap` gained the post-form coverage they never had, including the fact that unwrapping such a loop legitimately drops its run-once guarantee. A sweep of every operator over post-form loops found no mutation that fails to parse (EV-170m.10, PR #1570, GH #1439)
+- **Shared operator primitives (`Mutator::Primitives`)** — `mutate_to_nil` and `promote_child`, built on `Base#add_mutation(skip_unparseable: true)`. Operators built on them skip rather than emit when the result would not parse in its surrounding context, so a promotion that cannot parse no longer reaches the `unparseable` bucket that the point operators still populate (EV-170m.1, PR #1564, GH #1430)
+- **Dependency bumps** — `mcp` 0.24.0 -> 1.2.0 (PRs #1411, #1413, #1414, #1563), CI Ruby versions and gem dependencies (PR #1415), `ruby/setup-ruby` 1.318.0 -> 1.321.0 (PRs #1409, #1412), `actions/checkout` 7.0.0 -> 7.0.1 (PR #1410), `rubygems/release-gem` 1.4.0 -> 1.4.1 (PR #1562)
+
 ## [1.0.0] - 2026-07-15
 
 First stable release. From `1.0.0` onward evilution follows [Semantic Versioning](https://semver.org): the public contract — CLI commands and flags, `.evilution.yml` configuration keys, session JSON files, the MCP tool schemas, and process exit codes — is frozen and covered by the SemVer guarantees and deprecation cycle in [docs/versioning.md](docs/versioning.md). The `1.0.0` milestone is the culmination of the readiness work that shipped across the `0.31`–`0.35` line (config and session-JSON schema versioning, MCP tool-contract stabilization, the CLI flag deprecation sweep, real-world Rails validation, the parallel/isolation stress suite, and running evilution against its own suite to a mutation-score target).
