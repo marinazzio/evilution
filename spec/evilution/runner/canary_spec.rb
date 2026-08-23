@@ -157,7 +157,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/NameError: uninitialized constant Foo/) { |error|
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /NameError: uninitialized constant Foo/) { |error|
           expect(error.message).not_to include("NameError: NameError")
         }
       end
@@ -174,7 +174,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/concern_state_cleaner\.rb:25/)
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /concern_state_cleaner\.rb:25/)
       end
 
       it "reports the message alone when the child named no error class" do
@@ -184,7 +184,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/The child reported: boom/) { |error|
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /The child reported: boom/) { |error|
           expect(error.message).not_to match(/[A-Z]\w*(Error|Exception): boom/)
         }
       end
@@ -196,7 +196,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/Likely causes/)
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /Likely causes/)
       end
 
       it "omits the frame when the child reported an empty backtrace" do
@@ -206,7 +206,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/boom/) { |error|
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
           expect(error.message).not_to include("(at ")
         }
       end
@@ -218,7 +218,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/boom/) { |error|
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
           expect(error.message).not_to include("(at ")
         }
       end
@@ -230,7 +230,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/boom/) { |error|
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /boom/) { |error|
           expect(error.message).not_to include("Likely causes")
         }
       end
@@ -243,7 +243,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/Likely causes/)
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /Likely causes/)
       end
 
       it "still names the status either way" do
@@ -253,7 +253,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/scored :error instead of :survived/)
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /scored :error instead of :survived/)
       end
 
       it "still points at --no-canary either way" do
@@ -263,7 +263,7 @@ RSpec.describe Evilution::Runner::Canary do
           integration_class: Evilution::Integration::RSpec
         )
 
-        expect { canary.call }.to raise_error(/--no-canary/)
+        expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed, /--no-canary/)
       end
     end
 
