@@ -47,4 +47,37 @@ class CaseWhenExample
       "two"
     end
   end
+
+  def empty_when_with_then(x)
+    case x
+    when 1 then
+    when 2
+      "two"
+    end
+  end
+
+  def empty_when_multiple_conditions(x)
+    case x
+    when 1, 2
+      # intentionally empty
+    else
+      "other"
+    end
+  end
+
+  def empty_when_after_body(x)
+    case x
+    when 1
+      "one"
+    when 2
+      # intentionally empty
+    end
+  end
+
+  def only_empty_when(x)
+    case x
+    when 1
+      # intentionally empty
+    end
+  end
 end
