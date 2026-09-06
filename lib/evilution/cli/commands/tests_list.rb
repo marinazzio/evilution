@@ -5,7 +5,7 @@ require_relative "../command"
 require_relative "../dispatcher"
 require_relative "../printers/tests_list"
 require_relative "../../config"
-require_relative "../../spec_resolver"
+require_relative "../../config/builders/spec_resolver"
 require_relative "../../git/changed_files"
 
 class Evilution::CLI::Commands::TestsList < Evilution::CLI::Command
@@ -25,7 +25,10 @@ class Evilution::CLI::Commands::TestsList < Evilution::CLI::Command
       return 0
     end
 
-    resolver = Evilution::SpecResolver.new
+    # Same resolver `run` uses: minitest/test-unit look under test/*_test.rb,
+    # not spec/*_spec.rb (GH: `tests list` reported "no spec found" for every
+    # source in Minitest projects because it always built the RSpec resolver).
+    resolver = Evilution::Config::Builders::SpecResolver.call(integration: config.integration)
     entries = source_files.map { |source| { source: source, spec: resolver.call(source) } }
     Evilution::CLI::Printers::TestsList.new(mode: :resolved, entries: entries).render(@stdout)
     0

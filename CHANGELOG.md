@@ -2,6 +2,12 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [Unreleased]
+
+### Fixed
+
+- **`evilution tests list` honoured the RSpec layout only** — the command built `SpecResolver.new` with its defaults (`spec/`, `_spec.rb`) regardless of `integration`, so Minitest and Test::Unit projects saw `(no spec found)` for every source while `run` resolved the same files fine. It now goes through `Config::Builders::SpecResolver`, the same builder `run` uses
+
 ## [1.1.0] - 2026-08-23
 
 Control-flow and pattern-matching operator expansion: the `default` profile grows from 74 to 80 operators, and three existing operators gain mutations they were silently missing. Adding operators to `default` is a MINOR change under [docs/versioning.md](docs/versioning.md), and mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.

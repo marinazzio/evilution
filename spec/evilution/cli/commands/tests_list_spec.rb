@@ -69,12 +69,55 @@ RSpec.describe Evilution::CLI::Commands::TestsList do
     end
   end
 
+  describe "resolver selection by integration" do
+    it "builds the minitest resolver (test/*_test.rb) when integration is :minitest" do
+      config = instance_double(
+        Evilution::Config,
+        spec_files: [],
+        target_files: ["app/models/user.rb"],
+        integration: :minitest
+      )
+      allow(Evilution::Config).to receive(:new).and_return(config)
+      resolver = instance_double(Evilution::SpecResolver, call: "test/models/user_test.rb")
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      allow(Evilution::CLI::Printers::TestsList).to receive(:new).and_return(printer)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::SpecResolver).to have_received(:new).with(
+        test_dir: "test", test_suffix: "_test.rb", request_dir: "integration"
+      )
+      expect(Evilution::CLI::Printers::TestsList).to have_received(:new).with(
+        mode: :resolved,
+        entries: [{ source: "app/models/user.rb", spec: "test/models/user_test.rb" }]
+      )
+    end
+
+    it "keeps the rspec resolver defaults when integration is :rspec" do
+      config = instance_double(
+        Evilution::Config,
+        spec_files: [],
+        target_files: ["lib/a.rb"],
+        integration: :rspec
+      )
+      allow(Evilution::Config).to receive(:new).and_return(config)
+      resolver = instance_double(Evilution::SpecResolver, call: nil)
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      allow(Evilution::CLI::Printers::TestsList).to receive(:new).and_return(printer)
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::SpecResolver).to have_received(:new).with(no_args)
+    end
+  end
+
   describe "when source files resolve via target_files" do
     it "calls SpecResolver per source and renders the resolved printer" do
       config = instance_double(
         Evilution::Config,
         spec_files: [],
-        target_files: ["lib/a.rb", "lib/b.rb"]
+        target_files: ["lib/a.rb", "lib/b.rb"],
+        integration: :rspec
       )
       allow(Evilution::Config).to receive(:new).and_return(config)
       resolver = instance_double(Evilution::SpecResolver)
@@ -105,7 +148,8 @@ RSpec.describe Evilution::CLI::Commands::TestsList do
       config = instance_double(
         Evilution::Config,
         spec_files: [],
-        target_files: []
+        target_files: [],
+        integration: :rspec
       )
       allow(Evilution::Config).to receive(:new).and_return(config)
       changed_files = instance_double(Evilution::Git::ChangedFiles, call: ["lib/c.rb"])
