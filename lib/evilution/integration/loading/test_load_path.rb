@@ -29,20 +29,28 @@ module Evilution::Integration::Loading::TestLoadPath
   end
 
   # The directories to put on $LOAD_PATH for the given resolved test files:
-  # the conventional test/ and spec/ roots under base, each file's own
-  # directory, and the topmost test/spec ancestor of each file (covers nested
-  # layouts like test/unit, spec/lib, spec/unit). Existing directories only,
-  # and only those inside the project base -- never a broad outside-project dir
-  # (e.g. a /tmp test file), which would over-widen $LOAD_PATH for the whole
-  # process (the baseline runs in the long-lived parent).
+  # the conventional test/ and spec/ roots under base, and -- for files that
+  # live under one of those roots -- the file's own directory and its topmost
+  # test/spec ancestor (covers nested layouts like test/unit, spec/lib,
+  # spec/unit). Existing directories only, and only those inside the project
+  # base -- never a broad outside-project dir (e.g. a /tmp test file), which
+  # would over-widen $LOAD_PATH for the whole process (the baseline runs in
+  # the long-lived parent).
+  #
+  # A file outside every test root (a `--preload config/evilution_preload.rb`,
+  # say) contributes nothing: putting config/ on $LOAD_PATH lets its files
+  # shadow gems of the same name (`require "puma"` resolving to
+  # config/puma.rb during Bundler.require) and the preload then fails with an
+  # unrelated NoMethodError.
   def dirs_for(files, base)
     base = File.expand_path(base)
     dirs = conventional_roots(base)
     Array(files).each do |file|
       file_dir = File.dirname(File.expand_path(file, base))
-      dirs << file_dir
       root = root_ancestor(file_dir, base)
-      dirs << root if root
+      next unless root
+
+      dirs << file_dir << root
     end
     dirs.uniq.select { |dir| File.directory?(dir) && within?(dir, base) }
   end

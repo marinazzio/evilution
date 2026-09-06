@@ -36,6 +36,20 @@ RSpec.describe Evilution::Integration::Loading::TestLoadPath do
       end
     end
 
+    it "does not add the directory of a file outside every test root (e.g. a config/ preload)" do
+      Dir.mktmpdir do |base|
+        make_tree(base)
+        FileUtils.mkdir_p(File.join(base, "config"))
+        FileUtils.touch(File.join(base, "config", "evilution_preload.rb"))
+        FileUtils.touch(File.join(base, "config", "puma.rb"))
+
+        dirs = described_class.dirs_for(["config/evilution_preload.rb"], base)
+
+        expect(dirs).not_to include(File.join(base, "config"))
+        expect(dirs).to include(File.join(base, "test"))
+      end
+    end
+
     it "includes the topmost test/spec ancestor of a nested file (so test/unit -> test)" do
       Dir.mktmpdir do |base|
         make_tree(base)
