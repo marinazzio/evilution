@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# rubocop:disable Lint/InterpolationCheck
+# rubocop:disable-next Lint/InterpolationCheck
 RSpec.describe Evilution::Mutator::Operator::StringInterpolation do
   let(:fixture_path) { File.expand_path("../../../support/fixtures/string_interpolation.rb", __dir__) }
   let(:source) { File.read(fixture_path) }
@@ -130,4 +130,3 @@ RSpec.describe Evilution::Mutator::Operator::StringInterpolation do
     end
   end
 end
-# rubocop:enable Lint/InterpolationCheck
