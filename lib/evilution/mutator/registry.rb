@@ -97,6 +97,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::LoopFlip,
       Evilution::Mutator::Operator::LoopBodyToRaise,
       Evilution::Mutator::Operator::MethodBodyToRaise,
+      Evilution::Mutator::Operator::MethodBodyToSuper,
       Evilution::Mutator::Operator::StringInterpolation,
       Evilution::Mutator::Operator::RetryRemoval,
       Evilution::Mutator::Operator::CaseWhen,
