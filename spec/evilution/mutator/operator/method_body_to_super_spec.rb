@@ -129,6 +129,29 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyToSuper do
       expect(mutations_for("calls_super")).to be_empty
     end
 
+    # A nested def opens its own method scope, so its `super` belongs to it and
+    # says nothing about whether the enclosing body reaches for a parent.
+    it "mutates a method whose only super call sits inside a nested def" do
+      muts = mutations_from_source(
+        "class A < B\n  def outer(value)\n    def inner\n      super\n    end\n    value\n  end\nend\n",
+        method_name: "outer"
+      )
+
+      expect(muts.map(&:mutated_source)).to eq(
+        ["class A < B\n  def outer(value)\n    super\n  end\nend\n"]
+      )
+    end
+
+    # A block does not open a method scope: a `super` inside one still refers to
+    # the method it is written in.
+    it "emits nothing when super is called inside a block" do
+      muts = mutations_from_source(
+        "class A < B\n  def call(values)\n    values.map { super }\n  end\nend\n"
+      )
+
+      expect(muts).to be_empty
+    end
+
     it "emits nothing when the body calls super with explicit arguments" do
       expect(mutations_for("calls_super_with_arguments")).to be_empty
     end

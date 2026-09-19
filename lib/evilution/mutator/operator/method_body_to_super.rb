@@ -7,16 +7,18 @@ require_relative "../operator"
 # Replace a whole method body with a bare `super`: `def foo; body; end` becomes
 # `def foo; super; end`.
 #
-# A survivor means the override adds nothing the suite asserts over the
-# inherited implementation. MethodBodyReplacement emits the same replacement,
-# but only for a body that already calls super, so a plain override — the case
-# worth probing — is never reached by it.
+# A survivor means the body adds nothing the suite asserts over whatever
+# ancestor implementation it might be overriding. MethodBodyReplacement emits
+# the same replacement, but only for a body that already calls super, so a plain
+# override — the case worth probing — is never reached by it.
 #
 # `super` needs somewhere to go: without one the mutant raises NoMethodError and
 # dies on contact, which scores a kill that proves nothing. Emission is
-# therefore limited to methods whose enclosing scope supplies a super target:
-# an explicit superclass, or a mixin in the right position for that kind of
-# method (include/prepend for instance methods, extend for singleton ones).
+# therefore limited to methods whose enclosing scope has a plausible super
+# chain: an explicit superclass, or a mixin in the right position for that kind
+# of method (include/prepend for instance methods, extend for singleton ones).
+# Whether an ancestor actually defines this method name cannot be known from the
+# source, so a class that inherits or mixes in anything qualifies.
 class Evilution::Mutator::Operator::MethodBodyToSuper < Evilution::Mutator::Base
   INSTANCE_MIXINS = %i[include prepend].freeze
   SINGLETON_MIXINS = %i[extend].freeze
@@ -57,10 +59,18 @@ class Evilution::Mutator::Operator::MethodBodyToSuper < Evilution::Mutator::Base
 
   # MethodBodyReplacement owns bodies that already reach for the parent
   # implementation; emitting here would attribute one mutation to two operators.
+  #
+  # The search stops at a nested def, whose `super` belongs to that method
+  # rather than to the body being mutated. A nested class or module would be a
+  # boundary too, but Ruby rejects both inside a method body, so a def is the
+  # only one reachable here. A block is not a boundary: `values.map { super }`
+  # still calls the enclosing method's parent.
   def calls_super?(node)
     return true if node.is_a?(Prism::SuperNode) || node.is_a?(Prism::ForwardingSuperNode)
 
-    node.child_nodes.any? { |child| child && calls_super?(child) }
+    node.child_nodes.any? do |child|
+      child && !child.is_a?(Prism::DefNode) && calls_super?(child)
+    end
   end
 
   # `def self.foo` and a def inside `class << self` both define singleton
