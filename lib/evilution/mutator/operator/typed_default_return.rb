@@ -19,7 +19,8 @@ require_relative "../operator"
 # written down — the common shape of readers and builders — so the type is taken
 # from the trailing call's selector instead.
 #
-# Only selectors whose return type is fixed by Ruby (or a widely-used extension with a stable contract, e.g. ActiveSupport's `index_by`) are listed.
+# Only selectors whose return type is fixed by Ruby (or a widely-used extension with a stable contract,
+# e.g. ActiveSupport's `index_by`) are listed.
 # A method of the same name defined elsewhere can still return something else,
 # in which case the mutant raises where it is consumed and dies on contact; the
 # table is kept narrow to make that rare.
