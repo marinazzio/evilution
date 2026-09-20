@@ -94,11 +94,18 @@ class Evilution::Reporter::JSON
   end
 
   def append_optional_summary_fields(data, summary)
-    data[:unresolved_target_files] = summary.unresolved_target_files if summary.unresolved_targets?
+    append_diagnostic_summary_fields(data, summary)
     data[:truncated] = true if summary.truncated?
     data[:skipped] = summary.skipped if summary.skipped.positive?
     peak = summary.peak_memory_mb
     data[:peak_memory_mb] = peak.round(1) if peak
+  end
+
+  # What the run had to say about itself rather than about the mutations: a
+  # target that was never tested, work that had to be redone serially.
+  def append_diagnostic_summary_fields(data, summary)
+    data[:unresolved_target_files] = summary.unresolved_target_files if summary.unresolved_targets?
+    data[:infra_retried] = summary.infra_retried if summary.infra_retried.positive?
   end
 
   def build_mutation_detail(result)

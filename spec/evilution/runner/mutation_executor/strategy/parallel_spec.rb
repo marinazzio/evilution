@@ -20,6 +20,13 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     instance_double(Evilution::Mutation, file_path: "lib/foo.rb", to_s: id, unparseable?: false, strip_sources!: nil)
   end
 
+  def infra_crash(mut)
+    Evilution::Result::MutationResult.new(
+      mutation: mut, status: :killed, duration: 0.1, test_command: "c",
+      error: Evilution::Result::ErrorInfo.new(klass: "Timeout::Error", message: "execution expired")
+    )
+  end
+
   def killed(mut)
     Evilution::Result::MutationResult.new(mutation: mut, status: :killed, duration: 0.1, killing_test: "t", test_command: "c")
   end
@@ -237,6 +244,37 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       isolator: isolator,
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier(diags),
+      pool_factory: -> { pool },
+      config: cfg,
+      diagnostics: diags
+    )
+
+    strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+  end
+
+  # EV-j0bv / GH #1607: a mutation the pool could not judge because of
+  # infrastructure contention is re-run serially afterwards, which needs its
+  # sources to still be there.
+  it "keeps the sources of a mutation neutralised by an infra crash" do
+    m1 = mutation("m1")
+    expect(m1).not_to receive(:strip_sources!)
+
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(infra_crash(m1))
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map) { |uncached, &block| uncached.map(&block) }
+    diags = diagnostics
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new(
+        [Evilution::Runner::MutationExecutor::Neutralizer::InfraError.new]
+      ),
       notifier: notifier(diags),
       pool_factory: -> { pool },
       config: cfg,

@@ -78,4 +78,26 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
     expect(neutralizer.call(r)).to be(r)
     expect(neutralizer.call(r).status).to eq(:error)
   end
+
+  # A parallel run can re-run these once the contention is over, so they have
+  # to be identifiable after the fact (EV-j0bv / GH #1607).
+  describe ".infra_neutral?" do
+    it "is true for a result neutralised by an infra crash" do
+      neutralised = neutralizer.call(result(status: :killed, error_class: "Timeout::Error"))
+
+      expect(described_class.infra_neutral?(neutralised)).to be(true)
+    end
+
+    it "is false for a killed result carrying the same error class" do
+      expect(described_class.infra_neutral?(result(status: :killed, error_class: "Timeout::Error"))).to be(false)
+    end
+
+    it "is false for a neutral result from a failing baseline" do
+      expect(described_class.infra_neutral?(result(status: :neutral))).to be(false)
+    end
+
+    it "is false for a neutral result carrying an unrelated error class" do
+      expect(described_class.infra_neutral?(result(status: :neutral, error_class: "RuntimeError"))).to be(false)
+    end
+  end
 end

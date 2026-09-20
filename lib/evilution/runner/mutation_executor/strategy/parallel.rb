@@ -65,8 +65,26 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     compact_results = merge(batch, partition.uncached_indices, partition.cached_results, worker_results)
     batch_results = rebuild_results(batch, compact_results)
     cache_results(batch_results, partition.uncached_indices)
-    batch.each(&:strip_sources!)
+    release_sources(batch, batch_results)
     batch_results
+  end
+
+  # Sources are dropped as soon as a mutation has been judged, to keep a long
+  # run's memory flat. A mutation the workers could not judge because of
+  # infrastructure contention is re-run serially once the pool is done
+  # (InfraRetry), which needs its sources, so it keeps them until then. The
+  # neutralisation pipeline has not run yet here, so the crash is still a kill.
+  def release_sources(batch, batch_results)
+    batch.each_with_index do |mutation, index|
+      result = batch_results[index]
+      next if result && infra_crash?(result)
+
+      mutation.strip_sources!
+    end
+  end
+
+  def infra_crash?(result)
+    Evilution::Runner::MutationExecutor::Neutralizer::InfraError.infra_crash_class?(result.error_class)
   end
 
   def rebuild_results(batch, compact_results)

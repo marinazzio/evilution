@@ -26,13 +26,14 @@ RSpec.describe Evilution::Reporter::CLI::MetricsBlock do
       end
     end
 
-    it "contains 8 default formatters in the canonical order" do
+    it "contains 9 default formatters in the canonical order" do
       classes = described_class::DEFAULT_LINES.map(&:class)
       expect(classes).to eq([Evilution::Reporter::CLI::LineFormatters::Mutations,
                              Evilution::Reporter::CLI::LineFormatters::Score,
                              Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning,
                              Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning,
                              Evilution::Reporter::CLI::LineFormatters::UnresolvedTargets,
+                             Evilution::Reporter::CLI::LineFormatters::InfraRetryNotice,
                              Evilution::Reporter::CLI::LineFormatters::Duration,
                              Evilution::Reporter::CLI::LineFormatters::Efficiency,
                              Evilution::Reporter::CLI::LineFormatters::PeakMemory])

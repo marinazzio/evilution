@@ -312,6 +312,7 @@ Schema:
     "equivalent": "integer — mutations proven to have identical behavior to the original",
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
     "unresolved_target_files": "array of strings (optional) — target files that resolved to no spec at all; present only when non-empty, and the run fails when it is",
+    "infra_retried": "integer (optional) — mutations a parallel pass could not judge because the test process crashed on infrastructure, re-run serially afterwards; present only when non-zero",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
     "duration": "float   — total wall-clock seconds, rounded to 4 decimals",
@@ -396,7 +397,7 @@ Compatibility policy for the `1.x` gem line:
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
 | `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
 | `error`      | Mutation caused an unexpected error (syntax error, boot failure, etc.) | excluded from denominator |
-| `neutral`    | Baseline tests already failed before mutation — not a meaningful signal | excluded          |
+| `neutral`    | Baseline tests already failed before mutation, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
@@ -808,6 +809,14 @@ Use in CI to gate merges on `reintroduced` being empty, or to surface `new` surv
 ## Parallel Runs with SQLite
 
 Running with `-j N` forks worker processes. If your Rails app uses SQLite, every worker opens the same `db/test.sqlite3` file, and concurrent writers collide on the database-level lock. Symptoms: `ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, and slow runs. Evilution classifies these crashes as `:neutral` (see [EV-toid / #814](https://github.com/taxdome/evilution/issues/814)) so the mutation score is not polluted, but the wall-clock penalty remains.
+
+Because that contention only exists while several workers are running, those mutations are re-run one at a time once the pool is done, and the verdict from the quiet re-run is the one reported. Without it the neutral bucket moved with `-j` on identical input — the same files scoring 24 killed / 0 neutral at `-j 1` and 6 killed / 18 neutral at `-j 4` (GH #1607). The run says how much it had to redo:
+
+```
+! 18 mutations hit infrastructure errors under parallel workers; re-ran them serially.
+```
+
+The count is in JSON output as `summary.infra_retried`. Such a crash is also never written to the `--incremental` cache: the cache keeps no error class, so a cached `:killed` would be indistinguishable from a real one on the next run and would short-circuit both the demotion and the retry. A neutral from a failing baseline is never re-run — that is a real statement about the spec, not a missed verdict. The retry costs wall-clock time in proportion to the contention, which is another reason to give each worker its own database file:
 
 Evilution follows the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention: each worker receives a `TEST_ENV_NUMBER` environment variable (`""` for worker 1, `"2"` for worker 2, `"3"` for worker 3, …). Interpolate it into `config/database.yml` so each worker gets its own SQLite file:
 

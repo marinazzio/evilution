@@ -2,6 +2,7 @@
 
 require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
+require_relative "neutralizer/infra_error"
 
 class Evilution::Runner::MutationExecutor::ResultCache
   CACHEABLE_STATUSES = %i[killed timeout].freeze
@@ -32,12 +33,22 @@ class Evilution::Runner::MutationExecutor::ResultCache
   def store(mutation, result)
     return unless @backend
     return unless result.killed? || result.timeout?
+    return if infra_crash?(result)
 
     @backend.store(mutation,
                    status: result.status,
                    duration: result.duration,
                    killing_test: result.killing_test,
                    test_command: result.test_command)
+  end
+
+  # A kill that came from an infrastructure crash is not a verdict about the
+  # mutation, and the cache keeps no error class to tell them apart later. It
+  # is left out so the next fetch does not hand back a plain `:killed`, which
+  # would defeat both the demotion to neutral and the serial retry
+  # (EV-j0bv / GH #1607).
+  def infra_crash?(result)
+    Evilution::Runner::MutationExecutor::Neutralizer::InfraError.infra_crash_class?(result.error_class)
   end
 
   def partition(batch, packer:)

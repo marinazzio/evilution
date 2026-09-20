@@ -54,6 +54,13 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
     end
   end
 
+  def infra_crash(mut)
+    Evilution::Result::MutationResult.new(
+      mutation: mut, status: :killed, duration: 0.1, test_command: "c",
+      error: Evilution::Result::ErrorInfo.new(klass: "Timeout::Error", message: "execution expired")
+    )
+  end
+
   describe "#store" do
     it "is a no-op when the underlying cache is nil" do
       expect { described_class.new(nil).store(mutation, killed(mutation)) }.not_to raise_error
@@ -63,6 +70,17 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       backend = instance_double("Cache")
       expect(backend).not_to receive(:store)
       described_class.new(backend).store(mutation, survived(mutation))
+    end
+
+    # EV-j0bv / GH #1607: a kill that came from an infrastructure crash is not
+    # a verdict. The cache keeps no error class, so storing it would hand back
+    # a plain `:killed` on the next fetch — defeating both the demotion to
+    # neutral and the serial retry that would have produced the real answer.
+    it "is a no-op for a kill caused by an infrastructure crash" do
+      backend = instance_double("Cache")
+      expect(backend).not_to receive(:store)
+
+      described_class.new(backend).store(mutation, infra_crash(mutation))
     end
 
     it "stores killed results with status/duration/killing_test/test_command" do

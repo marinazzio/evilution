@@ -43,6 +43,10 @@ module CliGoldenSummary
       nil
     end
 
+    def infra_retried
+      0
+    end
+
     def success?(min_score:)
       score >= min_score
     end
