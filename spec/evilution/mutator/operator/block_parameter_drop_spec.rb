@@ -142,6 +142,17 @@ RSpec.describe Evilution::Mutator::Operator::BlockParameterDrop do
       )
     end
 
+    # The inner block rebinds the same name, so the outer parameter is never
+    # read and dropping it would change nothing; only the inner block is
+    # mutated.
+    it "leaves an outer parameter whose only reads are shadowed by an inner block" do
+      muts = mutations_for("shadowed_by_inner_block")
+
+      expect(mutated_bodies(muts, "shadowed_by_inner_block")).to eq(
+        ["  def shadowed_by_inner_block(users)\n    users.each { |u| others.each { touch(u) } }\n  end\n"]
+      )
+    end
+
     it "emits nothing for a splat parameter" do
       expect(mutations_for("splat_param")).to be_empty
     end

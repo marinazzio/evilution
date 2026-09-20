@@ -75,6 +75,10 @@ class BlockParameterDropTarget
     end
   end
 
+  def shadowed_by_inner_block(users)
+    users.each { |u| others.each { |u| touch(u) } }
+  end
+
   def splat_param(users)
     users.each { |*rest| touch(rest) }
   end
