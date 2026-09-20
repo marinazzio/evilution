@@ -299,6 +299,7 @@ Schema:
     "neutral": "integer  — mutations whose tests already failed before mutation (baseline failure)",
     "equivalent": "integer — mutations proven to have identical behavior to the original",
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
+    "unresolved_target_files": "array of strings (optional) — target files that resolved to no spec at all; present only when non-empty, and the run fails when it is",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
     "duration": "float   — total wall-clock seconds, rounded to 4 decimals",
@@ -389,6 +390,21 @@ Compatibility policy for the `1.x` gem line:
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
 
 Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). The resolver searches the `lib/`-mirrored path, common non-mirrored buckets (`spec/unit`, `spec/lib`, `test/unit`, `test/lib`), and the flat `test_`-prefixed Minitest/Test::Unit convention (`test/test_connection_pool_timed_stack.rb`), so a high unresolved rate usually means a genuinely missing or unconventionally-placed test; a run that leaves many mutations unresolved prints an unresolved-rate warning with a best-guess spec path per source file. They are reported separately so you can act on them (add a test, adjust test naming, pass `--spec`, or opt in to the full-suite fallback) without inflating the error count.
+
+A *target file* that resolves to no test at all is a stronger condition than an individual unresolved mutation, and is reported on its own terms: evilution names the file and **fails the run**, whatever the mutations it did measure scored. Without this, adding one well-tested file to the command dilutes the unresolved rate and the untested file disappears behind a `PASS` (GH #1603):
+
+```
+$ evilution run app/services/untested.rb app/services/well_tested.rb
+Mutations: 98 total, 82 killed, 0 survived, 0 timed out, 2 neutral, 14 unresolved
+Score: 100.00% (82/82)
+! 1 of 2 target files has no resolvable spec — it was never tested:
+    app/services/untested.rb
+Result: FAIL (1 target file has no resolvable spec)
+$ echo $?
+1
+```
+
+The check covers files evilution found something to mutate in; a file it produced no mutations for (a constants-only file, say) is not reported. `--fallback-full-suite` runs such a file against the whole suite instead, so nothing goes untested and nothing is reported. The file list is also in JSON output under `summary.unresolved_target_files`.
 
 ## Mutation Operators (88 total)
 

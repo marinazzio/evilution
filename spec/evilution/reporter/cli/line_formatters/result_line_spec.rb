@@ -12,13 +12,13 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::ResultLine do
 
   describe "#format" do
     let(:passing) do
-      summary = double("s", score: 0.85)
+      summary = double("s", score: 0.85, unresolved_targets?: false)
       allow(summary).to receive(:success?).with(min_score: 0.8).and_return(true)
       summary
     end
 
     let(:failing) do
-      summary = double("s", score: 0.5)
+      summary = double("s", score: 0.5, unresolved_targets?: false)
       allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
       summary
     end
@@ -32,9 +32,30 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::ResultLine do
     end
 
     it "uses injected min_score" do
-      summary = double("s", score: 0.6)
+      summary = double("s", score: 0.6, unresolved_targets?: false)
       allow(summary).to receive(:success?).with(min_score: 0.5).and_return(true)
       expect(described_class.new(min_score: 0.5).format(summary)).to eq("Result: PASS (score 60.00% >= 50.00%)")
+    end
+
+    # The score speaks only for the files that resolved, so saying "score X < Y"
+    # would point at the wrong problem.
+    it "states the reason when a target file resolved to no spec" do
+      summary = double("s", score: 1.0, unresolved_targets?: true, unresolved_target_files: ["lib/untested.rb"])
+      allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
+
+      expect(described_class.new.format(summary)).to eq(
+        "Result: FAIL (1 target file has no resolvable spec)"
+      )
+    end
+
+    it "pluralises the reason for several unresolved target files" do
+      summary = double("s", score: 1.0, unresolved_targets?: true,
+                            unresolved_target_files: ["a.rb", "b.rb"])
+      allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
+
+      expect(described_class.new.format(summary)).to eq(
+        "Result: FAIL (2 target files have no resolvable spec)"
+      )
     end
 
     it "uses injected Pct" do

@@ -46,9 +46,12 @@ class Evilution::Runner
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
 
+    audited_files = subjects.map(&:file_path).uniq.sort
     summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: execution.truncated,
                                              skipped: plan.skipped_count,
-                                             disabled_mutations: plan.disabled_mutations)
+                                             disabled_mutations: plan.disabled_mutations,
+                                             unresolved_target_files: target_spec_audit.call(audited_files),
+                                             target_file_count: audited_files.length)
     output_report(summary)
     save_session(summary)
 
@@ -69,6 +72,10 @@ class Evilution::Runner
 
   def mutation_planner
     @mutation_planner ||= Evilution::Runner::MutationPlanner.new(config, registry: registry)
+  end
+
+  def target_spec_audit
+    @target_spec_audit ||= Evilution::Runner::TargetSpecAudit.new(config)
   end
 
   def isolation_resolver
@@ -240,6 +247,7 @@ require_relative "rails_detector"
 require_relative "parallel_db_warning"
 require_relative "child_output"
 require_relative "runner/subject_pipeline"
+require_relative "runner/target_spec_audit"
 require_relative "runner/mutation_planner"
 require_relative "runner/isolation_resolver"
 require_relative "runner/baseline_runner"

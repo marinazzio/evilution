@@ -39,6 +39,8 @@ RSpec.describe Evilution::MCP::MutateTool do
   let(:summary) do
     instance_double(
       Evilution::Result::Summary,
+      unresolved_targets?: false,
+      unresolved_target_files: [],
       results: [killed_result],
       total: 1,
       killed: 1,
@@ -475,6 +477,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         timed_out_summary = instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [timed_out_result],
           total: 1,
           killed: 0,
@@ -533,6 +537,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         error_summary = instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [error_result],
           total: 1,
           killed: 0,
@@ -593,6 +599,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         neutral_summary = instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [neutral_result],
           total: 1,
           killed: 0,
@@ -661,6 +669,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         survived_summary = instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [survived_result],
           total: 1,
           killed: 0,
@@ -733,6 +743,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         let(:survived_summary) do
           instance_double(
             Evilution::Result::Summary,
+            unresolved_targets?: false,
+            unresolved_target_files: [],
             results: [survived_result],
             total: 1,
             killed: 0,
@@ -990,6 +1002,8 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         equivalent_summary = instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [equivalent_result],
           total: 1,
           killed: 0,
@@ -1069,6 +1083,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       let(:survived_summary) do
         instance_double(
           Evilution::Result::Summary,
+          unresolved_targets?: false,
+          unresolved_target_files: [],
           results: [survived_result],
           total: 1,
           killed: 0,
