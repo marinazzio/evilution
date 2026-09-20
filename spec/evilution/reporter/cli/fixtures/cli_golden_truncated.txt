@@ -40,5 +40,5 @@ Disabled mutations (skipped by # evilution:disable):
   BooleanFlip: lib/disabled.rb:99
 
 [TRUNCATED] Stopped early due to --fail-fast
-Result: PASS (score 80.00% >= 80.00%)
+Result: 80.00% (no minimum score set)
 > Hit friction with evilution vEVILUTION_VERSION? Share details: https://github.com/marinazzio/evilution/discussions

@@ -29,6 +29,18 @@ RSpec.describe Evilution::Runner::ReportPublisher do
       expect { publisher.publish(summary) }.to output("txt-output\n").to_stdout
     end
 
+    # EV-39t1 / GH #1604: the printed verdict and the exit code have to share
+    # one threshold, which is the one the run was configured with.
+    it "builds the text reporter with the configured min_score" do
+      cfg = config(format: :text, min_score: 0.9)
+      reporter = instance_double(Evilution::Reporter::CLI, call: "txt-output")
+      allow(Evilution::Reporter::CLI).to receive(:new).and_return(reporter)
+
+      described_class.new(cfg).publish(summary)
+
+      expect(Evilution::Reporter::CLI).to have_received(:new).with(min_score: 0.9)
+    end
+
     it "writes HTML to a file when format is :html" do
       Dir.mktmpdir do |dir|
         Dir.chdir(dir) do

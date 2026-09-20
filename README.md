@@ -167,8 +167,20 @@ Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.e
 | Code | Meaning                                       | Agent action                          |
 |------|-----------------------------------------------|---------------------------------------|
 | 0    | Mutation score meets or exceeds `--min-score` | Success. No action needed.            |
-| 1    | Mutation score below `--min-score`            | Parse output, fix surviving mutants.  |
+| 1    | Mutation score below `--min-score`, or a target file resolved to no spec | Parse output, fix surviving mutants.  |
 | 2    | Tool error (bad config, parse failure, etc.)  | Check stderr, fix invocation.         |
+
+`min_score` defaults to `0.0`, so **no score gate is armed unless you set one**. The `Result:` line says so rather than implying a threshold nobody configured:
+
+```
+$ evilution run lib/half_tested.rb              # no gate
+Result: 66.67% (no minimum score set)           # exit 0
+
+$ evilution run lib/half_tested.rb --min-score 0.8
+Result: FAIL (score 66.67% < 80.00%)            # exit 1
+```
+
+The printed verdict and the exit code always use the same threshold. Previously the line was printed against a hard-coded 80% that the exit code did not share, so a failing-looking run still exited 0 (GH #1604).
 
 ## Configuration
 

@@ -6,14 +6,18 @@ require_relative "line_formatters/result_line"
 require_relative "line_formatters/feedback_footer"
 
 class Evilution::Reporter::CLI::Trailer
-  DEFAULT_LINES = [
-    Evilution::Reporter::CLI::LineFormatters::TruncationNotice.new,
-    Evilution::Reporter::CLI::LineFormatters::ResultLine.new,
-    Evilution::Reporter::CLI::LineFormatters::FeedbackFooter.new
-  ].freeze
+  def self.default_lines(min_score: nil)
+    [
+      Evilution::Reporter::CLI::LineFormatters::TruncationNotice.new,
+      Evilution::Reporter::CLI::LineFormatters::ResultLine.new(min_score: min_score),
+      Evilution::Reporter::CLI::LineFormatters::FeedbackFooter.new
+    ]
+  end
 
-  def initialize(lines: DEFAULT_LINES)
-    @lines = lines
+  DEFAULT_LINES = default_lines.freeze
+
+  def initialize(lines: nil, min_score: nil)
+    @lines = lines || self.class.default_lines(min_score: min_score)
   end
 
   def call(summary)
