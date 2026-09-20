@@ -33,6 +33,21 @@ class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
   ].freeze
   private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS, :INFRA_CRASH_CLASSES
 
+  # Whether a crash class is one of the infrastructure failures that say
+  # nothing about the mutation. The parallel strategy asks this before the
+  # neutralisation pipeline has run, while the result is still a `:killed`
+  # crash (EV-j0bv / GH #1607).
+  def self.infra_crash_class?(error_class)
+    INFRA_CRASH_CLASSES.include?(error_class)
+  end
+
+  # Whether this result is a kill that was demoted because the test process
+  # crashed on infrastructure rather than on the mutation. Such a mutation got
+  # no verdict, so a parallel run can re-run it once the contention is over.
+  def self.infra_neutral?(result)
+    result.neutral? && infra_crash_class?(result.error_class)
+  end
+
   def call(result, **_ctx)
     return neutralize(result) if infra_crash?(result)
     return result unless result.error?

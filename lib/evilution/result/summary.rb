@@ -5,10 +5,10 @@ require_relative "coverage_gap_grouper"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
-              :target_file_count
+              :target_file_count, :infra_retried
 
   def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
-                 unresolved_target_files: [], target_file_count: nil)
+                 unresolved_target_files: [], target_file_count: nil, infra_retried: 0)
     @results = results
     @duration = duration
     @truncated = truncated
@@ -16,6 +16,7 @@ class Evilution::Result::Summary
     @disabled_mutations = disabled_mutations
     @unresolved_target_files = unresolved_target_files.freeze
     @target_file_count = target_file_count
+    @infra_retried = infra_retried
     freeze
   end
 

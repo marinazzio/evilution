@@ -56,6 +56,13 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 0.01)
   end
 
+  def infra_neutral_result(mutation)
+    Evilution::Result::MutationResult.new(
+      mutation: mutation, status: :neutral, duration: 0.01,
+      error: Evilution::Result::ErrorInfo.new(klass: "Timeout::Error", message: "execution expired")
+    )
+  end
+
   def survived_result(mutation)
     Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 0.01)
   end
@@ -96,6 +103,63 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
 
       build(cfg, isolator: isolator).call(mutations, nil)
+    end
+
+    # EV-j0bv / GH #1607: contention only exists while the pool runs, so a
+    # mutation it could not judge is re-run once the pool is done.
+    it "re-runs infra-neutralised results serially after a parallel pass" do
+      cfg = config(jobs: 2)
+      contended = mutation
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+      parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+      allow(parallel_strategy).to receive(:call).and_return(
+        Evilution::Runner::MutationExecutor::ExecutionResult.new(
+          results: [infra_neutral_result(contended)], truncated: false
+        )
+      )
+      allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+      execution = build(cfg, isolator: isolator).call([contended], nil)
+
+      expect(execution.results.map(&:status)).to eq([:killed])
+    end
+
+    it "leaves a parallel pass alone when nothing was neutralised by infrastructure" do
+      cfg = config(jobs: 2)
+      clean = mutation
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+      parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+      allow(parallel_strategy).to receive(:call).and_return(
+        Evilution::Runner::MutationExecutor::ExecutionResult.new(
+          results: [survived_result(clean)], truncated: false
+        )
+      )
+      allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+      execution = build(cfg, isolator: isolator).call([clean], nil)
+
+      expect([execution.results.map(&:status), execution.infra_retried]).to eq([[:survived], 0])
+    end
+
+    it "reports how many results it re-ran" do
+      cfg = config(jobs: 2)
+      contended = mutation
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+      parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+      allow(parallel_strategy).to receive(:call).and_return(
+        Evilution::Runner::MutationExecutor::ExecutionResult.new(
+          results: [infra_neutral_result(contended)], truncated: false
+        )
+      )
+      allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+      expect(build(cfg, isolator: isolator).call([contended], nil).infra_retried).to eq(1)
     end
 
     it "dispatches to the sequential strategy when jobs == 1" do

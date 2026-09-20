@@ -3,13 +3,18 @@
 require_relative "../runner"
 
 class Evilution::Runner::MutationExecutor
-  ExecutionResult = Data.define(:results, :truncated)
+  ExecutionResult = Data.define(:results, :truncated, :infra_retried) do
+    def initialize(results:, truncated:, infra_retried: 0)
+      super
+    end
+  end
 
   autoload :ResultCache, File.expand_path("mutation_executor/result_cache", __dir__)
   autoload :ResultPacker, File.expand_path("mutation_executor/result_packer", __dir__)
   autoload :ResultNotifier, File.expand_path("mutation_executor/result_notifier", __dir__)
   autoload :MutationRunner, File.expand_path("mutation_executor/mutation_runner", __dir__)
   autoload :NeutralizationPipeline, File.expand_path("mutation_executor/neutralization_pipeline", __dir__)
+  autoload :InfraRetry, File.expand_path("mutation_executor/infra_retry", __dir__)
   autoload :Strategy, File.expand_path("mutation_executor/strategy", __dir__)
   autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
 
@@ -29,12 +34,35 @@ class Evilution::Runner::MutationExecutor
     spec_resolver = baseline_failed?(baseline_result) ? @baseline_runner.neutralization_resolver : nil
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)
-    strategy = @config.jobs > 1 ? build_parallel(notifier, pipeline) : build_sequential(notifier, pipeline)
+    return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
 
-    strategy.call(mutations, baseline_result: baseline_result, integration: integration)
+    parallel_run(notifier, pipeline, mutations, baseline_result, integration)
   end
 
   private
+
+  def sequential_run(notifier, pipeline, mutations, baseline_result, integration)
+    build_sequential(notifier, pipeline)
+      .call(mutations, baseline_result: baseline_result, integration: integration)
+  end
+
+  # Infrastructure contention only exists while the pool is running, so the
+  # mutations it left without a verdict are re-run once it is done. Without
+  # this the neutral bucket swings with --jobs on identical input
+  # (EV-j0bv / GH #1607).
+  def parallel_run(notifier, pipeline, mutations, baseline_result, integration)
+    execution = build_parallel(notifier, pipeline)
+                .call(mutations, baseline_result: baseline_result, integration: integration)
+    retry_pass = InfraRetry.new(runner: build_mutation_runner, pipeline: pipeline)
+    results = retry_pass.call(execution.results, baseline_result: baseline_result, integration: integration)
+
+    ExecutionResult.new(results: results, truncated: execution.truncated,
+                        infra_retried: retry_pass.retried_count)
+  end
+
+  def build_mutation_runner
+    MutationRunner.new(config: @config, cache: @cache, isolator: @isolator)
+  end
 
   def baseline_failed?(baseline_result)
     baseline_result && baseline_result.failed?
@@ -59,7 +87,7 @@ class Evilution::Runner::MutationExecutor
 
   def build_sequential(notifier, pipeline)
     Strategy::Sequential.new(
-      runner: MutationRunner.new(config: @config, cache: @cache, isolator: @isolator),
+      runner: build_mutation_runner,
       pipeline: pipeline,
       notifier: notifier
     )

@@ -75,6 +75,10 @@ RSpec.describe Evilution::Reporter::CLI::Trailer, "feedback footer" do
         false
       end
 
+      def infra_retried
+        0
+      end
+
       def initialize(errors: 0, unparseable: 0, unresolved: 0)
         super(
           errors: errors, unparseable: unparseable, unresolved: unresolved,

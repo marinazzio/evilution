@@ -51,7 +51,8 @@ class Evilution::Runner
                                              skipped: plan.skipped_count,
                                              disabled_mutations: plan.disabled_mutations,
                                              unresolved_target_files: target_spec_audit.call(audited_files),
-                                             target_file_count: audited_files.length)
+                                             target_file_count: audited_files.length,
+                                             infra_retried: execution.infra_retried)
     output_report(summary)
     save_session(summary)
 
