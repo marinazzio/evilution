@@ -90,21 +90,7 @@ class Evilution::Mutator::Operator::BlockParameterDrop < Evilution::Mutator::Bas
   # read, so it is treated as unused even where the body happens to mention it.
   def body_reads?(body, name)
     return false if name.start_with?("_")
-    return false if body.nil?
 
-    reads_name?(body, name)
-  end
-
-  # A nested block shares the enclosing scope, so a read inside one still counts.
-  # A nested def does not, and neither does a name that is written before it is
-  # read — that binds a fresh local rather than reading the parameter.
-  def reads_name?(node, name)
-    return true if node.is_a?(Prism::LocalVariableReadNode) && node.name.to_s == name
-
-    node.compact_child_nodes.any? do |child|
-      next false if child.is_a?(Prism::DefNode)
-
-      reads_name?(child, name)
-    end
+    Evilution::AST::LocalReads.new.call(body, name)
   end
 end
