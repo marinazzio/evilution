@@ -816,7 +816,7 @@ Because that contention only exists while several workers are running, those mut
 ! 18 mutations hit infrastructure errors under parallel workers; re-ran them serially.
 ```
 
-The count is in JSON output as `summary.infra_retried`. A neutral from a failing baseline is never re-run — that is a real statement about the spec, not a missed verdict. The retry costs wall-clock time in proportion to the contention, which is another reason to give each worker its own database file:
+The count is in JSON output as `summary.infra_retried`. Such a crash is also never written to the `--incremental` cache: the cache keeps no error class, so a cached `:killed` would be indistinguishable from a real one on the next run and would short-circuit both the demotion and the retry. A neutral from a failing baseline is never re-run — that is a real statement about the spec, not a missed verdict. The retry costs wall-clock time in proportion to the contention, which is another reason to give each worker its own database file:
 
 Evilution follows the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention: each worker receives a `TEST_ENV_NUMBER` environment variable (`""` for worker 1, `"2"` for worker 2, `"3"` for worker 3, …). Interpolate it into `config/database.yml` so each worker gets its own SQLite file:
 

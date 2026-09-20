@@ -13,6 +13,7 @@ class Evilution::Reporter::CLI::LineFormatters::InfraRetryNotice
     return nil if count.zero?
 
     noun = count == 1 ? "mutation" : "mutations"
-    "! #{count} #{noun} hit infrastructure errors under parallel workers; re-ran them serially."
+    pronoun = count == 1 ? "it" : "them"
+    "! #{count} #{noun} hit infrastructure errors under parallel workers; re-ran #{pronoun} serially."
   end
 end

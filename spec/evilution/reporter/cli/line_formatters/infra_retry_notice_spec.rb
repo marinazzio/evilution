@@ -14,7 +14,7 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::InfraRetryNotice do
 
     it "reports a single re-run mutation" do
       expect(formatter.format(summary_with(1))).to eq(
-        "! 1 mutation hit infrastructure errors under parallel workers; re-ran them serially."
+        "! 1 mutation hit infrastructure errors under parallel workers; re-ran it serially."
       )
     end
 
