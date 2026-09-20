@@ -44,7 +44,7 @@ class Evilution::Runner::ReportPublisher
     when :json
       Evilution::Reporter::JSON.new(integration: config.integration)
     when :text
-      Evilution::Reporter::CLI.new
+      Evilution::Reporter::CLI.new(min_score: config.min_score)
     when :html
       Evilution::Reporter::HTML.new(baseline: load_baseline_session, integration: config.integration)
     end

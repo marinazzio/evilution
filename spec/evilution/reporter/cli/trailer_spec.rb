@@ -18,6 +18,30 @@ RSpec.describe Evilution::Reporter::CLI::Trailer do
     end
   end
 
+  describe "min_score" do
+    def result_line_for(trailer)
+      trailer.instance_variable_get(:@lines).find do |line|
+        line.is_a?(Evilution::Reporter::CLI::LineFormatters::ResultLine)
+      end
+    end
+
+    it "hands the configured threshold to the result line it builds" do
+      summary = double("s", score: 0.5, unresolved_targets?: false, truncated?: false,
+                            errors: 0, unresolved: 0, unparseable: 0)
+      allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
+
+      expect(result_line_for(described_class.new(min_score: 0.8)).format(summary))
+        .to eq("Result: FAIL (score 50.00% < 80.00%)")
+    end
+
+    it "builds a result line without a threshold when none is given" do
+      summary = double("s", score: 0.5, unresolved_targets?: false)
+
+      expect(result_line_for(described_class.new).format(summary))
+        .to eq("Result: 50.00% (no minimum score set)")
+    end
+  end
+
   describe "DEFAULT_LINES" do
     it "is a frozen array containing TruncationNotice, ResultLine and FeedbackFooter instances" do
       expect(described_class::DEFAULT_LINES).to be_frozen
@@ -25,6 +49,16 @@ RSpec.describe Evilution::Reporter::CLI::Trailer do
       expect(classes).to eq([Evilution::Reporter::CLI::LineFormatters::TruncationNotice,
                              Evilution::Reporter::CLI::LineFormatters::ResultLine,
                              Evilution::Reporter::CLI::LineFormatters::FeedbackFooter])
+    end
+
+    # Built without a threshold, so the constant carries no gate of its own.
+    it "carries a result line with no threshold" do
+      summary = double("s", score: 0.5, unresolved_targets?: false)
+      result_line = described_class::DEFAULT_LINES.find do |line|
+        line.is_a?(Evilution::Reporter::CLI::LineFormatters::ResultLine)
+      end
+
+      expect(result_line.format(summary)).to eq("Result: 50.00% (no minimum score set)")
     end
   end
 end

@@ -6,11 +6,12 @@ class Evilution::Reporter::CLI
   SEPARATOR = "=" * 44
 
   def initialize(
+    min_score: nil,
     header: LineFormatters::Header.new,
     metrics_block: MetricsBlock.new,
     section_renderer: SectionRenderer.new,
     sections: DEFAULT_SECTIONS,
-    trailer: Trailer.new
+    trailer: Trailer.new(min_score: min_score)
   )
     @header = header
     @metrics_block = metrics_block
