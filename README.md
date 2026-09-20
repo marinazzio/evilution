@@ -470,7 +470,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `block_parameter_drop` | Drop a block's single parameter | `users.each { |u| touch(u) }` -> `users.each { touch(u) }` |
 | `optional_parameter_to_required` | Drop an optional positional parameter's default | `def f(a = 1)` -> `def f(a)` |
 | `optional_default_injection` | Overwrite an optional parameter with its own default at the top of the body | `def f(a = 1); body; end` -> `def f(a = 1); a = 1; body; end` |
-| `block_destructuring_expansion` | Flatten a destructuring group in a block's parameters | `pairs.each_with_index { |(k, v), i| }` -> `{ |k, v, i| }` |
+| `block_destructuring_expansion` | Flatten a destructuring group in a block's parameters | `pairs.each_with_index { |(k, v), i| use(k, v, i) }` -> `pairs.each_with_index { |k, v, i| use(k, v, i) }` |
 | `string_interpolation` | Replace interpolation content with nil | `"hello #{name}"` -> `"hello #{nil}"` |
 | `retry_removal` | Remove retry statements | `retry` -> `nil` |
 | `case_when` | Remove/replace case/when branches | Remove `when` branch, drop one condition from `when a, b`, body -> `nil`, empty body -> `raise`, remove `else` |
