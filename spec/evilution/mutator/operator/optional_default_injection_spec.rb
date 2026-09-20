@@ -137,6 +137,12 @@ RSpec.describe Evilution::Mutator::Operator::OptionalDefaultInjection do
       expect(mutations_for("unused_optional")).to be_empty
     end
 
+    # The block binds its own `value`, so the parameter is never read and
+    # overwriting it would change nothing.
+    it "emits nothing when the only reads are shadowed by a block parameter" do
+      expect(mutations_for("shadowed_by_block_param")).to be_empty
+    end
+
     it "emits nothing for an underscore-prefixed parameter" do
       expect(mutations_for("underscore_optional")).to be_empty
     end

@@ -35,6 +35,47 @@ RSpec.describe Evilution::AST::LocalReads do
       expect(local_reads.call(body, "value")).to be(true)
     end
 
+    # A block parameter of the same name shadows the outer local, so reads
+    # inside that block are reads of the block's own variable.
+    it "ignores a read shadowed by a block parameter of the same name" do
+      body = body_of("def m(value)\n  items.each { |value| touch(value) }\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(false)
+    end
+
+    it "ignores a read shadowed by a block-local variable of the same name" do
+      body = body_of("def m(value)\n  items.each { |i; value| value = i; touch(value) }\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(false)
+    end
+
+    # A lambda is a scope in the same way a block is.
+    it "finds a read inside a lambda" do
+      body = body_of("def m(value)\n  handler = ->(i) { touch(value, i) }\n  handler\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(true)
+    end
+
+    it "ignores a read shadowed by a lambda parameter of the same name" do
+      body = body_of("def m(value)\n  handler = ->(value) { touch(value) }\n  handler\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(false)
+    end
+
+    it "finds a read in a block nested two deep" do
+      body = body_of("def m(value)\n  items.each { |i| others.each { |j| touch(value) } }\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(true)
+    end
+
+    # Only the shadowing block is excluded; a sibling block still reads the
+    # outer local.
+    it "finds a read in a sibling of a shadowing block" do
+      body = body_of("def m(value)\n  items.each { |value| touch(value) }\n  others.each { |j| touch(value) }\nend\n")
+
+      expect(local_reads.call(body, "value")).to be(true)
+    end
+
     # A nested def opens its own scope, so a local of the same name in there is
     # a different variable.
     it "ignores a local of the same name inside a nested def" do

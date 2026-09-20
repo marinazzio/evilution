@@ -35,6 +35,10 @@ class OptionalDefaultInjectionTarget
     cleanup
   end
 
+  def shadowed_by_block_param(value = 1)
+    [1, 2].each { |value| touch(value) }
+  end
+
   def read_in_rescue(value = 1)
     prepare
   rescue StandardError
