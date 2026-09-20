@@ -256,11 +256,45 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#unresolved_target_files" do
+    it "defaults to an empty list" do
+      expect(summary.unresolved_target_files).to eq([])
+    end
+
+    it "reports the files it was given" do
+      s = described_class.new(results: results, unresolved_target_files: ["lib/untested.rb"])
+
+      expect(s.unresolved_target_files).to eq(["lib/untested.rb"])
+    end
+
+    it "answers unresolved_targets? accordingly" do
+      s = described_class.new(results: results, unresolved_target_files: ["lib/untested.rb"])
+
+      expect([summary.unresolved_targets?, s.unresolved_targets?]).to eq([false, true])
+    end
+  end
+
   describe "#success?" do
     it "returns true when score meets threshold" do
       all_killed = described_class.new(results: [make_result(:killed)])
 
       expect(all_killed.success?).to be true
+    end
+
+    # A file evilution was pointed at and never tested is a failed run whatever
+    # the mutations it did measure scored.
+    it "returns false when a target file resolved to no spec" do
+      all_killed = described_class.new(results: [make_result(:killed)],
+                                       unresolved_target_files: ["lib/untested.rb"])
+
+      expect(all_killed.success?).to be false
+    end
+
+    it "returns false for an unresolved target even with min_score zero" do
+      all_killed = described_class.new(results: [make_result(:killed)],
+                                       unresolved_target_files: ["lib/untested.rb"])
+
+      expect(all_killed.success?(min_score: 0.0)).to be false
     end
 
     it "returns false when score below threshold" do

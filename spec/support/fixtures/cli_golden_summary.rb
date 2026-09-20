@@ -29,6 +29,20 @@ module CliGoldenSummary
     :coverage_gaps, :neutral_results, :equivalent_results, :unresolved_results,
     :unparseable_results, :results, :disabled_mutations, :truncated?
   ) do
+    # The golden summary predates unresolved-target reporting and has no target
+    # files of its own, so the report renders exactly as it did before.
+    def unresolved_targets?
+      false
+    end
+
+    def unresolved_target_files
+      []
+    end
+
+    def target_file_count
+      nil
+    end
+
     def success?(min_score:)
       score >= min_score
     end

@@ -12,9 +12,21 @@ class Evilution::Reporter::CLI::LineFormatters::ResultLine
   end
 
   def format(summary)
+    return unresolved_targets_line(summary) if summary.unresolved_targets?
+
     pass_fail = summary.success?(min_score: @min_score) ? "PASS" : "FAIL"
     score_pct = @pct.format(summary.score)
     threshold_pct = @pct.format(@min_score)
     "Result: #{pass_fail} (score #{score_pct} #{pass_fail == "PASS" ? ">=" : "<"} #{threshold_pct})"
+  end
+
+  private
+
+  # The score covers only the files that resolved to a spec, so reporting it
+  # against the threshold here would name the wrong problem.
+  def unresolved_targets_line(summary)
+    count = summary.unresolved_target_files.length
+    subject = count == 1 ? "target file has" : "target files have"
+    "Result: FAIL (#{count} #{subject} no resolvable spec)"
   end
 end

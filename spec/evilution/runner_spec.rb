@@ -75,6 +75,45 @@ RSpec.describe Evilution::Runner do
       expect(result).to be_a(Evilution::Result::Summary)
     end
 
+    # EV-p4sm / GH #1603: a file evilution was pointed at that resolves to no
+    # spec is carried into the summary, which fails the run on its own.
+    context "when a target file resolves to no spec" do
+      before do
+        spec_resolver = instance_double(Evilution::SpecResolver)
+        allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+        allow(spec_resolver).to receive(:resolve_specs).with("lib/example.rb", any_args).and_return(nil)
+        allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return(nil)
+      end
+
+      it "names the file in the summary" do
+        expect(runner.call.unresolved_target_files).to eq(["lib/example.rb"])
+      end
+
+      it "counts the files it audited" do
+        expect(runner.call.target_file_count).to eq(1)
+      end
+
+      it "fails the run despite every mutation being killed" do
+        result = runner.call
+
+        expect([result.score, result.success?(min_score: 0.0)]).to eq([1.0, false])
+      end
+    end
+
+    context "when every target file resolves to a spec" do
+      before do
+        spec_resolver = instance_double(Evilution::SpecResolver)
+        allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+        allow(spec_resolver).to receive(:resolve_specs)
+          .with("lib/example.rb", any_args).and_return(["spec/example_spec.rb"])
+        allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
+      end
+
+      it "reports no unresolved target files" do
+        expect(runner.call.unresolved_target_files).to be_empty
+      end
+    end
+
     it "includes all mutation results" do
       result = runner.call
 
@@ -1401,7 +1440,7 @@ RSpec.describe Evilution::Runner do
 
       spec_resolver = instance_double(Evilution::SpecResolver)
       allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
-      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
 
       result = runner.call
 
@@ -1443,7 +1482,7 @@ RSpec.describe Evilution::Runner do
 
       spec_resolver = instance_double(Evilution::SpecResolver)
       allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
-      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
 
       result = runner.call
 
@@ -1491,7 +1530,7 @@ RSpec.describe Evilution::Runner do
         allow(Evilution::SpecResolver).to receive(:new)
           .with(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
           .and_return(neutralize_resolver)
-        allow(neutralize_resolver).to receive(:call).with("lib/example.rb").and_return("test/example_test.rb")
+        allow(neutralize_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("test/example_test.rb")
 
         result = minitest_runner.call
 
@@ -1511,7 +1550,7 @@ RSpec.describe Evilution::Runner do
         allow(Evilution::SpecResolver).to receive(:new)
           .with(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
           .and_return(neutralize_resolver)
-        allow(neutralize_resolver).to receive(:call).with("lib/example.rb").and_return(nil)
+        allow(neutralize_resolver).to receive(:call).with("lib/example.rb", any_args).and_return(nil)
 
         result = minitest_runner.call
 
@@ -1554,7 +1593,7 @@ RSpec.describe Evilution::Runner do
 
       spec_resolver = instance_double(Evilution::SpecResolver)
       allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
-      allow(spec_resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
 
       ff_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],

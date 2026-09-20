@@ -94,6 +94,7 @@ class Evilution::Reporter::JSON
   end
 
   def append_optional_summary_fields(data, summary)
+    data[:unresolved_target_files] = summary.unresolved_target_files if summary.unresolved_targets?
     data[:truncated] = true if summary.truncated?
     data[:skipped] = summary.skipped if summary.skipped.positive?
     peak = summary.peak_memory_mb

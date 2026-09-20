@@ -4,15 +4,25 @@ require_relative "../result"
 require_relative "coverage_gap_grouper"
 
 class Evilution::Result::Summary
-  attr_reader :results, :duration, :skipped, :disabled_mutations
+  attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
+              :target_file_count
 
-  def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [])
+  def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
+                 unresolved_target_files: [], target_file_count: nil)
     @results = results
     @duration = duration
     @truncated = truncated
     @skipped = skipped
     @disabled_mutations = disabled_mutations
+    @unresolved_target_files = unresolved_target_files.freeze
+    @target_file_count = target_file_count
     freeze
+  end
+
+  # Files evilution was pointed at that resolved to no test file, so nothing
+  # about them was ever measured (EV-p4sm / GH #1603).
+  def unresolved_targets?
+    !unresolved_target_files.empty?
   end
 
   def truncated?
@@ -66,7 +76,11 @@ class Evilution::Result::Summary
     killed.to_f / denominator
   end
 
+  # A target file that was never tested fails the run on its own: the score
+  # only speaks for the files that did resolve to a spec.
   def success?(min_score: 1.0)
+    return false if unresolved_targets?
+
     score >= min_score
   end
 

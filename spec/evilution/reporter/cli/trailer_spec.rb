@@ -37,6 +37,10 @@ RSpec.describe Evilution::Reporter::CLI::Trailer, "feedback footer" do
       :duration, :score, :skipped, :disabled_mutations,
       keyword_init: true
     ) do
+      def unresolved_targets?
+        false
+      end
+
       def initialize(errors: 0, unparseable: 0, unresolved: 0)
         super(
           errors: errors, unparseable: unparseable, unresolved: unresolved,

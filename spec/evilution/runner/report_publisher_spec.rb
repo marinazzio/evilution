@@ -93,6 +93,7 @@ RSpec.describe Evilution::Runner::ReportPublisher do
         :score, :score_denominator, :skipped, :disabled_mutations,
         :survived_results, :killed_results, :neutral_results, :equivalent_results,
         :unresolved_results, :unparseable_results, :coverage_gaps,
+        :unresolved_target_files, :target_file_count,
         keyword_init: true
       ) do
         def initialize(errors: 0, unparseable: 0, unresolved: 0)
@@ -104,12 +105,17 @@ RSpec.describe Evilution::Runner::ReportPublisher do
             score: 0.0, score_denominator: 0, skipped: 0,
             disabled_mutations: [], survived_results: [], killed_results: [],
             neutral_results: [], equivalent_results: [], unresolved_results: [],
-            unparseable_results: [], coverage_gaps: []
+            unparseable_results: [], coverage_gaps: [],
+            unresolved_target_files: [], target_file_count: 0
           )
         end
 
         def truncated?
           false
+        end
+
+        def unresolved_targets?
+          !unresolved_target_files.empty?
         end
 
         def success?(min_score:)
