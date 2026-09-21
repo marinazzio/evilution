@@ -332,7 +332,7 @@ Schema:
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)",
-      "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: spec file or error class }"
+      "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }"
     }
   ],
   "subjects": [
@@ -455,7 +455,7 @@ Neutral mutations (7, not verified):
 
 The score line names the remainder whenever the run left mutations out of the denominator, because full marks over a fraction of a run otherwise reads as a verdict on all of it. A clean run still prints the plain `Score: 100.00% (17/17)`.
 
-Those seven mutations were survivors until the spec file went red — a neutral of this kind is a hidden coverage gap, not a clean bill of health. JSON output carries `neutral_reason` on each neutral entry as `{ kind, detail }`.
+Those seven mutations were survivors until the spec file went red — a neutral of this kind is a hidden coverage gap, not a clean bill of health. JSON output carries `neutral_reason` as `{ kind, detail }` on neutral entries that have one; `detail` is null where no single spec can be named (an explicit `--spec` run), and the field is absent on a result recorded without a reason, which the text report shows as `reason not recorded`.
 
 ### Per-Subject Scores
 
