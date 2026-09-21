@@ -394,7 +394,7 @@ Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent
 
 #### stdout in JSON mode
 
-With `--format json`, stdout carries the JSON document and nothing else. Once the document is written, stdout is pointed at stderr, so anything a preloaded spec helper prints on the way out — SimpleCov's coverage report, for example — lands on stderr instead of after the document where it would leave `JSON.parse` with nothing to work with. `--output FILE` writes the document to a file and leaves stdout alone entirely.
+With `--format json`, stdout carries the JSON document and nothing else. Each mutation's test run writes to buffers evilution owns, whatever the isolation mode: under `in_process` the framework's configuration can outlive a single run — `--preload` builds it before isolation swaps `$stdout` — so the run claims RSpec's output and error streams outright rather than relying on RSpec to redirect them (GH #1627). Once the document is written, stdout is pointed at stderr, so anything a preloaded spec helper prints on the way out — SimpleCov's coverage report, for example — lands on stderr instead of after the document where it would leave `JSON.parse` with nothing to work with. `--output FILE` writes the document to a file and leaves stdout alone entirely.
 
 #### Schema versioning
 
@@ -439,6 +439,14 @@ $ echo $?
 ```
 
 The check covers files evilution found something to mutate in; a file it produced no mutations for (a constants-only file, say) is not reported. `--fallback-full-suite` runs such a file against the whole suite instead, so nothing goes untested and nothing is reported. The file list is also in JSON output under `summary.unresolved_target_files`.
+
+### Survivor Confirmation
+
+Per-mutation targeting runs a subset of a spec file's examples, chosen by matching the enclosing method's name against example bodies. That match keys on identifier text, so it can miss the example that would have caught a mutation — and the mutation is then reported as a survivor the suite actually covers. A survivor nobody can reproduce is worse than a missed kill: it sends the reader to write a test that is already there (GH #1624).
+
+Before any survivor is reported, it is therefore re-run against the whole resolved spec file, and that run is the one reported. Only survivors pay for the extra run, and only where the targeted subset was narrower than the file; a mutation the targeted examples already killed is never re-run.
+
+On evilution's own `lib/evilution/reporter/json/subjects.rb` this moved the reported score from 74.19% with 8 survivors to 93.55% with 2 — the six that disappeared were killed by an example in the same file all along, and the run now agrees with `--no-example-targeting` instead of contradicting it.
 
 ### Neutral Mutations
 

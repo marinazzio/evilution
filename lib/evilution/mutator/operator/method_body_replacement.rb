@@ -46,9 +46,18 @@ class Evilution::Mutator::Operator::MethodBodyReplacement < Evilution::Mutator::
   # class has no parent implementation of the method. We emit it only when the
   # original body already calls super, using that as a heuristic that a super
   # target is intended in this context.
+  #
+  # The search stops at a nested def, whose super belongs to that method rather
+  # than to this one. Counting it would emit a super replacement for a method
+  # that may have no parent to call, and the mutant would raise NoMethodError on
+  # contact — a kill that proves nothing (EV-vk1f / GH #1625). A block is not a
+  # boundary: `values.each { super }` does call this method's parent.
+  # MethodBodyToSuper#calls_super? draws the same line.
   def body_calls_super?(node)
     return true if node.is_a?(Prism::SuperNode) || node.is_a?(Prism::ForwardingSuperNode)
 
-    node.child_nodes.any? { |child| child && body_calls_super?(child) }
+    node.child_nodes.any? do |child|
+      child && !child.is_a?(Prism::DefNode) && body_calls_super?(child)
+    end
   end
 end

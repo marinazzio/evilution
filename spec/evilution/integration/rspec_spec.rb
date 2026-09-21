@@ -869,19 +869,24 @@ RSpec.describe Evilution::Integration::RSpec do
 
     before { allow(Evilution).to receive(:const_defined?).and_call_original }
 
+    # The run under test is the targeted one. A mutation that survives it is
+    # re-run against the whole file afterwards (EV-f8h3 / GH #1624), so the
+    # assertion is scoped to the first run rather than to every run.
     it "passes locations (path:LINE) as rspec args when filter returns matches" do
       allow(example_filter).to receive(:call)
         .with(mutation, ["spec/some_spec.rb"])
         .and_return(["spec/some_spec.rb:12", "spec/some_spec.rb:34"])
       filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+      runs = []
       allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
-        expect(args).to include("spec/some_spec.rb:12")
-        expect(args).to include("spec/some_spec.rb:34")
-        expect(args).not_to include("spec/some_spec.rb")
+        runs << args
         0
       end
 
       filtered.call(mutation)
+
+      expect(runs.first).to include("spec/some_spec.rb:12", "spec/some_spec.rb:34")
+      expect(runs.first).not_to include("spec/some_spec.rb")
     end
 
     it "returns an unresolved result when filter returns nil" do

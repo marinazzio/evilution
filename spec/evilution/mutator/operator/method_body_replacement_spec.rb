@@ -64,6 +64,41 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       expect(super_mut).not_to be_nil
     end
 
+    # EV-vk1f / GH #1625: a nested def opens its own method scope, so its super
+    # says nothing about whether the enclosing method has a parent to call.
+    # Emitting one anyway produces a mutant that raises NoMethodError on
+    # contact — a kill that proves nothing.
+    it "does not emit a super-replacement when only a nested def calls super" do
+      muts = outer_subject_mutations(
+        "class Plain\n  def outer(value)\n    def inner\n      super\n    end\n    value\n  end\nend\n"
+      )
+
+      expect(muts.map(&:mutated_source)).to all(satisfy { |src| !src.match?(/def outer\(value\)\s+super\s+end/) })
+    end
+
+    # Visiting the outer subject also mutates the def nested in its body, which
+    # does call super and keeps all three replacements. Only the outer body
+    # loses the super one.
+    it "still emits the nil and self replacements for that method" do
+      muts = outer_subject_mutations(
+        "class Plain\n  def outer(value)\n    def inner\n      super\n    end\n    value\n  end\nend\n"
+      )
+
+      outer_bodies = muts.filter_map { |m| m.mutated_source[/def outer\(value\)\n    (\w+)\n  end/, 1] }
+
+      expect(outer_bodies).to eq(%w[nil self])
+    end
+
+    # A block shares the method's scope, so a super written in one does belong
+    # to the enclosing method.
+    it "emits a super-replacement when super is called inside a block" do
+      muts = outer_subject_mutations(
+        "class Child < Base\n  def outer(values)\n    values.each { super }\n  end\nend\n"
+      )
+
+      expect(muts.length).to eq(3)
+    end
+
     it "emits a super-replacement when body calls forwarding super" do
       muts = mutations_for("with_forwarding_super")
 

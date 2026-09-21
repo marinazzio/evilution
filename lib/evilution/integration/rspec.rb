@@ -70,6 +70,26 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     targets = @example_filter_applier.call(mutation, files)
     return @result_builder.unresolved_example(mutation) if targets.nil?
 
+    result = run_targets(targets)
+    return result unless confirm_survivor?(result, targets, files)
+
+    run_targets(files)
+  end
+
+  # Targeting runs a subset of the examples in a spec file, chosen by name. A
+  # mutation that subset does not catch looks like a survivor whether or not the
+  # rest of the file would have caught it, and a survivor nobody can reproduce
+  # is worse than a missed kill: it sends the reader to write a test that is
+  # already there (EV-f8h3 / GH #1624).
+  #
+  # So a survivor is re-run against the whole resolved file, and that run is the
+  # one reported. Only survivors pay for it, and only where the subset was
+  # actually narrower than the file.
+  def confirm_survivor?(result, targets, files)
+    result[:passed] && targets != files
+  end
+
+  def run_targets(targets)
     args = ["--format", "progress", "--no-color", "--order", "defined", *resolve_targets(targets)]
     command = "rspec #{args.join(" ")}"
 
@@ -115,15 +135,41 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   end
 
   def execute_run(args, command)
-    detector = @crash_detector_lifecycle.current
     snapshot = @state_guard.snapshot
     begin
-      status = ::RSpec::Core::Runner.run(args, StringIO.new, StringIO.new)
+      out = StringIO.new
+      err = StringIO.new
+      claim_rspec_streams(out, err)
+      detector = @crash_detector_lifecycle.register
+      status = ::RSpec::Core::Runner.run(args, err, out)
       @result_builder.from_run(status, command, detector, examples_loaded:)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
       @state_guard.release(snapshot)
+    end
+  end
+
+  # RSpec redirects its own output to the streams it is handed only when the
+  # stream its configuration already holds is the current `$stdout`. In-process
+  # isolation swaps `$stdout` for a null IO around every mutation, and a
+  # configuration built before that swap — which is what `--preload` produces,
+  # since the project's spec_helper calls RSpec.configure — still holds the real
+  # stdout. The two no longer match, RSpec keeps its own stream, and the run's
+  # output lands on the real stdout ahead of the report (EV-m6xc / GH #1627).
+  #
+  # So the streams are claimed outright rather than offered. The ivars are
+  # written directly because `output_stream=` is guarded once a reporter exists.
+  # The reporter and its formatters are dropped along with them: both hold the
+  # stream they were built with, so leaving them in place would keep writing
+  # wherever the host pointed. StateGuard snapshots all four ivars and puts the
+  # host's back afterwards.
+  def claim_rspec_streams(out, err)
+    config = ::RSpec.configuration
+    config.instance_variable_set(:@output_stream, out)
+    config.instance_variable_set(:@error_stream, err)
+    %i[@reporter @formatter_loader].each do |ivar|
+      config.remove_instance_variable(ivar) if config.instance_variable_defined?(ivar)
     end
   end
 
