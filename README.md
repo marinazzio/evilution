@@ -394,7 +394,7 @@ Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent
 
 #### stdout in JSON mode
 
-With `--format json`, stdout carries the JSON document and nothing else. Once the document is written, stdout is pointed at stderr, so anything a preloaded spec helper prints on the way out — SimpleCov's coverage report, for example — lands on stderr instead of after the document where it would leave `JSON.parse` with nothing to work with. `--output FILE` writes the document to a file and leaves stdout alone entirely.
+With `--format json`, stdout carries the JSON document and nothing else. Each mutation's test run writes to buffers evilution owns, whatever the isolation mode: under `in_process` the framework's configuration can outlive a single run — `--preload` builds it before isolation swaps `$stdout` — so the run claims RSpec's output and error streams outright rather than relying on RSpec to redirect them (GH #1627). Once the document is written, stdout is pointed at stderr, so anything a preloaded spec helper prints on the way out — SimpleCov's coverage report, for example — lands on stderr instead of after the document where it would leave `JSON.parse` with nothing to work with. `--output FILE` writes the document to a file and leaves stdout alone entirely.
 
 #### Schema versioning
 

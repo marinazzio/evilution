@@ -10,7 +10,7 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ConfigurationStreams d
   let(:config) { RSpec.configuration }
 
   def guarded_ivars
-    %i[@color_mode @output_stream @error_stream]
+    %i[@color_mode @output_stream @error_stream @reporter @formatter_loader]
   end
 
   # Guard the host's real configuration: capture and restore around each
@@ -25,14 +25,38 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ConfigurationStreams d
     saved.each { |iv, value| config.instance_variable_set(iv, value) }
   end
 
-  it "snapshot captures color_mode, output_stream and error_stream" do
+  it "snapshot captures the stream ivars a run mutates" do
     out = StringIO.new
     err = StringIO.new
+    reporter = Object.new
+    loader = Object.new
     config.instance_variable_set(:@color_mode, :on)
     config.instance_variable_set(:@output_stream, out)
     config.instance_variable_set(:@error_stream, err)
+    config.instance_variable_set(:@reporter, reporter)
+    config.instance_variable_set(:@formatter_loader, loader)
 
-    expect(strategy.snapshot).to eq(:@color_mode => :on, :@output_stream => out, :@error_stream => err)
+    expect(strategy.snapshot).to eq(
+      :@color_mode => :on, :@output_stream => out, :@error_stream => err,
+      :@reporter => reporter, :@formatter_loader => loader
+    )
+  end
+
+  # The run drops these two so RSpec rebuilds them against its own streams
+  # (EV-m6xc / GH #1627); the host's have to come back.
+  it "release restores a reporter and formatter loader the run dropped" do
+    reporter = Object.new
+    loader = Object.new
+    config.instance_variable_set(:@reporter, reporter)
+    config.instance_variable_set(:@formatter_loader, loader)
+    snap = strategy.snapshot
+    config.remove_instance_variable(:@reporter)
+    config.remove_instance_variable(:@formatter_loader)
+
+    strategy.release(snap)
+
+    expect([config.instance_variable_get(:@reporter), config.instance_variable_get(:@formatter_loader)])
+      .to eq([reporter, loader])
   end
 
   it "release restores all three ivars after they are mutated" do

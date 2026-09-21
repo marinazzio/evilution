@@ -18,7 +18,10 @@ require_relative "internals"
 # writing the ivars directly: configuration#output_stream= is guarded (it warns
 # and no-ops once a reporter exists), so the public setter cannot put it back.
 class Evilution::Integration::RSpec::StateGuard::ConfigurationStreams
-  IVARS = %i[@color_mode @output_stream @error_stream].freeze
+  #   - @reporter and @formatter_loader -- both hold the stream they were built
+  #                     with, so the run drops them to rebuild against its own
+  #                     (EV-m6xc / GH #1627); the host's are restored here.
+  IVARS = %i[@color_mode @output_stream @error_stream @reporter @formatter_loader].freeze
 
   def snapshot
     config = ::RSpec.configuration
