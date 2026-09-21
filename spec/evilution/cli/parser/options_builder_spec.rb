@@ -34,6 +34,16 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:min_score]).to eq(0.85)
   end
 
+  it "parses --output as a path" do
+    options, = parse(["--output", "tmp/report.json"])
+    expect(options[:output]).to eq("tmp/report.json")
+  end
+
+  it "leaves output unset when --output is not given" do
+    options, = parse([])
+    expect(options).not_to have_key(:output)
+  end
+
   it "parses --target as a string" do
     options, = parse(["--target", "Foo#bar"])
     expect(options[:target]).to eq("Foo#bar")
