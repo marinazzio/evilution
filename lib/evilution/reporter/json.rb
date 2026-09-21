@@ -8,8 +8,9 @@ require_relative "../reporter"
 require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
-  def initialize(suggest_tests: false, integration: :rspec)
+  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new)
     @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
+    @subjects = subjects
   end
 
   def call(summary)
@@ -25,6 +26,7 @@ class Evilution::Reporter::JSON
       timestamp: Time.now.iso8601,
       summary: build_summary(summary),
       coverage_gaps: build_coverage_gaps(summary),
+      subjects: @subjects.call(summary),
       **result_categories(summary)
     }
     append_disabled_to_report(report, summary)
@@ -169,3 +171,5 @@ class Evilution::Reporter::JSON
     }
   end
 end
+
+require_relative "json/subjects"

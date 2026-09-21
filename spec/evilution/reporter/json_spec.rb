@@ -33,7 +33,8 @@ RSpec.describe Evilution::Reporter::JSON do
       file_path: "lib/user.rb",
       line: 5,
       diff: "- x == 10\n+ x != 10",
-      unified_diff: nil
+      unified_diff: nil,
+      subject: double("Subject", name: "User#check")
     )
   end
 
@@ -331,7 +332,8 @@ RSpec.describe Evilution::Reporter::JSON do
           operator_name: "comparison_replacement",
           file_path: "lib/user.rb",
           line: 12,
-          diff: "- x <= 5\n+ x < 5"
+          diff: "- x <= 5\n+ x < 5",
+          subject: double("Subject", name: "U#x")
         )
       end
 
@@ -384,7 +386,8 @@ RSpec.describe Evilution::Reporter::JSON do
           operator_name: "comparison_replacement",
           file_path: "lib/user.rb",
           line: 12,
-          diff: "- x <= 5\n+ x < 5"
+          diff: "- x <= 5\n+ x < 5",
+          subject: double("Subject", name: "U#x")
         )
       end
 
@@ -430,7 +433,8 @@ RSpec.describe Evilution::Reporter::JSON do
           operator_name: "method_body_replacement",
           file_path: "lib/broken.rb",
           line: 4,
-          diff: "- def foo; end\n+ def foo; raise; end"
+          diff: "- def foo; end\n+ def foo; raise; end",
+          subject: double("Subject", name: "U#x")
         )
       end
 
@@ -715,7 +719,8 @@ RSpec.describe Evilution::Reporter::JSON do
           operator_name: "boolean_literal_replacement",
           file_path: "lib/user.rb",
           line: 15,
-          diff: "- true\n+ false"
+          diff: "- true\n+ false",
+          subject: double("Subject", name: "U#x")
         )
       end
 

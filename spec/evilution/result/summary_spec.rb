@@ -256,6 +256,41 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "subject scores" do
+    def subject_result(status, subject_name)
+      subject_obj = instance_double(Evilution::Subject, name: subject_name)
+      mut = instance_double(Evilution::Mutation, subject: subject_obj, file_path: "lib/helper.rb")
+      Evilution::Result::MutationResult.new(mutation: mut, status: status, duration: 0.01)
+    end
+
+    let(:mixed) do
+      described_class.new(
+        results: [
+          subject_result(:killed, "Helper#covered"),
+          subject_result(:survived, "Helper#partly"),
+          subject_result(:killed, "Helper#partly"),
+          subject_result(:unresolved, "Helper#unreached")
+        ]
+      )
+    end
+
+    it "scores every subject" do
+      expect(mixed.subject_scores.map(&:name)).to eq(["Helper#covered", "Helper#partly", "Helper#unreached"])
+    end
+
+    # A file's score speaks for the file; these are the methods it does not
+    # speak for (EV-nlx1 / GH #1605).
+    it "singles out the subjects that are not fully verified" do
+      expect(mixed.subjects_needing_attention.map(&:name)).to eq(["Helper#partly", "Helper#unreached"])
+    end
+
+    it "has nothing to single out when every subject is fully verified" do
+      clean = described_class.new(results: [subject_result(:killed, "Helper#covered")])
+
+      expect(clean.subjects_needing_attention).to be_empty
+    end
+  end
+
   describe "#unresolved_target_files" do
     it "defaults to an empty list" do
       expect(summary.unresolved_target_files).to eq([])

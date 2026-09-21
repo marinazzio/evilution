@@ -47,6 +47,8 @@ require_relative "cli/line_formatters/result_line"
 require_relative "cli/line_formatters/feedback_footer"
 require_relative "cli/item_formatters/coverage_gap"
 require_relative "cli/item_formatters/result_location"
+require_relative "cli/item_formatters/subject_score"
+require_relative "cli/item_formatters/subject_score_group"
 require_relative "cli/item_formatters/error"
 require_relative "cli/item_formatters/disabled"
 require_relative "cli/metrics_block"
@@ -59,6 +61,15 @@ Evilution::Reporter::CLI.const_set(
       title: ->(gaps) { "Survived mutations (#{gaps.length} coverage gap#{"s" unless gaps.length == 1}):" },
       fetcher: lambda(&:coverage_gaps),
       formatter: Evilution::Reporter::CLI::ItemFormatters::CoverageGap.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: lambda { |groups|
+        subjects = groups.sum(&:length)
+        "Subjects needing attention (#{subjects} subject#{"s" unless subjects == 1} " \
+          "in #{groups.length} file#{"s" unless groups.length == 1}):"
+      },
+      fetcher: lambda(&:subjects_needing_attention_by_file),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::SubjectScoreGroup.new
     ),
     Evilution::Reporter::CLI::Section.new(
       title: "Neutral mutations (test already failing):",
