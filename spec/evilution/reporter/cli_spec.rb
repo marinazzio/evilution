@@ -19,9 +19,9 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(described_class::SEPARATOR).to eq("=" * 44)
     end
 
-    it "exposes DEFAULT_SECTIONS as a frozen array of 7 Section instances" do
+    it "exposes DEFAULT_SECTIONS as a frozen array of 8 Section instances" do
       expect(described_class::DEFAULT_SECTIONS).to be_frozen
-      expect(described_class::DEFAULT_SECTIONS.length).to eq(7)
+      expect(described_class::DEFAULT_SECTIONS.length).to eq(8)
       described_class::DEFAULT_SECTIONS.each do |section|
         expect(section).to be_a(described_class::Section)
       end

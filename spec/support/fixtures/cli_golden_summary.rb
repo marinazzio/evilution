@@ -47,6 +47,10 @@ module CliGoldenSummary
       0
     end
 
+    def subjects_needing_attention_by_file
+      []
+    end
+
     def success?(min_score:)
       score >= min_score
     end

@@ -334,6 +334,18 @@ Schema:
       "suggestion": "string — actionable hint for surviving mutants (survived only)"
     }
   ],
+  "subjects": [
+    {
+      "name": "string      — subject name (e.g. 'Foo#bar')",
+      "file": "string      — relative path to source file",
+      "total": "integer    — mutations generated for this subject",
+      "killed": "integer   — mutations detected",
+      "verified": "integer — mutations that got a verdict (killed + survived + timed out)",
+      "survived": "integer — mutations that went undetected",
+      "score": "float      — killed / verified, 0.0 when nothing was verified, rounded to 4 decimals",
+      "reached": "boolean  — false when no mutation of this subject got a verdict at all"
+    }
+  ],
   "coverage_gaps": [
     {
       "file": "string       — relative path to source file",
@@ -426,6 +438,22 @@ $ echo $?
 ```
 
 The check covers files evilution found something to mutate in; a file it produced no mutations for (a constants-only file, say) is not reported. `--fallback-full-suite` runs such a file against the whole suite instead, so nothing goes untested and nothing is reported. The file list is also in JSON output under `summary.unresolved_target_files`.
+
+### Per-Subject Scores
+
+The run's score is computed per file, and test selection resolves per file too, so a well-tested file that gains new untested methods still reports 100% — the number only ever describes what the resolved spec reaches (GH #1605). Every report therefore breaks the run down per subject, and the text report names the subjects the file-level score does not speak for:
+
+```
+Mutations: 33 total, 7 killed, 0 survived, 0 timed out, 26 unresolved
+Score: 100.00% (7/7)
+
+Subjects needing attention (2 subjects in 1 file):
+  lib/helper.rb
+    #summary_for  0.00%  (0/17)  nothing reached this subject
+    #total_for  0.00%  (0/9)  nothing reached this subject
+```
+
+A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
 ## Mutation Operators (88 total)
 

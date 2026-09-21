@@ -2,6 +2,7 @@
 
 require_relative "../result"
 require_relative "coverage_gap_grouper"
+require_relative "subject_scorer"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
@@ -18,6 +19,25 @@ class Evilution::Result::Summary
     @target_file_count = target_file_count
     @infra_retried = infra_retried
     freeze
+  end
+
+  # What each subject — each method — scored on its own. The run's score is
+  # computed per file, which says nothing about a method inside it that no
+  # example reaches (EV-nlx1 / GH #1605).
+  def subject_scores
+    Evilution::Result::SubjectScorer.new.call(results)
+  end
+
+  # The subjects the file-level score does not speak for: something survived, or
+  # nothing reached them at all.
+  def subjects_needing_attention
+    subject_scores.reject(&:fully_verified?)
+  end
+
+  # The same subjects, gathered under the file they live in, which is how the
+  # report lists them.
+  def subjects_needing_attention_by_file
+    subjects_needing_attention.group_by(&:file_path).values
   end
 
   # Files evilution was pointed at that resolved to no test file, so nothing
