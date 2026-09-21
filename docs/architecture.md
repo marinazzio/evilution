@@ -55,6 +55,7 @@ Everything lives under `lib/evilution/`.
 | `Integration::{RSpec,Minitest,TestUnit}` | Apply a mutation and run the configured test framework; report the raw outcome. | `integration/base.rb`, `integration/rspec.rb` |
 | `Parallel::{Pool,WorkQueue}` | Fan mutations across worker processes for `jobs > 1`. | `parallel/pool.rb`, `parallel/work_queue.rb` |
 | `Result::{MutationResult,Summary}` | Per-mutation result + aggregated, scored summary. | `result/mutation_result.rb`, `result/summary.rb` |
+| `Result::{SubjectScore,SubjectScorer,NeutralReason}` | Score each subject on its own, and record why a neutral is neutral — what the file-level score does not speak for. | `result/subject_scorer.rb`, `result/neutral_reason.rb` |
 | `Reporter::{CLI,JSON,HTML,Suggestion}` | Render a `Summary` to text / JSON / HTML. | `reporter/*` |
 | `Session`, `Compare` | Persist runs to `.evilution/results/*.json`; diff two sessions. | `session/store.rb`, `compare.rb` |
 | `Coverage`, `Equivalent`, `Baseline`, `Cache`, `Hooks`, `MCP` | Coverage-based example targeting, equivalent-mutation detection, baseline capture, incremental cache, lifecycle hooks, MCP server. | respective dirs |
@@ -87,7 +88,10 @@ class that owns it.
 5. **Spec resolution** — per subject, `SpecSelector#call(source_path)` picks specs
    (explicit `spec_files` → `spec_mappings` → `SpecResolver#resolve_specs` layout
    heuristics). Example-level targeting narrows to examples that reference the
-   mutated token (`ExampleFilter` / `CoverageExampleFilter`).
+   mutated token (`ExampleFilter` / `CoverageExampleFilter`). Separately,
+   `Runner::TargetSpecAudit` asks the same selector once per target file in the
+   parent, so a file that resolves to no spec at all is a fact the summary
+   carries rather than a handful of `unresolved` mutations.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
@@ -103,13 +107,24 @@ class that owns it.
    guard / unresolved); the final symbol is chosen by
    `Isolation::Fork#classify_status`: `:timeout` → `:killed` (crash) →
    `:unresolved` → `:error` → `:survived` (tests passed) → default `:killed`.
-   A `NeutralizationPipeline` can reclassify results whose covering spec already
-   failed at baseline into `:neutral`.
+   A `NeutralizationPipeline` can reclassify results into `:neutral` — either
+   because the covering spec already failed at baseline (`Neutralizer::BaselineFailed`)
+   or because the test process crashed on infrastructure rather than on the
+   mutation (`Neutralizer::InfraError`). Each records a `Result::NeutralReason`,
+   since the two want opposite responses. A survivor is re-run against its whole
+   spec file before it is reported (`Integration::RSpec#confirm_survivor?`), so a
+   narrowed example set cannot invent one; after a parallel pass,
+   `MutationExecutor::InfraRetry` re-runs the infrastructure-neutralised
+   mutations serially, once the contention that caused them is gone.
 9. **Aggregate + report** — `Result::Summary` counts each status and computes
    `score = killed / score_denominator` (total minus error/neutral/equivalent/
    unresolved/unparseable). `Runner::ReportPublisher#publish` selects a reporter by
    `config.format` and writes it; `Session::Store` optionally persists the run.
-   `Commands::Run` maps `summary.success?(min_score:)` to exit code `0`/`1` (`2` on error).
+   `Summary#success?` is also false when a target file resolved to no spec, whatever
+   the score. `Commands::Run` maps `summary.success?(min_score:)` to exit code
+   `0`/`1` (`2` on error), and `CLI::ExitGuard` — installed by the executable before
+   anything can preload the project — has the final word on the process status, so a
+   preloaded spec helper's at-exit hook cannot replace it.
 
 ## How to add a new mutator
 

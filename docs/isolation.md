@@ -48,7 +48,7 @@ framework must be loaded in the parent before forking — see [Automatic
 preload](#automatic-preload) — and `in_process` cannot preload them without
 polluting the host process. A non-Rails gem run under the old `in_process`
 default therefore produced 0 examples / 100% errors out of the box; defaulting
-gems to `fork` lets auto-preload fire (EV-z03y, PR #1375). A plain non-Rails,
+gems to `fork` lets auto-preload fire (PR #1375). A plain non-Rails,
 non-gem project (no gemspec) still defaults to `in_process`.
 
 The same hazard applies to any Ruby code that uses
@@ -92,12 +92,11 @@ order, falling back to the gem's library entry point (`lib/<gem>.rb`):
 When a gem is detected but none of those helpers exist, evilution prints a
 warning naming the locations it looked in and pointing at `--preload`, so a
 non-standard test layout reads as a fixable configuration issue rather than a
-silent 0% (EV-z03y, PR #1375).
+silent 0% (PR #1375).
 
 Minitest/Test::Unit helpers that `require "test_helper"` (or any non-relative
 `require "support/..."`) work without `-Itest`: evilution puts the test root
-on `$LOAD_PATH` for the preload just as the test runner would (EV-5hk5, PR
-#1373).
+on `$LOAD_PATH` for the preload just as the test runner would (PR #1373).
 
 No configuration needed.
 

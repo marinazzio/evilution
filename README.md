@@ -619,6 +619,12 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 Use `minimal` when context window budget is tight and you only need to see what survived. The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
 
+What survives trimming matters when you are deciding whether to trust a score:
+
+- `neutral` entries — and with them each `neutral_reason` — are dropped at `summary` and `minimal`. Use `full` to see why mutations were neutralised.
+- `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary` and `survived`.
+- Everything inside `summary` survives at every level, including `unresolved_target_files`, `infra_retried` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
+
 ### Enriched Survived Entries
 
 Unlike `evilution --format json`, every survived entry returned by `evilution-mutate` carries extra fields so the agent can act without a second round-trip:
@@ -704,7 +710,7 @@ Per-tool placement:
 - **`evilution-session` `list`** — `{ "schema_version": Integer, "sessions": Array<{ file, timestamp, total, killed, survived, score, duration }> }`. Sessions are reverse-chronological; the array is filtered by `limit` when provided.
 - **`evilution-session` `show`** — the parsed session JSON document, exactly as written under `.evilution/results/*.json`. Field reference: see [Session JSON files](#session-json-files).
 - **`evilution-session` `diff`** — `{ "schema_version": Integer, "summary": { base_score, head_score, score_delta, base_survived, head_survived, base_total, head_total, base_killed, head_killed }, "fixed": Array, "new_survivors": Array, "persistent": Array }`. The mutation arrays carry the same per-mutation fields the session `survived` list uses (`operator`, `file`, `line`, `subject`, `diff`).
-- **`evilution-info` `subjects`** — `{ "schema_version": Integer, "subjects": Array<{ name, file, line, mutations }>, "total_subjects": Integer, "total_mutations": Integer }`.
+- **`evilution-info` `subjects`** — `{ "schema_version": Integer, "subjects": Array<{ name, file, line, mutations }>, "total_subjects": Integer, "total_mutations": Integer }`. Discovery only: this lists what *can* be mutated. The `subjects` array in a run's report is a different shape, carrying what each subject scored.
 - **`evilution-info` `tests`** — `{ "schema_version": Integer, "specs": Array<{ source, spec }>, "unresolved": Array<String>, "total_sources": Integer, "total_specs": Integer }`.
 - **`evilution-info` `environment`** — `{ "schema_version": Integer, "version": String, "ruby": String, "config_file": String|null, ... }` mirroring the effective `Evilution::Config`.
 - **`evilution-info` `statuses`** — `{ "schema_version": Integer, "statuses": Array<{ name, meaning, in_score }> }`.
@@ -735,7 +741,7 @@ When a parameter, action, or output field on the public MCP contract is deprecat
 bundle exec evilution run lib/ --format json --min-score 0.8
 ```
 
-Parse JSON output. Exit code 0 = pass, 1 = surviving mutants to address.
+Parse JSON output. Exit code 0 = pass, 1 = fail — either the score is below `--min-score`, or a target file resolved to no spec and was never tested (`summary.unresolved_target_files` names them). Without `--min-score` no score gate is armed; the run still fails on an untested target file.
 
 ### 2. PR / changed-lines scan (fast feedback)
 
@@ -790,7 +796,22 @@ bundle exec evilution run lib/models/user.rb lib/models/account.rb lib/models/or
 
 Pass multiple file paths on a single invocation to amortise startup cost. The framework (Rails, Sorbet, etc.) and the `preload` chain (`spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`) load **once** in the parent process. When `--isolation=fork` is selected (the default `--isolation=auto` resolves to `fork` on Rails projects and packaged gems), every subsequent mutation across all files forks from that warmed parent — materially faster than scripting a `for f in ...; do bundle exec evilution run "$f"; done` loop, which pays the bootstrap per file. With `--isolation=in_process` (default for non-Rails, non-gem projects under `auto`), there is no per-mutation fork, but the parent-process boot still runs once instead of N times. Per-file paths and line numbers are preserved in the report (`survived[].file`, HTML grouping by source file).
 
+### What to read before acting on a score
+
+A score describes only the mutations that got a verdict. Four fields say what it leaves out, and each points at a different action:
+
+| Field | Meaning | What to do |
+|---|---|---|
+| `summary.unresolved_target_files` | A file you named resolved to no spec and was never tested; the run fails on this alone | Write a spec, pass `--spec`, or map it in `spec_mappings` — do not trust the score until this is empty |
+| `subjects[].reached == false` | Mutations were generated for that method but none got a verdict | The method is untested even where its file scores well; start here rather than with `survived[]` |
+| `neutral[].neutral_reason.kind == "baseline_failure"` | The spec file was already red before any mutation ran; `detail` names it | Fix that spec first — nothing about these mutations is measurable until it is green |
+| `neutral[].neutral_reason.kind == "infra_error"` | The test process crashed on infrastructure (DB lock, timeout); `detail` names the class | Not a coverage gap. Give parallel workers their own database, or run `-j 1` |
+
+`summary.infra_retried` reports how many mutations had to be re-run serially because of the last case; a large number means the parallel run was fighting shared infrastructure rather than measuring your suite.
+
 ### 6. Fixing surviving mutants
+
+Every entry in `survived[]` has already been re-run against the whole resolved spec file, so it is a gap the suite genuinely does not cover rather than an artefact of per-mutation example targeting.
 
 For each entry in `survived[]`:
 1. Read `file` at `line` to understand the code context
@@ -832,7 +853,7 @@ RUBYOPT="-Itest" bundle exec evilution mutate lib/<file>.rb \
   --spec test/<dir>/<file>_test.rb
 ```
 
-`-j 4` parallelises across workers, `-t 10` caps any mutation that pathologically loops at 10 s. Expect the run to print progress only when stderr is a TTY (use `bundle exec evilution mutate ... 2>&1 | tee log` to get progress while still saving output). The historical "Minitest fork hangs on liquid" report (EV-blnq / GH #1211) turned out to be a slow run + silent UX, not an actual deadlock — the worker logs show steady forward progress when captured via `--quiet-children --quiet-children-dir DIR`.
+`-j 4` parallelises across workers, `-t 10` caps any mutation that pathologically loops at 10 s. Expect the run to print progress only when stderr is a TTY (use `bundle exec evilution mutate ... 2>&1 | tee log` to get progress while still saving output). The historical "Minitest fork hangs on liquid" report (GH #1211) turned out to be a slow run + silent UX, not an actual deadlock — the worker logs show steady forward progress when captured via `--quiet-children --quiet-children-dir DIR`.
 
 ### 8. CI gate
 
@@ -841,7 +862,9 @@ bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
 # Exit code 0 = pass, 1 = fail, 2 = error
 ```
 
-Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only when you care about the exit code and do not need JSON output.
+Exit 1 covers two conditions: the score missed `--min-score`, and a target file that resolved to no spec. The second fails the run whether or not a score gate is set, so a CI step that names files explicitly cannot silently stop testing one of them.
+
+Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only when you care about the exit code and do not need JSON output. `--output FILE` is the alternative when a preloaded spec helper (SimpleCov, for example) writes to stdout on exit.
 
 ### 9. Regression tracking across runs (`compare`)
 
@@ -870,7 +893,7 @@ Use in CI to gate merges on `reintroduced` being empty, or to surface `new` surv
 
 ## Parallel Runs with SQLite
 
-Running with `-j N` forks worker processes. If your Rails app uses SQLite, every worker opens the same `db/test.sqlite3` file, and concurrent writers collide on the database-level lock. Symptoms: `ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, and slow runs. Evilution classifies these crashes as `:neutral` (see [EV-toid / #814](https://github.com/taxdome/evilution/issues/814)) so the mutation score is not polluted, but the wall-clock penalty remains.
+Running with `-j N` forks worker processes. If your Rails app uses SQLite, every worker opens the same `db/test.sqlite3` file, and concurrent writers collide on the database-level lock. Symptoms: `ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, and slow runs. Evilution classifies these crashes as `:neutral` (see [GH #814](https://github.com/marinazzio/evilution/issues/814)) so the mutation score is not polluted, but the wall-clock penalty remains.
 
 Because that contention only exists while several workers are running, those mutations are re-run one at a time once the pool is done, and the verdict from the quiet re-run is the one reported. Without it the neutral bucket moved with `-j` on identical input — the same files scoring 24 killed / 0 neutral at `-j 1` and 6 killed / 18 neutral at `-j 4` (GH #1607). The run says how much it had to redo:
 
