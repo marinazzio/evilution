@@ -63,8 +63,19 @@ RSpec.describe Evilution::Result::SubjectScorer do
       expect([score.reached?, score.score, score.total, score.verified]).to eq([false, 0.0, 18, 0])
     end
 
-    it "counts a timeout as a kill, as the run's score does" do
-      expect(scorer.call([result(:timeout, "Helper#call")]).first.score).to eq(0.0)
+    # A timeout is a verdict — the mutation was reached and the tests did not
+    # come back — but it is not a detection, so it counts towards the
+    # denominator without counting as a kill.
+    it "counts a timeout towards the denominator but not as a kill" do
+      score = scorer.call([result(:timeout, "Helper#call")]).first
+
+      expect([score.reached?, score.verified, score.killed, score.score]).to eq([true, 1, 0, 0.0])
+    end
+
+    it "scores a subject whose mutations were killed and timed out" do
+      results = [result(:killed, "Helper#call"), result(:timeout, "Helper#call")]
+
+      expect(scorer.call(results).first.score).to eq(0.5)
     end
 
     it "sorts by file and then by subject name" do
