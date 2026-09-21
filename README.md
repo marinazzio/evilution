@@ -104,6 +104,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `-t`, `--timeout N`          | Integer | 30           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
 | `--target EXPR`              | String  | _(none)_     | Only mutate matching methods. Supports method name (`Foo::Bar#calculate`), class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
+| `--output FILE`              | String  | _(stdout)_   | Write the report to FILE instead of stdout. Useful when a preloaded spec helper writes to stdout on exit. |
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to auto-detection via `SpecResolver`, which also resolves non-mirrored (`spec/unit`, `test/unit`), dir-grouped (`test/unit/<class>/*_test.rb`), and flat `test_`-prefixed (`test/test_connection_pool_timed_stack.rb`) layouts. |
 | `--spec-dir DIR`             | String  | _(none)_     | Include all `*_spec.rb` files in DIR recursively. Composable with `--spec`. |
@@ -180,6 +181,8 @@ $ evilution run lib/half_tested.rb --min-score 0.8
 Result: FAIL (score 66.67% < 80.00%)            # exit 1
 ```
 
+Evilution owns the exit status: `--preload` loads the project's own spec helper into the parent process, and an at-exit hook it installs (SimpleCov calls `exit` with its own status when coverage is below the minimum) would otherwise replace the status evilution computed (GH #1608).
+
 The printed verdict and the exit code always use the same threshold. Previously the line was printed against a hard-coded 80% that the exit code did not share, so a failing-looking run still exited 0 (GH #1604).
 
 ## Configuration
@@ -236,6 +239,7 @@ All keys recognised under `schema_version: 1`:
 | `timeout`                    | Integer                       | `30`                                   | Per-mutation timeout in seconds.                                                                                                         |
 | `format`                     | String                        | `text`                                 | Output format: `text`, `json`, `html`.                                                                                                   |
 | `target`                     | String / null                 | `null`                                 | Filter expression: method (`Foo#bar`), class (`Foo`), namespace (`Foo*`), descendants (`descendants:Foo`), source glob (`source:**/*.rb`). |
+| `output`                     | String                        | _(stdout)_                             | Write the report to this file instead of stdout.                                                                                         |
 | `min_score`                  | Float                         | `0.0`                                  | Minimum mutation score (0.0–1.0) for exit code 0.                                                                                        |
 | `integration`                | String                        | `rspec`                                | Test framework: `rspec`, `minitest`, or `test_unit`.                                                                                     |
 | `verbose`                    | Boolean                       | `false`                                | Verbose output (RSS/GC stats per phase, error details for errored mutations).                                                            |
@@ -374,6 +378,10 @@ Sessions saved by `--save-session` (under `.evilution/results/*.json`) and consu
 | `skipped_count`      | Integer | Mutations skipped by `# evilution:disable` (omitted from `summary` unless positive).              |
 
 Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent`, `unresolved`, `unparseable`, `timed_out`, `errors`) — only `survived` and `coverage_gaps` are persisted. The score, totals, and timestamps are stable for diff/compare consumers.
+
+#### stdout in JSON mode
+
+With `--format json`, stdout carries the JSON document and nothing else. Once the document is written, stdout is pointed at stderr, so anything a preloaded spec helper prints on the way out — SimpleCov's coverage report, for example — lands on stderr instead of after the document where it would leave `JSON.parse` with nothing to work with. `--output FILE` writes the document to a file and leaves stdout alone entirely.
 
 #### Schema versioning
 

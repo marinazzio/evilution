@@ -18,6 +18,7 @@ require_relative "cli/commands/session_diff"
 require_relative "cli/commands/session_gc"
 require_relative "cli/commands/compare"
 require_relative "cli/commands/run"
+require_relative "cli/exit_guard"
 
 # @api private
 class Evilution::CLI

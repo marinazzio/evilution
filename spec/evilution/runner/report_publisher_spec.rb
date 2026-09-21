@@ -41,6 +41,59 @@ RSpec.describe Evilution::Runner::ReportPublisher do
       expect(Evilution::Reporter::CLI).to have_received(:new).with(min_score: 0.9)
     end
 
+    # EV-g8ya / GH #1608: a preloaded spec helper's at_exit hook (SimpleCov's
+    # prints its report) would otherwise append text after the JSON document
+    # and leave stdout unparseable.
+    it "hands stdout over to stderr after writing the JSON document" do
+      cfg = config(format: :json)
+      reporter = instance_double(Evilution::Reporter::JSON, call: "{}")
+      allow(Evilution::Reporter::JSON).to receive(:new).and_return(reporter)
+      stdout = StringIO.new
+      allow(stdout).to receive(:reopen)
+
+      described_class.new(cfg).publish(summary, stdout: stdout)
+
+      expect(stdout).to have_received(:reopen).with($stderr)
+    end
+
+    it "leaves stdout alone for a text report" do
+      cfg = config(format: :text)
+      reporter = instance_double(Evilution::Reporter::CLI, call: "txt")
+      allow(Evilution::Reporter::CLI).to receive(:new).and_return(reporter)
+      stdout = StringIO.new
+      allow(stdout).to receive(:reopen)
+
+      described_class.new(cfg).publish(summary, stdout: stdout)
+
+      expect(stdout).not_to have_received(:reopen)
+    end
+
+    it "writes the report to the file named by --output" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "report.json")
+        cfg = config(format: :json, output: path)
+        reporter = instance_double(Evilution::Reporter::JSON, call: '{"score":1.0}')
+        allow(Evilution::Reporter::JSON).to receive(:new).and_return(reporter)
+
+        expect { described_class.new(cfg).publish(summary) }.not_to output.to_stdout
+        expect(File.read(path)).to eq('{"score":1.0}')
+      end
+    end
+
+    it "does not touch stdout when the report went to a file" do
+      Dir.mktmpdir do |dir|
+        cfg = config(format: :json, output: File.join(dir, "report.json"))
+        reporter = instance_double(Evilution::Reporter::JSON, call: "{}")
+        allow(Evilution::Reporter::JSON).to receive(:new).and_return(reporter)
+        stdout = StringIO.new
+        allow(stdout).to receive(:reopen)
+
+        described_class.new(cfg).publish(summary, stdout: stdout)
+
+        expect(stdout).not_to have_received(:reopen)
+      end
+    end
+
     it "writes HTML to a file when format is :html" do
       Dir.mktmpdir do |dir|
         Dir.chdir(dir) do

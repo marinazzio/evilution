@@ -3,4 +3,11 @@
 
 require "evilution"
 
-exit Evilution::CLI.new(ARGV).call
+# Installed before anything loads the project's spec helper, so this hook is the
+# last one standing and decides the process status — a helper's own at_exit hook
+# (SimpleCov calls exit with its own status) cannot replace it.
+# EV-g8ya / GH #1608.
+guard = Evilution::CLI::ExitGuard.new.install
+guard.status = Evilution::CLI.new(ARGV).call
+
+exit guard.status

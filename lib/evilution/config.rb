@@ -17,7 +17,7 @@ class Evilution::Config
     save_session: false, line_ranges: {}, spec_files: [], ignore_patterns: [],
     show_disabled: false, baseline_session: nil, skip_heredoc_literals: false,
     related_specs_heuristic: false, fallback_to_full_suite: false, preload: nil,
-    spec_mappings: {}, spec_pattern: nil, example_targeting: true,
+    output: nil, spec_mappings: {}, spec_pattern: nil, example_targeting: true,
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
@@ -25,7 +25,7 @@ class Evilution::Config
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
-              :target, :min_score, :integration, :verbose, :quiet,
+              :target, :min_score, :integration, :verbose, :quiet, :output,
               :jobs, :fail_fast, :baseline, :isolation, :incremental, :suggest_tests,
               :progress, :save_session, :line_ranges, :spec_files, :hooks,
               :ignore_patterns, :show_disabled, :baseline_session,
@@ -243,6 +243,7 @@ class Evilution::Config
     format: :to_sym.to_proc,
     target: nil,
     min_score: :to_f.to_proc,
+    output: nil,
     verbose: nil,
     quiet: nil,
     baseline: nil,

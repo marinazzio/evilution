@@ -11,20 +11,42 @@ class Evilution::Runner::ReportPublisher
     @config = config
   end
 
-  def publish(summary)
+  def publish(summary, stdout: $stdout)
     reporter = build_reporter
     return unless reporter
 
     output = reporter.call(summary)
     return if config.quiet
 
-    if config.html?
-      path = "evilution-report.html"
-      File.write(path, output)
-      warn "HTML report written to #{path}"
-    else
-      $stdout.puts(output)
-    end
+    deliver(output, stdout)
+  end
+
+  def deliver(output, stdout)
+    return publish_html(output) if config.html?
+    return File.write(config.output, output) if config.output
+
+    stdout.puts(output)
+    claim_stdout(stdout) if config.json?
+  end
+
+  # `--preload` brings the project's at_exit hooks into this process, and
+  # SimpleCov's prints its coverage report on the way out. Once the document is
+  # written, stdout is pointed at stderr so nothing can append to it and leave a
+  # consumer with unparseable JSON (EV-g8ya / GH #1608). Text reports are read
+  # by people, not parsers, so they keep the stream as it was.
+  def claim_stdout(stdout)
+    stdout.flush
+    stdout.reopen($stderr)
+  rescue TypeError
+    # A harness that captures output swaps $stdout for a StringIO, which cannot
+    # be reopened onto an IO. There is no file descriptor to protect there.
+    nil
+  end
+
+  def publish_html(output)
+    path = "evilution-report.html"
+    File.write(path, output)
+    warn "HTML report written to #{path}"
   end
 
   def save_session(summary)
