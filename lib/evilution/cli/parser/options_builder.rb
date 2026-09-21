@@ -55,6 +55,7 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_spec_filter_options(opts)
     opts.on("--min-score FLOAT", Float, "Minimum mutation score to pass") { |s| @options[:min_score] = s }
+    opts.on("--output FILE", "Write the report to FILE instead of stdout") { |f| @options[:output] = f }
     opts.on("--spec FILES", Array, "Spec files to run (comma-separated)") { |f| @options[:spec_files] = f }
     opts.on("--spec-dir DIR", "Include all specs in DIR") { |d| expand_spec_dir(d) }
     opts.on("--spec-pattern GLOB",
