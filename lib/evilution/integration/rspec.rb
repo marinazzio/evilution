@@ -70,6 +70,26 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     targets = @example_filter_applier.call(mutation, files)
     return @result_builder.unresolved_example(mutation) if targets.nil?
 
+    result = run_targets(targets)
+    return result unless confirm_survivor?(result, targets, files)
+
+    run_targets(files)
+  end
+
+  # Targeting runs a subset of the examples in a spec file, chosen by name. A
+  # mutation that subset does not catch looks like a survivor whether or not the
+  # rest of the file would have caught it, and a survivor nobody can reproduce
+  # is worse than a missed kill: it sends the reader to write a test that is
+  # already there (EV-f8h3 / GH #1624).
+  #
+  # So a survivor is re-run against the whole resolved file, and that run is the
+  # one reported. Only survivors pay for it, and only where the subset was
+  # actually narrower than the file.
+  def confirm_survivor?(result, targets, files)
+    result[:passed] && targets != files
+  end
+
+  def run_targets(targets)
     args = ["--format", "progress", "--no-color", "--order", "defined", *resolve_targets(targets)]
     command = "rspec #{args.join(" ")}"
 
