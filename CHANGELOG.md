@@ -2,6 +2,45 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.2.0] - 2026-09-21
+
+Reporting honesty release. A run now says what it did **not** measure instead of letting the headline score speak for the whole target set: files that resolved to no spec fail the run, subjects nothing reached are named, neutral results record why, and the printed verdict and the exit code finally share one threshold. The `default` profile also grows from 80 to 88 operators, so mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
+
+Most of this release comes from a field report on 1.1.0 ([discussion #1584](https://github.com/marinazzio/evilution/discussions/1584)): eight months of side-by-side runs against `mutant` on a private Rails application, filed as GH #1603–#1608.
+
+### Added
+
+- **Eight new mutation operators for method definitions (`default` profile: 80 -> 88)** — the operator set mutated method bodies only to `nil`, `self` or `super`, and never touched parameter lists (GH #1419):
+  - **`method_body_to_raise`** — whole body to a bare `raise`. Where body-to-nil asks whether the return value matters, this asks the prior question of whether the method is called at all on a path the suite asserts; a method whose result is discarded survives the nil mutation but not this one (PR #1609, GH #1447)
+  - **`method_body_to_super`** — whole body to a bare `super`, for plain overrides. `method_body_replacement` emits the same replacement only when the body *already* calls super, so the case worth probing was never reached. Emitted only where a super target exists: an explicit superclass, or `include`/`prepend` for instance methods and `extend` for singleton ones (PR #1610, GH #1448)
+  - **`typed_default_return`** — single-expression body to the empty value of the type its trailing call returns (`users.map(&:name)` -> `[]`, `users.count` -> `0`). A survivor means the suite asserts the shape of what comes back but never its content (PR #1611, GH #1449)
+  - **`block_parameter_drop`** — drops a block's single parameter: `users.each { |u| touch(u) }` -> `users.each { touch(u) }`. A survivor means the block never ran on an asserted path (PR #1612, GH #1453)
+  - **`optional_parameter_to_required`** — `def f(a = 1)` -> `def f(a)`. A survivor means no example calls the method without that argument, so the default is never exercised (PR #1613, GH #1450)
+  - **`optional_default_injection`** — overwrites an optional parameter with its own default at the top of the body. The mirror of the above: it asks whether any value *other* than the default is ever asserted (PR #1614, GH #1451)
+  - **`block_destructuring_expansion`** — `|(k, v), i|` -> `|k, v, i|`, emitted only where the group has a sibling parameter, since a lone group and a flat list bind identically for a single yielded array (PR #1615, GH #1452)
+  - **`forwarding_super_to_explicit`** — bare `super` to `super()`. Bare super forwards the current arguments, `super()` forwards none, so a survivor means the forwarded arguments never reach an assertion (PR #1616, GH #1454)
+- **Per-subject score breakdown** — the run's score is computed per file, which says nothing about a method inside it that no example reaches; a well-tested file that gains untested methods still reported 100%. Every report now scores each subject separately. The text report names the subjects the file-level score does not speak for, and JSON carries every subject under `subjects` with `killed`, `verified`, `score` and `reached` (PR #1621, GH #1605)
+- **Neutral results record why they are neutral** — `neutral` covered both "the spec was already red" and "the test process died on infrastructure", which want opposite responses. Each neutral now carries a reason; the text report groups by it and names the failing spec or the crash class, and JSON entries carry `neutral_reason` as `{ kind, detail }` (PR #1622, GH #1606)
+- **`--output FILE`** — writes the report to a file instead of stdout, for projects whose preloaded spec helper writes to stdout on exit (PR #1620, GH #1608)
+
+### Changed
+
+- **A target file that resolves to no spec now fails the run** — previously it contributed a handful of `unresolved` mutations and disappeared behind the other files' score: adding one well-tested file to the same command turned a 0% file into a `PASS`. Such files are now named, and the run exits non-zero whatever the score. `--fallback-full-suite` suppresses this, since nothing goes untested there. JSON carries `summary.unresolved_target_files` (PR #1617, GH #1603)
+- **The printed verdict and the exit code share one threshold** — `Result:` was rendered against a hard-coded 80% while the exit code used `min_score`, whose default is `0.0`, so a run could print `FAIL (score 0.00% < 80.00%)` and exit 0. The reporter now uses the run's own `min_score`, and with no gate configured it prints the score instead of a verdict: `Result: 66.67% (no minimum score set)`. Exit-code semantics are unchanged (PR #1618, GH #1604)
+- **The score line says how much of the run it covers** — `Score: 100.00% (10/10 verified of 17 mutations, 7 neutral)` whenever mutations were left out of the denominator. A run that measured everything still prints the plain pair (PR #1622, GH #1606)
+- **Evilution owns its exit status and, in JSON mode, stdout** — `--preload` loads the project's spec helper into the parent process, and an at-exit hook it installs (SimpleCov calls `exit` with its own status, and prints its coverage report) replaced evilution's exit code and appended text after the JSON document. The executable now installs a guard that has the final word on the status, and JSON mode points stdout at stderr once the document is written (PR #1620, GH #1608)
+
+### Fixed
+
+- **Survivors are confirmed against the whole spec file** — per-mutation targeting selects examples by matching the enclosing method's name against example bodies, which keys on incidental identifier text: on evilution's own code a local variable named `row` selected two examples and hid six kills, reporting survivors the suite actually covered. A survivor is now re-run against the whole resolved file before it is reported. Only survivors pay for it, and only where the subset was narrower than the file (PR #1629, GH #1624)
+- **Neutral counts no longer move with `--jobs`** — parallel workers contending on a shared database crash the test process, and those crashes are demoted to `:neutral` so they cannot inflate the kill count (GH #814). Since the contention exists only while the pool runs, the same workload scored 24 killed / 0 neutral at `-j 1` and 6 killed / 18 neutral at `-j 4`. Mutations neutralised that way are now re-run one at a time once the pool is done, and the run reports how many it had to redo. Such crashes are also never written to the `--incremental` cache, where a cached `:killed` would have hidden a real survivor on the next run (PR #1619, GH #1607)
+- **`--format json` is parseable under `in_process` isolation** — RSpec redirects its own output only when the stream its configuration holds is the current `$stdout`; in-process isolation swaps `$stdout` for a null IO, and `--preload` builds the configuration before that swap, so RSpec kept writing to the real stdout ahead of the document. The run now claims RSpec's streams outright (PR #1631, GH #1627)
+- **`method_body_replacement` no longer emits a bare `super` for a method that has no parent to call** — a `super` inside a *nested* def made the enclosing method eligible, producing a mutant that raises `NoMethodError` on contact: a kill that proves nothing (PR #1630, GH #1625)
+- **Canary failures name the underlying error** — the proof-of-life check reported that it failed without saying why (PR #1592)
+- **Advisory warnings bypass `Kernel#warn`** — a project whose `Warning` handler raises could turn an evilution advisory into a fatal error mid-run (PR #1590)
+- **`ConcernStateCleaner` handles ActiveSupport deprecation proxies** — sending messages to a module that intercepts them left concern state uncleared (PR #1587)
+- **Empty results from a child report exit status and signal** — a worker that died without producing a result said only "empty result from child" (PR #1585, GH #1580)
+
 ## [1.1.0] - 2026-08-23
 
 Control-flow and pattern-matching operator expansion: the `default` profile grows from 74 to 80 operators, and three existing operators gain mutations they were silently missing. Adding operators to `default` is a MINOR change under [docs/versioning.md](docs/versioning.md), and mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
