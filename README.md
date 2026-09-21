@@ -331,7 +331,8 @@ Schema:
       "duration": "float — seconds this mutation took, rounded to 4 decimals",
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
-      "suggestion": "string — actionable hint for surviving mutants (survived only)"
+      "suggestion": "string — actionable hint for surviving mutants (survived only)",
+      "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: spec file or error class }"
     }
   ],
   "subjects": [
@@ -417,7 +418,7 @@ Compatibility policy for the `1.x` gem line:
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
 | `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
 | `error`      | Mutation caused an unexpected error (syntax error, boot failure, etc.) | excluded from denominator |
-| `neutral`    | Baseline tests already failed before mutation, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation | excluded          |
+| `neutral`    | Baseline tests already failed before mutation, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
@@ -438,6 +439,23 @@ $ echo $?
 ```
 
 The check covers files evilution found something to mutate in; a file it produced no mutations for (a constants-only file, say) is not reported. `--fallback-full-suite` runs such a file against the whole suite instead, so nothing goes untested and nothing is reported. The file list is also in JSON output under `summary.unresolved_target_files`.
+
+### Neutral Mutations
+
+Neutral covers two unrelated situations that want opposite responses: a spec file that was already red before any mutation ran, and a test process that died on infrastructure rather than on the mutation. Each neutral records which, and the report groups by it, naming the spec or the error class (GH #1606):
+
+```
+Score: 100.00% (10/10 verified of 17 mutations, 7 neutral)
+
+Neutral mutations (7, not verified):
+  baseline already failing (spec/tally_spec.rb):
+    arithmetic_replacement: lib/tally.rb:9
+    integer_literal: lib/tally.rb:9
+```
+
+The score line names the remainder whenever the run left mutations out of the denominator, because full marks over a fraction of a run otherwise reads as a verdict on all of it. A clean run still prints the plain `Score: 100.00% (17/17)`.
+
+Those seven mutations were survivors until the spec file went red — a neutral of this kind is a hidden coverage gap, not a clean bill of health. JSON output carries `neutral_reason` on each neutral entry as `{ kind, detail }`.
 
 ### Per-Subject Scores
 

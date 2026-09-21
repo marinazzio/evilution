@@ -81,4 +81,20 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed 
     bl = baseline_failed(failed_files: ["spec"])
     expect(nz.call(r, baseline_result: bl).status).to eq(:neutral)
   end
+  describe "the reason it records" do
+    it "names the spec file that was already failing" do
+      result = neutralizer.call(survived(mutation), baseline_result: baseline_failed(failed_files: ["spec/foo_spec.rb"]))
+
+      expect(result.neutral_reason)
+        .to eq(Evilution::Result::NeutralReason.baseline_failure("spec/foo_spec.rb"))
+    end
+
+    # With an explicit --spec there is no per-file resolution to name.
+    it "records no spec when the run was given explicit spec files" do
+      neutral = neutralizer(spec_files: ["spec/a_spec.rb"])
+                .call(survived(mutation), baseline_result: baseline_failed)
+
+      expect(neutral.neutral_reason).to eq(Evilution::Result::NeutralReason.baseline_failure(nil))
+    end
+  end
 end

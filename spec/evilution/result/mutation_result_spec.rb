@@ -258,4 +258,18 @@ RSpec.describe Evilution::Result::MutationResult do
       end
     end
   end
+  describe "#neutral_reason" do
+    it "is nil by default" do
+      result = described_class.new(mutation: mutation, status: :killed)
+
+      expect(result.neutral_reason).to be_nil
+    end
+
+    it "carries the reason a neutral was recorded" do
+      reason = Evilution::Result::NeutralReason.baseline_failure("spec/a_spec.rb")
+      result = described_class.new(mutation: mutation, status: :neutral, neutral_reason: reason)
+
+      expect(result.neutral_reason).to eq(reason)
+    end
+  end
 end

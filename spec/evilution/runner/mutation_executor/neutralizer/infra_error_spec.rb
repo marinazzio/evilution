@@ -79,6 +79,12 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
     expect(neutralizer.call(r).status).to eq(:error)
   end
 
+  it "records the crash class as the reason" do
+    neutralised = neutralizer.call(result(status: :killed, error_class: "Timeout::Error"))
+
+    expect(neutralised.neutral_reason).to eq(Evilution::Result::NeutralReason.infra_error("Timeout::Error"))
+  end
+
   # A parallel run can re-run these once the contention is over, so they have
   # to be identifiable after the fact (EV-j0bv / GH #1607).
   describe ".infra_neutral?" do

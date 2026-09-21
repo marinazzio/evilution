@@ -21,6 +21,13 @@ class Evilution::Result::Summary
     freeze
   end
 
+  # Neutral results gathered by the reason they were recorded, which is what the
+  # report needs to say which kind of neutral a reader is looking at
+  # (EV-5pob / GH #1606).
+  def neutral_results_by_reason
+    neutral_results.group_by(&:neutral_reason).to_a
+  end
+
   # What each subject — each method — scored on its own. The run's score is
   # computed per file, which says nothing about a method inside it that no
   # example reaches (EV-nlx1 / GH #1605).

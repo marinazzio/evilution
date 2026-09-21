@@ -7,10 +7,10 @@ require_relative "memory_stats"
 class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
 
-  attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error
+  attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason
 
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
-                 test_command: nil, memory: nil, error: nil)
+                 test_command: nil, memory: nil, error: nil, neutral_reason: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -20,6 +20,7 @@ class Evilution::Result::MutationResult
     @test_command = test_command
     @memory = memory
     @error = error
+    @neutral_reason = neutral_reason
     freeze
   end
 

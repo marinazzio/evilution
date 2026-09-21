@@ -117,7 +117,17 @@ class Evilution::Reporter::JSON
     detail[:test_command] = result.test_command if result.test_command
     append_memory_fields(detail, result)
     append_error_fields(detail, result)
+    append_neutral_reason(detail, result)
     detail
+  end
+
+  # Why a neutral was recorded — a red baseline and an infrastructure crash want
+  # opposite responses, and both land in the same bucket (EV-5pob / GH #1606).
+  def append_neutral_reason(detail, result)
+    reason = result.neutral_reason
+    return unless reason
+
+    detail[:neutral_reason] = { kind: reason.kind.to_s, detail: reason.detail }
   end
 
   def base_mutation_fields(mutation, result)

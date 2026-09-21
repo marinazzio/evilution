@@ -47,6 +47,7 @@ require_relative "cli/line_formatters/result_line"
 require_relative "cli/line_formatters/feedback_footer"
 require_relative "cli/item_formatters/coverage_gap"
 require_relative "cli/item_formatters/result_location"
+require_relative "cli/item_formatters/neutral_group"
 require_relative "cli/item_formatters/subject_score"
 require_relative "cli/item_formatters/subject_score_group"
 require_relative "cli/item_formatters/error"
@@ -72,9 +73,12 @@ Evilution::Reporter::CLI.const_set(
       formatter: Evilution::Reporter::CLI::ItemFormatters::SubjectScoreGroup.new
     ),
     Evilution::Reporter::CLI::Section.new(
-      title: "Neutral mutations (test already failing):",
-      fetcher: lambda(&:neutral_results),
-      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+      title: lambda { |groups|
+        count = groups.sum { |(_reason, results)| results.length }
+        "Neutral mutations (#{count}, not verified):"
+      },
+      fetcher: lambda(&:neutral_results_by_reason),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::NeutralGroup.new
     ),
     Evilution::Reporter::CLI::Section.new(
       title: "Equivalent mutations (provably identical behavior):",
