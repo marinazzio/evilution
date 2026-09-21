@@ -2,6 +2,7 @@
 
 require_relative "../neutralizer"
 require_relative "../../../result/mutation_result"
+require_relative "../../../result/neutral_reason"
 
 # Reclassify results as :neutral when the failure was caused by test
 # infrastructure rather than by the mutation. Two independent paths:
@@ -77,7 +78,8 @@ class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
       duration: result.duration,
       test_command: result.test_command,
       memory: result.memory,
-      error: result.error
+      error: result.error,
+      neutral_reason: Evilution::Result::NeutralReason.infra_error(result.error_class)
     )
   end
 end

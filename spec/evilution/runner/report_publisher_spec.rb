@@ -188,6 +188,10 @@ RSpec.describe Evilution::Runner::ReportPublisher do
           []
         end
 
+        def neutral_results_by_reason
+          []
+        end
+
         def success?(min_score:)
           score >= min_score
         end

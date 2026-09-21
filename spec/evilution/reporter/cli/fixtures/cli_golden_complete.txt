@@ -2,7 +2,7 @@ Evilution vEVILUTION_VERSION — Mutation Testing Results
 ============================================
 
 Mutations: 16 total, 8 killed, 2 survived, 0 timed out, 1 neutral, 1 equivalent, 1 unresolved, 1 unparseable, 1 skipped
-Score: 80.00% (8/10)
+Score: 80.00% (8/10 verified of 16 mutations, 1 neutral)
 Duration: 2.50s
 Efficiency: 34.00% killtime, 4.00 mutations/s
 Peak memory: 120.5 MB
@@ -17,8 +17,9 @@ Survived mutations (2 coverage gaps):
     -x + 1
     +x - 1
 
-Neutral mutations (test already failing):
-  StatementDeletion: lib/n.rb:3
+Neutral mutations (1, not verified):
+  baseline already failing (spec/n_spec.rb):
+    StatementDeletion: lib/n.rb:3
 
 Equivalent mutations (provably identical behavior):
   ScalarReturn: lib/e.rb:5

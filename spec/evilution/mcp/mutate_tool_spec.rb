@@ -18,6 +18,7 @@ RSpec.describe Evilution::MCP::MutateTool do
   let(:killed_result) do
     instance_double(
       Evilution::Result::MutationResult,
+      neutral_reason: nil,
       mutation: mutation,
       status: :killed,
       duration: 0.123,
@@ -461,6 +462,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diff + error_backtrace from timed_out entries (EV-187j)" do
         timed_out_result = instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: mutation,
           status: :timeout,
           duration: 30.0,
@@ -523,6 +525,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diff + error_backtrace from errors entries (EV-187j)" do
         error_result = instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: mutation,
           status: :error,
           duration: 0.05,
@@ -587,6 +590,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diffs from neutral mutations" do
         neutral_result = instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: mutation,
           status: :neutral,
           duration: 0.1,
@@ -659,6 +663,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         survived_result = instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,
           duration: 0.1,
@@ -733,6 +738,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         let(:survived_result) do
           instance_double(
             Evilution::Result::MutationResult,
+            neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
             duration: 0.1,
@@ -885,6 +891,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         it "caches resolver lookups for survivors from the same file" do
           second_result = instance_double(
             Evilution::Result::MutationResult,
+            neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
             duration: 0.1,
@@ -996,6 +1003,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diffs from equivalent entries in full verbosity" do
         equivalent_result = instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: mutation,
           status: :equivalent,
           duration: 0.0,
@@ -1076,6 +1084,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       let(:survived_result) do
         instance_double(
           Evilution::Result::MutationResult,
+          neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,
           duration: 0.1,

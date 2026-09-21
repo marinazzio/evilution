@@ -13,7 +13,7 @@
 # rubocop:disable Metrics/ModuleLength
 module CliGoldenSummary
   Mutation = Struct.new(:operator_name, :file_path, :line, :unified_diff)
-  Result = Struct.new(:mutation, :error?, :error_message)
+  Result = Struct.new(:mutation, :error?, :error_message, :neutral_reason)
   # CoverageGap mirrors Evilution::Result::CoverageGap which exposes a `count`
   # method; the CLI calls it directly so we must shadow Struct#count here.
   # rubocop:disable Lint/StructNewOverride
@@ -45,6 +45,10 @@ module CliGoldenSummary
 
     def infra_retried
       0
+    end
+
+    def neutral_results_by_reason
+      neutral_results.group_by(&:neutral_reason).to_a
     end
 
     def subjects_needing_attention_by_file
@@ -134,8 +138,13 @@ module CliGoldenSummary
   end
 
   def neutral_results
-    [Result.new(Mutation.new("StatementDeletion", "lib/n.rb", 3, nil), false, nil)].freeze
+    [Result.new(Mutation.new("StatementDeletion", "lib/n.rb", 3, nil), false, nil, neutral_reason)].freeze
   end
+
+  def neutral_reason
+    Evilution::Result::NeutralReason.baseline_failure("spec/n_spec.rb")
+  end
+
 
   def equivalent_results
     [Result.new(Mutation.new("ScalarReturn", "lib/e.rb", 5, nil), false, nil)].freeze
