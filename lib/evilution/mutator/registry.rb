@@ -113,7 +113,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::EqualityToIdentity,
       Evilution::Mutator::Operator::LambdaBody,
       Evilution::Mutator::Operator::BeginUnwrap,
-      Evilution::Mutator::Operator::BlockParamRemoval
+      Evilution::Mutator::Operator::BlockParamRemoval,
+      Evilution::Mutator::Operator::CallToNil
     ].each { |op| registry.register(op) }
     registry
   end
