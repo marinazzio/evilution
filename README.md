@@ -514,7 +514,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `method_call_removal` | Remove method calls, keep receiver | `obj.foo(x)` -> `obj` |
 | `argument_removal` | Remove individual arguments | `foo(a, b)` -> `foo(b)` |
 | `argument_nil_substitution` | Replace arguments with `nil` | `foo(a, b)` -> `foo(nil, b)` |
-| `call_to_nil` | Replace a method call with `nil` (skips void statements, receivers of another call, and attribute writes) | `user.name` -> `nil` |
+| `call_to_nil` | Replace a method call with `nil` (skips void statements, receivers of another call, and attribute or index writes) | `user.name` -> `nil` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
