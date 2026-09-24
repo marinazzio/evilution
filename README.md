@@ -21,9 +21,15 @@ Add to `Gemfile`:
 gem "evilution", group: :test
 ```
 
-Then: `bundle install`
+Then:
+```shell
+bundle install
+```
 
-Or standalone: `gem install evilution`
+Or standalone:
+```shell
+gem install evilution
+```
 
 Requires `prism >= 1.5, < 2`. Older Rails apps (e.g. Rails 7.1 pins `prism 0.19`) must upgrade prism — the gemspec constraint forces bundler to resolve a compatible 1.x version. If your app pins `prism 2.x`, bundler will reject the install until evilution widens its upper bound.
 
