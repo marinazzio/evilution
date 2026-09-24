@@ -114,7 +114,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::LambdaBody,
       Evilution::Mutator::Operator::BeginUnwrap,
       Evilution::Mutator::Operator::BlockParamRemoval,
-      Evilution::Mutator::Operator::CallToNil
+      Evilution::Mutator::Operator::CallToNil,
+      Evilution::Mutator::Operator::SafeNavigationRemoval
     ].each { |op| registry.register(op) }
     registry
   end
