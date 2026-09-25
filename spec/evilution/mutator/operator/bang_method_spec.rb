@@ -102,6 +102,20 @@ RSpec.describe Evilution::Mutator::Operator::BangMethod do
       tmpfile&.unlink
     end
 
+    # Every standard-library method with an in-place bang twin (Ruby 4.0:
+    # String, Array, Hash, Set) beyond the original sample.
+    %i[
+      capitalize downcase upcase swapcase lstrip rstrip scrub tr tr_s
+      unicode_normalize delete_prefix delete_suffix succ next filter rotate
+      sort_by transform_keys transform_values
+    ].each do |name|
+      it "replaces #{name} with #{name}!" do
+        muts = mutations_for_source("class C\n  def m(x)\n    x.#{name}\n  end\nend", "m")
+
+        expect(muts.map { |m| m.mutated_slice.strip }).to eq(["x.#{name}!"])
+      end
+    end
+
     # Kills the `return super unless node.receiver` guard removal/change: a
     # call with no explicit receiver (a bare `foo!`) must NOT be mutated;
     # without the guard the operator would emit a spurious `foo` mutation.

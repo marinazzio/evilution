@@ -3,10 +3,16 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::BangMethod < Evilution::Mutator::Base
+  # Every standard-library method with an in-place bang twin (String, Array,
+  # Hash, Set as of Ruby 4.0), plus `update` / `save` for ActiveRecord.
   KNOWN_BANG_PAIRS = %i[
-    sort map collect select reject uniq compact flatten
-    shuffle reverse slice gsub sub strip chomp chop squeeze
-    delete encode merge update save
+    sort sort_by map collect select filter reject uniq compact flatten
+    shuffle reverse rotate slice
+    gsub sub tr tr_s strip lstrip rstrip chomp chop squeeze delete
+    delete_prefix delete_suffix capitalize downcase upcase swapcase
+    scrub encode unicode_normalize succ next
+    merge transform_keys transform_values
+    update save
   ].to_set.freeze
 
   def visit_call_node(node)
