@@ -113,7 +113,7 @@ RSpec.describe Evilution::Mutator::Operator::KeywordArgumentRemoval do
     end
 
     it "reports the mutation on the line of the dropped keyword" do
-      expect(mutations_for("multiline").map(&:line)).to contain_exactly(12, 13)
+      expect(mutations_for("multiline").map(&:line)).to contain_exactly(14, 15)
     end
 
     it "names the operator" do
