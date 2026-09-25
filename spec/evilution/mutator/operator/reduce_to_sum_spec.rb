@@ -112,6 +112,12 @@ RSpec.describe Evilution::Mutator::Operator::ReduceToSum do
       expect(mutations_from_source("def t(values, blk)\n  values.reduce(:+, &blk)\nend\n")).to be_empty
     end
 
+    # `:+` is then the initial value, not the operator, and both the original
+    # and `sum(:+)` raise NoMethodError — an unkillable mutant.
+    it "skips :+ passed both as an argument and as a block-pass" do
+      expect(mutations_from_source("def t(values)\n  values.reduce(:+, &:+)\nend\n")).to be_empty
+    end
+
     it "skips a splat argument" do
       expect(mutations_from_source("def t(values, args)\n  values.reduce(*args, :+)\nend\n")).to be_empty
     end

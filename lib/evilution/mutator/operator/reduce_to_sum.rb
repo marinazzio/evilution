@@ -42,7 +42,7 @@ class Evilution::Mutator::Operator::ReduceToSum < Evilution::Mutator::Base
     arguments = node.arguments ? node.arguments.arguments : []
 
     if plus_block_pass?(node.block)
-      arguments
+      arguments unless plus_symbol?(arguments.last)
     elsif node.block.nil? && plus_symbol?(arguments.last)
       arguments[...-1]
     end
