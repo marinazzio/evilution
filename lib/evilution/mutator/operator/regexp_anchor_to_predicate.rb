@@ -15,7 +15,9 @@ require_relative "../operator"
 # or MatchData — still differs from a boolean); `match?` would be an exact
 # equivalent and is skipped.
 #
-# Only a flag-free pattern of one anchor plus literal characters qualifies.
+# Only a flag-free pattern of one anchor plus literal characters qualifies,
+# and only on a call without a block: `match` yields its MatchData to one,
+# which the predicate would silently drop.
 class Evilution::Mutator::Operator::RegexpAnchorToPredicate < Evilution::Mutator::Base
   SELECTORS = %i[=~ match match?].freeze
   private_constant :SELECTORS
@@ -60,7 +62,7 @@ class Evilution::Mutator::Operator::RegexpAnchorToPredicate < Evilution::Mutator
 
   def rewrite(node)
     return unless node.arguments in Prism::ArgumentsNode[arguments: [argument]]
-    return if node.receiver.nil?
+    return if node.receiver.nil? || node.block
 
     regexp, operand = split_operands(node.receiver, argument)
     return if regexp.nil?

@@ -158,6 +158,14 @@ RSpec.describe Evilution::Mutator::Operator::RegexpAnchorToPredicate do
       expect(mutations_for("position_argument")).to be_empty
     end
 
+    it "skips match with a block, which the predicate would drop" do
+      expect(mutations_from_source("def t(line)\n  line.match(/^foo/) { |m| m[0] }\nend\n")).to be_empty
+    end
+
+    it "skips match with a block-pass, which the predicate would drop" do
+      expect(mutations_from_source("def t(line, blk)\n  line.match(/^foo/, &blk)\nend\n")).to be_empty
+    end
+
     it "skips an implicit receiver" do
       expect(mutations_for("implicit_receiver")).to be_empty
     end
