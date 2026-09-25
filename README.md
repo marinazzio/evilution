@@ -164,7 +164,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 96 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 97 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
@@ -487,7 +487,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (96 total)
+## Mutation Operators (97 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -528,6 +528,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `symbol_to_proc_replacement` | Apply the `send_mutation` and `collection_replacement` selector tables to a symbol block-pass (skips alias swaps) | `map(&:to_s)` -> `map(&:to_i)` |
 | `dynamic_dispatch_resolution` | Resolve `send` / `__send__` / `public_send` with a literal symbol into a direct call, only where visibility checks can differ | `obj.send(:m, a)` -> `obj.m(a)` |
 | `keyword_argument_removal` | Drop one `key: value` argument at a call site (keeps `**opts`; skips a lone keyword) | `f(a: 1, b: 2)` -> `f(b: 2)` |
+| `double_negation_removal` | Replace a double negation with its operand | `!!x` -> `x` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
@@ -960,7 +961,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 96 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 97 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
