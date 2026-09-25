@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class KeywordArgumentRemovalTarget
   def two_keywords
     build(name: "x", size: 2)
