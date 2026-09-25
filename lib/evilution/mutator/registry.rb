@@ -116,7 +116,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::BlockParamRemoval,
       Evilution::Mutator::Operator::CallToNil,
       Evilution::Mutator::Operator::SafeNavigationRemoval,
-      Evilution::Mutator::Operator::AttributeWriteToRead
+      Evilution::Mutator::Operator::AttributeWriteToRead,
+      Evilution::Mutator::Operator::ArgumentPropagation
     ].each { |op| registry.register(op) }
     registry
   end
