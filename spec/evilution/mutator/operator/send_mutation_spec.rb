@@ -160,14 +160,14 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
     it "replaces to_s with to_i" do
       muts = mutations_for("using_to_s")
 
-      expect(muts.length).to eq(1)
+      expect(muts.length).to eq(2)
       expect(muts.first.mutated_source).to include(".to_i")
     end
 
     it "replaces to_i with to_s" do
       muts = mutations_for("using_to_i")
 
-      expect(muts.length).to eq(1)
+      expect(muts.length).to eq(2)
       expect(muts.first.mutated_source).to include(".to_s")
     end
 
@@ -181,14 +181,14 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
     it "replaces to_a with to_h" do
       muts = mutations_for("using_to_a")
 
-      expect(muts.length).to eq(1)
+      expect(muts.length).to eq(2)
       expect(muts.first.mutated_source).to include(".to_h")
     end
 
     it "replaces to_h with to_a" do
       muts = mutations_for("using_to_h")
 
-      expect(muts.length).to eq(1)
+      expect(muts.length).to eq(2)
       expect(muts.first.mutated_source).to include(".to_a")
     end
 
@@ -252,6 +252,50 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
         a_string_including(".map { |x|"),
         a_string_including(".flat_map { |y|")
       )
+    end
+
+    def mutated_selectors(src)
+      tmpfile = Tempfile.new(["send_mutation", ".rb"])
+      tmpfile.write("def t(x)\n  #{src}\nend\n")
+      tmpfile.flush
+      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+      subjects.flat_map { |s| described_class.new.call(s) }.map { |m| m.mutated_slice.strip }
+    ensure
+      tmpfile.close
+      tmpfile.unlink
+    end
+
+    # String handling and coercion boundaries (EV-tsi4.26).
+    {
+      bytes: %w[chars], chars: %w[bytes],
+      start_with?: %w[end_with?], end_with?: %w[start_with?],
+      ceil: %w[floor], floor: %w[ceil],
+      transform_keys: %w[transform_values], transform_values: %w[transform_keys],
+      append: %w[prepend], prepend: %w[append],
+      reverse_merge: %w[merge],
+      to_s: %w[to_i to_str], to_i: %w[to_s to_int],
+      to_a: %w[to_h to_ary], to_h: %w[to_a to_hash]
+    }.each do |selector, replacements|
+      it "replaces #{selector} with #{replacements.join(" and ")}" do
+        expect(mutated_selectors("x.#{selector}")).to match_array(replacements.map { |r| "x.#{r}" })
+      end
+    end
+
+    it "replaces method with public_method when called with a method name" do
+      expect(mutated_selectors("x.method(:save)")).to eq(["x.public_method(:save)"])
+    end
+
+    # `request.method` is an HTTP-verb accessor, not Object#method.
+    it "leaves a zero-argument method call alone" do
+      expect(mutated_selectors("request.method")).to be_empty
+    end
+
+    it "leaves method with more than one argument alone" do
+      expect(mutated_selectors("x.method(:a, :b)")).to be_empty
+    end
+
+    it "keeps method out of the table symbol block-passes read, where it is always called without arguments" do
+      expect(described_class::REPLACEMENTS).not_to have_key(:method)
     end
 
     it "skips bare method calls without receiver" do
