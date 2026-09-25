@@ -119,7 +119,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::AttributeWriteToRead,
       Evilution::Mutator::Operator::ArgumentPropagation,
       Evilution::Mutator::Operator::ArgumentListRemoval,
-      Evilution::Mutator::Operator::SymbolToProcReplacement
+      Evilution::Mutator::Operator::SymbolToProcReplacement,
+      Evilution::Mutator::Operator::DynamicDispatchResolution
     ].each { |op| registry.register(op) }
     registry
   end
