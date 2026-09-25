@@ -3,14 +3,16 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::BangMethod < Evilution::Mutator::Base
-  # Every standard-library method with an in-place bang twin (String, Array,
-  # Hash, Set as of Ruby 4.0), plus `update` / `save` for ActiveRecord.
+  # Methods that have an in-place bang twin on at least one of String, Array,
+  # Hash or Set (the same set on every supported Ruby, 3.3+), plus `update` /
+  # `save` for ActiveRecord. String's `succ` / `next` are left out: those
+  # names are far more often called on Integer, which has no bang twin.
   KNOWN_BANG_PAIRS = %i[
     sort sort_by map collect select filter reject uniq compact flatten
     shuffle reverse rotate slice
     gsub sub tr tr_s strip lstrip rstrip chomp chop squeeze delete
     delete_prefix delete_suffix capitalize downcase upcase swapcase
-    scrub encode unicode_normalize succ next
+    scrub encode unicode_normalize
     merge transform_keys transform_values
     update save
   ].to_set.freeze
