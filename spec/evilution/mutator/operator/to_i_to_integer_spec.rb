@@ -70,6 +70,12 @@ RSpec.describe Evilution::Mutator::Operator::ToIToInteger do
       expect(mutations_for("float_literal")).to be_empty
     end
 
+    it "skips rational and imaginary literal receivers, where both agree" do
+      muts = mutations_from_source("def t\n  [1r.to_i, 1i.to_i]\nend\n")
+
+      expect(muts).to be_empty
+    end
+
     it "skips a receiverless call" do
       expect(mutations_for("receiverless")).to be_empty
     end

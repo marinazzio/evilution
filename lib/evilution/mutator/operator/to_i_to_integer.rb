@@ -13,7 +13,7 @@ require_relative "../operator"
 #
 # Numeric literal receivers are skipped: both conversions agree on them.
 class Evilution::Mutator::Operator::ToIToInteger < Evilution::Mutator::Base
-  NUMERIC_LITERALS = [Prism::IntegerNode, Prism::FloatNode, Prism::RationalNode].freeze
+  NUMERIC_LITERALS = [Prism::IntegerNode, Prism::FloatNode, Prism::RationalNode, Prism::ImaginaryNode].freeze
   private_constant :NUMERIC_LITERALS
 
   def visit_call_node(node)
