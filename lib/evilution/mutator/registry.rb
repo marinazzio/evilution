@@ -123,7 +123,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::DynamicDispatchResolution,
       Evilution::Mutator::Operator::KeywordArgumentRemoval,
       Evilution::Mutator::Operator::DoubleNegationRemoval,
-      Evilution::Mutator::Operator::RegexpAnchorToPredicate
+      Evilution::Mutator::Operator::RegexpAnchorToPredicate,
+      Evilution::Mutator::Operator::ReduceToSum
     ].each { |op| registry.register(op) }
     registry
   end
