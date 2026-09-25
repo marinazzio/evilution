@@ -124,7 +124,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::KeywordArgumentRemoval,
       Evilution::Mutator::Operator::DoubleNegationRemoval,
       Evilution::Mutator::Operator::RegexpAnchorToPredicate,
-      Evilution::Mutator::Operator::ReduceToSum
+      Evilution::Mutator::Operator::ReduceToSum,
+      Evilution::Mutator::Operator::ArrayCoercionToLiteral
     ].each { |op| registry.register(op) }
     registry
   end
