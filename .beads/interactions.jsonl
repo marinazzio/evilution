@@ -512,3 +512,4 @@
 {"id":"int-dbccf56c","kind":"field_change","created_at":"2026-09-26T06:52:37.666559599Z","actor":"Denis Kiselev","issue_id":"EV-tsi4.17","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-3ace0c73","kind":"field_change","created_at":"2026-09-26T07:07:52.345696388Z","actor":"Denis Kiselev","issue_id":"EV-tsi4.18","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-df7a3ad8","kind":"field_change","created_at":"2026-09-26T07:19:58.301755963Z","actor":"Denis Kiselev","issue_id":"EV-tsi4.24","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-ec1508f5","kind":"field_change","created_at":"2026-09-26T07:41:16.328539681Z","actor":"Denis Kiselev","issue_id":"EV-tsi4.19","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
