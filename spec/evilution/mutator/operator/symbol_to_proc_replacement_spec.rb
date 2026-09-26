@@ -35,7 +35,8 @@ RSpec.describe Evilution::Mutator::Operator::SymbolToProcReplacement do
 
   describe "#call" do
     it "swaps a selector from the send-mutation table" do
-      expect(mutated_lines(mutations_for("stringify"))).to eq(["items.map(&:to_i)"])
+      expect(mutated_lines(mutations_for("stringify")))
+        .to contain_exactly("items.map(&:to_i)", "items.map(&:to_str)")
     end
 
     it "swaps a selector from the collection-replacement table" do
@@ -61,7 +62,9 @@ RSpec.describe Evilution::Mutator::Operator::SymbolToProcReplacement do
     it "descends into a block-pass expression that holds another block-pass" do
       muts = mutations_from_source("def each_str(lists)\n  lists.each(&->(xs) { xs.map(&:to_s) })\nend\n")
 
-      expect(mutated_lines(muts)).to eq(["lists.each(&->(xs) { xs.map(&:to_i) })"])
+      expect(mutated_lines(muts)).to contain_exactly(
+        "lists.each(&->(xs) { xs.map(&:to_i) })", "lists.each(&->(xs) { xs.map(&:to_str) })"
+      )
     end
 
     it "swaps a quoted symbol inside its quotes" do
@@ -91,7 +94,7 @@ RSpec.describe Evilution::Mutator::Operator::SymbolToProcReplacement do
     end
 
     it "reports the mutation on the line of the block-pass" do
-      expect(mutations_for("stringify").map(&:line)).to eq([3])
+      expect(mutations_for("stringify").map(&:line)).to eq([3, 3])
     end
 
     it "names the operator" do
@@ -111,7 +114,7 @@ RSpec.describe Evilution::Mutator::Operator::SymbolToProcReplacement do
       muts = described_class.new.call(subject, filter: filter)
 
       expect(muts).to be_empty
-      expect(filter.skipped_count).to eq(1)
+      expect(filter.skipped_count).to eq(2)
     end
   end
 end

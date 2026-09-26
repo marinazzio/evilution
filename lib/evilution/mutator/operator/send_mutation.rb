@@ -25,22 +25,41 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     count: [:size],
     select: [:filter],
     filter: [:select],
-    to_s: [:to_i],
-    to_i: [:to_s],
+    to_s: %i[to_i to_str],
+    to_i: %i[to_s to_int],
     to_f: [:to_i],
-    to_a: [:to_h],
-    to_h: [:to_a],
+    to_a: %i[to_h to_ary],
+    to_h: %i[to_a to_hash],
     downcase: [:upcase],
     upcase: [:downcase],
     strip: %i[lstrip rstrip],
     lstrip: [:strip],
     rstrip: [:strip],
     chomp: [:chop],
-    chop: [:chomp]
+    chop: [:chomp],
+    bytes: [:chars],
+    chars: [:bytes],
+    start_with?: [:end_with?],
+    end_with?: [:start_with?],
+    ceil: [:floor],
+    floor: [:ceil],
+    transform_keys: [:transform_values],
+    transform_values: [:transform_keys],
+    append: [:prepend],
+    prepend: [:append],
+    reverse_merge: [:merge]
+  }.freeze
+
+  # Swapped only when called with exactly one argument. Kept out of
+  # REPLACEMENTS, which symbol_to_proc_replacement also reads: `&:method`
+  # always calls with none, and a zero-argument `method` is usually an
+  # accessor such as `request.method` (the HTTP verb), not Object#method.
+  ONE_ARGUMENT_REPLACEMENTS = {
+    method: [:public_method]
   }.freeze
 
   def visit_call_node(node)
-    replacements = REPLACEMENTS[node.name]
+    replacements = replacements_for(node)
     return super unless replacements
     return super unless node.receiver
 
@@ -57,5 +76,13 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     end
 
     super
+  end
+
+  private
+
+  def replacements_for(node)
+    REPLACEMENTS.fetch(node.name) do
+      ONE_ARGUMENT_REPLACEMENTS[node.name] if node.arguments && node.arguments.arguments.length == 1
+    end
   end
 end
