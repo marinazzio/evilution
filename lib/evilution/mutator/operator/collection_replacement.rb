@@ -47,7 +47,11 @@ class Evilution::Mutator::Operator::CollectionReplacement < Evilution::Mutator::
     at: %i[fetch key?],
     delete_if: [:reject],
     keep_if: [:select],
-    filter_map: [:map]
+    filter_map: [:map],
+    chunk: [:each],
+    chunk_while: [:each],
+    each_with_index: [:each],
+    slice_when: [:each]
   }.freeze
 
   def visit_call_node(node)
