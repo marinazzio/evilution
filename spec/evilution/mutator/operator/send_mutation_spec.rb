@@ -157,18 +157,16 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".select {")
     end
 
-    it "replaces to_s with to_i" do
+    it "replaces to_s with to_i and to_str" do
       muts = mutations_for("using_to_s")
 
-      expect(muts.length).to eq(2)
-      expect(muts.first.mutated_source).to include(".to_i")
+      expect(muts.map { |m| m.mutated_slice[/\.(to_\w+)/, 1] }).to contain_exactly("to_i", "to_str")
     end
 
-    it "replaces to_i with to_s" do
+    it "replaces to_i with to_s and to_int" do
       muts = mutations_for("using_to_i")
 
-      expect(muts.length).to eq(2)
-      expect(muts.first.mutated_source).to include(".to_s")
+      expect(muts.map { |m| m.mutated_slice[/\.(to_\w+)/, 1] }).to contain_exactly("to_s", "to_int")
     end
 
     it "replaces to_f with to_i" do
@@ -178,18 +176,16 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       expect(muts.first.mutated_source).to include(".to_i")
     end
 
-    it "replaces to_a with to_h" do
+    it "replaces to_a with to_h and to_ary" do
       muts = mutations_for("using_to_a")
 
-      expect(muts.length).to eq(2)
-      expect(muts.first.mutated_source).to include(".to_h")
+      expect(muts.map { |m| m.mutated_slice[/\.(to_\w+)/, 1] }).to contain_exactly("to_h", "to_ary")
     end
 
-    it "replaces to_h with to_a" do
+    it "replaces to_h with to_a and to_hash" do
       muts = mutations_for("using_to_h")
 
-      expect(muts.length).to eq(2)
-      expect(muts.first.mutated_source).to include(".to_a")
+      expect(muts.map { |m| m.mutated_slice[/\.(to_\w+)/, 1] }).to contain_exactly("to_a", "to_hash")
     end
 
     it "replaces downcase with upcase" do
