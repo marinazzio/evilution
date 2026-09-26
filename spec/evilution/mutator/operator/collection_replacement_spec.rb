@@ -83,29 +83,25 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
     it "replaces find with detect" do
       muts = mutations_for("find_item")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.detect")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.detect"))
     end
 
     it "replaces detect with find" do
       muts = mutations_for("detect_item")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.find")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.find"))
     end
 
     it "replaces any? with all?" do
       muts = mutations_for("check_any")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.all?")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.all?"))
     end
 
     it "replaces all? with any?" do
       muts = mutations_for("check_all")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.any?")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.any?"))
     end
 
     it "replaces count with length" do
@@ -209,15 +205,13 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
     it "replaces min with max" do
       muts = mutations_for("min_item")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.max")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.max"))
     end
 
     it "replaces max with min" do
       muts = mutations_for("max_item")
 
-      expect(muts.length).to eq(1)
-      expect(muts.first.mutated_source).to include("items.min")
+      expect(muts.map(&:mutated_source)).to include(a_string_including("items.min"))
     end
 
     it "replaces min_by with max_by" do
@@ -317,6 +311,39 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
 
       muts = described_class.new.call(subj)
       expect(muts).to be_empty
+    end
+
+    def replaced_selectors(src)
+      Tempfile.create(["collection_replacement", ".rb"]) do |tmpfile|
+        tmpfile.write("def t(x)\n  #{src}\nend\n")
+        tmpfile.flush
+        subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+        subjects.flat_map { |s| described_class.new.call(s) }.map { |m| m.mutated_slice[/x\.(\w+[?!]?)/, 1] }
+      end
+    end
+
+    # Selection and lookup pairs (EV-tsi4.25), with the full replacement set
+    # per selector so emission order does not matter.
+    {
+      "any?" => %w[all? empty? none?],
+      "all?" => %w[any? none?],
+      "find" => %w[detect first last],
+      "detect" => %w[find first last],
+      "max" => %w[min first last],
+      "min" => %w[max first last],
+      "sample" => %w[first last],
+      "max_by" => %w[min_by first last],
+      "min_by" => %w[max_by first last],
+      "fetch" => %w[key?],
+      "at" => %w[fetch key?],
+      "delete_if" => %w[reject],
+      "keep_if" => %w[select],
+      "filter_map" => %w[map],
+      "sort_by" => %w[sort]
+    }.each do |selector, replacements|
+      it "replaces #{selector} with #{replacements.join(", ")}" do
+        expect(replaced_selectors("x.#{selector}")).to match_array(replacements)
+      end
     end
 
     it "still visits a replaceable call nested inside a non-replaceable call" do
