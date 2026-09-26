@@ -132,7 +132,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ProcToLambda,
       Evilution::Mutator::Operator::DigToFetchChain,
       Evilution::Mutator::Operator::InequalityToNegatedIdentity,
-      Evilution::Mutator::Operator::BinaryOperandPromotion
+      Evilution::Mutator::Operator::BinaryOperandPromotion,
+      Evilution::Mutator::Operator::ReceiverConstructorSwap
     ].each { |op| registry.register(op) }
     registry
   end
