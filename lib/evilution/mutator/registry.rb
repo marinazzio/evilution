@@ -131,7 +131,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ConstGetToConstantPath,
       Evilution::Mutator::Operator::ProcToLambda,
       Evilution::Mutator::Operator::DigToFetchChain,
-      Evilution::Mutator::Operator::InequalityToNegatedIdentity
+      Evilution::Mutator::Operator::InequalityToNegatedIdentity,
+      Evilution::Mutator::Operator::BinaryOperandPromotion
     ].each { |op| registry.register(op) }
     registry
   end
