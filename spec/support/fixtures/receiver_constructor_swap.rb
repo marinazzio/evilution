@@ -23,7 +23,7 @@ class ReceiverConstructorSwapTarget
     klass.parse(value)
   end
 
-  def other_selector(value)
-    Date.today(value)
+  def other_selector
+    Date.today
   end
 end
