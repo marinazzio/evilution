@@ -128,7 +128,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ArrayCoercionToLiteral,
       Evilution::Mutator::Operator::ToIToInteger,
       Evilution::Mutator::Operator::CoercionEmptying,
-      Evilution::Mutator::Operator::ConstGetToConstantPath
+      Evilution::Mutator::Operator::ConstGetToConstantPath,
+      Evilution::Mutator::Operator::ProcToLambda
     ].each { |op| registry.register(op) }
     registry
   end
