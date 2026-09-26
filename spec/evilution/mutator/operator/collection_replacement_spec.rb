@@ -322,7 +322,8 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       end
     end
 
-    # Selection and lookup pairs (EV-tsi4.25), with the full replacement set
+    # Selection and lookup pairs (EV-tsi4.25) and argument-free traversals
+    # to each (EV-tsi4.24), with the full replacement set
     # per selector so emission order does not matter.
     {
       "any?" => %w[all? empty? none?],
@@ -339,10 +340,22 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
       "delete_if" => %w[reject],
       "keep_if" => %w[select],
       "filter_map" => %w[map],
-      "sort_by" => %w[sort]
+      "sort_by" => %w[sort],
+      "chunk" => %w[each],
+      "chunk_while" => %w[each],
+      "each_with_index" => %w[each],
+      "slice_when" => %w[each]
     }.each do |selector, replacements|
       it "replaces #{selector} with #{replacements.join(", ")}" do
         expect(replaced_selectors("x.#{selector}")).to match_array(replacements)
+      end
+    end
+
+    # `each` takes no arguments: `each(2) { }` would only ever raise
+    # ArgumentError, killed by mere execution.
+    %w[each_slice(2) each_cons(2) each_with_object([]) slice_before(1) slice_after(1)].each do |call|
+      it "leaves the argument-taking traversal #{call} alone" do
+        expect(replaced_selectors("x.#{call}")).to be_empty
       end
     end
 
