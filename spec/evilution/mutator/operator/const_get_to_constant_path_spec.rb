@@ -47,6 +47,12 @@ RSpec.describe Evilution::Mutator::Operator::ConstGetToConstantPath do
       expect(mutated_lines(mutations_for("with_inherit"))).to eq(["Registry::Handler"])
     end
 
+    it "drops a nil inherit flag, which const_get treats as false" do
+      muts = mutations_from_source("def t\n  Registry.const_get(:Handler, nil)\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["Registry::Handler"])
+    end
+
     it "rewrites on a variable receiver" do
       expect(mutated_lines(mutations_for("variable_receiver"))).to eq(["klass::Config"])
     end

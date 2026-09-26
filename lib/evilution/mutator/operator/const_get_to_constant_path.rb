@@ -6,7 +6,7 @@ require_relative "../operator"
 # `Registry.const_get(:Handler)` becomes `Registry::Handler`. A literal
 # inherit flag is dropped; a receiverless call resolves against `self`.
 #
-# The two find the same own, inherited and mixed-in constants and raise the
+# Both forms find the same own, inherited and mixed-in constants and raise the
 # same NameError for a missing one. They differ on top-level constants (found
 # by `const_get` through Object, rejected by `::`), on private constants
 # (returned by `const_get` only) and with `inherit = false` (ancestors skipped
@@ -18,7 +18,8 @@ class Evilution::Mutator::Operator::ConstGetToConstantPath < Evilution::Mutator:
   CONSTANT_NAME = /\A[A-Z]\w*\z/
   private_constant :CONSTANT_NAME
 
-  INHERIT_FLAGS = [Prism::TrueNode, Prism::FalseNode].freeze
+  # `nil` behaves like `false`.
+  INHERIT_FLAGS = [Prism::TrueNode, Prism::FalseNode, Prism::NilNode].freeze
   private_constant :INHERIT_FLAGS
 
   def visit_call_node(node)
