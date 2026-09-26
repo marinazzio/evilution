@@ -126,7 +126,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RegexpAnchorToPredicate,
       Evilution::Mutator::Operator::ReduceToSum,
       Evilution::Mutator::Operator::ArrayCoercionToLiteral,
-      Evilution::Mutator::Operator::ToIToInteger
+      Evilution::Mutator::Operator::ToIToInteger,
+      Evilution::Mutator::Operator::CoercionEmptying
     ].each { |op| registry.register(op) }
     registry
   end
