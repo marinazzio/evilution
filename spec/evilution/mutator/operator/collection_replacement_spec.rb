@@ -314,14 +314,12 @@ RSpec.describe Evilution::Mutator::Operator::CollectionReplacement do
     end
 
     def replaced_selectors(src)
-      tmpfile = Tempfile.new(["collection_replacement", ".rb"])
-      tmpfile.write("def t(x)\n  #{src}\nend\n")
-      tmpfile.flush
-      subjects = Evilution::AST::Parser.new.call(tmpfile.path)
-      subjects.flat_map { |s| described_class.new.call(s) }.map { |m| m.mutated_slice[/x\.(\w+[?!]?)/, 1] }
-    ensure
-      tmpfile.close
-      tmpfile.unlink
+      Tempfile.create(["collection_replacement", ".rb"]) do |tmpfile|
+        tmpfile.write("def t(x)\n  #{src}\nend\n")
+        tmpfile.flush
+        subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+        subjects.flat_map { |s| described_class.new.call(s) }.map { |m| m.mutated_slice[/x\.(\w+[?!]?)/, 1] }
+      end
     end
 
     # Selection and lookup pairs (EV-tsi4.25), with the full replacement set
