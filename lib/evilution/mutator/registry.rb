@@ -135,7 +135,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::BinaryOperandPromotion,
       Evilution::Mutator::Operator::ReceiverConstructorSwap,
       Evilution::Mutator::Operator::BlockBodyToNil,
-      Evilution::Mutator::Operator::BlockBodyToRaise
+      Evilution::Mutator::Operator::BlockBodyToRaise,
+      Evilution::Mutator::Operator::BlockBodyPromotion
     ].each { |op| registry.register(op) }
     registry
   end
