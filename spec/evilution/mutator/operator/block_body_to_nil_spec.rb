@@ -59,6 +59,25 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyToNil do
       expect(mutated_lines(mutations_for("bounded_cycle"))).to eq(["items.cycle(2) { |item| nil }"])
     end
 
+    # Numbered and `it` parameters get the same block-level mutation (EV-27v9.5).
+    it "replaces the body of a numbered-parameter block" do
+      muts = mutations_from_source("def t(items)\n  items.map { _1.name }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["items.map { nil }"])
+    end
+
+    it "replaces the body of a multi-numbered-parameter block" do
+      muts = mutations_from_source("def t(pairs)\n  pairs.map { _1 + _2 }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["pairs.map { nil }"])
+    end
+
+    it "replaces the body of an it-parameter block" do
+      muts = mutations_from_source("def t(items)\n  items.map { it.name }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["items.map { nil }"])
+    end
+
     it "mutates nested blocks independently" do
       muts = mutations_from_source("def t(rows)\n  rows.map { |r| r.map { |c| c * 2 } }\nend\n")
 
