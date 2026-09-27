@@ -261,7 +261,8 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       tmpfile.unlink
     end
 
-    # String handling and coercion boundaries (EV-tsi4.26).
+    # String handling and coercion boundaries (EV-tsi4.26), predicate and
+    # numeric pairs (EV-tsi4.23).
     {
       bytes: %w[chars], chars: %w[bytes],
       start_with?: %w[end_with?], end_with?: %w[start_with?],
@@ -270,7 +271,11 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       append: %w[prepend], prepend: %w[append],
       reverse_merge: %w[merge],
       to_s: %w[to_i to_str], to_i: %w[to_s to_int],
-      to_a: %w[to_h to_ary], to_h: %w[to_a to_hash]
+      to_a: %w[to_h to_ary], to_h: %w[to_a to_hash],
+      even?: %w[odd?], odd?: %w[even?], zero?: %w[nonzero?],
+      negative?: %w[positive?], positive?: %w[negative?],
+      pred: %w[succ], succ: %w[pred],
+      is_a?: %w[instance_of?], kind_of?: %w[instance_of?]
     }.each do |selector, replacements|
       it "replaces #{selector} with #{replacements.join(" and ")}" do
         expect(mutated_selectors("x.#{selector}")).to match_array(replacements.map { |r| "x.#{r}" })

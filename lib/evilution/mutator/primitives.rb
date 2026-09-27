@@ -59,7 +59,8 @@ module Evilution::Mutator::Primitives
   PRIMARY_OPERANDS = [
     Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode,
     Prism::GlobalVariableReadNode, Prism::ConstantReadNode, Prism::ConstantPathNode, Prism::SelfNode,
-    Prism::ParenthesesNode, Prism::StringNode, Prism::IntegerNode, Prism::FloatNode, Prism::ArrayNode
+    Prism::ParenthesesNode, Prism::StringNode, Prism::IntegerNode, Prism::FloatNode, Prism::ArrayNode,
+    Prism::RegularExpressionNode
   ].freeze
   private_constant :PRIMARY_OPERANDS
 

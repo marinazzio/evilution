@@ -94,6 +94,23 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
       expect(mutated_lines_for("a < b + c")).to include("a.eql?(b + c)")
     end
 
+    # `match?` returns a boolean and leaves $~ / $1 unset (EV-tsi4.23).
+    it "rewrites =~ to a match? call" do
+      expect(mutated_lines_for("a =~ b")).to eq(["a.match?(b)"])
+    end
+
+    it "keeps a regexp literal receiver unwrapped for match?" do
+      expect(mutated_lines_for("/x/ =~ a")).to eq(["/x/.match?(a)"])
+    end
+
+    it "parenthesizes a compound receiver for match?" do
+      expect(mutated_lines_for("a + b =~ c")).to include("(a + b).match?(c)")
+    end
+
+    it "does not rewrite === to is_a?" do
+      expect(mutated_lines_for("a === b")).to be_empty
+    end
+
     it "skips eql? / equal? for an explicit call with extra arguments" do
       expect(mutated_lines_for("a.<(b, c)").grep(/eql\?|equal\?/)).to be_empty
     end

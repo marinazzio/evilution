@@ -47,7 +47,16 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     transform_values: [:transform_keys],
     append: [:prepend],
     prepend: [:append],
-    reverse_merge: [:merge]
+    reverse_merge: [:merge],
+    even?: [:odd?],
+    odd?: [:even?],
+    zero?: [:nonzero?],
+    negative?: [:positive?],
+    positive?: [:negative?],
+    pred: [:succ],
+    succ: [:pred],
+    is_a?: [:instance_of?],
+    kind_of?: [:instance_of?]
   }.freeze
 
   # Swapped only when called with exactly one argument. Kept out of
