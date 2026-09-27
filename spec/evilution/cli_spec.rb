@@ -890,15 +890,15 @@ RSpec.describe Evilution::CLI do
     end
 
     it "returns exit code 0" do
-      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/example.rb", spec_pattern: nil).and_return("spec/example_spec.rb")
 
       cli = described_class.new(%w[tests list lib/example.rb])
       capture_stdout { expect(cli.call).to eq(0) }
     end
 
     it "lists spec files with source mapping" do
-      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
-      allow(resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+      allow(resolver).to receive(:call).with("lib/example.rb", spec_pattern: nil).and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/user.rb", spec_pattern: nil).and_return("spec/user_spec.rb")
 
       cli = described_class.new(%w[tests list lib/example.rb lib/user.rb])
       output = capture_stdout { cli.call }
@@ -910,8 +910,8 @@ RSpec.describe Evilution::CLI do
     end
 
     it "shows unresolved source files" do
-      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
-      allow(resolver).to receive(:call).with("lib/orphan.rb").and_return(nil)
+      allow(resolver).to receive(:call).with("lib/example.rb", spec_pattern: nil).and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/orphan.rb", spec_pattern: nil).and_return(nil)
 
       cli = described_class.new(%w[tests list lib/example.rb lib/orphan.rb])
       output = capture_stdout { cli.call }
@@ -922,8 +922,8 @@ RSpec.describe Evilution::CLI do
     end
 
     it "shows summary with counts" do
-      allow(resolver).to receive(:call).with("lib/example.rb").and_return("spec/example_spec.rb")
-      allow(resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+      allow(resolver).to receive(:call).with("lib/example.rb", spec_pattern: nil).and_return("spec/example_spec.rb")
+      allow(resolver).to receive(:call).with("lib/user.rb", spec_pattern: nil).and_return("spec/user_spec.rb")
 
       cli = described_class.new(%w[tests list lib/example.rb lib/user.rb])
       output = capture_stdout { cli.call }
@@ -932,8 +932,8 @@ RSpec.describe Evilution::CLI do
     end
 
     it "deduplicates spec files" do
-      allow(resolver).to receive(:call).with("lib/foo/bar.rb").and_return("spec/foo_spec.rb")
-      allow(resolver).to receive(:call).with("lib/foo/baz.rb").and_return("spec/foo_spec.rb")
+      allow(resolver).to receive(:call).with("lib/foo/bar.rb", spec_pattern: nil).and_return("spec/foo_spec.rb")
+      allow(resolver).to receive(:call).with("lib/foo/baz.rb", spec_pattern: nil).and_return("spec/foo_spec.rb")
 
       cli = described_class.new(%w[tests list lib/foo/bar.rb lib/foo/baz.rb])
       output = capture_stdout { cli.call }

@@ -24,16 +24,17 @@ class Evilution::CLI::Printers::TestsList
     io.puts(@specs.length == 1 ? "1 spec file" : "#{@specs.length} spec files")
   end
 
+  # Each entry is `{ source:, specs: [...] }`; a source can resolve to several
+  # spec files (spec_mappings), and each gets its own line.
   def render_resolved(io)
     unique_specs = []
     @entries.each do |entry|
       source = entry[:source]
-      spec = entry[:spec]
-      if spec
+      specs = entry[:specs]
+      io.puts("  #{source}  (no spec found)") if specs.empty?
+      specs.each do |spec|
         unique_specs << spec
         io.puts("  #{spec}  (#{source})")
-      else
-        io.puts("  #{source}  (no spec found)")
       end
     end
 
