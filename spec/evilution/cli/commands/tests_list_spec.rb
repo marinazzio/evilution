@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "stringio"
+require "tmpdir"
 require "evilution/cli/commands/tests_list"
 require "evilution/cli/parsed_args"
 
