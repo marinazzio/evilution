@@ -542,7 +542,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `receiver_constructor_swap` | Swap `Date` / `DateTime` / `Time.parse` for a stricter sibling constructor on the same receiver | `Date.parse(s)` -> `Date.iso8601(s)`, `Date.strptime(s)`, ... |
 | `block_body_to_nil` | Replace a block body with `nil`, keeping the iteration (skips `loop` and endless `cycle` / `cycle(nil)`, which would hang) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| nil }` |
 | `block_body_to_raise` | Replace a block body with `raise` to prove the block is invoked (skips bodies with a `rescue` clause, which would swallow it) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| raise }` |
-| `block_body_promotion` | Replace a call with its parameter-less block body, run once (skips blocks with parameters or a `rescue` / `ensure` clause) | `Base.transaction { save! }` -> `save!`, `3.times { retry }` -> `retry` |
+| `block_body_promotion` | Replace a call with its parameter-less block body, run once (skips blocks with parameters or a `rescue` / `ensure` clause) | `Base.transaction { save! }` -> `save!`, `3.times { poll }` -> `poll` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |

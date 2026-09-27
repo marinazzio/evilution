@@ -12,18 +12,28 @@ require_relative "../operator"
 # rollback no test triggers, a lock nothing contends for, an iteration count
 # nothing checks.
 #
-# Blocks with parameters (including `_1` / `it`) are skipped — the unwrapped
-# body would reference a variable that no longer exists. So are bodies with
-# a rescue / ensure clause, and bodies using `break` / `next` / `redo`, which
-# do not parse outside a block and are dropped by the parse guard.
+# Blocks with parameters (including `_1` / `it` and block-locals) are
+# skipped — the unwrapped body would reference a variable that no longer
+# exists; explicitly empty pipes `{ || ... }` count as parameter-less. So are
+# bodies with a rescue / ensure clause, and bodies using `break` / `next` /
+# `redo`, which do not parse outside a block and are dropped by the parse
+# guard.
 class Evilution::Mutator::Operator::BlockBodyPromotion < Evilution::Mutator::Base
   def visit_call_node(node)
     block = node.block
-    unwrap(node, block.body) if block.is_a?(Prism::BlockNode) && block.parameters.nil?
+    unwrap(node, block.body) if block.is_a?(Prism::BlockNode) && parameterless?(block.parameters)
     super
   end
 
   private
+
+  # No parameters at all, or explicitly empty pipes `{ || ... }`. Block-local
+  # variables (`{ |;tmp| ... }`) count as parameters: unwrapping would turn
+  # them into method locals.
+  def parameterless?(parameters)
+    parameters.nil? ||
+      (parameters.is_a?(Prism::BlockParametersNode) && parameters.parameters.nil? && parameters.locals.empty?)
+  end
 
   def unwrap(node, body)
     return unless body.is_a?(Prism::StatementsNode)

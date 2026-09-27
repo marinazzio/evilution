@@ -69,6 +69,16 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyPromotion do
       expect(muts.map(&:parse_status).uniq).to eq([:ok])
     end
 
+    it "unwraps a block with explicitly empty pipes" do
+      muts = mutations_from_source("def t\n  wrap { || work }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["work"])
+    end
+
+    it "skips a block declaring block-local variables" do
+      expect(mutations_from_source("def t\n  wrap { |;tmp| tmp = work }\nend\n")).to be_empty
+    end
+
     it "skips a block with parameters" do
       expect(mutations_for("with_parameters")).to be_empty
     end
