@@ -540,7 +540,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `inequality_to_negated_identity` | Rewrite `!=` with the stricter `eql?` / `equal?` (skips nil, boolean and symbol literals) | `a != b` -> `!a.eql?(b)`, `!a.equal?(b)` |
 | `binary_operand_promotion` | Replace an arithmetic or bitwise expression with one of its operands (skips integer identities and void statements) | `a + b` -> `a`, `b` |
 | `receiver_constructor_swap` | Swap `Date` / `DateTime` / `Time.parse` for a stricter sibling constructor on the same receiver | `Date.parse(s)` -> `Date.iso8601(s)`, `Date.strptime(s)`, ... |
-| `block_body_to_nil` | Replace a block body with `nil`, keeping the iteration (skips `loop` and count-less `cycle`, which would hang) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| nil }` |
+| `block_body_to_nil` | Replace a block body with `nil`, keeping the iteration (skips `loop` and endless `cycle` / `cycle(nil)`, which would hang) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| nil }` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |

@@ -81,6 +81,22 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyToNil do
       expect(mutations_from_source("def t(q)\n  Kernel.loop { q.pop }\nend\n")).to be_empty
     end
 
+    it "skips ::Kernel.loop" do
+      expect(mutations_from_source("def t(q)\n  ::Kernel.loop { q.pop }\nend\n")).to be_empty
+    end
+
+    it "still mutates loop on another top-level constant" do
+      muts = mutations_from_source("def t\n  ::Worker.loop { step }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["::Worker.loop { nil }"])
+    end
+
+    it "still mutates loop on a namespaced Kernel constant" do
+      muts = mutations_from_source("def t\n  Acme::Kernel.loop { step }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["Acme::Kernel.loop { nil }"])
+    end
+
     it "still mutates loop called on another receiver" do
       muts = mutations_from_source("def t(runner)\n  runner.loop { step }\nend\n")
 
@@ -101,6 +117,10 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyToNil do
 
     it "skips cycle without a count, whose nil body would never terminate" do
       expect(mutations_for("endless_cycle")).to be_empty
+    end
+
+    it "skips cycle(nil), which Ruby treats as endless" do
+      expect(mutations_from_source("def t(xs)\n  xs.cycle(nil) { |x| process(x) }\nend\n")).to be_empty
     end
 
     it "skips a block-pass" do
