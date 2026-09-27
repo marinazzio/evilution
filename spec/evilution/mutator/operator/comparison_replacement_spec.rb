@@ -17,11 +17,11 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
   end
 
   describe "#call" do
-    it "replaces >= with >, ==, and <=" do
+    it "replaces >= with >, ==, <=, eql? and equal?" do
       muts = mutations_for("adult?")
       replacements = muts.map(&:mutated_source)
 
-      expect(muts.length).to eq(3)
+      expect(muts.length).to eq(5)
       expect(replacements).to include(
         a_string_including("> 18"),
         a_string_including("== 18"),
@@ -29,10 +29,10 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
       )
     end
 
-    it "replaces > with >=, ==, and < and replaces < with <=, ==, and >" do
+    it "replaces > and < with their ordering neighbours, ==, eql? and equal?" do
       muts = mutations_for("teenager?")
 
-      expect(muts.length).to eq(6)
+      expect(muts.length).to eq(10)
     end
 
     it "replaces == with !=" do
@@ -49,16 +49,53 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
       expect(muts.first.mutated_source).to include("==")
     end
 
-    it "replaces <= with <, ==, and >=" do
+    it "replaces <= with <, ==, >=, eql? and equal?" do
       muts = mutations_for("at_most?")
 
-      expect(muts.length).to eq(3)
+      expect(muts.length).to eq(5)
       replacements = muts.map(&:mutated_source)
       expect(replacements).to include(
         a_string_including("< limit"),
         a_string_including("== limit"),
         a_string_including(">= limit")
       )
+    end
+
+    def mutated_lines_for(body)
+      Tempfile.create(["comparison", ".rb"]) do |tmpfile|
+        tmpfile.write("def t(a, b, c)\n  #{body}\nend\n")
+        tmpfile.flush
+        subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+        subjects.flat_map { |s| described_class.new.call(s) }.map { |m| m.mutated_slice.strip }
+      end
+    end
+
+    # Ordering comparisons also collapse to the stricter equalities (EV-tsi4.22).
+    %w[< <= > >=].each do |operator|
+      it "rewrites #{operator} to eql? and equal? calls" do
+        expect(mutated_lines_for("a #{operator} b")).to include("a.eql?(b)", "a.equal?(b)")
+      end
+    end
+
+    it "does not rewrite == or != to eql? / equal?" do
+      expect(mutated_lines_for("a == b")).to eq(["a != b"])
+      expect(mutated_lines_for("a != b")).to eq(["a == b"])
+    end
+
+    it "parenthesizes a compound receiver for eql? / equal?" do
+      expect(mutated_lines_for("a + b < c")).to include("(a + b).eql?(c)", "(a + b).equal?(c)")
+    end
+
+    it "keeps a method-call receiver unwrapped" do
+      expect(mutated_lines_for("a.size < b")).to include("a.size.eql?(b)")
+    end
+
+    it "keeps a compound argument inside the call parentheses" do
+      expect(mutated_lines_for("a < b + c")).to include("a.eql?(b + c)")
+    end
+
+    it "skips eql? / equal? for an explicit call with extra arguments" do
+      expect(mutated_lines_for("a.<(b, c)").grep(/eql\?|equal\?/)).to be_empty
     end
 
     it "produces valid Ruby for all mutations" do
@@ -106,7 +143,7 @@ RSpec.describe Evilution::Mutator::Operator::ComparisonReplacement do
     it "mutates comparisons nested inside a non-comparison call's arguments" do
       muts = mutations_for_source("class C\n  def m(a, b)\n    puts(a > b)\n  end\nend", "m")
 
-      expect(muts.length).to eq(3)
+      expect(muts.length).to eq(5)
       expect(muts.map(&:mutated_source)).to include(a_string_including("puts(a >= b)"))
     end
 

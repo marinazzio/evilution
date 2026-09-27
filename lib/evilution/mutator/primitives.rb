@@ -49,4 +49,28 @@ module Evilution::Mutator::Primitives
     location = child.location
     byteslice_source(location.start_offset, location.length)
   end
+
+  # `operand`'s source, parenthesized unless it is a primary expression — so
+  # it can take a method call: `a + b` becomes `(a + b)` in `(a + b).eql?(c)`.
+  def receiver_source(operand)
+    primary_operand?(operand) ? source_of(operand) : "(#{source_of(operand)})"
+  end
+
+  PRIMARY_OPERANDS = [
+    Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode,
+    Prism::GlobalVariableReadNode, Prism::ConstantReadNode, Prism::ConstantPathNode, Prism::SelfNode,
+    Prism::ParenthesesNode, Prism::StringNode, Prism::IntegerNode, Prism::FloatNode, Prism::ArrayNode
+  ].freeze
+  private_constant :PRIMARY_OPERANDS
+
+  METHOD_NAME = /\A[[:alpha:]_]/
+  private_constant :METHOD_NAME
+
+  # A named method call or an index (`a.size`, `a[0]`) binds tighter than a
+  # following `.`; an operator send (`a + b`, `!a`, `-a`) does not.
+  def primary_operand?(operand)
+    return true if PRIMARY_OPERANDS.any? { |type| operand.is_a?(type) }
+
+    operand.is_a?(Prism::CallNode) && (operand.name.match?(METHOD_NAME) || operand.name == :[])
+  end
 end

@@ -19,17 +19,6 @@ class Evilution::Mutator::Operator::InequalityToNegatedIdentity < Evilution::Mut
   SINGLETON_LITERALS = [Prism::NilNode, Prism::TrueNode, Prism::FalseNode, Prism::SymbolNode].freeze
   private_constant :SINGLETON_LITERALS
 
-  # Operands that need no parentheses in front of `.eql?`.
-  PRIMARY_OPERANDS = [
-    Prism::LocalVariableReadNode, Prism::InstanceVariableReadNode, Prism::ClassVariableReadNode,
-    Prism::GlobalVariableReadNode, Prism::ConstantReadNode, Prism::ConstantPathNode, Prism::SelfNode,
-    Prism::ParenthesesNode, Prism::StringNode, Prism::IntegerNode, Prism::FloatNode, Prism::ArrayNode
-  ].freeze
-  private_constant :PRIMARY_OPERANDS
-
-  IDENTIFIER = /\A[[:alpha:]_]/
-  private_constant :IDENTIFIER
-
   def visit_call_node(node)
     rewrite(node) if node.name == :!=
     super
@@ -41,7 +30,7 @@ class Evilution::Mutator::Operator::InequalityToNegatedIdentity < Evilution::Mut
     return unless node.arguments in Prism::ArgumentsNode[arguments: [argument]]
     return if [node.receiver, argument].any? { |operand| singleton_literal?(operand) }
 
-    left = operand_source(node.receiver)
+    left = receiver_source(node.receiver)
     SELECTORS.each do |selector|
       add_mutation(offset: node.start_offset, length: node.location.length,
                    replacement: "!#{left}.#{selector}(#{source_of(argument)})", node: node)
@@ -50,15 +39,5 @@ class Evilution::Mutator::Operator::InequalityToNegatedIdentity < Evilution::Mut
 
   def singleton_literal?(operand)
     SINGLETON_LITERALS.any? { |type| operand.is_a?(type) }
-  end
-
-  def operand_source(operand)
-    primary?(operand) ? source_of(operand) : "(#{source_of(operand)})"
-  end
-
-  def primary?(operand)
-    return true if PRIMARY_OPERANDS.any? { |type| operand.is_a?(type) }
-
-    operand.is_a?(Prism::CallNode) && (operand.name.match?(IDENTIFIER) || operand.name == :[])
   end
 end
