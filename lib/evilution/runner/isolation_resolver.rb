@@ -148,7 +148,7 @@ class Evilution::Runner::IsolationResolver
 
   def prepare_test_preload_load_path(preload_path)
     base = detected_rails_root || Evilution.project_base_dir
-    Evilution::Integration::Loading::TestLoadPath.add!([preload_path], base: base)
+    Evilution::Integration::Loading::TestLoadPath.add!([preload_path], base: base, outside_root_dirs: false)
   end
 
   def resolve_spec_dir

@@ -36,17 +36,39 @@ RSpec.describe Evilution::Integration::Loading::TestLoadPath do
       end
     end
 
-    it "does not add the directory of a file outside every test root (e.g. a config/ preload)" do
+    it "keeps the directory of a test file outside the conventional roots (e.g. a tests/ layout)" do
+      Dir.mktmpdir do |base|
+        make_tree(base)
+        FileUtils.mkdir_p(File.join(base, "tests"))
+        FileUtils.touch(File.join(base, "tests", "parser_test.rb"))
+
+        dirs = described_class.dirs_for(["tests/parser_test.rb"], base)
+
+        expect(dirs).to include(File.join(base, "tests"))
+      end
+    end
+
+    it "does not add the directory of a file outside every test root when outside_root_dirs is false" do
       Dir.mktmpdir do |base|
         make_tree(base)
         FileUtils.mkdir_p(File.join(base, "config"))
         FileUtils.touch(File.join(base, "config", "evilution_preload.rb"))
         FileUtils.touch(File.join(base, "config", "puma.rb"))
 
-        dirs = described_class.dirs_for(["config/evilution_preload.rb"], base)
+        dirs = described_class.dirs_for(["config/evilution_preload.rb"], base, outside_root_dirs: false)
 
         expect(dirs).not_to include(File.join(base, "config"))
         expect(dirs).to include(File.join(base, "test"))
+      end
+    end
+
+    it "still adds a file's directory under a test root when outside_root_dirs is false" do
+      Dir.mktmpdir do |base|
+        make_tree(base)
+
+        dirs = described_class.dirs_for(["test/unit/transition/transition_test.rb"], base, outside_root_dirs: false)
+
+        expect(dirs).to include(File.join(base, "test", "unit", "transition"), File.join(base, "test"))
       end
     end
 

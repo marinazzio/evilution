@@ -248,6 +248,36 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       end
     end
 
+    # GH #1597: a preload in config/ must not put config/ ahead of the gems,
+    # or `require "puma"` resolves to the app's config/puma.rb.
+    it "keeps a minitest preload's own directory off $LOAD_PATH when it lies outside the test roots" do
+      Dir.mktmpdir do |dir|
+        FileUtils.mkdir_p(File.join(dir, "test"))
+        FileUtils.mkdir_p(File.join(dir, "config"))
+        File.write(File.join(dir, "test", "test_helper.rb"), "# helper\n")
+        File.write(File.join(dir, "config", "puma.rb"), "raise 'config/puma.rb shadowed a gem'\n")
+        File.write(File.join(dir, "config", "evilution_preload.rb"), %(require "test_helper"\n))
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+        original_load_path = $LOAD_PATH.dup
+        original_features = $LOADED_FEATURES.dup
+
+        begin
+          Dir.chdir(dir) do
+            resolver = described_class.new(
+              config(preload: "config/evilution_preload.rb", integration: :minitest, isolation: :fork),
+              target_files: -> { [] }, hooks: nil
+            )
+            expect { resolver.perform_preload }.not_to raise_error
+            expect($LOAD_PATH).not_to include(File.expand_path("config"))
+            expect($LOAD_PATH).to include(File.expand_path("test"))
+          end
+        ensure
+          $LOAD_PATH.replace(original_load_path)
+          $LOADED_FEATURES.replace(original_features)
+        end
+      end
+    end
+
     it "puts the test root on $LOAD_PATH for a minitest project before requiring the preload file" do
       Dir.mktmpdir do |dir|
         test_dir = File.join(dir, "test")
