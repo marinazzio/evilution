@@ -63,14 +63,14 @@ class Evilution::Runner::IsolationResolver
 
   attr_reader :config, :hooks
 
-  # Runs only after a preload -- that is what loads Rails -- so it only ever
-  # happens in the long-lived parent the forks inherit from.
+  # Runs only after a preload (which is what loads Rails). This is primarily an
+  # optimisation for :fork isolation, where children inherit the warmed state.
   def warm_up_rails
     return unless config.warmup == :rails
 
     application = ::Rails.application if defined?(::Rails) && ::Rails.respond_to?(:application)
     unless application
-      Evilution::Diagnostic.warn("[evilution] warmup: rails requested but Rails is not loaded after preload; skipping")
+      Evilution::Diagnostic.warn("[evilution] warmup: rails requested but Rails is not loaded (or has no application) after preload; skipping")
       return
     end
 
