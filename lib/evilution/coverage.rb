@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../evilution"
+require_relative "version"
 
 # Per-example line-coverage support: build a `source file:line -> [examples]`
 # map so mutation targeting can run exactly the examples that execute a line.

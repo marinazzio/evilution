@@ -2,7 +2,7 @@
 
 require "digest"
 require "prism"
-require_relative "../evilution"
+require_relative "version"
 
 # Content-hash-keyed LRU of Prism::ParseResult. Different source bytes always
 # yield a different key, so the cache is valid for the lifetime of the process.

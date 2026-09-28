@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../pattern"
 require_relative "matcher"
 
 class Evilution::AST::Pattern::Parser

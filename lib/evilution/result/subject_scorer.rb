@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../result"
 require_relative "subject_score"
 
 # Groups mutation results by the subject they belong to and scores each one.

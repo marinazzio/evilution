@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "optparse"
+require_relative "../parser"
 require_relative "../../version"
 require_relative "file_args"
 

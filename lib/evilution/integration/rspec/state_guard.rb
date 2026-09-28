@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "../rspec"
+
+# Declared before the children are required: each child requires this file
+# and nests under StateGuard, while DEFAULT_STRATEGIES below needs the
+# children loaded, so the namespace must exist first.
+class Evilution::Integration::RSpec::StateGuard; end # rubocop:disable Lint/EmptyClass
+
 require_relative "state_guard/object_space_example_groups"
 require_relative "state_guard/world_example_groups"
 require_relative "state_guard/world_sources_by_path"

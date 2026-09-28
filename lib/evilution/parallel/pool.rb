@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../parallel"
 require_relative "work_queue"
 
 class Evilution::Parallel::Pool

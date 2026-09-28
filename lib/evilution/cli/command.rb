@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../cli"
 require_relative "result"
 
 class Evilution::CLI::Command

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../cli"
+
 # Gives evilution the final word on the process exit status.
 #
 # `--preload` loads the project's own spec helper into the parent process, and

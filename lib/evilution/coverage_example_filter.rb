@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../evilution"
+require_relative "version"
 require_relative "coverage/map"
 
 # Per-mutation example targeting backed by a real line-coverage Map (EV-ndjd).

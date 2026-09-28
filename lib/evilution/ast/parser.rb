@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require_relative "../ast"
 
 module Evilution::AST
   class Parser

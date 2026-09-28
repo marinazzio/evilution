@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../parser"
 require_relative "file_args"
 
 class Evilution::CLI::Parser::StdinReader

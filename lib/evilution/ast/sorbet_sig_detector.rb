@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
+require_relative "../ast"
 
 class Evilution::AST::SorbetSigDetector
   def call(source)

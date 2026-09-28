@@ -21,3 +21,11 @@ Metrics/ClassLength:
 Metrics/MethodLength:
   Exclude:
     - "lib/evilution/runner.rb"
+
+# The empty forward declaration (`class Evilution::CLI; end`) that lets the
+# children nest under the namespace before the full definition counts as a
+# second top-level class. See "Require conventions" in docs/architecture.md.
+Style/OneClassPerFile:
+  Exclude:
+    - "lib/evilution/cli.rb"
+    - "lib/evilution/integration/rspec/state_guard.rb"

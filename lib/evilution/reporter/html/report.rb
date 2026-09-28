@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../html"
 require_relative "section"
 require_relative "stylesheet"
 require_relative "baseline_keys"

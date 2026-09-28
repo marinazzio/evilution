@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../pattern"
 require_relative "parser"
 
 class Evilution::AST::Pattern::Filter

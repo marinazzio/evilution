@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../cli"
+
 class Evilution::CLI
   ParsedArgs = Struct.new(
     :command, :options, :files, :line_ranges, :stdin_error, :parse_error,

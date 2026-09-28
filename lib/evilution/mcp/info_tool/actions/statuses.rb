@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../actions"
 require_relative "base"
 require_relative "../status_glossary"
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "prism"
-require_relative "../evilution"
+require_relative "version"
 
 class Evilution::SpecAstCache
   Block = Struct.new(:kind, :line, :end_line, :body_text)

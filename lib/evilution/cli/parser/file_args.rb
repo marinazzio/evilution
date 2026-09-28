@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../parser"
+
 module Evilution::CLI::Parser::FileArgs
   ParsedPaths = Data.define(:files, :ranges)
 

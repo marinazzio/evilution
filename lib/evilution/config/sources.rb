@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../config"
 require_relative "file_loader"
 require_relative "env_loader"
 

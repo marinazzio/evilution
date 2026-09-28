@@ -2,7 +2,7 @@
 
 require "erb"
 require "yaml"
-require_relative "../evilution"
+require_relative "version"
 
 # EV-kdns / GH #817: nudge users running parallel jobs against SQLite to adopt
 # the parallel_tests convention. WorkQueue sets TEST_ENV_NUMBER per worker, but

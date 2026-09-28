@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "../evilution"
+require_relative "version"
 
 # Evilution's own advisory messages -- "no matching spec found", and the like.
 #

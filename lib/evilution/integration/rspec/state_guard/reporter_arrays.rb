@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../state_guard"
 require_relative "../../rspec"
 require_relative "internals"
 

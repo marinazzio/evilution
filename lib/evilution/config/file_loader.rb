@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require_relative "../config"
 
 module Evilution::Config::FileLoader
   module_function

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../cli"
 require_relative "parsed_args"
 
 class Evilution::CLI::Parser

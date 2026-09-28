@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../state_guard"
 require_relative "../../rspec"
-
-class Evilution::Integration::RSpec::StateGuard; end unless defined?(Evilution::Integration::RSpec::StateGuard) # rubocop:disable Lint/EmptyClass
 
 module Evilution::Integration::RSpec::StateGuard::Internals
   module_function

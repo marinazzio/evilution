@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../validators"
 require_relative "base"
 
 class Evilution::Config::Validators::ExampleTargetingStrategy < Evilution::Config::Validators::Base

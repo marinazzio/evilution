@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../parser"
+
 class Evilution::CLI::Parser::CommandExtractor
   SIMPLE_COMMANDS = {
     "version" => :version,

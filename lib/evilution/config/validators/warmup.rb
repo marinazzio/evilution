@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../validators"
 require_relative "base"
 
 # `warmup: rails` warms Rails' lazily-initialised state in the parent after

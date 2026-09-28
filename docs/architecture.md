@@ -60,6 +60,40 @@ Everything lives under `lib/evilution/`.
 | `Session`, `Compare` | Persist runs to `.evilution/results/*.json`; diff two sessions. | `session/store.rb`, `compare.rb` |
 | `Coverage`, `Equivalent`, `Baseline`, `Cache`, `Hooks`, `MCP` | Coverage-based example targeting, equivalent-mutation detection, baseline capture, incremental cache, lifecycle hooks, MCP server. | respective dirs |
 
+## Require conventions
+
+Most directories under `lib/evilution/` have a parent file of the same name
+(`runner.rb` next to `runner/`) that declares the namespace. The rules:
+
+- **Every child requires its parent.** A file in `runner/` starts with
+  `require_relative "../runner"`, a file in `cli/commands/` with
+  `require_relative "../commands"`, and so on down the tree.
+- **A parent declares its namespace before requiring its children.** Usually
+  the class or module is defined first and children are required at the
+  bottom. Where the parent's own body needs its children loaded first (for
+  example a constant built from them), it opens with an empty declaration —
+  `class Evilution::CLI; end` — then requires the children, then defines the
+  rest. `cli.rb` and `integration/rspec/state_guard.rb` do this.
+- **Top-level files (`lib/evilution/*.rb`) are the exception.** Their parent is
+  `lib/evilution.rb`, the gem's entry point, which loads everything. A
+  top-level file that only needs the root module requires `version.rb`, which
+  defines `module Evilution` and nothing else. Only a file that genuinely needs
+  the whole gem requires `../evilution` — `runner.rb`, whose collaborators
+  reach every operator through `Mutator::Registry`.
+
+The parent require and the parent's own `require_relative` of its children
+form a cycle (`runner.rb` → `runner/canary.rb` → `runner.rb`). It is inert:
+Ruby does not load a file twice, so a re-entrant require of a file already
+being loaded returns immediately, and the namespace already exists because the
+parent declared it first. Reviews flagging it as a circular require can be
+answered with this section.
+
+Loading an arbitrary file on its own (`require "evilution/cli/command"` in a
+fresh process) is not a goal. The parent requires make most files work that
+way, but not all: a base class whose subclasses are required by the parent
+(`cli/command.rb`) cannot finish defining itself before those subclasses load.
+Load the gem through `require "evilution"`.
+
 ## Data flow, source → result
 
 Driven entirely by `Evilution::Runner#call` (`runner.rb:24`). Each step names the

@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "version"
+
+# Declared before the children are required: each child requires this file
+# and nests under Evilution::CLI, so the namespace must exist first.
+class Evilution::CLI; end # rubocop:disable Lint/EmptyClass
+
 require_relative "cli/parser"
 require_relative "cli/parsed_args"
 require_relative "cli/printers/subjects"
