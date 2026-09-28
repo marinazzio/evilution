@@ -254,7 +254,7 @@ RSpec.describe Evilution::Baseline do
       expect(result.failed_spec_files).to be_empty
     end
 
-    # GH #1598: a baseline killed by the timeout still counts as failing, but
+    # a baseline killed by the timeout still counts as failing, but
     # must say so instead of silently recording a failure.
     # Drives read_result directly with a child that never reports back: going
     # through fork_spec_runner would reopen the child's stderr, which clashes
@@ -262,7 +262,7 @@ RSpec.describe Evilution::Baseline do
     it "reports a baseline that timed out and treats it as failing" do
       slow_baseline = described_class.new(spec_resolver: spec_resolver, timeout: 0.2)
       read_io, write_io = IO.pipe
-      pid = Process.spawn("sleep", "5")
+      pid = Process.spawn(RbConfig.ruby, "-e", "sleep 5")
       passed = :unset
 
       begin
@@ -282,7 +282,7 @@ RSpec.describe Evilution::Baseline do
       held_write_end = nil
       allow(slow_baseline).to receive(:fork_spec_runner) do |_spec_file, _read_io, write_io|
         held_write_end = write_io.dup
-        Process.spawn("sleep", "5")
+        Process.spawn(RbConfig.ruby, "-e", "sleep 5")
       end
 
       expect { slow_baseline.run_spec_file("spec/user_spec.rb") }
