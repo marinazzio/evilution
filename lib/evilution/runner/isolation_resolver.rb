@@ -6,6 +6,7 @@ require_relative "../isolation/in_process"
 require_relative "../rails_detector"
 require_relative "../gem_detector"
 require_relative "../integration/loading/test_load_path"
+require_relative "../rails_warmup"
 
 class Evilution::Runner::IsolationResolver
   PRELOAD_CANDIDATES = [
@@ -48,6 +49,7 @@ class Evilution::Runner::IsolationResolver
     prepare_load_path_for_preload(path)
     prepare_integration_for_preload
     require File.expand_path(path)
+    warm_up_rails
   rescue Evilution::ConfigError
     raise
   rescue ScriptError, StandardError => e
@@ -60,6 +62,20 @@ class Evilution::Runner::IsolationResolver
   private
 
   attr_reader :config, :hooks
+
+  # Runs only after a preload -- that is what loads Rails -- so it only ever
+  # happens in the long-lived parent the forks inherit from.
+  def warm_up_rails
+    return unless config.warmup == :rails
+
+    application = ::Rails.application if defined?(::Rails) && ::Rails.respond_to?(:application)
+    unless application
+      Evilution::Diagnostic.warn("[evilution] warmup: rails requested but Rails is not loaded after preload; skipping")
+      return
+    end
+
+    Evilution::RailsWarmup.new(application).call
+  end
 
   # Under :fork, allow preloading — caller resolves whether a path exists (an
   # explicit --preload / preload: value, or an auto-detected rails_helper) and

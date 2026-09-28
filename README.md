@@ -135,6 +135,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. See [docs/isolation.md](docs/isolation.md). |
 | `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. For non-Rails gems: `spec/spec_helper.rb` → `test/test_helper.rb` → `test/helper.rb`, falling back to the gem entry `lib/<gem>.rb` (with a warning naming the searched paths). Pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
+| `--warmup NAME`              | String  | `none`       | After preload, warm lazily-initialised framework state once in the parent: `none` or `rails`. See [Warming up Rails before forking](#warming-up-rails-before-forking). |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
 | `--fallback-full-suite`      | Boolean | false        | When no matching spec/test resolves for a mutation, run the whole test suite instead of marking it `:unresolved` and skipping. |
@@ -208,6 +209,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
+# warmup: none            # rails: warm I18n, routes, assets and templates once after preload (fork isolation)
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
@@ -267,6 +269,7 @@ All keys recognised under `schema_version: 1`:
 | `related_specs_heuristic`    | Boolean                       | `false`                                | Append related request/integration/feature/system specs for `includes(...)` mutations.                                                   |
 | `fallback_to_full_suite`     | Boolean                       | `false`                                | When no matching spec resolves, run the entire suite instead of marking the mutation `:unresolved`.                                      |
 | `preload`                    | String / Boolean / null       | `null`                                 | File to preload in parent before forking. `false` to disable. `null` to auto-detect for Rails projects and packaged gems.                |
+| `warmup`                     | String                        | `none`                                 | `rails` warms lazily-initialised Rails state once after preload so forks do not each pay it. `none` / `false` to skip.                  |
 | `spec_mappings`              | Hash&lt;String, String/Array&gt; | `{}`                                | Custom mapping from source path to spec path(s).                                                                                         |
 | `spec_pattern`               | String / null                 | `null`                                 | Glob restricting resolved spec candidates.                                                                                               |
 | `example_targeting`          | Boolean                       | `true`                                 | Per-mutation example-level targeting.                                                                                                    |
@@ -919,6 +922,21 @@ Output buckets:
 | `flaky`         | Status flipped and back — unstable test |
 
 Use in CI to gate merges on `reintroduced` being empty, or to surface `new` survivors for reviewer attention without failing the build on `persistent` debt.
+
+## Warming up Rails before forking
+
+Under `isolation: fork` the parent preloads once and every mutation runs in a fresh fork, which inherits only what the parent had already initialised. Rails initialises a lot lazily on a process's first request: loading locale files, building route helpers, resolving asset paths, compiling templates. Without a warm-up, every forked mutation whose tests make a request pays that cold start again, often several hundred milliseconds each.
+
+`warmup: rails` (or `--warmup rails`) does that initialisation once in the parent, right after the preload:
+
+- `I18n.eager_load!`
+- the route set's `url_helpers` (and `eager_load!` for lazily drawn routes on Rails 8)
+- an asset path lookup through the controller helpers
+- template precompilation, only if the [`actionview_precompiler`](https://github.com/jhawthorn/actionview_precompiler) gem is installed
+
+Each step is skipped if its library is not loaded, and skipped with a one-line note if it raises, so an app that does not fit a step still runs normally.
+
+Do not warm up by sending a real request from your preload (`Rails.application.call(...)`). Controller callbacks change process-global state that every fork then inherits: `I18n.locale`, gem request stores such as PaperTrail's, a session row in the database. Tests that depend on that state then fail in every fork, and evilution reports their mutations as killed. The steps above make no request and leave that state untouched.
 
 ## Parallel Runs with SQLite
 

@@ -182,6 +182,11 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:profile]).to eq("strict")
   end
 
+  it "parses --warmup as a string" do
+    options, = parse(["--warmup", "rails"])
+    expect(options[:warmup]).to eq("rails")
+  end
+
   it "sets the OptionParser banner" do
     expect(described_class.build({}).help).to start_with("Usage: evilution [command] [options] [files...]")
   end

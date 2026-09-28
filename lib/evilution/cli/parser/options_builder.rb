@@ -119,6 +119,8 @@ class Evilution::CLI::Parser::OptionsBuilder
                               "(default: auto-detect spec/rails_helper.rb -> spec/spec_helper.rb -> " \
                               "test/test_helper.rb for Rails projects)") { |f| @options[:preload] = f }
     opts.on("--no-preload", "Disable parent-process preload even for Rails projects") { @options[:preload] = false }
+    opts.on("--warmup NAME", "After preload, warm lazily-initialised framework state once " \
+                             "in the parent: none, rails (default: none)") { |w| @options[:warmup] = w }
   end
 
   def add_output_options(opts)

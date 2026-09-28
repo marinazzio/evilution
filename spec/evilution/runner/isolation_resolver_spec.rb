@@ -248,7 +248,75 @@ RSpec.describe Evilution::Runner::IsolationResolver do
       end
     end
 
-    # GH #1597: a preload in config/ must not put config/ ahead of the gems,
+    # Warm up Rails' lazily-initialised state once in the parent, so
+    # every forked mutation does not pay the first-request cold start again.
+    describe "rails warmup" do
+      def restoring_load_path
+        original_load_path = $LOAD_PATH.dup
+        original_features = $LOADED_FEATURES.dup
+        yield
+      ensure
+        $LOAD_PATH.replace(original_load_path)
+        $LOADED_FEATURES.replace(original_features)
+      end
+
+      # An rspec project: the warmup does not depend on the framework, and
+      # rspec is already loaded here, whereas preloading minitest and then
+      # restoring $LOADED_FEATURES makes a later example load it a second time.
+      def preload_with(warmup:)
+        allow(Evilution::RailsDetector).to receive(:rails_root_for_any).and_return(nil)
+        Dir.mktmpdir do |dir|
+          FileUtils.mkdir_p(File.join(dir, "spec"))
+          File.write(File.join(dir, "spec", "spec_helper.rb"), "# helper\n")
+          restoring_load_path do
+            Dir.chdir(dir) do
+              described_class.new(
+                config(preload: "spec/spec_helper.rb", integration: :rspec, isolation: :fork, warmup: warmup),
+                target_files: -> { [] }, hooks: nil
+              ).perform_preload
+            end
+          end
+        end
+      end
+
+      let(:warmup) { instance_double(Evilution::RailsWarmup, call: nil) }
+      let(:application) { double("Rails.application") }
+
+      before { allow(Evilution::RailsWarmup).to receive(:new).and_return(warmup) }
+
+      it "warms up the loaded Rails application after the preload" do
+        stub_const("Rails", double("Rails", application: application))
+
+        preload_with(warmup: :rails)
+
+        expect(Evilution::RailsWarmup).to have_received(:new).with(application)
+        expect(warmup).to have_received(:call)
+      end
+
+      it "does nothing when warmup is not requested" do
+        stub_const("Rails", double("Rails", application: application))
+
+        preload_with(warmup: :none)
+
+        expect(Evilution::RailsWarmup).not_to have_received(:new)
+      end
+
+      it "notes and skips the warmup when Rails is not loaded" do
+        hide_const("Rails")
+
+        expect { preload_with(warmup: :rails) }.to output(/warmup: rails requested but Rails is not loaded/).to_stderr
+        expect(Evilution::RailsWarmup).not_to have_received(:new)
+      end
+
+      it "notes and skips the warmup when Rails has no application yet" do
+        stub_const("Rails", double("Rails", application: nil))
+
+        expect { preload_with(warmup: :rails) }.to output(/warmup: rails requested but Rails is not loaded/).to_stderr
+        expect(Evilution::RailsWarmup).not_to have_received(:new)
+      end
+    end
+
+    # a preload in config/ must not put config/ ahead of the gems,
     # or `require "puma"` resolves to the app's config/puma.rb.
     it "keeps a minitest preload's own directory off $LOAD_PATH when it lies outside the test roots" do
       Dir.mktmpdir do |dir|

@@ -21,7 +21,7 @@ class Evilution::Config
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default, canary: true
+    profile: :default, canary: true, warmup: :none
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -33,7 +33,7 @@ class Evilution::Config
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
-              :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary
+              :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -274,7 +274,7 @@ class Evilution::Config
 
   VALIDATED_ATTRS = %i[
     integration jobs fail_fast isolation ignore_patterns
-    hooks preload spec_mappings spec_pattern profile
+    hooks preload spec_mappings spec_pattern profile warmup
   ].freeze
   private_constant :VALIDATED_ATTRS
 
@@ -311,6 +311,7 @@ require_relative "config/validators/example_targeting_fallback"
 require_relative "config/validators/example_targeting_strategy"
 require_relative "config/validators/example_targeting_cache"
 require_relative "config/validators/profile"
+require_relative "config/validators/warmup"
 require_relative "config/builders"
 require_relative "config/builders/spec_resolver"
 require_relative "config/builders/spec_selector"
