@@ -70,7 +70,8 @@ class Evilution::Runner::IsolationResolver
 
     application = ::Rails.application if defined?(::Rails) && ::Rails.respond_to?(:application)
     unless application
-      Evilution::Diagnostic.warn("[evilution] warmup: rails requested but Rails is not loaded (or has no application) after preload; skipping")
+      warn_message = "[evilution] warmup: rails requested but Rails is not loaded (or has no application) after preload; skipping"
+      Evilution::Diagnostic.warn(warn_message)
       return
     end
 
