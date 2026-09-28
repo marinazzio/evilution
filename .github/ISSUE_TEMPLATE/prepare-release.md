@@ -8,6 +8,7 @@ assignees: marinazzio
 ---
 
 - [ ] Bump version for both Gemfile.lock and Gemfile.min_prism
+- [ ] Upgrade dependencies
 - [ ] Update CHANGELOG
 - [ ] Update agent and user manuals
 - [ ] Perform stability run on real world repositories
