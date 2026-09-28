@@ -13,7 +13,9 @@ require_relative "../loading"
 # Strategy: walk Prism tree, find CallNodes that sit directly under a class
 # or module body (not inside a def). Calls on a small allowlist of patterns
 # known to be idempotent (`include`, `attr_*`, visibility modifiers, etc.)
-# are preserved; everything else is replaced byte-for-byte with `nil`.
+# are preserved; everything else has its source range replaced with `()`.
+# The replacement is shorter than the call it replaces, so edits are applied
+# from the end of the source backwards to keep earlier offsets valid.
 class Evilution::Integration::Loading::BodyCallNeutralizer
   IDEMPOTENT_CALLS = %i[
     include extend prepend using
@@ -24,6 +26,12 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     delegate
     require require_relative autoload
   ].to_set.freeze
+
+  # `()` rather than `nil`: under -w Ruby flags a bare `nil` statement as
+  # "possibly useless use of nil in void context", which a project raising on
+  # warnings turns into an error for every mutation of the file. `()` evaluates
+  # to nil without the warning on every supported Ruby (`(nil)` still warns on 3.3).
+  REPLACEMENT = "()"
 
   class << self
     attr_writer :preloaded_features
@@ -80,7 +88,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   def apply_edits(source, edits)
     bytes = source.b
     edits.sort_by!(&:first).reverse_each do |start_offset, end_offset|
-      bytes[start_offset, end_offset - start_offset] = "nil"
+      bytes[start_offset, end_offset - start_offset] = REPLACEMENT
     end
     bytes.force_encoding(source.encoding)
   end
