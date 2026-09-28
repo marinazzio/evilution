@@ -231,6 +231,34 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.call([:subject])
     end
 
+    # resolve through the selector `run` uses and honour the flag.
+    it "passes config.spec_selector and fallback_to_full_suite to Baseline" do
+      cfg = config(baseline: true, integration: :minitest, fallback_to_full_suite: false)
+      runner = described_class.new(cfg)
+      baseline = instance_double(Evilution::Baseline, call: :ok)
+      expect(Evilution::Baseline).to receive(:new)
+        .with(hash_including(spec_selector: cfg.spec_selector, fallback_to_full_suite: false))
+        .and_return(baseline)
+      runner.call([:subject])
+    end
+
+    it "passes fallback_to_full_suite: true through when the run falls back" do
+      runner = described_class.new(config(baseline: true, integration: :minitest, fallback_to_full_suite: true))
+      baseline = instance_double(Evilution::Baseline, call: :ok)
+      expect(Evilution::Baseline).to receive(:new)
+        .with(hash_including(fallback_to_full_suite: true))
+        .and_return(baseline)
+      runner.call([:subject])
+    end
+
+    it "hands the subjects to the baseline" do
+      runner = described_class.new(config(baseline: true, integration: :rspec))
+      baseline = instance_double(Evilution::Baseline)
+      allow(baseline).to receive(:call).with([:subject]).and_return(:ok)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      expect(runner.call([:subject])).to eq(:ok)
+    end
+
     it "passes nil Baseline test_files when config.spec_files is empty" do
       runner = described_class.new(config(baseline: true, integration: :rspec))
       baseline = instance_double(Evilution::Baseline, call: :ok)
@@ -329,21 +357,13 @@ RSpec.describe Evilution::Runner::BaselineRunner do
     end
   end
 
+  # The neutralizer must map a source to the same spec files the baseline ran,
+  # so both go through config.spec_selector (GH #1598).
   describe "#neutralization_resolver" do
-    it "returns the spec_resolver from integration baseline_options when present" do
-      klass = Class.new do
-        def self.baseline_options
-          { spec_resolver: :custom }
-        end
-      end
-      runner = described_class.new(config)
-      allow(runner).to receive(:integration_class).and_return(klass)
-      expect(runner.neutralization_resolver).to eq(:custom)
-    end
-
-    it "falls back to a default SpecResolver when integration has none" do
-      runner = described_class.new(config(integration: :rspec))
-      expect(runner.neutralization_resolver).to be_a(Evilution::SpecResolver)
+    it "returns config.spec_selector" do
+      cfg = config(integration: :minitest)
+      runner = described_class.new(cfg)
+      expect(runner.neutralization_resolver).to be(cfg.spec_selector)
     end
   end
 

@@ -213,7 +213,9 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     end
 
     it "wires up the neutralization pipeline (infra-error + baseline-failed mixed batch)" do
-      cfg = config(jobs: 1)
+      # The baseline-failed half relies on the fallback dir: the resolver returns
+      # nothing, and the baseline only ran "spec" because the run falls back.
+      cfg = config(jobs: 1, fallback_to_full_suite: true)
       infra_mut = mutation(file: "lib/foo.rb")
       baseline_mut = mutation(file: "lib/foo.rb")
       isolator = instance_double(Evilution::Isolation::Fork)

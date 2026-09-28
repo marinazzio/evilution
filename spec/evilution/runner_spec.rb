@@ -1537,24 +1537,43 @@ RSpec.describe Evilution::Runner do
         expect(result.results.first.status).to eq(:neutral)
       end
 
-      it "uses minitest fallback_dir for neutralization when resolver returns nil" do
-        baseline_result = Evilution::Baseline::Result.new(
-          failed_spec_files: Set["test"],
-          duration: 0.5
-        )
-        baseline = instance_double(Evilution::Baseline)
-        allow(Evilution::Baseline).to receive(:new).and_return(baseline)
-        allow(baseline).to receive(:call).and_return(baseline_result)
+      # A baseline in which the whole test/ directory failed.
+      def stub_failed_test_dir_baseline
+        baseline_result = Evilution::Baseline::Result.new(failed_spec_files: Set["test"], duration: 0.5)
+        allow(Evilution::Baseline).to receive(:new).and_return(instance_double(Evilution::Baseline, call: baseline_result))
+      end
 
-        neutralize_resolver = instance_double(Evilution::SpecResolver)
+      # A minitest resolver that finds no test for lib/example.rb.
+      def stub_unresolving_minitest_resolver
+        resolver = instance_double(Evilution::SpecResolver)
+        allow(resolver).to receive(:call).with("lib/example.rb", any_args).and_return(nil)
         allow(Evilution::SpecResolver).to receive(:new)
           .with(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
-          .and_return(neutralize_resolver)
-        allow(neutralize_resolver).to receive(:call).with("lib/example.rb", any_args).and_return(nil)
+          .and_return(resolver)
+      end
 
-        result = minitest_runner.call
+      def run_with_failed_test_dir(fallback_to_full_suite:)
+        stub_failed_test_dir_baseline
+        stub_unresolving_minitest_resolver
+        cfg = Evilution::Config.new(
+          target_files: ["lib/example.rb"], format: :json, timeout: 5, quiet: true, isolation: :fork,
+          integration: :minitest, skip_config_file: true, fallback_to_full_suite: fallback_to_full_suite
+        )
+        described_class.new(config: cfg).call
+      end
+
+      it "uses minitest fallback_dir for neutralization when resolver returns nil and the run falls back" do
+        result = run_with_failed_test_dir(fallback_to_full_suite: true)
 
         expect(result.results.first.status).to eq(:neutral)
+      end
+
+      # without the fallback the baseline never ran test/, so a
+      # failing "test" entry says nothing about this unresolved source.
+      it "does not neutralize an unresolved source via the fallback dir when the run does not fall back" do
+        result = run_with_failed_test_dir(fallback_to_full_suite: false)
+
+        expect(result.results.first.status).not_to eq(:neutral)
       end
     end
 

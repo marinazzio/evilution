@@ -60,18 +60,15 @@ class Evilution::Runner::BaselineRunner
     return nil unless config.baseline? && subjects.any?
 
     log_start
-    baseline = Evilution::Baseline.new(
-      timeout: config.timeout,
-      test_files: config.spec_files.empty? ? nil : config.spec_files,
-      **integration_class.baseline_options
-    )
-    result = baseline.call(subjects)
+    result = build_baseline.call(subjects)
     log_complete(result)
     result
   end
 
+  # The same selector the baseline resolves with, so a surviving mutation is
+  # matched against exactly the spec files the baseline ran.
   def neutralization_resolver
-    integration_class.baseline_options[:spec_resolver] || Evilution::SpecResolver.new
+    config.spec_selector
   end
 
   def neutralization_fallback_dir
@@ -81,6 +78,19 @@ class Evilution::Runner::BaselineRunner
   private
 
   attr_reader :config, :hooks
+
+  # Resolves through config.spec_selector -- the object `run` uses, so
+  # spec_mappings / spec_pattern apply -- and skips unresolved sources unless
+  # the run falls back to the full suite.
+  def build_baseline
+    Evilution::Baseline.new(
+      timeout: config.timeout,
+      test_files: config.spec_files.empty? ? nil : config.spec_files,
+      spec_selector: config.spec_selector,
+      fallback_to_full_suite: config.fallback_to_full_suite?,
+      **integration_class.baseline_options
+    )
+  end
 
   def build_example_filter
     return nil unless config.example_targeting?
