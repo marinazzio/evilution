@@ -13,7 +13,9 @@ require_relative "../loading"
 # Strategy: walk Prism tree, find CallNodes that sit directly under a class
 # or module body (not inside a def). Calls on a small allowlist of patterns
 # known to be idempotent (`include`, `attr_*`, visibility modifiers, etc.)
-# are preserved; everything else is replaced byte-for-byte with `()`.
+# are preserved; everything else has its source range replaced with `()`.
+# The replacement is shorter than the call it replaces, so edits are applied
+# from the end of the source backwards to keep earlier offsets valid.
 class Evilution::Integration::Loading::BodyCallNeutralizer
   IDEMPOTENT_CALLS = %i[
     include extend prepend using
@@ -29,7 +31,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # "possibly useless use of nil in void context", which a project raising on
   # warnings turns into an error for every mutation of the file. `()` evaluates
   # to nil without the warning on every supported Ruby (`(nil)` still warns on
-  # 3.2 and 3.3).
+  # 3.3).
   REPLACEMENT = "()"
 
   class << self
