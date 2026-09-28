@@ -30,8 +30,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # `()` rather than `nil`: under -w Ruby flags a bare `nil` statement as
   # "possibly useless use of nil in void context", which a project raising on
   # warnings turns into an error for every mutation of the file. `()` evaluates
-  # to nil without the warning on every supported Ruby (`(nil)` still warns on
-  # 3.3).
+  # to nil without the warning on every supported Ruby (`(nil)` still warns on 3.3).
   REPLACEMENT = "()"
 
   class << self
