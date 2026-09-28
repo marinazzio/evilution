@@ -11,8 +11,8 @@ jobs:
       matrix:
         ruby:
           - '3.3.12'
-          - '3.4.10'
-          - '4.0.6'
+          - '3.4.11'
+          - '4.0.7'
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
@@ -42,7 +42,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1.324.0
         with:
-          ruby-version: '3.3.11'
+          ruby-version: '3.3.12'
           bundler-cache: true
       - name: Verify prism resolved to 1.5.x
         run: |
