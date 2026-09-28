@@ -2,6 +2,53 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.3.0] - 2026-09-28
+
+Operator expansion release: the `default` profile grows from 88 to 111 operators, mostly around call sites and blocks, and several existing operators gain new replacements. Mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
+
+The fixes come from a field report by [@rubdttcom](https://github.com/rubdttcom) on a Rails 8 / Minitest application (GH #1596–#1599); two of them landed as their own commits.
+
+### Added
+
+- **Nineteen new operators for call sites and message sends (`default` profile)** — call nodes were mutated only by selector swaps, receiver stripping and argument nil-substitution (epic GH #1420):
+  - **`call_to_nil`** — a call to `nil`, the broadest value-level probe. Skips calls whose value is discarded, receivers of another call and attribute writes, where the result is noise (PR #1635, GH #1455)
+  - **`safe_navigation_removal`** — `a&.b` to `a.b`. A survivor means no test reaches the call with a nil receiver. Skips `self` and literal receivers, which are never nil (PR #1636, GH #1457)
+  - **`attribute_write_to_read`** — `a.foo = b` to `a.foo`, and `a[i] = b` to `a[i]`: proves the write is observed (PR #1637, GH #1458)
+  - **`argument_propagation`** — `normalize(value)` to `value`: proves the method transforms its input (PR #1638, GH #1459)
+  - **`argument_list_removal`** — `foo(a, b)` to `foo`, every argument kind at once; also covers the single-argument case `argument_removal` never reached (PR #1639, GH #1460, #1461)
+  - **`keyword_argument_removal`** — drops one `key: value` pair at a call site, which no operator touched before (PR #1642, GH #1462)
+  - **`double_negation_removal`** — `!!x` to `x`: distinguishes a truthy object from `true` (PR #1643, GH #1463)
+  - **`regexp_anchor_to_predicate`** — `x =~ /^foo/` to `x.start_with?("foo")`, and `$` / `\Z` to `end_with?`. Line anchors also match after a newline, so a survivor means no test feeds multi-line input, or the anchor should have been `\A` / `\z` (PR #1644, GH #1464)
+  - **`reduce_to_sum`** — `reduce(:+)` to `sum`: differs on empty collections, non-numeric elements and float precision (PR #1646, GH #1465)
+  - **`array_coercion_to_literal`** — `Array(x)` to `[x]`: differs for `nil`, arrays and hashes (PR #1647, GH #1466)
+  - **`to_i_to_integer`** — `x.to_i` to `Integer(x)`: `Integer()` rejects malformed input and honours radix prefixes (`"0x1A"`, `"012"`) (PR #1648, GH #1467)
+  - **`coercion_emptying`** — `to_a` / `to_h` / `to_s` (and `to_ary` / `to_hash` / `to_str`) to `[]` / `{}` / `""`: proves the content is asserted, not just the type (PR #1650, GH #1468)
+  - **`dynamic_dispatch_resolution`** — `obj.send(:m)` to `obj.m`, emitted only where visibility checks can differ (PR #1641, GH #1469)
+  - **`const_get_to_constant_path`** — `X.const_get(:Y)` to `X::Y`: differs on top-level and private constants and `inherit = false` (PR #1652, GH #1470)
+  - **`proc_to_lambda`** — `proc { }` / `Proc.new { }` to `lambda { }`: arity checks, array auto-splat and `return` semantics (PR #1653, GH #1471)
+  - **`dig_to_fetch_chain`** — `x.dig(a, b)` to `x.fetch(a).dig(b)` (PR #1654, GH #1472)
+  - **`inequality_to_negated_identity`** — `a != b` to `!a.eql?(b)` and `!a.equal?(b)`; skips `nil`, boolean and symbol literals, where all three agree (PR #1656, GH #1473)
+  - **`binary_operand_promotion`** — `a + b` to `a` and `b` for arithmetic and bitwise operators, skipping integer identities such as `a + 0` (PR #1657, GH #1474)
+  - **`receiver_constructor_swap`** — `Date` / `DateTime` / `Time.parse` to a stricter sibling (`iso8601`, `strptime`, …), keyed on receiver and selector (PR #1658, GH #1475)
+- **`symbol_to_proc_replacement`** — applies the `send_mutation` and `collection_replacement` selector tables to `&:sym` arguments, which previously got only removal (PR #1640, GH #1482)
+- **Three new operators for blocks** — blocks were only ever removed wholesale (epic GH #1421):
+  - **`block_body_to_nil`** — the block body to `nil`, keeping the iteration. Skips `loop` and endless `cycle`, which would never terminate (PR #1661, GH #1483)
+  - **`block_body_to_raise`** — the block body to `raise`: a survivor means the block is never invoked. Skips bodies with a `rescue` clause, which would swallow it (PR #1662, GH #1484)
+  - **`block_body_promotion`** — `Base.transaction { save! }` to `save!` for parameter-less blocks: exposes wrappers whose effect is never tested, such as transactions whose rollback nothing triggers (PR #1663, GH #1485)
+- **`warmup: rails` / `--warmup rails`** — after `--preload`, warms Rails state that otherwise initialises on each fork's first request (I18n, routes, asset paths, templates when `actionview_precompiler` is installed). Every step is side-effect free and skipped with a note if it does not apply. See "Warming up Rails before forking" in the README (PR #1671, GH #1599)
+
+### Changed
+
+- **Larger selector tables** — new swaps in `send_mutation` (`bytes`/`chars`, `start_with?`/`end_with?`, `ceil`/`floor`, `to_s` -> `to_str` and the other implicit conversions, `even?`/`odd?`, `pred`/`succ`, `is_a?` -> `instance_of?`, `obj.method(:m)` -> `public_method`, …), `collection_replacement` (`any?` -> `empty?`/`none?`, `find` / `max` / `min` -> `first`/`last`, `fetch` -> `key?`, `delete_if` -> `reject`, `each_with_index` -> `each`, …) and `comparison_replacement` (ordering comparisons to `eql?` / `equal?`, `=~` -> `match?`) (PRs #1649, #1651, #1655, #1659, #1660; GH #1476–#1480)
+- **`bang_method` knows every standard-library bang pair** — the list grew from a 24-name sample to every String, Array, Hash and Set method with an in-place twin (PR #1645, GH #1481)
+
+### Fixed
+
+- **`tests list` resolves specs the way `run` does** — it always used the RSpec layout, so Minitest and Test::Unit projects saw `(no spec found)` for every source, and it ignored `spec_mappings` and `spec_pattern`. A source mapped to several spec files now lists each (PR #1667, GH #1596; fix by @rubdttcom)
+- **A preload outside `test/` or `spec/` no longer shadows gems** — the preload's own directory went onto `$LOAD_PATH`, so `--preload config/evilution_preload.rb` made `require "puma"` load the app's `config/puma.rb` (PR #1668, GH #1597; fix by @rubdttcom)
+- **The baseline follows `fallback_to_full_suite` and `spec_mappings`** — for a source with no resolved test it ran the whole test directory even with the fallback off, and printed "running full suite"; in a real Rails suite that run timed out silently. A source declared only through `spec_mappings` also fell back to the directory, and its survivors were then reported `neutral` against a mapped test that passes. The baseline now uses the same spec selection as `run`, skips unresolved sources unless the run falls back, and reports a timed-out baseline explicitly (PR #1669, GH #1598)
+- **Projects that raise on warnings no longer error every mutation of a file with a neutralized class-body call** — before re-evaluating a mutated file, evilution replaces non-idempotent class-body calls such as `deprecate :lift, :coerce` with `nil`, which Ruby flags under `-w` as "possibly useless use of nil in void context". A suite that raises on warnings (dry-monads) then scored 545 of 546 mutations of `maybe.rb` as errors; the replacement is now `()` (GH #1673)
+
 ## [1.2.0] - 2026-09-21
 
 Reporting honesty release. A run now says what it did **not** measure instead of letting the headline score speak for the whole target set: files that resolved to no spec fail the run, subjects nothing reached are named, neutral results record why, and the printed verdict and the exit code finally share one threshold. The `default` profile also grows from 80 to 88 operators, so mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.

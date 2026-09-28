@@ -54,7 +54,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
   end
 
   describe "#call" do
-    it "replaces a registry-style call inside a module body with nil" do
+    it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY
         module Foo
           register_mixin :bar, Baz
@@ -62,8 +62,27 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       RUBY
 
       result = neutralize(src)
-      expect(result).to eq("module Foo\n  nil\nend\n")
+      expect(result).to eq("module Foo\n  ()\nend\n")
       expect(result).not_to include("register_mixin")
+    end
+
+    # Projects that run specs with --warnings and raise on every warning (dry-monads)
+    # would otherwise fail each mutation of the file on "possibly useless use of nil
+    # in void context", before any test runs.
+    it "leaves nothing Ruby warns about as a void-context expression" do
+      src = <<~RUBY
+        class Foo
+          deprecate :lift, :coerce
+          def coerce; end
+        end
+      RUBY
+      result = neutralize(src)
+
+      previous = $VERBOSE
+      $VERBOSE = true
+      expect { RubyVM::InstructionSequence.compile(result) }.not_to output.to_stderr
+    ensure
+      $VERBOSE = previous
     end
 
     it "preserves include/extend/prepend/using (idempotent in Ruby)" do
@@ -303,7 +322,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       RUBY
 
       result = neutralize(src)
-      expect(result).to eq("class Foo\n  class << self\n    nil\n  end\nend\n")
+      expect(result).to eq("class Foo\n  class << self\n    ()\n  end\nend\n")
       expect(result).not_to include("register_thing")
     end
 
@@ -327,12 +346,12 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
     it "neutralizes a call inside a module body via visit_module_node" do
       src = "module M\n  side_effect :go\nend\n"
-      expect(neutralize(src)).to eq("module M\n  nil\nend\n")
+      expect(neutralize(src)).to eq("module M\n  ()\nend\n")
     end
 
     it "neutralizes a call inside a class body via visit_class_node" do
       src = "class C\n  side_effect :go\nend\n"
-      expect(neutralize(src)).to eq("class C\n  nil\nend\n")
+      expect(neutralize(src)).to eq("class C\n  ()\nend\n")
     end
 
     it "neutralizes every non-allowlisted body call, not just the first" do
@@ -348,7 +367,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(result).not_to include("first_call")
       expect(result).not_to include("second_call")
       expect(result).not_to include("third_call")
-      expect(result.scan("nil").length).to eq(3)
+      expect(result.scan("()").length).to eq(3)
     end
 
     it "applies edits in descending offset order so byte ranges do not shift" do
@@ -370,9 +389,9 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(result).to eq(<<~RUBY)
         module Outer
           class Inner
-            nil
+            ()
           end
-          nil
+          ()
         end
       RUBY
       expect(result).not_to include("inner_call")
@@ -384,7 +403,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       result = neutralize(src)
 
       expect(result.encoding).to eq(Encoding::US_ASCII)
-      expect(result).to eq("module Foo\n  nil\nend\n")
+      expect(result).to eq("module Foo\n  ()\nend\n")
     end
 
     it "does not mutate the caller's source string in place" do
@@ -414,10 +433,10 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
         expect(result).not_to include("def_callback")
         expect(result).not_to include("node.children.each")
         # The heredoc terminator's trailing newline is excluded from the
-        # replacement, so the bare `nil` and the closing `end` stay on
-        # separate lines (no `nilend` collision).
-        expect(result).to include("  nil\nend")
-        expect(result).not_to include("nilend")
+        # replacement, so the `()` and the closing `end` stay on
+        # separate lines (no `()end` collision).
+        expect(result).to include("  ()\nend")
+        expect(result).not_to include("()end")
       end
 
       it "handles a multi-line heredoc body plus trailing call args together" do
@@ -438,14 +457,14 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
         expect(result).not_to include("register :foo")
         expect(result).not_to include("should be neutralized")
         expect(result).not_to include('name: "qux"')
-        expect(result).not_to include("nilend")
+        expect(result).not_to include("()end")
       end
 
       it "extends the replacement past a plain x-string (backtick) heredoc terminator" do
         # A `<<~`MARKER`` backtick heredoc argument is an XStringNode.
         # HeredocEndCollector#visit_x_string_node must call record_if_heredoc
         # so the replacement reaches the `CMD` terminator; otherwise the
-        # heredoc body lines and terminator are left orphaned after the `nil`.
+        # heredoc body lines and terminator are left orphaned after the `()`.
         src = "module Foo\n  " \
               "run_cmd :build, <<~`CMD`\n    " \
               "echo building\n  " \
@@ -454,7 +473,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  nil\nend\n")
+        expect(result).to eq("module Foo\n  ()\nend\n")
         expect(result).not_to include("run_cmd")
         expect(result).not_to include("echo building")
         expect(result).not_to include("CMD")
@@ -472,7 +491,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  nil\nend\n")
+        expect(result).to eq("module Foo\n  ()\nend\n")
         expect(result).not_to include("run_cmd")
         expect(result).not_to include("echo building")
         expect(result).not_to include("CMD")
@@ -492,7 +511,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  nil\nend\n")
+        expect(result).to eq("module Foo\n  ()\nend\n")
         expect(result).not_to include("def_thing")
         expect(result).not_to include("heredoc body line")
       end
@@ -510,7 +529,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  nil\nend\n")
+        expect(result).to eq("module Foo\n  ()\nend\n")
         expect(result).not_to include("def_thing")
         expect(result).not_to include("heredoc body line")
       end
