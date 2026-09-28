@@ -94,7 +94,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `init`               | Generate `.evilution.yml` config file               |         |
 | `version`            | Print version string                                |         |
 | `subjects [files]`   | List mutation subjects with locations and counts    |         |
-| `tests list [files]` | List spec files mapped to source files              |         |
+| `tests list [files]` | List the spec files `run` would use for each source (layout, `spec_mappings`, `spec_pattern`) |         |
 | `session list`       | List saved session results                          |         |
 | `session show FILE`  | Display detailed session results                    |         |
 | `session diff A B`   | Compare two sessions (fixed/new/persistent)         |         |
@@ -872,6 +872,17 @@ bundle exec evilution mutate lib/aasm/base.rb --spec spec/unit/event_spec.rb,spe
 bundle exec evilution mutate lib/aasm/base.rb --fallback-full-suite
 ```
 
+To make the mapping permanent, declare it once in `.evilution.yml` under `spec_mappings`; the run, its baseline and `tests list` all honour it. `evilution tests list <file>` prints exactly the spec files a run would use, so it is the quick way to check a mapping before spending a run on it:
+
+```yaml
+spec_mappings:
+  lib/aasm/base.rb:
+    - spec/unit/event_spec.rb
+    - spec/unit/callbacks_spec.rb
+```
+
+Without `--fallback-full-suite` an unresolved source is also left out of the baseline, which does not run the whole test directory for it.
+
 ### Long Minitest fork runs — not a hang
 
 Minitest projects under `--isolation=fork` re-bootstrap the test environment (`test_helper.rb`, plugins, runnable state) once per mutation. On constant-heavy files (e.g. Shopify/liquid's `lib/liquid/lexer.rb`, ~270 mutations) the wall-clock cost is dominated by that per-fork bootstrap and any mutations that hit a `--timeout` rather than killing the test fast. A single-worker run (`-j 1`) on a few hundred mutations can take 4+ minutes; combined with `--no-progress` and a non-TTY stderr (CI, redirected logs) the run looks silent the entire time.
@@ -885,7 +896,7 @@ RUBYOPT="-Itest" bundle exec evilution mutate lib/<file>.rb \
   --spec test/<dir>/<file>_test.rb
 ```
 
-`-j 4` parallelises across workers, `-t 10` caps any mutation that pathologically loops at 10 s. Expect the run to print progress only when stderr is a TTY (use `bundle exec evilution mutate ... 2>&1 | tee log` to get progress while still saving output). The historical "Minitest fork hangs on liquid" report (GH #1211) turned out to be a slow run + silent UX, not an actual deadlock — the worker logs show steady forward progress when captured via `--quiet-children --quiet-children-dir DIR`.
+`-j 4` parallelises across workers, `-t 10` caps any mutation that pathologically loops at 10 s. On a Rails app, add `--warmup rails` so each fork does not re-initialise I18n, routes and templates on its first request (see [Warming up Rails before forking](#warming-up-rails-before-forking)). Expect the run to print progress only when stderr is a TTY (use `bundle exec evilution mutate ... 2>&1 | tee log` to get progress while still saving output). The historical "Minitest fork hangs on liquid" report (GH #1211) turned out to be a slow run + silent UX, not an actual deadlock — the worker logs show steady forward progress when captured via `--quiet-children --quiet-children-dir DIR`.
 
 ### 8. CI gate
 
