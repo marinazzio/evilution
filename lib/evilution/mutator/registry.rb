@@ -140,7 +140,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::DataStructMember,
       Evilution::Mutator::Operator::PinOperatorRemoval,
       Evilution::Mutator::Operator::RightwardAssignment,
-      Evilution::Mutator::Operator::NumberedParameterSwap
+      Evilution::Mutator::Operator::NumberedParameterSwap,
+      Evilution::Mutator::Operator::ForwardedArgumentDrop
     ].each { |op| registry.register(op) }
     registry
   end
