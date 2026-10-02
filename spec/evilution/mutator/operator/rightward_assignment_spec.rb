@@ -54,6 +54,32 @@ RSpec.describe Evilution::Mutator::Operator::RightwardAssignment do
       expect(mutated_lines(muts)).to eq(["item in { id: Integer }"])
     end
 
+    # `in` is a word, so unlike `=>` it needs space around it to stay a token
+    # of its own: `value=>Integer` must not become the name `valueinInteger`.
+    it "separates the keyword from an adjacent value and pattern" do
+      muts = mutations_for("    value=>Integer\n    value\n")
+
+      expect(mutated_lines(muts)).to eq(["value in Integer"])
+    end
+
+    it "separates the keyword from an adjacent value only" do
+      muts = mutations_for("    value=> [first, *]\n    first\n")
+
+      expect(mutated_lines(muts)).to eq(["value in [first, *]"])
+    end
+
+    it "separates the keyword from an adjacent pattern only" do
+      muts = mutations_for("    value =>[first, *]\n    first\n")
+
+      expect(mutated_lines(muts)).to eq(["value in [first, *]"])
+    end
+
+    it "adds no space when the operator is followed by a line break" do
+      muts = mutations_for("    value =>\n      Integer\n    value\n")
+
+      expect(mutated_lines(muts)).to eq(["value in"])
+    end
+
     it "rewrites a match nested in the value of another match" do
       muts = mutations_for("    value.each { |item| item => Integer } => [first, *]\n    first\n")
 

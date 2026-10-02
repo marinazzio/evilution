@@ -22,9 +22,20 @@ class Evilution::Mutator::Operator::RightwardAssignment < Evilution::Mutator::Ba
     add_mutation(
       offset: location.start_offset,
       length: location.length,
-      replacement: "in",
+      replacement: keyword_for(node),
       node: node
     )
+  end
+
+  # `=>` is punctuation and may touch its neighbours (`value=>Integer`), but
+  # `in` is a word: written flush against them it would merge into a single
+  # name. A space is added on each side that has none.
+  def keyword_for(node)
+    location = node.operator_loc
+    before = node.value.location.end_offset == location.start_offset ? " " : ""
+    after = node.pattern.location.start_offset == location.end_offset ? " " : ""
+
+    "#{before}in#{after}"
   end
 
   # A bare name (`value => captured`, `value => _`) captures any value, so the
