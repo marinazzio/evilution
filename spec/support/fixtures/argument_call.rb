@@ -73,4 +73,17 @@ class ArgumentCallExample
       could not append
     MSG
   end
+
+  # Member lists of Data/Struct definitions belong to DataStructMember.
+  def struct_definition
+    Struct.new(:a, :b)
+  end
+
+  def data_definition
+    Data.define(:a, :b)
+  end
+
+  def struct_instance(klass)
+    klass.new(:a, :b)
+  end
 end

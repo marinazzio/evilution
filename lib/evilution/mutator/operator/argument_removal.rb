@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../operator"
+require_relative "data_struct_member"
 
 class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   SKIP_TYPES = [
@@ -30,7 +31,14 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   end
 
   def mutable?(node, args)
-    args && args.length >= 2 && positional_only?(args) && node.name != :[]=
+    args && args.length >= 2 && positional_only?(args) && node.name != :[]= && !member_list?(node)
+  end
+
+  # DataStructMember owns the member list of `Data.define` / `Struct.new` and
+  # drops each member itself; removing an argument here would emit the same
+  # mutant a second time.
+  def member_list?(node)
+    Evilution::Mutator::Operator::DataStructMember.definition?(node)
   end
 
   def positional_only?(args)

@@ -46,6 +46,19 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentRemoval do
       expect(muts).to be_empty
     end
 
+    # DataStructMember owns the member list of these definitions; removing an
+    # argument here would repeat its drop mutations byte for byte.
+    it "skips Struct.new and Data.define member lists" do
+      expect(mutations_for("struct_definition")).to be_empty
+      expect(mutations_for("data_definition")).to be_empty
+    end
+
+    it "still removes arguments of new on other receivers" do
+      muts = mutations_for("struct_instance")
+
+      expect(muts.length).to eq(2)
+    end
+
     it "skips calls with splat arguments" do
       muts = mutations_for("with_splat")
 
