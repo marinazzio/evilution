@@ -112,6 +112,65 @@ RSpec.describe Evilution::Mutator::Operator::KeywordArgument do
       keyword_mutations = mutations.select { |m| m.operator_name == "keyword_argument" }
       expect(keyword_mutations).to be_empty
     end
+
+    # An anonymous `**` in a call only parses while the signature declares
+    # one, so taking it out of the signature would leave the body unparseable.
+    it "keeps an anonymous ** that the body forwards" do
+      expect(mutations_for("def foo(*, **, &)\n  bar(*, **, &)\nend\n")).to be_empty
+      expect(mutations_for("def foo(x, **)\n  bar(x, **)\nend\n")).to be_empty
+      expect(mutations_for("def foo(**)\n  bar(**)\nend\n")).to be_empty
+    end
+
+    it "keeps an anonymous ** that the body splats into a hash" do
+      expect(mutations_for("def foo(x, **)\n  { x: x, ** }\nend\n")).to be_empty
+    end
+
+    it "keeps an anonymous ** forwarded from inside a block" do
+      expect(mutations_for("def foo(xs, **)\n  xs.each { |x| bar(x, **) }\nend\n")).to be_empty
+    end
+
+    it "removes an anonymous ** that the body does not forward" do
+      mutations = mutations_for("def foo(x, **)\n  x\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(["def foo(x)"])
+    end
+
+    it "removes a standalone anonymous ** that the body does not forward" do
+      mutations = mutations_for("def foo(**)\n  1\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(["def foo()"])
+    end
+
+    it "removes an anonymous ** from an empty method" do
+      mutations = mutations_for("def foo(x, **)\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(["def foo(x)"])
+    end
+
+    # A method defined in the body forwards the anonymous `**` of its own
+    # signature, which says nothing about the outer one.
+    it "removes an anonymous ** when only a nested def forwards its own" do
+      mutations = mutations_for("def foo(x, **)\n  def inner(**) = bar(**)\n  x\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(["def foo(x)"])
+    end
+
+    # Removing a named rest leaves the body reading an undefined name, which
+    # parses and fails at runtime, so the mutant is still worth running.
+    it "still removes a named rest that the body forwards" do
+      mutations = mutations_for("def foo(x, **opts)\n  bar(x, **opts)\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(["def foo(x)"])
+    end
+
+    it "keeps optional keyword mutations of a method that forwards an anonymous **" do
+      mutations = mutations_for("def foo(strict: true, **)\n  bar(strict: strict, **)\nend\n")
+
+      expect(mutations.map { |m| m.mutated_source.lines.first.strip }).to eq(
+        ["def foo(strict:, **)", "def foo(**)"]
+      )
+      expect(mutations.map(&:parse_status)).to eq(%i[ok ok])
+    end
   end
 
   describe "valid Ruby output" do

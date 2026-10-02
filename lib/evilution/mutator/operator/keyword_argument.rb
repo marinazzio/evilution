@@ -8,7 +8,7 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
     if params
       mutate_optional_keyword_defaults(params)
       mutate_optional_keyword_removal(params)
-      mutate_keyword_rest_removal(params)
+      mutate_keyword_rest_removal(node)
     end
 
     super
@@ -51,9 +51,11 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
     end
   end
 
-  def mutate_keyword_rest_removal(params)
+  def mutate_keyword_rest_removal(node)
+    params = node.parameters
     kr = params.keyword_rest
     return unless kr.is_a?(Prism::KeywordRestParameterNode)
+    return if anonymous_rest_used?(node.body)
 
     all_params = collect_all_params(params)
     if all_params.length < 2
@@ -61,6 +63,27 @@ class Evilution::Mutator::Operator::KeywordArgument < Evilution::Mutator::Base
     else
       emit_remove_kr_with_remaining(params, all_params, kr)
     end
+  end
+
+  # An anonymous `**` in the body (`bar(**)`, `{ ** }`) only parses while the
+  # signature declares one, so removing it there would leave the body
+  # unparseable. Finding one also tells the rest is anonymous: Ruby rejects it
+  # next to a named rest. A named rest is safe to remove: without it the body
+  # reads an undefined name, which parses and fails at runtime.
+  def anonymous_rest_used?(body)
+    return false if body.nil?
+
+    uses_anonymous_rest?(body)
+  end
+
+  # A nested def is not searched: an anonymous `**` inside it belongs to that
+  # method's own signature. Blocks and lambdas share the enclosing method's
+  # parameters, so they are.
+  def uses_anonymous_rest?(node)
+    return false if node.is_a?(Prism::DefNode)
+    return true if node.is_a?(Prism::AssocSplatNode) && node.value.nil?
+
+    node.compact_child_nodes.any? { |child| uses_anonymous_rest?(child) }
   end
 
   def emit_remove_only_kr(kr)
