@@ -83,10 +83,14 @@ class Evilution::Mutator::Operator::PatternMatchingArray < Evilution::Mutator::B
   end
 
   def replace_pattern(node, parts)
+    constant = node.constant ? source_for(node.constant) : ""
+    opening = node.opening_loc&.slice || "["
+    closing = node.closing_loc&.slice || "]"
+
     add_mutation(
       offset: node.location.start_offset,
       length: node.location.length,
-      replacement: "[#{parts.join(", ")}]",
+      replacement: "#{constant}#{opening}#{parts.join(", ")}#{closing}",
       node: node
     )
   end

@@ -126,6 +126,46 @@ RSpec.describe Evilution::Mutator::Operator::PatternMatchingArray do
       tmpfile.unlink if tmpfile
     end
 
+    {
+      "Point(x, y)" => ["Point(y)", "Point(_, y)", "Point(x)", "Point(x, _)"],
+      "Point[x, y]" => ["Point[y]", "Point[_, y]", "Point[x]", "Point[x, _]"],
+      "::Geometry::Point[x, y]" => ["::Geometry::Point[y]", "::Geometry::Point[_, y]", "::Geometry::Point[x]", "::Geometry::Point[x, _]"],
+      "Point[x, *rest, y]" => ["Point[*rest, y]", "Point[_, *rest, y]", "Point[x, *rest]", "Point[x, *rest, _]"],
+      "Point[*, x, *]" => ["Point[*, _, *]"]
+    }.each do |pattern, expected|
+      it "preserves the constant and delimiters in #{pattern}" do
+        mutations = mutations_from_source("def m(v)\n  case v\n  in #{pattern}\n    1\n  end\nend\n")
+
+        expect(mutations.map { |mutation| mutation.mutated_source.lines.find { |line| line.include?("in ") }.strip }).to match_array(
+          expected.map { |replacement| "in #{replacement}" }
+        )
+        mutations.each { |mutation| expect(Prism.parse(mutation.mutated_source).errors).to be_empty }
+      end
+    end
+
+    it "preserves constants while descending into a nested deconstruct pattern" do
+      mutations = mutations_from_source("def m(v)\n  case v\n  in Outer[Point(x, y), z]\n    1\n  end\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to include(
+        a_string_matching(/in Outer\[Point\(_, y\), z\]/),
+        a_string_matching(/in Outer\[Point\(x, _\), z\]/)
+      )
+      mutations.each { |mutation| expect(Prism.parse(mutation.mutated_source).errors).to be_empty }
+    end
+
+    it "keeps the type check when wildcarding a deconstruct element" do
+      mutations = mutations_from_source("def m(v)\n  case v\n  in Point[x, y]\n    1\n  end\nend\n")
+      mutation = mutations.find { |candidate| candidate.mutated_source.include?("_, y") }
+      namespace = Module.new
+      point_class = Class.new { define_method(:deconstruct) { [1, 2] } }
+      namespace.const_set(:Point, point_class)
+      namespace.module_eval(mutation.mutated_source)
+      receiver = Class.new { include namespace }.new
+
+      expect(receiver.m(point_class.new)).to eq(1)
+      expect { receiver.m([1, 2]) }.to raise_error(NoMatchingPatternError)
+    end
+
     it "descends into an array pattern nested inside another array pattern" do
       mutations = mutations_from_source(
         "def m(v)\n  case v\n  in [[Integer, String], Symbol]\n    1\n  end\nend\n"
