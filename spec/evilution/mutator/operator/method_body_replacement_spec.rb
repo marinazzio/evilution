@@ -163,6 +163,51 @@ RSpec.describe Evilution::Mutator::Operator::MethodBodyReplacement do
       expect(muts.length).to eq(0)
     end
 
+    # An endless def has no `end` keyword, but its body is still a
+    # StatementsNode holding the single expression, so the replacement lands
+    # after the `=` and leaves the signature intact.
+    it "replaces the expression of an endless method with nil and self" do
+      muts = outer_subject_mutations("class C\n  def total(value) = compute(value) + 2\nend\n")
+
+      expect(muts.map { |m| m.mutated_source[/  def total.*$/] }).to eq(
+        ["  def total(value) = nil", "  def total(value) = self"]
+      )
+    end
+
+    it "replaces the expression of an endless singleton method" do
+      muts = outer_subject_mutations("class C\n  def self.total = compute + 2\nend\n")
+
+      expect(muts.map { |m| m.mutated_source[/  def self\.total.*$/] }).to eq(
+        ["  def self.total = nil", "  def self.total = self"]
+      )
+    end
+
+    # The rescue modifier belongs to the body expression, not to the def, so it
+    # is replaced along with the expression it guards.
+    it "replaces an endless method body together with its rescue modifier" do
+      muts = outer_subject_mutations("class C\n  def total(value) = value.compute rescue 0\nend\n")
+
+      expect(muts.map { |m| m.mutated_source[/  def total.*$/] }).to eq(
+        ["  def total(value) = nil", "  def total(value) = self"]
+      )
+    end
+
+    it "emits a super-replacement for an endless method whose expression calls super" do
+      muts = outer_subject_mutations("class Child < Base\n  def total(value) = super + 1\nend\n")
+
+      expect(muts.map { |m| m.mutated_source[/  def total.*$/] }).to eq(
+        ["  def total(value) = nil", "  def total(value) = self", "  def total(value) = super"]
+      )
+    end
+
+    it "produces parseable mutations for endless methods" do
+      muts = outer_subject_mutations("class Child < Base\n  def total(value) = super + 1\nend\n") +
+             outer_subject_mutations("class C\n  def self.count = compute rescue 0\nend\n")
+
+      expect(muts.length).to eq(5)
+      expect(muts.map(&:parse_status).uniq).to eq([:ok])
+    end
+
     it "produces valid Ruby for all mutations" do
       subjects_from_fixture.each do |subj|
         muts = described_class.new.call(subj)
