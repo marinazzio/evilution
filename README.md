@@ -165,7 +165,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 112 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 113 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
@@ -490,7 +490,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (112 total)
+## Mutation Operators (113 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -547,6 +547,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `block_body_to_raise` | Replace a block body with `raise` to prove the block is invoked (skips bodies with a `rescue` clause, which would swallow it) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| raise }` |
 | `block_body_promotion` | Replace a call with its parameter-less block body, run once (skips blocks with parameters or a `rescue` / `ensure` clause) | `Base.transaction { save! }` -> `save!`, `3.times { poll }` -> `poll` |
 | `data_struct_member` | Drop a member, or swap adjacent members, of a `Data.define` / `Struct.new` definition (class-body definitions are attributed to the first method of the enclosing class or module; skips single-member and splatted lists) | `Data.define(:a, :b)` -> `Data.define(:b)`, `Data.define(:b, :a)` |
+| `pin_operator_removal` | Drop the pin of a pattern variable so it captures instead of comparing (local variables only; skips pins inside alternative patterns, where a capture is not allowed) | `in ^expected` -> `in expected` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
@@ -1005,7 +1006,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 112 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 113 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention

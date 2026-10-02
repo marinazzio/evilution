@@ -137,7 +137,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::BlockBodyToNil,
       Evilution::Mutator::Operator::BlockBodyToRaise,
       Evilution::Mutator::Operator::BlockBodyPromotion,
-      Evilution::Mutator::Operator::DataStructMember
+      Evilution::Mutator::Operator::DataStructMember,
+      Evilution::Mutator::Operator::PinOperatorRemoval
     ].each { |op| registry.register(op) }
     registry
   end
