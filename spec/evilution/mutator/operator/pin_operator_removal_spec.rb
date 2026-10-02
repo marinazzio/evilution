@@ -70,6 +70,18 @@ RSpec.describe Evilution::Mutator::Operator::PinOperatorRemoval do
       expect(muts).to be_empty
     end
 
+    it "emits nothing for a pin nested inside an alternative pattern" do
+      muts = mutations_for("    case value\n    in [^a, 1] | { id: ^b } then 1\n    end\n")
+
+      expect(muts).to be_empty
+    end
+
+    it "still drops a pin beside an alternative pattern" do
+      muts = mutations_for("    case value\n    in [1 | 2, ^a] then 1\n    end\n")
+
+      expect(mutated_lines(muts)).to eq(["in [1 | 2, a] then 1"])
+    end
+
     it "emits nothing for a pinned numbered parameter" do
       muts = mutations_for("    [a].map do\n      value in ^_1\n    end\n")
 

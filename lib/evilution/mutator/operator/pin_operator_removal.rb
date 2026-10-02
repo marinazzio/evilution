@@ -9,18 +9,33 @@ require_relative "../operator"
 # matches every value. A survivor means no example feeds the pattern a value
 # that differs from the pinned one.
 class Evilution::Mutator::Operator::PinOperatorRemoval < Evilution::Mutator::Base
+  def initialize(**options)
+    super
+    @alternation_depth = 0
+  end
+
+  # An alternative pattern (`^a | ^b`) may not capture, at any depth inside it,
+  # so no pin under one has an unpinned form. Tracked here rather than left to
+  # the parse check: older Prism releases accept the capture that Ruby rejects.
+  def visit_alternation_pattern_node(node)
+    @alternation_depth += 1
+    super
+  ensure
+    @alternation_depth -= 1
+  end
+
   def visit_pinned_variable_node(node)
-    remove_pin(node)
+    remove_pin(node) if @alternation_depth.zero?
     super
   end
 
   private
 
-  # Not every pin has an unpinned form. Only a local name can stand as a
-  # capturing pattern, so `^@expected` and `^$expected` have none; neither does
-  # a numbered parameter (`^_1`), nor any pin inside an alternative pattern
-  # (`^a | ^b`), which may not capture. Those rewrites do not parse and carry
-  # no signal, so they are dropped rather than reported as unparseable.
+  # Other pins without an unpinned form are caught by the parse check. Only a
+  # local name can stand as a capturing pattern, so `^@expected` and
+  # `^$expected` have none, and neither does a numbered parameter (`^_1`).
+  # Those rewrites carry no signal, so they are dropped rather than reported
+  # as unparseable.
   def remove_pin(node)
     add_mutation(
       offset: node.location.start_offset,
