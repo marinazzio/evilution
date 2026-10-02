@@ -18,6 +18,7 @@ require_relative "../operator"
 # pattern binds, so the branch body still runs as written.
 class Evilution::Mutator::Operator::PatternWildcardWidening < Evilution::Mutator::Base
   WILDCARD = "_"
+  UNWIDENABLE_VALUE_TYPES = [Prism::LocalVariableTargetNode, Prism::ImplicitNode].freeze
 
   def visit_array_pattern_node(node)
     append_rest(node)
@@ -58,9 +59,11 @@ class Evilution::Mutator::Operator::PatternWildcardWidening < Evilution::Mutator
   end
 
   # A bare name reaching here is an underscore one, which already accepts any
-  # value; rewriting it to `_` would change nothing.
+  # value; rewriting it to `_` would change nothing. A shorthand key
+  # (`_ignored:`) has no value pattern of its own: its implicit value spans the
+  # key, so writing a wildcard there would rename the key instead.
   def wildcard_value(node, pair)
-    return if pair.value.is_a?(Prism::LocalVariableTargetNode)
+    return if UNWIDENABLE_VALUE_TYPES.include?(pair.value.class)
 
     location = pair.value.location
 

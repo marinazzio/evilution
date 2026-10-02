@@ -158,6 +158,22 @@ RSpec.describe Evilution::Mutator::Operator::PatternWildcardWidening do
         )
       end
 
+      # A shorthand key has no value pattern of its own to widen; the name it
+      # binds stands in for one.
+      it "does not widen a shorthand key bound to an underscore name" do
+        expect(mutations_for(in_clause("{ _ignored: }"))).to be_empty
+
+        muts = mutations_for(in_clause("{ name: String, _ignored: }"))
+
+        expect(mutated_lines(muts)).to eq(
+          [
+            "in { name: _, _ignored: } then 1",
+            "in { _ignored: } then 1",
+            "in { name: String } then 1"
+          ]
+        )
+      end
+
       it "treats a pinned value as one that binds nothing" do
         muts = mutations_for(in_clause("{ id: ^expected }"))
 
