@@ -145,7 +145,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::PatternWildcardWidening,
       Evilution::Mutator::Operator::NoMatchingPatternElse,
       Evilution::Mutator::Operator::ArgumentOrderPermutation,
-      Evilution::Mutator::Operator::KeywordValueSwap
+      Evilution::Mutator::Operator::KeywordValueSwap,
+      Evilution::Mutator::Operator::ComparisonOperandSwap
     ].each { |op| registry.register(op) }
     registry
   end
