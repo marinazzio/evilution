@@ -69,6 +69,40 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyPromotion do
       expect(muts.map(&:parse_status).uniq).to eq([:ok])
     end
 
+    # Unwrapping a lock or a thread is how this operator probes concurrency
+    # claims: the body runs unguarded, or inline on the caller's thread. A
+    # separate operator for the same edit was proposed and dropped in favour
+    # of these cases.
+    it "unwraps a Mutex#synchronize block" do
+      muts = mutations_from_source("def t\n  @mutex.synchronize { @count += 1 }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["@count += 1"])
+    end
+
+    it "unwraps a multi-line synchronize block, grouping its statements" do
+      muts = mutations_from_source("def t\n  @mutex.synchronize do\n    @count += 1\n    log(@count)\n  end\nend\n")
+
+      expect(muts.map(&:mutated_source)).to eq(["def t\n  (@count += 1\n    log(@count))\nend\n"])
+    end
+
+    it "unwraps a Monitor#synchronize block" do
+      muts = mutations_from_source("def t\n  @monitor.synchronize { tick }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["tick"])
+    end
+
+    it "runs the body of a Thread.new block inline" do
+      muts = mutations_from_source("def t\n  Thread.new { work }\nend\n")
+
+      expect(mutated_lines(muts)).to eq(["work"])
+    end
+
+    # Inlining would need the thread's arguments bound to the block
+    # parameters; like any block with parameters, it is left alone.
+    it "leaves a Thread.new block with parameters alone" do
+      expect(mutations_from_source("def t(job)\n  Thread.new(job) { |j| j.run }\nend\n")).to be_empty
+    end
+
     it "unwraps a block with explicitly empty pipes" do
       muts = mutations_from_source("def t\n  wrap { || work }\nend\n")
 
