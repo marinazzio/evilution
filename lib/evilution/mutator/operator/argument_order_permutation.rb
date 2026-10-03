@@ -19,6 +19,10 @@ class Evilution::Mutator::Operator::ArgumentOrderPermutation < Evilution::Mutato
   # reached, which only shows that the line ran.
   RAISING_METHODS = %i[raise fail].freeze
 
+  # The format string swapped with a value raises TypeError the same way;
+  # what the string renders is FormatSpecifierSwap's job.
+  FORMAT_METHODS = %i[format sprintf printf].freeze
+
   # Core methods that treat their arguments as an unordered set of
   # alternatives, so any order gives the same answer.
   ORDER_FREE_METHODS = %i[start_with? end_with?].freeze
@@ -50,7 +54,7 @@ class Evilution::Mutator::Operator::ArgumentOrderPermutation < Evilution::Mutato
     return false if ORDER_FREE_METHODS.include?(node.name)
     return false if set_literal?(node)
 
-    !(node.receiver.nil? && RAISING_METHODS.include?(node.name))
+    !(node.receiver.nil? && (RAISING_METHODS.include?(node.name) || FORMAT_METHODS.include?(node.name)))
   end
 
   # `Set[a, b]` builds a set, where the order of elements does not count.

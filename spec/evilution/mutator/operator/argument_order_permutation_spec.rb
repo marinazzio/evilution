@@ -103,6 +103,18 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentOrderPermutation do
       expect(mutations_for("    fail ArgumentError, a\n")).to be_empty
     end
 
+    # The format string swapped with a value raises TypeError wherever it is
+    # reached; what the string itself renders is FormatSpecifierSwap's job.
+    it "leaves format, sprintf and printf alone" do
+      expect(mutations_for("    format(\"%d %d\", a, b)\n")).to be_empty
+      expect(mutations_for("    sprintf(\"%d %d\", a, b)\n")).to be_empty
+      expect(mutations_for("    printf(\"%d %d\", a, b)\n")).to be_empty
+    end
+
+    it "swaps the arguments of a format method sent to a receiver" do
+      expect(mutated_lines(mutations_for("    a.format(b, c)\n"))).to eq(["a.format(c, b)"])
+    end
+
     it "swaps the arguments of a raise sent to a receiver" do
       muts = mutations_for("    a.raise(b, c)\n")
 

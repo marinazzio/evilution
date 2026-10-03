@@ -165,7 +165,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 123 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 124 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
@@ -490,7 +490,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (123 total)
+## Mutation Operators (124 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -553,11 +553,12 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `forwarded_argument_drop` | Stop forwarding one part of the arguments a method passes through unnamed; a `...` signature is spelled out so a single part can be left out (skips a lone anonymous argument and named splats) | `g(*, **, &)` -> `g(**, &)`, `def f(...) = g(...)` -> `def f(*, **, &) = g(*, **)` |
 | `pattern_wildcard_widening` | Widen a pattern so it accepts shapes it rejects: append a rest to an array pattern, wildcard or drop a hash-pattern pair, remove `**nil` (skips pairs that bind a variable and patterns that already have a rest) | `in [a, b]` -> `in [a, b, *]`, `in { age: Integer }` -> `in { age: _ }` |
 | `no_matching_pattern_else` | Add an empty `else` to a `case/in` that has none, so an unmatched value yields `nil` instead of raising (skips a `case/in` with a bare capture clause, which matches everything) | `case v; in Integer then 1; end` -> `case v; in Integer then 1; else; end` |
-| `argument_order_permutation` | Swap neighbouring positional arguments of a call, `super` or `yield` (keeps keywords, block and splats in place; skips identical neighbours, `raise` / `fail`, index writes, `start_with?` / `end_with?` and `Set[...]`). Calls that accept arguments in any order, such as `OptionParser#on`, can be silenced with `ignore_patterns`, e.g. `call{name=on, receiver=local_variable_read{name=opts}}` | `compute(a, b)` -> `compute(b, a)` |
+| `argument_order_permutation` | Swap neighbouring positional arguments of a call, `super` or `yield` (keeps keywords, block and splats in place; skips identical neighbours, `raise` / `fail`, `format` / `sprintf` / `printf`, index writes, `start_with?` / `end_with?` and `Set[...]`). Calls that accept arguments in any order, such as `OptionParser#on`, can be silenced with `ignore_patterns`, e.g. `call{name=on, receiver=local_variable_read{name=opts}}` | `compute(a, b)` -> `compute(b, a)` |
 | `keyword_value_swap` | Swap the values of neighbouring keyword arguments, keeping the keys (keeps positional arguments, `**splat` and block in place; skips identical values and braced hash arguments; spells out shorthand keys) | `compute(x: a, y: b)` -> `compute(x: b, y: a)` |
 | `comparison_operand_swap` | Swap the operands of a spaceship comparison, reversing a sort block or a custom ordering (skips identical operands and safe navigation; `between?` / `clamp` bounds are swapped by `argument_order_permutation`) | `x.age <=> y.age` -> `y.age <=> x.age` |
 | `integer_division_to_fdiv` | Turn a division into `fdiv`, so integer division keeps its remainder (groups a compound dividend; skips float literals, `/=` and the explicit `./(...)` form) | `a / b` -> `a.fdiv(b)` |
 | `off_by_one_boundary` | Lower a count held in a variable by one: the receiver of `times`, the argument of `upto` / `downto` / `take` / `first` / `last` / `drop` / `each_slice` / `each_cons` (skips literal counts, which `integer_literal` shifts, and safe navigation) | `n.times` -> `(n - 1).times`, `items.first(n)` -> `items.first(n - 1)` |
+| `format_specifier_swap` | Loosen one conversion specifier of a literal format string in `format` / `sprintf` / `printf` / `String#%`: drop flags, width and precision, or render a non-integer number as `%s` (skips `%%`, `%{name}`, `*` widths, `%c`, `%p` and interpolated or heredoc strings) | `format("%05d", n)` -> `format("%d", n)`, `"%.2f"` -> `"%f"`, `"%s"` |
 | `keyword_argument` | Remove keyword defaults/params | `def foo(bar: 42)` -> `def foo(bar:)` |
 | `multiple_assignment` | Remove targets or swap order | `a, b = 1, 2` -> `b, a = 1, 2` |
 | `block_removal` | Remove blocks from method calls | `items.map { \|x\| x * 2 }` -> `items.map` |
@@ -1016,7 +1017,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 123 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 124 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
