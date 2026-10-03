@@ -16,6 +16,18 @@ RSpec.describe Evilution::Mutator::Operator::MethodCallRemoval do
     described_class.new.call(subject)
   end
 
+  def mutations_from_source(inline_source)
+    Tempfile.create(["method_call_removal", ".rb"]) do |tmpfile|
+      tmpfile.write(inline_source)
+      tmpfile.flush
+      Evilution::AST::Parser.new.call(tmpfile.path).flat_map { |s| described_class.new.call(s) }
+    end
+  end
+
+  def mutated_lines_from_source(inline_source)
+    mutations_from_source(inline_source).map { |m| m.mutated_source.lines[m.line - 1].strip }
+  end
+
   describe "#call" do
     it "replaces receiver.method with receiver" do
       muts = mutations_for("no_args")
@@ -54,6 +66,29 @@ RSpec.describe Evilution::Mutator::Operator::MethodCallRemoval do
       expect(muts.length).to eq(1)
       expect(muts.first.mutated_source).to include("self\n")
       expect(muts.first.mutated_source).not_to include("self.name")
+    end
+
+    # Dropping `.lazy` from a chain is how this operator probes laziness
+    # assumptions: the chain turns eager, so an infinite source hangs (and is
+    # classified as a timeout) and a large one is built in full. A separate
+    # operator for the same edit was proposed and dropped in favour of these
+    # cases.
+    it "drops .lazy from an enumerator chain" do
+      lines = mutated_lines_from_source("def t(items)\n  items.lazy.select(&:even?).first(3)\nend\n")
+
+      expect(lines).to include("items.select(&:even?).first(3)")
+    end
+
+    it "drops .lazy from a chain over an infinite range" do
+      lines = mutated_lines_from_source("def t\n  (1..Float::INFINITY).lazy.map { _1 * 2 }.first(5)\nend\n")
+
+      expect(lines).to include("(1..Float::INFINITY).map { _1 * 2 }.first(5)")
+    end
+
+    it "drops .lazy from a chain ending in force" do
+      lines = mutated_lines_from_source("def t(items)\n  items.lazy.map(&:to_s).force\nend\n")
+
+      expect(lines).to include("items.map(&:to_s).force")
     end
 
     it "produces valid Ruby for all mutations" do
