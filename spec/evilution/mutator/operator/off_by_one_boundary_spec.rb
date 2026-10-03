@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Evilution::Mutator::Operator::OffByOneBoundary do
-  def mutations_for(body, filter: nil)
+  def mutations_for(body, signature: "n, m, items", filter: nil)
     tmpfile = Tempfile.new(["off_by_one_boundary", ".rb"])
-    tmpfile.write("class Bounds\n  def call(n, m, items)\n#{body}  end\nend\n")
+    tmpfile.write("class Bounds\n  def call(#{signature})\n#{body}  end\nend\n")
     tmpfile.flush
     subject = Evilution::AST::Parser.new.call(tmpfile.path).first
     described_class.new.call(subject, filter: filter)
@@ -64,6 +64,15 @@ RSpec.describe Evilution::Mutator::Operator::OffByOneBoundary do
       expect(mutations_for("    items.first\n")).to be_empty
       expect(mutations_for("    items.first(n, m)\n")).to be_empty
       expect(mutations_for("    n.times(m)\n")).to be_empty
+    end
+
+    # A splat, keywords or forwarded arguments stand in the argument list
+    # without being a count; subtracting from them would not parse.
+    it "leaves an argument that is not a plain value alone" do
+      expect(mutations_for("    items.take(*n)\n")).to be_empty
+      expect(mutations_for("    items.first(**n)\n")).to be_empty
+      expect(mutations_for("    items.first(count: n)\n")).to be_empty
+      expect(mutations_for("    items.take(...)\n", signature: "items, ...")).to be_empty
     end
 
     # With safe navigation a nil count yields nil; `nil - 1` would raise

@@ -15,6 +15,12 @@ class Evilution::Mutator::Operator::OffByOneBoundary < Evilution::Mutator::Base
   # Methods whose single argument is the count or the bound.
   ARGUMENT_COUNT_METHODS = %i[upto downto take first last drop each_slice each_cons].freeze
 
+  # Arguments that stand in the list without being a value: a splat,
+  # keywords, forwarded arguments. Subtracting from them would not parse.
+  NON_VALUE_ARGUMENT_TYPES = [
+    Prism::SplatNode, Prism::KeywordHashNode, Prism::ForwardingArgumentsNode
+  ].freeze
+
   def visit_call_node(node)
     shift_count(node) unless node.safe_navigation?
     super
@@ -46,7 +52,10 @@ class Evilution::Mutator::Operator::OffByOneBoundary < Evilution::Mutator::Base
     return nil if node.arguments.nil?
 
     arguments = node.arguments.arguments
-    arguments.first if arguments.length == 1
+    return nil unless arguments.length == 1
+    return nil if NON_VALUE_ARGUMENT_TYPES.include?(arguments.first.class)
+
+    arguments.first
   end
 
   # A receiver is followed by `.method`, so the subtraction is grouped; an
