@@ -143,7 +143,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::NumberedParameterSwap,
       Evilution::Mutator::Operator::ForwardedArgumentDrop,
       Evilution::Mutator::Operator::PatternWildcardWidening,
-      Evilution::Mutator::Operator::NoMatchingPatternElse
+      Evilution::Mutator::Operator::NoMatchingPatternElse,
+      Evilution::Mutator::Operator::ArgumentOrderPermutation
     ].each { |op| registry.register(op) }
     registry
   end
