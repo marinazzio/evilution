@@ -124,6 +124,77 @@ RSpec.describe Evilution::Runner::Canary do
       expect { canary.call }.to raise_error(Evilution::Runner::Canary::Failed)
     end
 
+    # RubyGems refuses to load the test framework when a gem it needs was
+    # already activated at an incompatible version — typically evilution run
+    # outside `bundle exec`, picking the newest installed copy of a shared
+    # dependency. Nothing is wrong with the mutation pipeline then, and every
+    # mutation would fail the same way, so --no-canary would not help.
+    describe "a gem activation conflict" do
+      let(:conflict_message) do
+        "Gem::ConflictError: Unable to activate rspec-expectations-3.13.5, because " \
+          "diff-lcs-2.0.0 conflicts with diff-lcs (>= 1.2.0, < 2.0)"
+      end
+
+      def failure_for(result)
+        canary = described_class.new(
+          config: config, isolator: stub_isolator_returning(result),
+          integration_class: Evilution::Integration::RSpec
+        )
+        canary.call
+      rescue Evilution::Runner::Canary::Failed => e
+        e.message
+      end
+
+      it "names it as an environment problem and points at bundle exec" do
+        message = failure_for(errored_result(message: conflict_message, klass: "Gem::ConflictError"))
+
+        expect(message).to include("gem activation conflict")
+        expect(message).to include("bundle exec")
+      end
+
+      it "still reports what the child said" do
+        message = failure_for(errored_result(message: conflict_message, klass: "Gem::ConflictError"))
+
+        expect(message).to include("diff-lcs-2.0.0 conflicts with diff-lcs (>= 1.2.0, < 2.0)")
+      end
+
+      it "does not blame the mutation pipeline" do
+        message = failure_for(errored_result(message: conflict_message, klass: "Gem::ConflictError"))
+
+        expect(message).not_to include("pipeline is misreporting")
+      end
+
+      it "does not suggest --no-canary" do
+        message = failure_for(errored_result(message: conflict_message, klass: "Gem::ConflictError"))
+
+        expect(message).not_to include("--no-canary")
+      end
+
+      it "recognises the conflict from the message when the class field is empty" do
+        message = failure_for(errored_result(message: conflict_message, klass: nil))
+
+        expect(message).to include("gem activation conflict")
+      end
+
+      it "recognises other gem activation failures" do
+        message = failure_for(
+          errored_result(
+            message: "Could not find 'rspec-core' (= 9.9.9) - did find: [rspec-core-3.13.5]",
+            klass: "Gem::MissingSpecVersionError"
+          )
+        )
+
+        expect(message).to include("gem activation conflict")
+      end
+
+      it "leaves other load errors to the generic message" do
+        message = failure_for(errored_result(message: "cannot load such file -- foo", klass: "LoadError"))
+
+        expect(message).to include("pipeline is misreporting")
+        expect(message).not_to include("gem activation conflict")
+      end
+    end
+
     # EV-65nf / GH #1586: the failure previously reported only the status and a
     # list of four speculative causes, discarding the one field that names what
     # actually happened. Diagnosing GH #1581 meant rebuilding the canary by hand

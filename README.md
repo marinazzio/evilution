@@ -628,15 +628,15 @@ Create a `.mcp.json` file in your project root:
   "mcpServers": {
     "evilution": {
       "type": "stdio",
-      "command": "evilution",
-      "args": ["mcp"],
+      "command": "bundle",
+      "args": ["exec", "evilution", "mcp"],
       "env": {}
     }
   }
 }
 ```
 
-If using Bundler, set the command to `bundle` and args to `["exec", "evilution", "mcp"]`.
+Run the server through `bundle exec` so the project's `Gemfile.lock` decides which versions of evilution, your test framework and their shared dependencies get loaded. Started outside Bundler, RubyGems picks the newest installed copy of each gem, which your test framework may refuse — the run then stops at the proof-of-life canary with a gem activation conflict. Projects without a Gemfile can use `"command": "evilution"` and `"args": ["mcp"]`.
 
 The server exposes the following tools:
 

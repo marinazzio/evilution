@@ -40,7 +40,11 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "diff-lcs", ">= 1.5", "< 3"
+  # Capped below 2 while rspec-expectations requires diff-lcs < 2.0: outside
+  # Bundler, RubyGems activates the newest installed diff-lcs when evilution
+  # loads, and RSpec then refuses to load in the child process. Widen once
+  # RSpec accepts 2.x.
+  spec.add_dependency "diff-lcs", ">= 1.5", "< 2"
   spec.add_dependency "mcp", ">= 0.8", "< 2"
   spec.add_dependency "prism", ">= 1.5", "< 2"
 end
