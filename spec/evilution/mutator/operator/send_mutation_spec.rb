@@ -267,6 +267,7 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       bytes: %w[chars], chars: %w[bytes],
       start_with?: %w[end_with?], end_with?: %w[start_with?],
       ceil: %w[floor], floor: %w[ceil],
+      round: %w[floor ceil], truncate: %w[floor],
       transform_keys: %w[transform_values], transform_values: %w[transform_keys],
       append: %w[prepend], prepend: %w[append],
       reverse_merge: %w[merge],
@@ -280,6 +281,13 @@ RSpec.describe Evilution::Mutator::Operator::SendMutation do
       it "replaces #{selector} with #{replacements.join(" and ")}" do
         expect(mutated_selectors("x.#{selector}")).to match_array(replacements.map { |r| "x.#{r}" })
       end
+    end
+
+    # Rounding mode is what money and precision code most often leaves
+    # unasserted; truncate and floor part only for negative numbers.
+    it "keeps the precision argument when swapping a rounding mode" do
+      expect(mutated_selectors("x.round(2)")).to match_array(["x.floor(2)", "x.ceil(2)"])
+      expect(mutated_selectors("x.truncate(1)")).to eq(["x.floor(1)"])
     end
 
     it "replaces method with public_method when called with a method name" do

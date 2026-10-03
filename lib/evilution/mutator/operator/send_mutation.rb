@@ -43,6 +43,8 @@ class Evilution::Mutator::Operator::SendMutation < Evilution::Mutator::Base
     end_with?: [:start_with?],
     ceil: [:floor],
     floor: [:ceil],
+    round: %i[floor ceil],
+    truncate: [:floor],
     transform_keys: [:transform_values],
     transform_values: [:transform_keys],
     append: [:prepend],
