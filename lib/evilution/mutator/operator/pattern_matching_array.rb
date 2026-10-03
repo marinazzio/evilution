@@ -84,8 +84,7 @@ class Evilution::Mutator::Operator::PatternMatchingArray < Evilution::Mutator::B
 
   def replace_pattern(node, parts)
     constant = node.constant ? source_for(node.constant) : ""
-    opening = node.opening_loc&.slice || "["
-    closing = node.closing_loc&.slice || "]"
+    opening, closing = delimiters(node)
 
     add_mutation(
       offset: node.location.start_offset,
@@ -93,6 +92,14 @@ class Evilution::Mutator::Operator::PatternMatchingArray < Evilution::Mutator::B
       replacement: "#{constant}#{opening}#{parts.join(", ")}#{closing}",
       node: node
     )
+  end
+
+  # A pattern written without brackets (`in a, b`) has no delimiters of its
+  # own, so the mutant is given square ones.
+  def delimiters(node)
+    return ["[", "]"] if node.opening_loc.nil?
+
+    [node.opening_loc.slice, node.closing_loc.slice]
   end
 
   def source_for(node)

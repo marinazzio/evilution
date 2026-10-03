@@ -143,6 +143,17 @@ RSpec.describe Evilution::Mutator::Operator::PatternMatchingArray do
       end
     end
 
+    # A pattern written without brackets has no delimiters of its own to keep,
+    # so the mutant gets square brackets.
+    it "brackets a pattern written without delimiters" do
+      mutations = mutations_from_source("def m(v)\n  case v\n  in Integer, String\n    1\n  end\nend\n")
+
+      expect(mutations.map { |mutation| mutation.mutated_source.lines.find { |line| line.include?("in ") }.strip }).to match_array(
+        ["in [String]", "in [_, String]", "in [Integer]", "in [Integer, _]"]
+      )
+      mutations.each { |mutation| expect(Prism.parse(mutation.mutated_source).errors).to be_empty }
+    end
+
     it "preserves constants while descending into a nested deconstruct pattern" do
       mutations = mutations_from_source("def m(v)\n  case v\n  in Outer[Point(x, y), z]\n    1\n  end\nend\n")
 
