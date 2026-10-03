@@ -142,7 +142,7 @@ Key-by-key:
 | `matcher.ignore` | `ignore_patterns` / `# evilution:disable` | AST patterns or inline comments |
 | `fail_fast` | `fail_fast` | integer N or `null` |
 | `--score` gate (CLI; default `1.0`) | `min_score` | evilution defaults to `0.0` — set your own gate |
-| _(n/a)_ | `profile: strict` | opt into aggressive truthiness mutators |
+| _(n/a)_ | `profile: strict` | opt into aggressive mutators (truthiness, swallowed errors) |
 
 Run `evilution init` for a fully commented template, and point your editor at
 `schema/evilution.config.schema.json` for autocomplete/validation.

@@ -142,7 +142,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--related-specs-heuristic`  | Boolean | false        | When a mutation removes an `includes(...)` call, also run matching specs from `spec/{requests,integration,features,system}` (Rails-style domain match on the source file's basename). Trades extra spec runs for higher kill rate on ORM mutations. |
 | `--baseline-session PATH`    | String  | _(none)_     | Saved session file for HTML report comparison.     |
 | `-e CODE`, `--eval CODE`     | String  | _(none)_     | Inline Ruby code for `util mutation` command.      |
-| `--profile NAME`             | String  | `default`    | Operator profile: `default` or `strict`. `strict` adds aggressive truthiness mutators (e.g. replaces `x.predicate?` with `nil`) intended for pre-merge audits. |
+| `--profile NAME`             | String  | `default`    | Operator profile: `default` or `strict`. `strict` adds aggressive mutators (e.g. replaces `x.predicate?` with `nil`, or appends `rescue nil` to a raising call) intended for pre-merge audits. |
 | `--strict`                   | Boolean | false        | Shortcut for `--profile=strict`.                    |
 
 ### Options (for `session` subcommands)
@@ -166,7 +166,11 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 Two profiles ship out of the box:
 
 - **`default`** — the 124 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
-- **`strict`** — adds extra truthiness mutators on top of `default`. Currently `PredicateToNil` (replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values). Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
+- **`strict`** — adds extra aggressive mutators on top of `default`:
+  - `PredicateToNil` replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values.
+  - `ExceptionSwallow` appends `rescue nil` to a statement that raises by convention — a bang method, `fetch` without a default, `Integer` / `Float` / `Rational` — to surface tests that never make it fail and check the error comes out (`record.save!` -> `record.save! rescue nil`). It skips Ruby core in-place bangs (`uniq!`, `sort_by!`, …), `exit!`, statements already under a rescue, and `raise`; project bangs that mutate rather than raise will still show up as survivors.
+
+  Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
 

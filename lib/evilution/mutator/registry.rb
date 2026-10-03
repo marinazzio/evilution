@@ -4,7 +4,8 @@ require_relative "../mutator"
 
 class Evilution::Mutator::Registry
   STRICT_EXTRA_OPERATORS = [
-    Evilution::Mutator::Operator::PredicateToNil
+    Evilution::Mutator::Operator::PredicateToNil,
+    Evilution::Mutator::Operator::ExceptionSwallow
   ].freeze
 
   def self.for_profile(profile)

@@ -216,8 +216,9 @@ class Evilution::Config
       #   - "call{name=debug|warn}"
 
       # Operator profile: default or strict (default: default).
-      # strict adds aggressive truthiness mutators (e.g. replaces
-      # `x.predicate?` with `nil`) intended for pre-merge audits.
+      # strict adds aggressive mutators (e.g. replaces `x.predicate?` with
+      # `nil`, or appends `rescue nil` to a raising call) intended for
+      # pre-merge audits.
       # profile: default
     YAML
   end

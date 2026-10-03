@@ -140,7 +140,7 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_profile_options(opts)
     opts.on("--profile NAME", "Operator profile: default, strict (default: default). " \
-                              "strict adds aggressive truthiness mutators for pre-merge audits.") { |p| @options[:profile] = p }
+                              "strict adds aggressive mutators for pre-merge audits.") { |p| @options[:profile] = p }
     opts.on("--strict", "Shortcut for --profile=strict") { @options[:profile] = "strict" }
   end
 
