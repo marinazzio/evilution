@@ -95,6 +95,16 @@ RSpec.describe Evilution::AST::RegexpPattern do
     end
   end
 
+  describe "#offsets" do
+    it "gives an expression's start and end offsets in the file" do
+      pattern = pattern_in("x = /é(ab|c)/\n")
+      alternation = nil
+      pattern.each_expression { |expression, *| alternation = expression if expression.is_a?(Regexp::Expression::Alternation) }
+
+      expect(alternation.expressions.map { |branch| source_at(*pattern.offsets(branch)) }).to eq(%w[ab c])
+    end
+  end
+
   describe "#compiles?" do
     it "accepts an edit that leaves a valid pattern" do
       source = "x = /a\\d/\n"

@@ -154,7 +154,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::FormatSpecifierSwap,
       Evilution::Mutator::Operator::AliasRemoval,
       Evilution::Mutator::Operator::RegexpCharacterTypeComplement,
-      Evilution::Mutator::Operator::RegexpAnchorPromotion
+      Evilution::Mutator::Operator::RegexpAnchorPromotion,
+      Evilution::Mutator::Operator::RegexpAlternationBranchDeletion
     ].each { |op| registry.register(op) }
     registry
   end

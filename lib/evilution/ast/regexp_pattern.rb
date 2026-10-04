@@ -45,8 +45,13 @@ class Evilution::AST::RegexpPattern
   # offsets in the file.
   def each_expression
     @root.each_expression do |expression, _index|
-      yield expression, file_offset(expression.ts), file_offset(expression.ts + expression.full_length)
+      yield expression, *offsets(expression)
     end
+  end
+
+  # An expression's start and end offsets in the file, quantifier included.
+  def offsets(expression)
+    [file_offset(expression.ts), file_offset(expression.ts + expression.full_length)]
   end
 
   # Whether the pattern still compiles once the span between the two file
