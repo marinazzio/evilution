@@ -156,15 +156,17 @@ RSpec.describe Evilution::Mutator::Registry do
     it "returns default + aggressive operators for :strict" do
       registry = described_class.for_profile(:strict)
 
-      expect(registry.operator_count).to eq(described_class.default.operator_count + 2)
+      expect(registry.operator_count).to eq(described_class.default.operator_count + 3)
       expect(registry.operators).to include(
-        Evilution::Mutator::Operator::PredicateToNil, Evilution::Mutator::Operator::ExceptionSwallow
+        Evilution::Mutator::Operator::PredicateToNil, Evilution::Mutator::Operator::ExceptionSwallow,
+        Evilution::Mutator::Operator::StatementReorder
       )
     end
 
     it "keeps the aggressive operators out of :default" do
       expect(described_class.default.operators).not_to include(
-        Evilution::Mutator::Operator::PredicateToNil, Evilution::Mutator::Operator::ExceptionSwallow
+        Evilution::Mutator::Operator::PredicateToNil, Evilution::Mutator::Operator::ExceptionSwallow,
+        Evilution::Mutator::Operator::StatementReorder
       )
     end
 
@@ -195,7 +197,7 @@ RSpec.describe Evilution::Mutator::Registry do
 
     it "accepts string profile names" do
       expect(described_class.for_profile("strict").operator_count).to(
-        eq(described_class.default.operator_count + 2)
+        eq(described_class.default.operator_count + 3)
       )
     end
   end

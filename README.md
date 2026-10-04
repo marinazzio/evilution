@@ -170,6 +170,8 @@ Two profiles ship out of the box:
   - `PredicateToNil` replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values.
   - `ExceptionSwallow` appends `rescue nil` to a statement that raises by convention — a bang method, `fetch` without a default, `Integer` / `Float` / `Rational` — to surface tests that never make it fail and check the error comes out (`record.save!` -> `record.save! rescue nil`). It skips Ruby core in-place bangs (`uniq!`, `sort_by!`, …), `exit!`, statements already under a rescue, and `raise`; project bangs that mutate rather than raise will still show up as survivors.
 
+  - `StatementReorder` swaps two adjacent commands (`charge(card); send_receipt(user)` -> `send_receipt(user); charge(card)`) to surface side effects whose order is never asserted. It only swaps statements that both act — call a method, append, write an index, yield, call super — and leaves alone pairs that share a variable, contain control flow or a heredoc, involve a local or instance variable assignment, write different literal keys of the same receiver, or move the last statement of a body. Expect survivors where the order only shows up in help text or in the order a list is built.
+
   Use for pre-merge audits where you want maximum sensitivity at the cost of more survivors.
 
 Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.evilution.yml`.
