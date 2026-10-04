@@ -8,7 +8,7 @@ require_relative "../operator"
 # and `alias_method :count, :size` are removed.
 #
 # A survivor means no example calls the method by its alias, so the alias is
-# surface the suite never exercises — dead, or reached only where nothing
+# a surface the suite never exercises — dead, or reached only where nothing
 # asserts.
 #
 # Declarations sit in the class body, outside every method, where no subject
