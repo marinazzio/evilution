@@ -45,7 +45,10 @@ class Evilution::Mutator::Operator::StatementReorder < Evilution::Mutator::Base
   # Nodes that set a variable, and nodes that read one.
   WRITE_TYPES = [
     *VALUE_WRITE_TYPES, Prism::LocalVariableTargetNode, Prism::InstanceVariableTargetNode,
-    Prism::ClassVariableWriteNode, Prism::GlobalVariableWriteNode
+    Prism::ClassVariableWriteNode, Prism::ClassVariableOperatorWriteNode, Prism::ClassVariableOrWriteNode,
+    Prism::ClassVariableAndWriteNode, Prism::ClassVariableTargetNode,
+    Prism::GlobalVariableWriteNode, Prism::GlobalVariableOperatorWriteNode, Prism::GlobalVariableOrWriteNode,
+    Prism::GlobalVariableAndWriteNode, Prism::GlobalVariableTargetNode
   ].freeze
   LITERAL_KEY_TYPES = [Prism::SymbolNode, Prism::StringNode, Prism::IntegerNode].freeze
 

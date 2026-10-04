@@ -85,6 +85,14 @@ RSpec.describe Evilution::Mutator::Operator::StatementReorder do
       expect(mutations_for("    charge(total = 1)\n    log(total = 2)\n    order\n")).to be_empty
     end
 
+    it "skips commands that share a class or global variable written in any form" do
+      expect(mutations_for("    $count ||= tick(order)\n    log($count)\n    order\n")).to be_empty
+      expect(mutations_for("    $count += tick(order)\n    log($count)\n    order\n")).to be_empty
+      expect(mutations_for("    @@count &&= tick(order)\n    log(@@count)\n    order\n")).to be_empty
+      expect(mutations_for("    $first, last = split(order)\n    log($first)\n    order\n")).to be_empty
+      expect(mutations_for("    @@first, last = split(order)\n    log(@@first)\n    order\n")).to be_empty
+    end
+
     it "swaps commands that only read the same variable" do
       muts = mutations_for("    charge(card)\n    log(card)\n    order\n")
 
