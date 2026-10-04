@@ -153,7 +153,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::OffByOneBoundary,
       Evilution::Mutator::Operator::FormatSpecifierSwap,
       Evilution::Mutator::Operator::AliasRemoval,
-      Evilution::Mutator::Operator::RegexpCharacterTypeComplement
+      Evilution::Mutator::Operator::RegexpCharacterTypeComplement,
+      Evilution::Mutator::Operator::RegexpAnchorPromotion
     ].each { |op| registry.register(op) }
     registry
   end
