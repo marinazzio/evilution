@@ -156,7 +156,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RegexpCharacterTypeComplement,
       Evilution::Mutator::Operator::RegexpAnchorPromotion,
       Evilution::Mutator::Operator::RegexpAlternationBranchDeletion,
-      Evilution::Mutator::Operator::RegexpQuantifierMinimumSwap
+      Evilution::Mutator::Operator::RegexpQuantifierMinimumSwap,
+      Evilution::Mutator::Operator::RegexpCaptureToPassive
     ].each { |op| registry.register(op) }
     registry
   end
