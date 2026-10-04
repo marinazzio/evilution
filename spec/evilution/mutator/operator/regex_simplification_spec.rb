@@ -198,11 +198,11 @@ RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
         expect(muts.first.mutated_source).to include("/[az]/")
       end
 
-      it "treats a leading bracket after a negation caret as a class member" do
-        muts = mutations_for_regex("/[^]a-z]/")
-
-        expect(muts.length).to eq(1)
-        expect(muts.first.mutated_source).to include("/[^]az]/")
+      # Ruby reads an unescaped `]` right after `[^` as a class member (and
+      # warns about it); regexp_parser reads an empty class instead. Rather
+      # than guess, the pattern gets no mutants.
+      it "emits nothing for an unescaped bracket leading a negated class" do
+        expect(mutations_for_regex("/[^]a-z]/")).to be_empty
       end
 
       it "does not treat a dash directly before the class close as a range" do
@@ -229,6 +229,79 @@ RSpec.describe Evilution::Mutator::Operator::RegexSimplification do
         muts = mutations_for_regex('/[a\]+]z/')
 
         expect(muts).to be_empty
+      end
+    end
+
+    # The pattern's own structure decides what is a quantifier or an anchor:
+    # group syntax, comments and property escapes contain the same characters
+    # without being either.
+    context "pattern structure" do
+      def mutated_patterns(regex_literal)
+        mutations_for_regex(regex_literal).map { |m| m.mutated_source[/match\?\((.*)\)/m, 1] }
+      end
+
+      it "does not read the ? of a group opener as a quantifier" do
+        expect(mutated_patterns("/(?:ab)+/")).to eq(["/(?:ab)/"])
+        expect(mutated_patterns("/(?<name>x)/")).to be_empty
+        expect(mutated_patterns("/(?=a)b/")).to be_empty
+        expect(mutated_patterns("/(?!a)(?<=b)(?<!c)(?>d)/")).to be_empty
+      end
+
+      it "leaves the inside of a comment group alone" do
+        expect(mutated_patterns("/x(?#comment ^$+)y/")).to be_empty
+      end
+
+      it "leaves comments and whitespace of an extended pattern alone" do
+        expect(mutated_patterns("/a # ^ and $ here\n  b+/x")).to eq(["/a # ^ and $ here\n  b/x"])
+      end
+
+      # Ruby reads `{2,}?` as one lazy interval; removing only `{2,}` would
+      # leave its lazy marker behind as a new `?` quantifier.
+      it "removes a lazy interval as one quantifier" do
+        expect(mutated_patterns("/a{2,}?/")).to eq(["/a/"])
+      end
+
+      it "keeps quantifiers apart that are not a lazy interval" do
+        expect(mutated_patterns("/a{2}b?/")).to eq(["/ab?/", "/a{2}b/"])
+        expect(mutated_patterns("/a{2}+/")).to eq(["/a+/", "/a{2}/"])
+        expect(mutated_patterns("/a+??/")).to eq(["/a?/", "/a+?/"])
+        expect(mutated_patterns("/a+b{2,}?/")).to eq(["/ab{2,}?/", "/a+b/"])
+      end
+
+      it "removes lazy and possessive quantifiers whole" do
+        expect(mutated_patterns("/a+?b*+/")).to eq(["/ab*+/", "/a+?b/"])
+      end
+
+      it "leaves the negation of a property escape alone" do
+        expect(mutated_patterns("/\\p{^Alpha}/")).to be_empty
+      end
+
+      it "removes string anchors and leaves other assertions alone" do
+        expect(mutated_patterns("/\\Aa\\z/")).to eq(["/a\\z/", "/\\Aa/"])
+        expect(mutated_patterns("/a\\Z/")).to eq(["/a/"])
+        expect(mutated_patterns("/\\ba\\B\\G/")).to be_empty
+      end
+
+      # A quantifier that a subexpression call depends on cannot be removed
+      # without the pattern failing to compile.
+      it "skips a removal that leaves a pattern which no longer compiles" do
+        expect(mutated_patterns("/\\A(?<p>a\\g<p>?b)\\z/")).to eq(
+          ["/(?<p>a\\g<p>?b)\\z/", "/\\A(?<p>a\\g<p>?b)/"]
+        )
+      end
+
+      it "keeps multibyte text around an edit intact" do
+        expect(mutated_patterns("/é+…/")).to eq(["/é…/"])
+      end
+
+      it "emits nothing for a pattern regexp_parser cannot read" do
+        allow(Evilution::AST::RegexpPattern).to receive(:parse).and_return(nil)
+
+        expect(mutated_patterns("/a+$/")).to be_empty
+      end
+
+      it "leaves interpolated patterns alone" do
+        expect(mutated_patterns("/\#{s}+/")).to be_empty
       end
     end
   end

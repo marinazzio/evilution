@@ -1,164 +1,85 @@
 # frozen_string_literal: true
 
 require_relative "../operator"
+require_relative "../../ast/regexp_pattern"
 
+# Simplify a regexp literal one piece at a time: remove a quantifier
+# (`/a+/` -> `/a/`), remove an anchor (`/^a$/` -> `/a$/`), or drop the dash of
+# a character-class range (`/[a-z]/` -> `/[az]/`).
+#
+# The pattern is read with regexp_parser, so only real quantifiers, anchors and
+# ranges are touched: the `?` of a group opener (`(?:`, `(?<name>`, `(?=`), the
+# inside of a `(?#...)` comment, a property's negation (`\p{^Alpha}`) and the
+# comments of an extended pattern contain the same characters without being
+# any of them. Each edit is made in place in the source and kept only if the
+# pattern still compiles.
 class Evilution::Mutator::Operator::RegexSimplification < Evilution::Mutator::Base
+  # Line and string anchors. Word boundaries and `\G` are assertions of a
+  # different kind and are left alone.
+  REMOVABLE_ANCHORS = %i[bol eol bos eos eos_ob_eol].freeze
+
   def visit_regular_expression_node(node)
-    content = node.content
-    return super if content.empty?
-
-    content_offset = node.content_loc.start_offset
-
-    remove_quantifiers(node, content, content_offset)
-    remove_anchors(node, content, content_offset)
-    remove_character_class_ranges(node, content, content_offset)
+    pattern = Evilution::AST::RegexpPattern.parse(node)
+    if pattern
+      remove_quantifiers(node, pattern)
+      remove_anchors(node, pattern)
+      remove_class_ranges(node, pattern)
+    end
 
     super
   end
 
   private
 
-  def remove_quantifiers(node, content, content_offset)
-    scan_regex_positions(content) do |kind, i|
-      case kind
-      when :backslash then 2
-      when :class_open then class_skip(content, i)
-      when :char then emit_quantifier_at(node, content, content_offset, i)
+  def remove_quantifiers(node, pattern)
+    quantifier_spans(pattern.tokens).each do |start_offset, end_offset|
+      remove_span(node, pattern, start_offset, end_offset)
+    end
+  end
+
+  # Ruby reads `{2,}?` as one lazy interval, while regexp_parser reports an
+  # interval followed by a `?` quantifier. The two are joined so the lazy
+  # marker is removed with its interval instead of becoming a quantifier of
+  # its own.
+  def quantifier_spans(tokens)
+    quantifiers = tokens.select { |token| token.type == :quantifier }
+    spans = []
+    quantifiers.each do |token|
+      previous = spans.last
+      if lazy_marker_of?(token, previous)
+        previous[1] = token.end_offset
+      else
+        spans << [token.start_offset, token.end_offset, token]
       end
     end
+    spans.map { |start_offset, end_offset, _token| [start_offset, end_offset] }
   end
 
-  def emit_quantifier_at(node, content, content_offset, i)
-    match = match_quantifier(content, i)
-    return 1 if match.nil?
+  def lazy_marker_of?(token, previous)
+    return false if previous.nil?
 
-    add_mutation(offset: content_offset + i, length: match.length, replacement: "", node: node)
-    match.length
+    previous.last.text.start_with?("{") && token.text == "?" && previous[1] == token.start_offset
   end
 
-  def match_quantifier(content, pos)
-    case content[pos]
-    when "+", "*", "?"
-      content[pos]
-    when "{"
-      if (m = content[pos..].match(/\A\{\d+(?:,\d*)?\}/))
-        m[0]
-      end
+  def remove_anchors(node, pattern)
+    pattern.tokens.each do |token|
+      next unless token.type == :anchor && REMOVABLE_ANCHORS.include?(token.token)
+
+      remove_span(node, pattern, token.start_offset, token.end_offset)
     end
   end
 
-  def remove_anchors(node, content, content_offset)
-    scan_regex_positions(content) do |kind, i|
-      case kind
-      when :backslash then try_emit_backslash_anchor(node, content, content_offset, i)
-      when :class_open then class_skip(content, i)
-      when :char
-        try_emit_caret_dollar(node, content, content_offset, i)
-        1
-      end
+  def remove_class_ranges(node, pattern)
+    pattern.tokens.each do |token|
+      next unless token.type == :set && token.token == :range
+
+      remove_span(node, pattern, token.start_offset, token.end_offset)
     end
   end
 
-  def try_emit_backslash_anchor(node, content, content_offset, i)
-    anchor = match_backslash_anchor(content, i)
-    return 2 if anchor.nil?
+  def remove_span(node, pattern, start_offset, end_offset)
+    return unless pattern.compiles?(start_offset, end_offset, "")
 
-    add_mutation(offset: content_offset + i, length: anchor.length, replacement: "", node: node)
-    anchor.length
-  end
-
-  def try_emit_caret_dollar(node, content, content_offset, i)
-    return unless %w[^ $].include?(content[i])
-
-    add_mutation(offset: content_offset + i, length: 1, replacement: "", node: node)
-  end
-
-  def match_backslash_anchor(content, pos)
-    return nil unless content[pos] == "\\"
-
-    two_char = content[pos, 2]
-    return two_char if %w[\\A \\z \\Z].include?(two_char)
-
-    nil
-  end
-
-  def remove_character_class_ranges(node, content, content_offset)
-    scan_regex_positions(content) do |kind, i|
-      case kind
-      when :backslash then 2
-      when :class_open
-        scan_ranges_in_class(node, content, content_offset, i)
-        class_skip(content, i)
-      when :char then 1
-      end
-    end
-  end
-
-  def scan_ranges_in_class(node, content, content_offset, class_start)
-    first_item = skip_class_prefix(content, class_start)
-    i = first_item
-
-    while i < content.length && content[i] != "]"
-      if content[i] == "\\"
-        i += 2
-        next
-      end
-
-      emit_range_removal(node, content, content_offset, first_item, i) if content[i] == "-"
-      i += 1
-    end
-  end
-
-  def skip_class_prefix(content, class_start)
-    i = class_start + 1
-    i += 1 if i < content.length && content[i] == "^"
-    i += 1 if i < content.length && content[i] == "]"
-    i
-  end
-
-  def emit_range_removal(node, content, content_offset, first_item, pos)
-    return unless pos > first_item && pos + 1 < content.length && content[pos + 1] != "]"
-
-    add_mutation(
-      offset: content_offset + pos,
-      length: 1,
-      replacement: "",
-      node: node
-    )
-  end
-
-  # Walks `content` yielding (kind, position) for each significant token:
-  # :backslash for an escape sequence, :class_open for `[`, :char for any
-  # other byte. The block returns the number of characters to advance from
-  # `position` — callers decide how to handle each case (skip, emit a
-  # mutation, descend into a character class, etc.).
-  def scan_regex_positions(content)
-    i = 0
-    while i < content.length
-      advance = case content[i]
-                when "\\" then yield(:backslash, i)
-                when "[" then yield(:class_open, i)
-                else yield(:char, i)
-                end
-      i += advance
-    end
-  end
-
-  def class_skip(content, pos)
-    skip_character_class(content, pos) - pos
-  end
-
-  def skip_character_class(content, pos)
-    scan_to_class_close(content, skip_class_prefix(content, pos))
-  end
-
-  def scan_to_class_close(content, start)
-    i = start
-    while i < content.length
-      return i + 1 if content[i] == "]"
-
-      i += content[i] == "\\" ? 2 : 1
-    end
-    i
+    add_mutation(offset: start_offset, length: end_offset - start_offset, replacement: "", node: node)
   end
 end
