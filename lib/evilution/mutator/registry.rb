@@ -152,7 +152,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::IntegerDivisionToFdiv,
       Evilution::Mutator::Operator::OffByOneBoundary,
       Evilution::Mutator::Operator::FormatSpecifierSwap,
-      Evilution::Mutator::Operator::AliasRemoval
+      Evilution::Mutator::Operator::AliasRemoval,
+      Evilution::Mutator::Operator::RegexpCharacterTypeComplement
     ].each { |op| registry.register(op) }
     registry
   end
