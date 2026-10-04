@@ -5,6 +5,7 @@ PATH
       diff-lcs (>= 1.5, < 2)
       mcp (>= 0.8, < 2)
       prism (>= 1.5, < 2)
+      regexp_parser (>= 2.9, < 3)
 
 GEM
   remote: https://rubygems.org/
