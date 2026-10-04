@@ -10,6 +10,11 @@ RSpec.describe Evilution::Git::ChangedFiles do
     Dir.mktmpdir("changed_files_spec") do |dir|
       Dir.chdir(dir) do
         system("git", "init", "--quiet", "--initial-branch=main", out: File::NULL, err: File::NULL)
+        # A commit can start git's housekeeping in the background, which
+        # creates and removes .git/objects/maintenance.lock while mktmpdir is
+        # deleting the repo, so the cleanup fails with ENOENT.
+        system("git", "config", "maintenance.auto", "false")
+        system("git", "config", "gc.auto", "0")
         system("git", "config", "user.email", "spec@example.com")
         system("git", "config", "user.name", "Spec")
         block.call(dir)
