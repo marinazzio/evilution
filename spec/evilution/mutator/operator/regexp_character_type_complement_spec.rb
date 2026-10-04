@@ -34,6 +34,13 @@ RSpec.describe Evilution::Mutator::Operator::RegexpCharacterTypeComplement do
       expect(mutated_patterns("/[\\d_]/")).to eq(["/[\\D_]/"])
     end
 
+    # Inside a class `\b` is a backspace, not a word boundary, and `[\B]` is
+    # a literal B.
+    it "leaves a backspace escape inside a character class alone" do
+      expect(mutated_patterns("/[\\b]/")).to be_empty
+      expect(mutated_patterns("/[\\b\\d]/")).to eq(["/[\\b\\D]/"])
+    end
+
     # \X (grapheme cluster) and \R (line break) overlap: \X matches "\n" too,
     # so swapping them is not an inversion.
     it "leaves grapheme and line-break escapes alone" do

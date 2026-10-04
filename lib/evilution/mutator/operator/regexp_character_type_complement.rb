@@ -19,12 +19,17 @@ require_relative "../../ast/regexp_pattern"
 # one escape for another of the same kind and cannot touch a group or a
 # reference. Across 37,840 flips in real code, every mutant compiled.
 class Evilution::Mutator::Operator::RegexpCharacterTypeComplement < Evilution::Mutator::Base
+  # Complements by the scanner's token kind and name rather than by text:
+  # inside a character class `\b` scans as a backspace escape, and `\p{Digit}`
+  # shares the `digit` name under the property kind.
   COMPLEMENTS = {
-    "\\d" => "\\D", "\\D" => "\\d",
-    "\\s" => "\\S", "\\S" => "\\s",
-    "\\w" => "\\W", "\\W" => "\\w",
-    "\\h" => "\\H", "\\H" => "\\h",
-    "\\b" => "\\B", "\\B" => "\\b"
+    type: {
+      digit: "\\D", nondigit: "\\d",
+      space: "\\S", nonspace: "\\s",
+      word: "\\W", nonword: "\\w",
+      hex: "\\H", nonhex: "\\h"
+    },
+    anchor: { word_boundary: "\\B", nonword_boundary: "\\b" }
   }.freeze
 
   def visit_regular_expression_node(node)
@@ -36,7 +41,7 @@ class Evilution::Mutator::Operator::RegexpCharacterTypeComplement < Evilution::M
   private
 
   def flip(node, token)
-    complement = COMPLEMENTS[token.text]
+    complement = COMPLEMENTS.fetch(token.type, {})[token.token]
     return if complement.nil?
 
     add_mutation(
