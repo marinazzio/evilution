@@ -6,7 +6,7 @@ require_relative "../../ast/regexp_pattern"
 # Rename a named regexp group: `/(?<user>\w+)@/` becomes `/(?<_user>\w+)@/`.
 #
 # The pattern still matches and still captures, but `m[:user]`, `$~[:user]` or
-# the local variable `/(?<user>...)/ =~ s` binds no longer find it. A survivor
+# the local variable that `/(?<user>...)/ =~ s` binds no longer find it. A survivor
 # means nothing outside the pattern reads the named capture.
 #
 # References inside the pattern (`\k<user>`, `\g<user>`, `\k<user+1>`) are
