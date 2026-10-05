@@ -165,7 +165,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 135 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 136 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra aggressive mutators on top of `default`:
   - `PredicateToNil` replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values.
   - `ExceptionSwallow` appends `rescue nil` to a statement that raises by convention — a bang method, `fetch` without a default, `Integer` / `Float` / `Rational` — to surface tests that never make it fail and check the error comes out (`record.save!` -> `record.save! rescue nil`). It skips Ruby core in-place bangs (`uniq!`, `sort_by!`, …), `exit!`, statements already under a rescue, and `raise`; project bangs that mutate rather than raise will still show up as survivors.
@@ -496,7 +496,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (135 total)
+## Mutation Operators (136 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -523,6 +523,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `method_body_replacement` | Replace entire method body | Method body -> `nil`, `self`, `super` |
 | `negation_insertion` | Negate predicate methods | `x.empty?` -> `!x.empty?` |
 | `return_value_removal` | Strip return values | `return x` -> `return` |
+| `return_keyword_removal` | Drop the `return` keyword and keep its value, so control flow continues past a guard clause or early return (several values become an array; skips returns in tail position, where the value is the result anyway, and bare `return`) | `return :neg if x.negative?` -> `:neg if x.negative?` |
 | `collection_replacement` | Swap collection methods | `map` -> `each`, `select` <-> `reject` |
 | `collection_return` | Replace collection return values | `return [1]` -> `return []` |
 | `scalar_return` | Replace scalar return values | `return 42` -> `return 0` |
@@ -1034,7 +1035,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 135 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 136 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention

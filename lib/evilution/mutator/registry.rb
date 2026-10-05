@@ -162,7 +162,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RegexpOptionRemoval,
       Evilution::Mutator::Operator::RescueHandlerPromotion,
       Evilution::Mutator::Operator::RescueHandlerConcatenation,
-      Evilution::Mutator::Operator::RescueElseConcatenation
+      Evilution::Mutator::Operator::RescueElseConcatenation,
+      Evilution::Mutator::Operator::ReturnKeywordRemoval
     ].each { |op| registry.register(op) }
     registry
   end
