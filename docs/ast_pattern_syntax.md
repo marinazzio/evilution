@@ -66,6 +66,29 @@ after calling `.to_s` on both sides:
 call{name=log}       # matches when node.name.to_s == "log"
 ```
 
+**Method names** that end in `?`, `!` or `=` are written as they are, and so are
+operator methods:
+
+```
+call{name=valid?}          # record.valid?
+call{name=strip_sources!}  # strip_sources!
+call{name=value=}          # record.value = 1
+call{name=<=>}             # a <=> b
+call{name=-@}              # -a (unary minus)
+```
+
+The bare operators are `<=>`, `===`, `==`, `=~`, `[]=`, `[]`, `<=`, `<<`, `<`,
+`>=`, `>>`, `>`, `+@`, `-@`, `+`, `-`, `/`, `%`, `&`, `^` and `~`. Any other
+name — `|`, `!`, `!=`, `!~`, `*`, `**`, a backtick — goes in single or double
+quotes, since unquoted these characters mean alternation, negation or a wildcard.
+A quoted name is matched literally:
+
+```
+call{name='|'}       # a | b, not an alternation
+call{name='*'}       # a * b, not a wildcard
+call{name='!='}      # a != b, not a negation
+```
+
 **Alternatives** use `|` (OR logic) within a single attribute value:
 
 ```
@@ -139,6 +162,13 @@ ignore_patterns:
 
   # Suppress mutations on constant `ENV` reads
   - "call{receiver=constant_read{name=ENV}}"
+
+  # Suppress mutations on bang and predicate calls, and on `<=>`
+  - "call{name=strip_sources!|eager_load!|valid?}"
+  - "call{name=<=>}"
+
+  # Quote names made of reserved characters
+  - "call{name='|'}"
 ```
 
 ## Pattern Matching Semantics
@@ -164,12 +194,21 @@ value          = "!" value
                | "*"
 nested_pattern = node_type "{" attributes "}"
 alternatives   = atom { "|" atom }
-atom           = identifier | "*"
+atom           = name | "*"
+name           = identifier [ "?" | "!" | "=" ]
+               | operator
+               | "'" { any character except "'" } "'"
+               | '"' { any character except '"' } '"'
+operator       = "<=>" | "===" | "==" | "=~" | "[]=" | "[]" | "<=" | "<<" | "<"
+               | ">=" | ">>" | ">" | "+@" | "-@" | "+" | "-" | "/" | "%"
+               | "&" | "^" | "~"
 identifier     = [a-zA-Z_] [a-zA-Z0-9_]*
 ```
 
-A bare `identifier` without `{` is parsed as a scalar value (matched via `.to_s`).
-An `identifier` followed by `{` is parsed as a nested pattern.
+A bare `name` without `{` is parsed as a scalar value (matched via `.to_s`).
+An `identifier` followed by `{` is parsed as a nested pattern. Operators are
+read longest first, so `<=>` is never taken for `<=`. Node types and attribute
+names are always plain identifiers. A quoted name is at least one character long.
 
 ## Examples
 
@@ -183,6 +222,9 @@ An `identifier` followed by `{` is parsed as a nested pattern.
 | `call{receiver=**}` | `foo()`, `x.foo()`, `a.b.foo()` | *(matches all)* |
 | `def{name=to_s}` | `def to_s; ... end` | `def to_str; ... end` |
 | `call{name=!log}` | `debug()`, `info()` | `log()` |
+| `call{name=valid?\|save!}` | `x.valid?`, `save!` | `valid`, `save` |
+| `call{name=<=>}` | `a <=> b` | `a <= b` |
+| `call{name='\|'}` | `a \| b` | `a & b` |
 
 ## Design Decisions
 
@@ -191,8 +233,11 @@ An `identifier` followed by `{` is parsed as a nested pattern.
    write patterns immediately.
 
 2. **Unquoted values**: Attribute values don't require quotes. This keeps YAML clean
-   and avoids escaping issues. The tradeoff is that values cannot contain `{`, `}`,
-   `,`, `=`, `|`, or `!` — these are reserved syntax characters.
+   and avoids escaping issues. Method names ending in `?`, `!` or `=` and operators
+   that cannot be confused with pattern syntax are written bare too. Only names
+   built from reserved characters (`|`, `!`, `*`) or characters outside a method
+   name need quotes; there is no escaping inside them. In YAML, use one kind of
+   quote for the YAML string and the other inside it: `- "call{name='|'}"`.
 
 3. **Implicit wildcards for unspecified attributes**: `call{name=log}` matches
    regardless of receiver, arguments, etc. Only specified attributes constrain the

@@ -224,5 +224,143 @@ RSpec.describe Evilution::AST::Pattern::Parser do
       expect(value_matcher.match_value?("*")).to be true
       expect(value_matcher.match_value?(:bar)).to be false
     end
+
+    context "with method names that are not plain identifiers" do
+      it "parses a bang method name" do
+        matcher = parse("call{name=strip_sources!}")
+
+        expect(matcher.match?(parse_node("strip_sources!"))).to be true
+        expect(matcher.match?(parse_node("strip_sources"))).to be false
+      end
+
+      it "parses a predicate method name" do
+        matcher = parse("call{name=valid?}")
+
+        expect(matcher.match?(parse_node("record.valid?"))).to be true
+        expect(matcher.match?(parse_node("record.valid"))).to be false
+      end
+
+      it "parses a setter method name" do
+        matcher = parse("call{name=value=}")
+
+        expect(matcher.match?(parse_node("record.value = 1"))).to be true
+        expect(matcher.match?(parse_node("record.value"))).to be false
+      end
+
+      it "parses suffixed names as alternatives" do
+        matcher = parse("call{name=save!|valid?|save}")
+
+        expect(matcher.match?(parse_node("save!"))).to be true
+        expect(matcher.match?(parse_node("valid?"))).to be true
+        expect(matcher.match?(parse_node("save"))).to be true
+        expect(matcher.match?(parse_node("valid"))).to be false
+      end
+
+      it "parses a suffixed name next to other attributes" do
+        matcher = parse("call{name=empty? , receiver=call{name=items}}")
+
+        expect(matcher.match?(parse_node("items.empty?"))).to be true
+        expect(matcher.match?(parse_node("other.empty?"))).to be false
+      end
+
+      it "negates a suffixed name" do
+        matcher = parse("call{name=!valid?}")
+
+        expect(matcher.match?(parse_node("valid?"))).to be false
+        expect(matcher.match?(parse_node("valid"))).to be true
+      end
+
+      it "parses bare operator method names" do
+        {
+          "<=>" => "a <=> b", "===" => "a === b", "==" => "a == b", "=~" => "a =~ b",
+          "[]=" => "a[1] = b", "[]" => "a[1]", "<=" => "a <= b", "<<" => "a << b", "<" => "a < b",
+          ">=" => "a >= b", ">>" => "a >> b", ">" => "a > b", "+@" => "+a", "-@" => "-a",
+          "+" => "a + b", "-" => "a - b", "/" => "a / b", "%" => "a % b", "&" => "a & b",
+          "^" => "a ^ b", "~" => "~a"
+        }.each do |name, code|
+          matcher = parse("call{name=#{name}}")
+
+          expect(matcher.match?(parse_node(code))).to be(true), "expected #{name} to match #{code}"
+          expect(matcher.match?(parse_node("a.foo"))).to be(false), "expected #{name} not to match a.foo"
+        end
+      end
+
+      it "takes the longest operator" do
+        matcher = parse("call{name=<=>}")
+
+        expect(matcher.match?(parse_node("a <=> b"))).to be true
+        expect(matcher.match?(parse_node("a <= b"))).to be false
+        expect(matcher.match?(parse_node("a < b"))).to be false
+      end
+
+      it "parses operators as alternatives" do
+        matcher = parse("call{name=<|<=|>|>=}")
+
+        expect(matcher.match?(parse_node("a < b"))).to be true
+        expect(matcher.match?(parse_node("a >= b"))).to be true
+        expect(matcher.match?(parse_node("a == b"))).to be false
+      end
+
+      it "negates an operator" do
+        matcher = parse("call{name=!==}")
+
+        expect(matcher.match?(parse_node("a == b"))).to be false
+        expect(matcher.match?(parse_node("a != b"))).to be true
+      end
+
+      it "parses single-quoted names" do
+        matcher = parse("call{name='|'}")
+
+        expect(matcher.match?(parse_node("a | b"))).to be true
+        expect(matcher.match?(parse_node("a & b"))).to be false
+      end
+
+      it "parses double-quoted names" do
+        matcher = parse('call{name="!="}')
+
+        expect(matcher.match?(parse_node("a != b"))).to be true
+        expect(matcher.match?(parse_node("a == b"))).to be false
+      end
+
+      it "matches quoted names literally, without wildcard or negation meaning" do
+        expect(parse("call{name='*'}").match?(parse_node("a * b"))).to be true
+        expect(parse("call{name='*'}").match?(parse_node("a + b"))).to be false
+        expect(parse("call{name='**'}").match?(parse_node("a ** b"))).to be true
+        expect(parse("call{name='!'}").match?(parse_node("!a"))).to be true
+        expect(parse("call{name='!~'}").match?(parse_node("a !~ b"))).to be true
+      end
+
+      it "parses quoted names as alternatives" do
+        matcher = parse("call{name='|'|'&'|^}")
+
+        expect(matcher.match?(parse_node("a | b"))).to be true
+        expect(matcher.match?(parse_node("a & b"))).to be true
+        expect(matcher.match?(parse_node("a ^ b"))).to be true
+        expect(matcher.match?(parse_node("a + b"))).to be false
+      end
+
+      it "raises on an unterminated quoted name" do
+        expect { parse("call{name='<=>}") }.to raise_error(
+          Evilution::ConfigError, /unterminated quoted name starting at position 10/
+        )
+      end
+
+      it "raises on an empty quoted name" do
+        expect { parse("call{name=''}") }.to raise_error(
+          Evilution::ConfigError, /empty quoted name at position 10/
+        )
+      end
+
+      it "suggests quoting a name it cannot read" do
+        expect { parse("call{name=`}") }.to raise_error(
+          Evilution::ConfigError, /invalid name starting with '`' at position 10.*quote/
+        )
+      end
+
+      it "keeps node types and attribute names to plain identifiers" do
+        expect { parse("call?") }.to raise_error(Evilution::ConfigError, /unexpected characters at position 4/)
+        expect { parse("call{name?=foo}") }.to raise_error(Evilution::ConfigError, /expected '='/)
+      end
+    end
   end
 end

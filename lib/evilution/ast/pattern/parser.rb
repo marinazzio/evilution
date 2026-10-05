@@ -2,6 +2,7 @@
 
 require_relative "../pattern"
 require_relative "matcher"
+require_relative "method_name"
 
 class Evilution::AST::Pattern::Parser
   def initialize(input)
@@ -39,15 +40,16 @@ class Evilution::AST::Pattern::Parser
     node_type = consume_identifier
     skip_whitespace
 
-    attributes = {}
-    if current_char == "{"
-      advance(1)
-      attributes = parse_attributes
-      skip_whitespace
-      expect_char("}")
-    end
-
+    attributes = current_char == "{" ? parse_braced_attributes : {}
     Evilution::AST::Pattern::NodeMatcher.new(node_type, attributes)
+  end
+
+  def parse_braced_attributes
+    advance(1)
+    attributes = parse_attributes
+    skip_whitespace
+    expect_char("}")
+    attributes
   end
 
   def parse_attributes
@@ -109,15 +111,11 @@ class Evilution::AST::Pattern::Parser
   end
 
   def parse_value_or_nested
-    id = consume_identifier
+    id, @pos = Evilution::AST::Pattern::MethodName.scan(@input, @pos)
     skip_whitespace
 
     if current_char == "{"
-      advance(1)
-      attrs = parse_attributes
-      skip_whitespace
-      expect_char("}")
-      Evilution::AST::Pattern::NodeMatcher.new(id, attrs)
+      Evilution::AST::Pattern::NodeMatcher.new(id, parse_braced_attributes)
     else
       parse_alternatives_from(id)
     end
@@ -133,7 +131,8 @@ class Evilution::AST::Pattern::Parser
         advance(1)
         values << "*"
       else
-        values << consume_identifier
+        name, @pos = Evilution::AST::Pattern::MethodName.scan(@input, @pos)
+        values << name
       end
     end
 

@@ -48,6 +48,17 @@ RSpec.describe Evilution::AST::Pattern::Filter do
       expect(filter.skip?(node)).to be true
     end
 
+    it "matches bang, predicate and operator method names" do
+      filter = described_class.new(["call{name=strip_sources!|valid?}", "call{name=<=>}", "call{name='|'}"])
+
+      expect(filter.skip?(parse_node("strip_sources!"))).to be true
+      expect(filter.skip?(parse_node("record.valid?"))).to be true
+      expect(filter.skip?(parse_node("a <=> b"))).to be true
+      expect(filter.skip?(parse_node("a | b"))).to be true
+      expect(filter.skip?(parse_node("strip_sources"))).to be false
+      expect(filter.skip?(parse_node("a <= b"))).to be false
+    end
+
     it "rejects when nested pattern does not match" do
       filter = described_class.new(["call{name=info, receiver=call{name=logger}}"])
       node = parse_node("foo.info")
