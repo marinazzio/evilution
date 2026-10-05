@@ -14,6 +14,7 @@ require_relative "state_guard/world_filtered_examples"
 require_relative "state_guard/reporter_arrays"
 require_relative "state_guard/example_groups_constants"
 require_relative "state_guard/configuration_state"
+require_relative "../../diagnostic"
 
 class Evilution::Integration::RSpec::StateGuard
   DEFAULT_STRATEGIES = [
@@ -43,6 +44,6 @@ class Evilution::Integration::RSpec::StateGuard
   def release_one(strategy, captured)
     strategy.release(captured)
   rescue StandardError => e
-    warn "[evilution] state release failed for #{strategy.class.name}: #{e.class}: #{e.message}"
+    Evilution::Diagnostic.warn("[evilution] state release failed for #{strategy.class.name}: #{e.class}: #{e.message}")
   end
 end

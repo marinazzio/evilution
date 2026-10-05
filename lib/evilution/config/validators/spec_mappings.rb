@@ -2,6 +2,7 @@
 
 require_relative "../validators"
 require_relative "base"
+require_relative "../../diagnostic"
 
 class Evilution::Config::Validators::SpecMappings < Evilution::Config::Validators::Base
   def self.call(value)
@@ -49,7 +50,7 @@ class Evilution::Config::Validators::SpecMappings < Evilution::Config::Validator
         specs.each do |spec_path|
           next if File.exist?(spec_path)
 
-          warn "[evilution] spec_mappings[#{source.inspect}]: #{spec_path} not found, skipping"
+          Evilution::Diagnostic.warn("[evilution] spec_mappings[#{source.inspect}]: #{spec_path} not found, skipping")
         end
       end
     end

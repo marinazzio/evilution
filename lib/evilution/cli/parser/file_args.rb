@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../parser"
+require_relative "../../diagnostic"
 
 module Evilution::CLI::Parser::FileArgs
   ParsedPaths = Data.define(:files, :ranges)
@@ -24,7 +25,7 @@ module Evilution::CLI::Parser::FileArgs
 
   def expand_spec_dir(dir)
     unless File.directory?(dir)
-      warn("Error: #{dir} is not a directory")
+      Evilution::Diagnostic.warn("Error: #{dir} is not a directory")
       return []
     end
 

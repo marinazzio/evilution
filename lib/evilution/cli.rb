@@ -24,6 +24,7 @@ require_relative "cli/commands/session_gc"
 require_relative "cli/commands/compare"
 require_relative "cli/commands/run"
 require_relative "cli/exit_guard"
+require_relative "diagnostic"
 
 # @api private
 class Evilution::CLI
@@ -42,14 +43,14 @@ class Evilution::CLI
     return run_subcommand_error(@parse_error) if @command == :parse_error
 
     result = Dispatcher.lookup(@command).new(@parsed, stdout: $stdout, stderr: $stderr).call
-    warn("Error: #{result.error.message}") if result.error && !result.error_rendered
+    Evilution::Diagnostic.warn("Error: #{result.error.message}") if result.error && !result.error_rendered
     result.exit_code
   end
 
   private
 
   def run_subcommand_error(message)
-    warn("Error: #{message}")
+    Evilution::Diagnostic.warn("Error: #{message}")
     2
   end
 end

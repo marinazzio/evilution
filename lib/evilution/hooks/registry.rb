@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../hooks"
+require_relative "../diagnostic"
 
 class Evilution::Hooks::Registry
   def initialize(on_error: nil)
@@ -54,7 +55,7 @@ class Evilution::Hooks::Registry
     if @on_error
       @on_error.call(event, error)
     else
-      warn "[evilution] hook error in #{event}: #{error.message}"
+      Evilution::Diagnostic.warn("[evilution] hook error in #{event}: #{error.message}")
     end
   end
 end

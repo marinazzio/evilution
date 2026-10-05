@@ -170,13 +170,15 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       store = instance_double(Evilution::Coverage::MapStore, stale_files: ["/x/lib/foo.rb"])
       allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
       allow(Evilution::Coverage::MapBuilder).to receive(:new).and_raise(RuntimeError, "boom")
-      allow(runner).to receive(:warn)
+      allow(Evilution::Diagnostic).to receive(:warn)
 
       expect(Evilution::Integration::RSpec).to receive(:new) do |**kwargs|
         expect(kwargs[:example_filter]).to be_a(Evilution::ExampleFilter)
         Evilution::Integration::RSpec.allocate
       end
       runner.build_integration
+      expect(Evilution::Diagnostic).to have_received(:warn)
+        .with("evilution: coverage targeting unavailable (RuntimeError: boom); using lexical targeting")
     end
 
     it "omits example_filter when example_targeting disabled" do

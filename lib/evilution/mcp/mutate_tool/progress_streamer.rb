@@ -3,6 +3,7 @@
 require "json"
 require_relative "../mutate_tool"
 require_relative "../../reporter/suggestion"
+require_relative "../../diagnostic"
 
 module Evilution::MCP::MutateTool::ProgressStreamer
   def self.build(server_context:, suggest_tests:, integration:)
@@ -21,7 +22,7 @@ module Evilution::MCP::MutateTool::ProgressStreamer
         detail = build_suggestion_detail(result.mutation, suggestion)
         server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
       rescue StandardError => e
-        warn "[evilution] progress stream disabled after error: #{e.class}: #{e.message}"
+        Evilution::Diagnostic.warn("[evilution] progress stream disabled after error: #{e.class}: #{e.message}")
         disabled = true
       end
     end

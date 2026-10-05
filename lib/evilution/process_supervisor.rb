@@ -3,6 +3,7 @@
 require "fileutils"
 require_relative "version"
 require_relative "temp_dir_tracker"
+require_relative "diagnostic"
 
 # Single owner of the process-lifecycle invariant: every pid spawned here is
 # group-isolated, tracked in a signal-safe registry, group-signalled through a
@@ -219,8 +220,8 @@ class Evilution::ProcessSupervisor
     # group: a later group-kill won't sweep its subtree. Don't raise (spawn
     # must still return a usable handle), but surface it so the leak is
     # debuggable rather than silent.
-    warn "evilution: could not isolate process #{pid} into its own process " \
-         "group (#{e.class}: #{e.message}); grandchildren may survive a kill."
+    Evilution::Diagnostic.warn("evilution: could not isolate process #{pid} into its own process " \
+                               "group (#{e.class}: #{e.message}); grandchildren may survive a kill.")
   end
 
   # True once the child has been reaped (now or earlier). WNOHANG returns the

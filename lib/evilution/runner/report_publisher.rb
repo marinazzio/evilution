@@ -5,6 +5,7 @@ require_relative "../reporter/json"
 require_relative "../reporter/cli"
 require_relative "../reporter/html"
 require_relative "../session/store"
+require_relative "../diagnostic"
 
 class Evilution::Runner::ReportPublisher
   def initialize(config)
@@ -46,7 +47,7 @@ class Evilution::Runner::ReportPublisher
   def publish_html(output)
     path = "evilution-report.html"
     File.write(path, output)
-    warn "HTML report written to #{path}"
+    Evilution::Diagnostic.warn("HTML report written to #{path}")
   end
 
   def save_session(summary)
@@ -54,7 +55,7 @@ class Evilution::Runner::ReportPublisher
 
     Evilution::Session::Store.new.save(summary)
   rescue StandardError => e
-    warn "[evilution] failed to save session: #{e.message}" unless config.quiet
+    Evilution::Diagnostic.warn("[evilution] failed to save session: #{e.message}") unless config.quiet
   end
 
   private

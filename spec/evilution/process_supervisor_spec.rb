@@ -306,11 +306,11 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
 
     it "tolerates a benign parent-side setpgid failure (ESRCH) without warning" do
-      allow(supervisor).to receive(:warn)
+      allow(Evilution::Diagnostic).to receive(:warn)
       allow(Process).to receive(:setpgid).and_raise(Errno::ESRCH)
       h = supervisor.spawn(isolate_in_child: false) { sleep 60 }
       begin
-        expect(supervisor).not_to have_received(:warn)
+        expect(Evilution::Diagnostic).not_to have_received(:warn)
       ensure
         allow(Process).to receive(:setpgid).and_call_original
         supervisor.terminate(h, grace: 0.2)
@@ -318,12 +318,12 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
 
     it "warns but does not raise when parent-side isolation fails unexpectedly" do
-      allow(supervisor).to receive(:warn)
+      allow(Evilution::Diagnostic).to receive(:warn)
       allow(Process).to receive(:setpgid).and_raise(Errno::EPERM)
       h = nil
       begin
         expect { h = supervisor.spawn(isolate_in_child: false) { sleep 60 } }.not_to raise_error
-        expect(supervisor).to have_received(:warn).with(/could not isolate/)
+        expect(Evilution::Diagnostic).to have_received(:warn).with(/could not isolate/)
       ensure
         allow(Process).to receive(:setpgid).and_call_original
         supervisor.terminate(h, grace: 0.2) if h

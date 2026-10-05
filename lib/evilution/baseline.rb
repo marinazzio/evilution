@@ -2,6 +2,7 @@
 
 require_relative "spec_resolver"
 require_relative "process_cleanup"
+require_relative "diagnostic"
 
 class Evilution::Baseline
   Result = Struct.new(:failed_spec_files, :duration) do
@@ -96,7 +97,7 @@ class Evilution::Baseline
   end
 
   def warn_timeout(spec_file)
-    warn "[evilution] Baseline for #{spec_file} timed out after #{@timeout}s; treating it as failing."
+    Evilution::Diagnostic.warn("[evilution] Baseline for #{spec_file} timed out after #{@timeout}s; treating it as failing.")
   end
 
   def terminate_child(pid)
@@ -137,7 +138,7 @@ class Evilution::Baseline
 
   def warn_no_matching_test(file_path)
     action = @fallback_to_full_suite ? "running full suite" : "marking its mutations unresolved"
-    warn "[evilution] No matching test found for #{file_path}, #{action}. #{no_match_hint(file_path)}"
+    Evilution::Diagnostic.warn("[evilution] No matching test found for #{file_path}, #{action}. #{no_match_hint(file_path)}")
   end
 
   def no_match_hint(file_path)

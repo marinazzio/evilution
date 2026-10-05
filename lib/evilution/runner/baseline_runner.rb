@@ -12,6 +12,7 @@ require_relative "../integration/test_unit"
 require_relative "../example_filter"
 require_relative "../spec_ast_cache"
 require_relative "../source_ast_cache"
+require_relative "../diagnostic"
 
 unless defined?(Evilution::Runner::INTEGRATIONS)
   Evilution::Runner::INTEGRATIONS = {
@@ -119,7 +120,7 @@ class Evilution::Runner::BaselineRunner
 
     Evilution::CoverageExampleFilter.new(map: map, lexical: lexical)
   rescue StandardError => e
-    warn "evilution: coverage targeting unavailable (#{e.class}: #{e.message}); using lexical targeting"
+    Evilution::Diagnostic.warn("evilution: coverage targeting unavailable (#{e.class}: #{e.message}); using lexical targeting")
     lexical
   end
 
