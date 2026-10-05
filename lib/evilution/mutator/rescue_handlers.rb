@@ -61,6 +61,18 @@ class Evilution::Mutator::RescueHandlers
     end
   end
 
+  # What goes between the last statement of a body and code appended after
+  # it: a new line at that statement's indentation, or `; ` when the body
+  # does not end its line (`begin; a; rescue ...`).
+  def self.continuation(source, statements)
+    end_offset = statements.location.end_offset
+    return "; " unless source.byteslice(end_offset, 1) == "\n"
+
+    start_offset = statements.body.last.location.start_offset
+    line_start = (source.byterindex("\n", start_offset - 1) || -1) + 1
+    "\n#{source.byteslice(line_start, start_offset - line_start)}"
+  end
+
   def self.nodes_in(node)
     [node, *node.compact_child_nodes.flat_map { |child| nodes_in(child) }]
   end

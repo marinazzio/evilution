@@ -41,7 +41,7 @@ class Evilution::Mutator::Operator::RescueHandlerConcatenation < Evilution::Muta
 
   def append_handlers(node)
     body_end = node.statements.location.end_offset
-    separator = separator_after(node.statements)
+    separator = Evilution::Mutator::RescueHandlers.continuation(@file_source, node.statements)
 
     Evilution::Mutator::RescueHandlers.new(node).clauses.each do |clause|
       handler = clause.statements
@@ -65,16 +65,5 @@ class Evilution::Mutator::Operator::RescueHandlerConcatenation < Evilution::Muta
     when Prism::NextNode, Prism::ReturnNode then statement.arguments.nil?
     else false
     end
-  end
-
-  # A body that ends its line is continued on a new line at its own
-  # indentation; a one-line `begin; a; rescue ...` is continued with `; `.
-  def separator_after(statements)
-    end_offset = statements.location.end_offset
-    return "; " unless @file_source.byteslice(end_offset, 1) == "\n"
-
-    last = statements.body.last
-    line_start = line_start_byte(@file_source, last.location.start_offset)
-    "\n#{byteslice_source(line_start, last.location.start_offset - line_start)}"
   end
 end
