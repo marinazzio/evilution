@@ -41,11 +41,12 @@ module Evilution::AST
       @file_path = file_path
       @subjects = []
       @context = []
+      @singleton = [false]
     end
 
     def visit_module_node(node)
       @context.push(constant_name(node.constant_path))
-      super
+      within_scope(singleton: false) { super }
       @context.pop
     end
 
@@ -56,12 +57,22 @@ module Evilution::AST
       @context.push(constant_name(node.constant_path))
       superclass = node.superclass
       add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
-      super
+      within_scope(singleton: false) { super }
       @context.pop
     end
 
+    # A `def` inside `class << self` defines a method on the enclosing
+    # class's singleton, like `def self.name`; inside `class << Store` it
+    # defines one on Store.
+    def visit_singleton_class_node(node)
+      constant = constant_expression?(node.expression)
+      @context.push(constant_name(node.expression)) if constant
+      within_scope(singleton: true) { super }
+      @context.pop if constant
+    end
+
     def visit_def_node(node)
-      separator = node.receiver ? "." : "#"
+      separator = node.receiver || @singleton.last ? "." : "#"
       add_subject(node, "#{@context.join("::")}#{separator}#{node.name}", :method)
       super
     end
@@ -79,6 +90,17 @@ module Evilution::AST
     end
 
     private
+
+    def within_scope(singleton:)
+      @singleton.push(singleton)
+      yield
+    ensure
+      @singleton.pop
+    end
+
+    def constant_expression?(node)
+      node.is_a?(Prism::ConstantReadNode) || node.is_a?(Prism::ConstantPathNode)
+    end
 
     # A value-object definition assigned to a constant is a subject of its
     # own, and a scope for what its block defines: `def area` in

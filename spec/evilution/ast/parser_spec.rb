@@ -257,6 +257,138 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with methods inside class << self" do
+    def subject_names(source)
+      tmpfile = Tempfile.new(["singleton_class", ".rb"])
+      tmpfile.write(source)
+      tmpfile.close
+
+      parser.call(tmpfile.path).map(&:name)
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "names them with dot separator" do
+      names = subject_names(<<~RUBY)
+        class Gateway
+          class << self
+            def create_group(owner)
+              owner
+            end
+
+            private
+
+            def build(path)
+              path
+            end
+          end
+
+          def run
+            :ok
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Gateway.create_group", "Gateway.build", "Gateway#run")
+    end
+
+    it "names them within a nested module" do
+      names = subject_names(<<~RUBY)
+        module Api
+          module Client
+            class << self
+              def fetch
+                :ok
+              end
+            end
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Api::Client.fetch")
+    end
+
+    it "names instance methods after the singleton block with hash separator" do
+      names = subject_names(<<~RUBY)
+        class Gateway
+          class << self
+            def one
+              1
+            end
+          end
+
+          def two
+            2
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Gateway.one", "Gateway#two")
+    end
+
+    it "names methods of a class defined inside the singleton block as instance methods" do
+      names = subject_names(<<~RUBY)
+        class Outer
+          class << self
+            class Inner
+              def call
+                :ok
+              end
+            end
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Outer::Inner#call")
+    end
+
+    it "names methods of class << Constant after that constant" do
+      names = subject_names(<<~RUBY)
+        module Registry
+          class << Store
+            def lookup
+              :ok
+            end
+          end
+
+          def self.reset
+            :ok
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Registry::Store.lookup", "Registry.reset")
+    end
+
+    it "names methods of class << Namespaced::Constant after that path" do
+      names = subject_names(<<~RUBY)
+        class << Cache::Store
+          def lookup
+            :ok
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Cache::Store.lookup")
+    end
+
+    it "names methods of a module defined inside the singleton block as instance methods" do
+      names = subject_names(<<~RUBY)
+        class Outer
+          class << self
+            module Helpers
+              def help
+                :ok
+              end
+            end
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Outer::Helpers#help")
+    end
+  end
+
   context "with value-object definitions outside any method" do
     def subjects_in(source)
       tmpfile = Tempfile.new(["value_objects", ".rb"])
