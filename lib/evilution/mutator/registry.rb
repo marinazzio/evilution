@@ -160,7 +160,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RegexpCaptureToPassive,
       Evilution::Mutator::Operator::RegexpNamedGroupRename,
       Evilution::Mutator::Operator::RegexpOptionRemoval,
-      Evilution::Mutator::Operator::RescueHandlerPromotion
+      Evilution::Mutator::Operator::RescueHandlerPromotion,
+      Evilution::Mutator::Operator::RescueHandlerConcatenation
     ].each { |op| registry.register(op) }
     registry
   end
