@@ -5,12 +5,12 @@ require_relative "../rescue_handlers"
 
 # Move the else clause of a rescue into the code it guards, keeping the rescue:
 #
-#   begin                  begin
-#     fetch(id)              fetch(id)
-#   rescue NotFound    ->    notify
-#     default              rescue NotFound
-#   else                     default
-#     notify               end
+#   begin                    begin
+#     fetch(id)                fetch(id)
+#   rescue StandardError ->    notify
+#     default                rescue StandardError
+#   else                       default
+#     notify                 end
 #   end
 #
 # The else code still runs only when the body succeeded; the one thing that
