@@ -309,6 +309,19 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#uncovered_code" do
+    it "defaults to an empty list" do
+      expect([summary.uncovered_code, summary.uncovered_code?]).to eq([[], false])
+    end
+
+    it "reports the entries it was given" do
+      entries = [{ file: "app/models/order.rb", lines: ["2-4"] }]
+      s = described_class.new(results: results, uncovered_code: entries)
+
+      expect([s.uncovered_code, s.uncovered_code?]).to eq([entries, true])
+    end
+  end
+
   describe "#success?" do
     it "returns true when score meets threshold" do
       all_killed = described_class.new(results: [make_result(:killed)])

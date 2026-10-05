@@ -53,6 +53,9 @@ Metrics/PerceivedComplexity:
 
 Metrics/ParameterLists:
   Max: 8
+  inherit_mode:
+    merge:
+      - Exclude
   Exclude:
     - "lib/evilution/integration/rspec.rb"
 

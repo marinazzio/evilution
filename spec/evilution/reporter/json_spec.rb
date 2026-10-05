@@ -241,6 +241,21 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["summary"]).not_to have_key("truncated")
     end
 
+    it "lists targeted lines that hold code outside every subject" do
+      uncovered_summary = Evilution::Result::Summary.new(
+        results: [], uncovered_code: [{ file: "app/models/order.rb", lines: %w[2-4 9] }]
+      )
+      parsed = JSON.parse(reporter.call(uncovered_summary))
+
+      expect(parsed["summary"]["uncovered_code"]).to eq([{ "file" => "app/models/order.rb", "lines" => %w[2-4 9] }])
+    end
+
+    it "omits uncovered_code when every targeted line belongs to a subject" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["summary"]).not_to have_key("uncovered_code")
+    end
+
     it "includes rounded peak_memory_mb when any result has child_rss_kb" do
       result_with_rss = Evilution::Result::MutationResult.new(
         mutation: killed_mutation,

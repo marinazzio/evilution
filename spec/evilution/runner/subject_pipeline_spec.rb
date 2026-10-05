@@ -414,6 +414,116 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         expect(pipeline.call.map(&:name)).to eq(["Foo#big"])
       end
     end
+
+    context "when the range holds code outside every subject" do
+      let(:model_source) do
+        <<~RUBY
+          class Order
+            scope :for_owner, ->(owner) do
+              owner ? where(owner: owner) : none
+            end
+
+            def total
+              1
+            end
+          end
+        RUBY
+      end
+
+      it "warns which lines no subject covers" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", model_source)
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (2..4) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+
+          expect { expect(pipeline.call).to be_empty }
+            .to output("[evilution] #{file}:2-4 holds code outside every subject (class-body code such as " \
+                       "DSL calls and constants is not mutated); no mutations target those lines.\n").to_stderr
+          expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2-4"] }])
+        end
+      end
+
+      it "names only the uncovered part of a range that also reaches a method" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", model_source)
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (3..7) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+
+          expect { expect(pipeline.call.map(&:name)).to eq(["Order#total"]) }
+            .to output(/#{Regexp.escape(file)}:3-4 holds code outside every subject/).to_stderr
+        end
+      end
+
+      it "stays silent when the range holds only methods" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", model_source)
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (6..8) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+
+          expect { pipeline.call }.not_to output.to_stderr
+          expect(pipeline.uncovered_code).to eq([])
+        end
+      end
+    end
+  end
+
+  describe "#call with a target file that has no subjects" do
+    it "warns which lines hold code no subject covers" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "app/models/scopes.rb", <<~RUBY)
+          module Scopes
+            LIMIT = 10
+
+            private
+
+            ORDER = :asc
+          end
+        RUBY
+        config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
+        pipeline = described_class.new(config, parser: parser)
+
+        expect { pipeline.call }.to output(/#{Regexp.escape(file)}:2, 6 holds code outside every subject/).to_stderr
+        expect(pipeline.uncovered_code).to eq([{ file: file, lines: %w[2 6] }])
+      end
+    end
+
+    it "does not inspect a whole file that has subjects" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "app/models/order.rb", <<~RUBY)
+          class Order
+            LIMIT = 10
+
+            def total
+              1
+            end
+          end
+        RUBY
+        config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
+        pipeline = described_class.new(config, parser: parser)
+
+        expect { pipeline.call }.not_to output.to_stderr
+        expect(pipeline.uncovered_code).to eq([])
+      end
+    end
+
+    it "stays silent for a file with no code" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/empty.rb", "# frozen_string_literal: true\n")
+        config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
+        pipeline = described_class.new(config, parser: parser)
+
+        expect { pipeline.call }.not_to output.to_stderr
+      end
+    end
   end
 
   describe "#call with no target_files and no target" do

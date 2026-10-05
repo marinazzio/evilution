@@ -6,10 +6,10 @@ require_relative "subject_scorer"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
-              :target_file_count, :infra_retried
+              :target_file_count, :infra_retried, :uncovered_code
 
   def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
-                 unresolved_target_files: [], target_file_count: nil, infra_retried: 0)
+                 unresolved_target_files: [], target_file_count: nil, infra_retried: 0, uncovered_code: [])
     @results = results
     @duration = duration
     @truncated = truncated
@@ -18,6 +18,7 @@ class Evilution::Result::Summary
     @unresolved_target_files = unresolved_target_files.freeze
     @target_file_count = target_file_count
     @infra_retried = infra_retried
+    @uncovered_code = uncovered_code.freeze
     freeze
   end
 
@@ -51,6 +52,12 @@ class Evilution::Result::Summary
   # about them was ever measured (EV-p4sm / GH #1603).
   def unresolved_targets?
     !unresolved_target_files.empty?
+  end
+
+  # Targeted lines that hold code outside every subject, so no mutation was
+  # ever generated for them: `{ file:, lines: ["2-4", "9"] }` per file.
+  def uncovered_code?
+    !uncovered_code.empty?
   end
 
   def truncated?

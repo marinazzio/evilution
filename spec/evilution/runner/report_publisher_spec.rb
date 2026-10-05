@@ -184,6 +184,10 @@ RSpec.describe Evilution::Runner::ReportPublisher do
           !unresolved_target_files.empty?
         end
 
+        def uncovered_code?
+          false
+        end
+
         def subjects_needing_attention_by_file
           []
         end

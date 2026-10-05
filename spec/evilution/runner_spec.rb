@@ -217,6 +217,9 @@ RSpec.describe Evilution::Runner do
   end
 
   describe "#call with line-range filtering" do
+    # The parser is stubbed over files that do not exist on disk.
+    before { allow(Evilution::AST::UncoveredCode).to receive(:call).and_return([]) }
+
     let(:subject_in_range) do
       double("Subject",
              name: "Example#foo",
@@ -753,6 +756,9 @@ RSpec.describe Evilution::Runner do
   end
 
   describe "#call with namespace wildcard target" do
+    # The parser is stubbed over files that do not exist on disk.
+    before { allow(Evilution::AST::UncoveredCode).to receive(:call).and_return([]) }
+
     let(:bar_subject) do
       double("Subject", name: "Foo::Bar#run", file_path: "lib/foo/bar.rb",
                         line_number: 3, release_node!: nil)
@@ -1271,6 +1277,9 @@ RSpec.describe Evilution::Runner do
   end
 
   describe "#call with no mutations" do
+    # The parser is stubbed over files that do not exist on disk.
+    before { allow(Evilution::AST::UncoveredCode).to receive(:call).and_return([]) }
+
     before do
       parser = instance_double(Evilution::AST::Parser)
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)

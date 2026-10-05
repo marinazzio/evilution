@@ -2,6 +2,8 @@
 
 require_relative "../runner"
 require_relative "../ast/inheritance_scanner"
+require_relative "../ast/uncovered_code"
+require_relative "../diagnostic"
 require_relative "../git/changed_files"
 
 class Evilution::Runner::SubjectPipeline
@@ -12,6 +14,7 @@ class Evilution::Runner::SubjectPipeline
 
   def call
     subjects = parse_subjects
+    report_uncovered_code(subjects)
     subjects = filter_by_descendants(subjects) if descendants_target?
     subjects = filter_by_target(subjects) if method_target?
     subjects = filter_by_line_ranges(subjects) if config.line_ranges?
@@ -22,12 +25,47 @@ class Evilution::Runner::SubjectPipeline
     @target_files ||= resolve_target_files
   end
 
+  # The targeted lines that hold code outside every subject, as
+  # `{ file:, lines: ["2-4", "9"] }` per file, once #call has run.
+  def uncovered_code
+    @uncovered_code || []
+  end
+
   private
 
   attr_reader :config, :parser
 
   def parse_subjects
     target_files.flat_map { |file| parser.call(file) }
+  end
+
+  # A line range is checked as given; a whole file only when it has no
+  # subjects at all -- every class with an `include` or a constant would
+  # otherwise warn.
+  def report_uncovered_code(subjects)
+    by_file = subjects.group_by(&:file_path)
+    @uncovered_code = target_files.filter_map { |file| uncovered_entry(file, by_file.fetch(file, [])) }
+    @uncovered_code.each { |entry| warn_uncovered(entry) }
+  end
+
+  def uncovered_entry(file, file_subjects)
+    range = config.line_ranges[file]
+    return unless range || file_subjects.empty?
+
+    lines = Evilution::AST::UncoveredCode.call(file, file_subjects, lines: range)
+    { file: file, lines: lines.map { |run| line_label(run) } } unless lines.empty?
+  end
+
+  # Spelled the way a range is passed on the command line: `2-4`, or `9`.
+  def line_label(run)
+    run.size == 1 ? run.first.to_s : "#{run.first}-#{run.last}"
+  end
+
+  def warn_uncovered(entry)
+    Evilution::Diagnostic.warn(
+      "[evilution] #{entry[:file]}:#{entry[:lines].join(", ")} holds code outside every subject " \
+      "(class-body code such as DSL calls and constants is not mutated); no mutations target those lines."
+    )
   end
 
   def source_glob_target?

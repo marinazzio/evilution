@@ -29,3 +29,7 @@ Style/OneClassPerFile:
   Exclude:
     - "lib/evilution/cli.rb"
     - "lib/evilution/integration/rspec/state_guard.rb"
+
+Metrics/ParameterLists:
+  Exclude:
+    - "lib/evilution/result/summary.rb"

@@ -41,6 +41,7 @@ RSpec.describe Evilution::MCP::MutateTool do
     instance_double(
       Evilution::Result::Summary,
       unresolved_targets?: false,
+      uncovered_code?: false,
       unresolved_target_files: [],
       infra_retried: 0,
       subject_scores: [],
@@ -482,6 +483,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         timed_out_summary = instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],
@@ -545,6 +547,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         error_summary = instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],
@@ -610,6 +613,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         neutral_summary = instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],
@@ -683,6 +687,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         survived_summary = instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],
@@ -760,6 +765,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           instance_double(
             Evilution::Result::Summary,
             unresolved_targets?: false,
+            uncovered_code?: false,
             unresolved_target_files: [],
             infra_retried: 0,
             subject_scores: [],
@@ -1023,6 +1029,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         equivalent_summary = instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],
@@ -1107,6 +1114,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         instance_double(
           Evilution::Result::Summary,
           unresolved_targets?: false,
+          uncovered_code?: false,
           unresolved_target_files: [],
           infra_retried: 0,
           subject_scores: [],

@@ -108,6 +108,7 @@ class Evilution::Reporter::JSON
   def append_diagnostic_summary_fields(data, summary)
     data[:unresolved_target_files] = summary.unresolved_target_files if summary.unresolved_targets?
     data[:infra_retried] = summary.infra_retried if summary.infra_retried.positive?
+    data[:uncovered_code] = summary.uncovered_code if summary.uncovered_code?
   end
 
   def build_mutation_detail(result)

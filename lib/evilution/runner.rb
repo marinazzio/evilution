@@ -52,7 +52,8 @@ class Evilution::Runner
                                              disabled_mutations: plan.disabled_mutations,
                                              unresolved_target_files: target_spec_audit.call(audited_files),
                                              target_file_count: audited_files.length,
-                                             infra_retried: execution.infra_retried)
+                                             infra_retried: execution.infra_retried,
+                                             uncovered_code: subject_pipeline.uncovered_code)
     output_report(summary)
     save_session(summary)
 
