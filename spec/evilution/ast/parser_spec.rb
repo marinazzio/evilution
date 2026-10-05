@@ -215,6 +215,34 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with a class or module whose path has dynamic parts" do
+    it "names it within the scope it is written in" do
+      tmpfile = Tempfile.new(["dynamic_path", ".rb"])
+      tmpfile.write(<<~RUBY)
+        module Units
+          class self::Meter
+            def scale
+              1
+            end
+          end
+
+          module self::Helpers
+            def help
+              :ok
+            end
+          end
+        end
+      RUBY
+      tmpfile.close
+
+      names = parser.call(tmpfile.path).map(&:name)
+
+      expect(names).to contain_exactly("Units::Meter#scale", "Units::Helpers#help")
+    ensure
+      tmpfile&.unlink
+    end
+  end
+
   context "with class methods (def self.foo)" do
     let(:class_method_source) do
       <<~RUBY
@@ -370,6 +398,20 @@ RSpec.describe Evilution::AST::Parser do
       RUBY
 
       expect(names).to contain_exactly("Cache::Store.lookup")
+    end
+
+    it "names methods of class << self::Constant after the constant's own name" do
+      names = subject_names(<<~RUBY)
+        module Units
+          class << self::Meter
+            def scale
+              1
+            end
+          end
+        end
+      RUBY
+
+      expect(names).to contain_exactly("Units::Meter.scale")
     end
 
     it "names methods of a module defined inside the singleton block as instance methods" do

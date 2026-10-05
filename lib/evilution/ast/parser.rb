@@ -135,12 +135,16 @@ module Evilution::AST
       target.name.to_s
     end
 
+    # `class self::Unit` and `class << self::Unit` have no static full name
+    # either; like `path_name`, they are named by their own constant.
     def constant_name(node)
       if node.respond_to?(:full_name)
         node.full_name
       else
         node.name.to_s
       end
+    rescue Prism::ConstantPathNode::DynamicPartsInConstantPathError
+      node.name.to_s
     end
   end
 end
