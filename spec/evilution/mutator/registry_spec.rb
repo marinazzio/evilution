@@ -259,7 +259,8 @@ RSpec.describe Evilution::Mutator::Registry do
       subject_obj = double("Subject",
                            name: "User#initialize",
                            file_path: fixture_path,
-                           node: first_def)
+                           node: first_def,
+                           kind: :method)
 
       mutations = registry.mutations_for(subject_obj)
 
@@ -293,13 +294,59 @@ RSpec.describe Evilution::Mutator::Registry do
       code = "log()"
       tree = Prism.parse(code).value
       node = tree.statements.body.first
-      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method)
 
       filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
       mutations = registry.mutations_for(subject_obj, filter: filter)
 
       expect(mutations).to be_empty
       expect(filter.skipped_count).to eq(1)
+    end
+
+    context "with subjects of different kinds" do
+      let(:fixture_path) { File.expand_path("../../support/fixtures/simple_class.rb", __dir__) }
+      let(:node) { Prism.parse("Point = Data.define(:x, :y)").value.statements.body.first.value }
+
+      def nil_out(subject_kinds)
+        Class.new(Evilution::Mutator::Base) do
+          define_singleton_method(:subject_kinds) { subject_kinds } if subject_kinds
+
+          def visit_call_node(node)
+            add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "nil", node: node)
+          end
+        end
+      end
+
+      def subject_of(kind)
+        Evilution::Subject.new(name: "Point", file_path: fixture_path, line_number: 1, source: node.slice,
+                               node: node, kind: kind)
+      end
+
+      it "runs operators on method subjects by default" do
+        registry.register(nil_out(nil))
+
+        expect(registry.mutations_for(subject_of(:method)).length).to eq(1)
+        expect(registry.mutations_for(subject_of(:constant))).to be_empty
+      end
+
+      it "runs an operator on the kinds of subject it accepts" do
+        registry.register(nil_out(%i[method constant]))
+
+        expect(registry.mutations_for(subject_of(:constant)).length).to eq(1)
+      end
+
+      it "keeps going past an operator that skips the subject" do
+        registry.register(nil_out(nil))
+        registry.register(nil_out(%i[constant]))
+
+        expect(registry.mutations_for(subject_of(:constant)).length).to eq(1)
+      end
+
+      it "accepts only method subjects in every built-in operator but DataStructMember" do
+        constant_operators = described_class.default.operators.select { |op| op.subject_kinds.include?(:constant) }
+
+        expect(constant_operators).to eq([Evilution::Mutator::Operator::DataStructMember])
+      end
     end
   end
 

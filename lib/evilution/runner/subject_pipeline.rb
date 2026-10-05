@@ -124,7 +124,7 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def class_matcher(target)
-    ->(s) { s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
+    ->(s) { s.name == target || s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
   end
 
   def filter_by_line_ranges(subjects)

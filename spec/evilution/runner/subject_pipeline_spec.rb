@@ -120,6 +120,28 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
+    it "matches a constant subject by its exact name" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/geo.rb", "module Geo\n  Point = Data.define(:x, :y)\n  def self.origin = 0\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], target: "Geo::Point", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to eq(["Geo::Point"])
+      end
+    end
+
+    it "matches the methods and the constant subject of a class by its name" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/coord.rb", "class Coord < Data.define(:lat)\n  def north? = lat.positive?\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], target: "Coord", quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+        expect(pipeline.call.map(&:name)).to eq(["Coord", "Coord#north?"])
+      end
+    end
+
     it "matches a trailing-hash prefix target" do
       Dir.mktmpdir do |dir|
         file = write(dir, "lib/foo.rb", fixture)

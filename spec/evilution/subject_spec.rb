@@ -33,6 +33,17 @@ RSpec.describe Evilution::Subject do
     expect(subj.node).to eq(node)
   end
 
+  it "is a method subject by default" do
+    expect(subj.kind).to eq(:method)
+  end
+
+  it "exposes a given kind" do
+    constant = described_class.new(name: "Point", file_path: "lib/point.rb", line_number: 1,
+                                   source: "Data.define(:x)", node: node, kind: :constant)
+
+    expect(constant.kind).to eq(:constant)
+  end
+
   describe "#to_s" do
     it "returns name with file and line" do
       expect(subj.to_s).to eq("User#adult? (lib/user.rb:9)")

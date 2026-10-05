@@ -114,6 +114,179 @@ RSpec.describe Evilution::ExampleFilter do
       expect(locations).to eq(["#{spec_path}:2"])
     end
 
+    it "extracts the constant name when mutation.line is in a value-object definition" do
+      src = <<~RUBY
+        module Geo
+          Point = Data.define(
+            :x,
+            :y
+          )
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Geo do
+          it "builds a point" do
+            Geo::Point.new(x: 1, y: 2)
+          end
+          it "other thing" do
+            Geo.version
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "extracts a top-level value-object constant name" do
+      src = "Pair = Struct.new(:left, :right)\n"
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "pairs" do
+          it "builds a pair" do
+            Pair.new(1, 2)
+          end
+          it "other thing" do
+            expect(Other.new(1, 2)).to be_valid
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 1), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "extracts the last name of a value-object constant path" do
+      src = "Geo::Point = Data.define(:x, :y)\n"
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "geo" do
+          it "builds a point" do
+            Geo::Point.new(x: 1, y: 2)
+          end
+          it "other thing" do
+            expect(Geo.version).to eq(1)
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 1), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "prefers the method name inside a value-object constant path's block" do
+      src = <<~RUBY
+        Geo::Pair = Struct.new(:left, :right) do
+          def total
+            left + right
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "pairs" do
+          it "adds up" do
+            Geo::Pair.new(1, 2).total
+          end
+          it "builds" do
+            Geo::Pair.new(1, 2)
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "drops a value-object constant's name once past its definition" do
+      src = <<~RUBY
+        Point = Data.define(:x, :y)
+        puts "hello"
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "points" do
+          it "builds a point" do
+            Point.new(x: 1, y: 2)
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 2), [spec_path])
+
+      expect(locations).to eq([spec_path])
+    end
+
+    it "keeps the class name for an ordinary constant in a class body" do
+      src = <<~RUBY
+        class Shape
+          LIMIT = 5
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "shapes" do
+          it "builds" do
+            Shape.new
+          end
+          it "caps" do
+            Shape::LIMIT
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 2), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2", "#{spec_path}:5"])
+    end
+
+    it "reaches a method inside another constant's value" do
+      src = <<~RUBY
+        Handler = Class.new do
+          def handle_event
+            1
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "handler" do
+          it "handles" do
+            Handler.new.handle_event
+          end
+          it "builds" do
+            Handler.new
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "prefers the method name inside a value-object definition's block" do
+      src = <<~RUBY
+        Pair = Struct.new(:left, :right) do
+          def total
+            left + right
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "pairs" do
+          it "adds up" do
+            Pair.new(1, 2).total
+          end
+          it "builds" do
+            Pair.new(1, 2)
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
     it "falls back when no enclosing def/class/module (top-level script)" do
       src = <<~RUBY
         require "something"

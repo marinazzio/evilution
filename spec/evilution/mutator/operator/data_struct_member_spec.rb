@@ -18,6 +18,13 @@ RSpec.describe Evilution::Mutator::Operator::DataStructMember do
     end
   end
 
+  def constant_mutations_for(inline_source, name)
+    subjects_for(inline_source) do |subjects|
+      subject = subjects.find { |s| s.kind == :constant && s.name == name }
+      described_class.new.call(subject)
+    end
+  end
+
   # The line each mutation rewrote, so an expectation reads as the definition
   # the mutant would load.
   def mutated_lines(muts)
@@ -168,13 +175,13 @@ RSpec.describe Evilution::Mutator::Operator::DataStructMember do
       end
     end
 
-    context "with a definition in a class body" do
+    context "with a definition outside any method" do
       let(:superclass_source) do
         "class Coord < Data.define(:lat, :lng)\n  def north? = lat.positive?\n\n  def east? = lng.positive?\nend\n"
       end
 
-      it "mutates a superclass definition through the first method of the class" do
-        muts = mutations_for(superclass_source, "north?")
+      it "mutates a superclass definition through the class's constant subject" do
+        muts = constant_mutations_for(superclass_source, "Coord")
 
         expect(mutated_lines(muts)).to eq(
           [
@@ -183,97 +190,60 @@ RSpec.describe Evilution::Mutator::Operator::DataStructMember do
             "class Coord < Data.define(:lng, :lat)"
           ]
         )
+        expect(muts.map(&:subject).map(&:name).uniq).to eq(["Coord"])
       end
 
-      # The definition is not part of any method, so it is attributed to one
-      # subject only; emitting it per method would repeat the same mutant.
-      it "does not repeat the mutations for later methods of the class" do
+      # The definition has a subject of its own, so the methods of the class
+      # do not repeat its mutants.
+      it "leaves the definition out of the methods of the class" do
+        expect(mutations_for(superclass_source, "north?")).to be_empty
         expect(mutations_for(superclass_source, "east?")).to be_empty
       end
 
-      it "mutates a constant assigned in the class body" do
-        muts = mutations_for("class Shape\n  Size = Struct.new(:w, :h)\n\n  def area(size) = size.w * size.h\nend\n", "area")
+      it "mutates a constant assigned in a class body" do
+        muts = constant_mutations_for("class Shape\n  Size = Struct.new(:w, :h)\n\n  def area(size) = size.w * size.h\nend\n",
+                                      "Shape::Size")
 
         expect(mutated_lines(muts)).to eq(
           ["Size = Struct.new(:h)", "Size = Struct.new(:w)", "Size = Struct.new(:h, :w)"]
         )
       end
 
-      it "mutates a definition in a module body" do
-        muts = mutations_for("module Geo\n  Point = Data.define(:x, :y)\n\n  def self.origin = Point.new(0, 0)\nend\n", "origin")
+      it "mutates a definition in a module without methods" do
+        muts = constant_mutations_for("module Geo\n  Point = Data.define(:x, :y)\nend\n", "Geo::Point")
 
         expect(mutated_lines(muts)).to eq(
           ["Point = Data.define(:y)", "Point = Data.define(:x)", "Point = Data.define(:y, :x)"]
         )
       end
 
-      # The only method lives in the definition's own block, which is still
-      # inside the enclosing class.
-      it "attributes the definition to a method defined in its block" do
-        muts = mutations_for("class Shape\n  Size = Struct.new(:w, :h) do\n    def area = w * h\n  end\nend\n", "area")
+      it "mutates a bare top-level definition" do
+        muts = constant_mutations_for("Pair = Struct.new(:left, :right)\n", "Pair")
+
+        expect(mutated_lines(muts)).to eq(
+          ["Pair = Struct.new(:right)", "Pair = Struct.new(:left)", "Pair = Struct.new(:right, :left)"]
+        )
+      end
+
+      it "mutates a definition with a block, keeping the block" do
+        muts = constant_mutations_for("Size = Struct.new(:w, :h) do\n  def area = w * h\nend\n", "Size")
 
         expect(mutated_lines(muts)).to eq(
           ["Size = Struct.new(:h) do", "Size = Struct.new(:w) do", "Size = Struct.new(:h, :w) do"]
         )
+        expect(mutations_for("Size = Struct.new(:w, :h) do\n  def area = w * h\nend\n", "area")).to be_empty
       end
 
-      it "attributes a top-level definition to a method defined in its block" do
-        muts = mutations_for("Size = Struct.new(:w, :h) do\n  def area = w * h\nend\n", "area")
+      # A definition nested in the block of another has a subject of its own;
+      # the outer subject mutates only its own member list.
+      it "leaves a definition nested in the block to its own subject" do
+        source = "class Shape\n  Size = Struct.new(:w, :h) do\n    self::Unit = Data.define(:n, :s)\n  end\nend\n"
 
-        expect(mutated_lines(muts)).to eq(
+        expect(mutated_lines(constant_mutations_for(source, "Shape::Size"))).to eq(
           ["Size = Struct.new(:h) do", "Size = Struct.new(:w) do", "Size = Struct.new(:h, :w) do"]
         )
-      end
-
-      # Outside any class, module or block of its own there is no method the
-      # definition belongs to; borrowing an unrelated one would run the mutant
-      # against tests that never load it.
-      it "does not attribute a bare top-level definition to an unrelated method" do
-        muts = mutations_for("Point = Data.define(:x, :y)\n\nclass Other\n  def call = 1\nend\n", "call")
-
-        expect(muts).to be_empty
-      end
-
-      it "attributes a definition to the innermost enclosing scope" do
-        source = "module Geo\n  def self.first = 1\n\n  class Shape\n    Size = Struct.new(:w, :h)\n\n    def area = 2\n  end\nend\n"
-
-        expect(mutations_for(source, "first")).to be_empty
-        expect(mutated_lines(mutations_for(source, "area")).length).to eq(3)
-      end
-
-      it "ignores other calls in the class body" do
-        muts = mutations_for("class Shape\n  attr_reader :w, :h\n\n  def area = w * h\nend\n", "area")
-
-        expect(muts).to be_empty
-      end
-
-      # A nested class has methods of its own subject; the definition belongs
-      # to the scope it is written in, even when that class comes first.
-      it "attributes a definition after a nested class to its own scope" do
-        source = "module Geo\n  class Inner\n    def inner = 1\n  end\n\n  Point = Data.define(:x, :y)\n\n  " \
-                 "def self.outer = 2\nend\n"
-
-        expect(mutations_for(source, "inner")).to be_empty
-        expect(mutated_lines(mutations_for(source, "outer"))).to eq(
-          ["Point = Data.define(:y)", "Point = Data.define(:x)", "Point = Data.define(:y, :x)"]
-        )
-      end
-
-      it "reaches a definition nested in the block of another" do
-        muts = mutations_for(
-          "class Shape\n  Size = Struct.new(:w, :h) do\n    self::Unit = Data.define(:n, :s)\n    def area = w * h\n  end\nend\n",
-          "area"
-        )
-
-        expect(mutated_lines(muts)).to eq(
-          [
-            "Size = Struct.new(:h) do",
-            "Size = Struct.new(:w) do",
-            "Size = Struct.new(:h, :w) do",
-            "self::Unit = Data.define(:s)",
-            "self::Unit = Data.define(:n)",
-            "self::Unit = Data.define(:s, :n)"
-          ]
+        expect(mutated_lines(constant_mutations_for(source, "Shape::Size::Unit"))).to eq(
+          ["self::Unit = Data.define(:s)", "self::Unit = Data.define(:n)", "self::Unit = Data.define(:s, :n)"]
         )
       end
 
@@ -285,12 +255,15 @@ RSpec.describe Evilution::Mutator::Operator::DataStructMember do
     end
 
     it "produces parseable mutations" do
-      muts = mutations_for(
-        "class Coord < Data.define(:lat, :lng, :alt)\n  def build = Struct.new(:a, :b, keyword_init: true)\nend\n", "build"
-      )
+      source = "class Coord < Data.define(:lat, :lng, :alt)\n  def build = Struct.new(:a, :b, keyword_init: true)\nend\n"
+      muts = constant_mutations_for(source, "Coord") + mutations_for(source, "build")
 
       expect(muts.length).to eq(8)
       expect(muts.map(&:parse_status).uniq).to eq([:ok])
+    end
+
+    it "accepts method and constant subjects" do
+      expect(described_class.subject_kinds).to eq(%i[method constant])
     end
 
     it "sets the operator name" do

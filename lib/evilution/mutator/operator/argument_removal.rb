@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../operator"
-require_relative "data_struct_member"
+require_relative "../../ast/value_object_definition"
 
 class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   SKIP_TYPES = [
@@ -38,7 +38,7 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   # drops each member itself; removing an argument here would emit the same
   # mutant a second time.
   def member_list?(node)
-    Evilution::Mutator::Operator::DataStructMember.definition?(node)
+    Evilution::AST::ValueObjectDefinition.match?(node)
   end
 
   def positional_only?(args)

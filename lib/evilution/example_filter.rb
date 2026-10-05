@@ -3,6 +3,7 @@
 require "prism"
 require_relative "version"
 require_relative "spec_ast_cache"
+require_relative "ast/value_object_definition"
 
 class Evilution::ExampleFilter
   VALID_FALLBACKS = %i[full_file unresolved].freeze
@@ -119,7 +120,26 @@ class Evilution::ExampleFilter
       @class_stack.pop
     end
 
+    # A value-object definition assigned to a constant names the type its
+    # specs build (`Point = Data.define(:x, :y)` -> `Point`), like a class.
+    def visit_constant_write_node(node)
+      within_value_object(node, node.name.to_s) { super }
+    end
+
+    def visit_constant_path_write_node(node)
+      within_value_object(node, node.target.name.to_s) { super }
+    end
+
     private
+
+    def within_value_object(node, name)
+      return yield unless Evilution::AST::ValueObjectDefinition.match?(node.value)
+
+      @class_stack.push(name)
+      capture_if_match(node)
+      yield
+      @class_stack.pop
+    end
 
     def capture_if_match(node)
       return if @found

@@ -157,6 +157,13 @@ class Evilution::Mutator::Base < Prism::Visitor
               .downcase
   end
 
+  # The kinds of Subject the operator mutates. Operators work on method
+  # bodies; one that also has something to say about a constant subject
+  # (a definition outside any method) adds :constant.
+  def self.subject_kinds
+    %i[method]
+  end
+
   @parse_cache = {}
 
   def self.parsed_tree_for(file_path, file_source)

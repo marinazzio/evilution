@@ -109,7 +109,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 |------------------------------|---------|--------------|---------------------------------------------------|
 | `-t`, `--timeout N`          | Integer | 30           | Per-mutation timeout in seconds.                   |
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
-| `--target EXPR`              | String  | _(none)_     | Only mutate matching methods. Supports method name (`Foo::Bar#calculate`), class (`Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
+| `--target EXPR`              | String  | _(none)_     | Only mutate matching subjects. Supports method name (`Foo::Bar#calculate`), class (`Foo`, which also matches a value-object constant named `Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
 | `--output FILE`              | String  | _(stdout)_   | Write the report to FILE instead of stdout. Useful when a preloaded spec helper writes to stdout on exit. |
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to auto-detection via `SpecResolver`, which also resolves non-mirrored (`spec/unit`, `test/unit`), dir-grouped (`test/unit/<class>/*_test.rb`), and flat `test_`-prefixed (`test/test_connection_pool_timed_stack.rb`) layouts. |
@@ -553,7 +553,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `block_body_to_nil` | Replace a block body with `nil`, keeping the iteration (skips `loop` and endless `cycle` / `cycle(nil)`, which would hang) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| nil }` |
 | `block_body_to_raise` | Replace a block body with `raise` to prove the block is invoked (skips bodies with a `rescue` clause, which would swallow it) | `xs.each { \|x\| log(x) }` -> `xs.each { \|x\| raise }` |
 | `block_body_promotion` | Replace a call with its parameter-less block body, run once (skips blocks with parameters or a `rescue` / `ensure` clause) | `Base.transaction { save! }` -> `save!`, `3.times { poll }` -> `poll` |
-| `data_struct_member` | Drop a member, or swap adjacent members, of a `Data.define` / `Struct.new` definition (class-body definitions are attributed to the first method of the enclosing class or module; skips single-member and splatted lists) | `Data.define(:a, :b)` -> `Data.define(:b)`, `Data.define(:b, :a)` |
+| `data_struct_member` | Drop a member, or swap adjacent members, of a `Data.define` / `Struct.new` definition (a definition outside any method — `Point = Data.define(...)`, `class Coord < Struct.new(...)` — is its own subject, named after the constant; skips single-member and splatted lists) | `Data.define(:a, :b)` -> `Data.define(:b)`, `Data.define(:b, :a)` |
 | `pin_operator_removal` | Drop the pin of a pattern variable so it captures instead of comparing (local variables only; skips pins inside alternative patterns, where a capture is not allowed) | `in ^expected` -> `in expected` |
 | `rightward_assignment` | Turn a rightward pattern match into a pattern predicate, so a mismatch returns `false` instead of raising (skips a bare capture, which cannot fail) | `value => [a, b]` -> `value in [a, b]` |
 | `numbered_parameter_swap` | Swap neighbouring numbered block parameters that the body reads (skips blocks reading a single one; `it` has nothing to swap with) | `pairs.map { _1 - _2 }` -> `pairs.map { _2 - _1 }` |
@@ -1033,7 +1033,7 @@ For the full contributor architecture — module map, data flow, and extension
 points — see [docs/architecture.md](docs/architecture.md).
 
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
-2. **Extract** — Methods are identified as mutation subjects
+2. **Extract** — Methods are identified as mutation subjects, and so are value-object definitions outside any method (`Point = Data.define(:x, :y)`, `class Coord < Struct.new(:lat, :lng)`), which only the operators that apply to them mutate
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
 4. **Mutate** — 136 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy

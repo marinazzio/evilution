@@ -12,7 +12,8 @@ For deeper dives on two subsystems that have their own docs, see
 ## The one-paragraph version
 
 Evilution parses each target file with [Prism](https://github.com/ruby/prism)
-into an AST with exact byte offsets. Every method becomes a *subject*. Each
+into an AST with exact byte offsets. Every method becomes a *subject*, and so
+does every value-object definition outside a method (`Point = Data.define(:x)`). Each
 mutation *operator* walks a subject's AST and emits *mutations* — byte-range
 edits applied by source-level surgery (no AST unparsing). For every mutation,
 evilution copies the file, applies the edit, runs the covering specs in an
@@ -105,13 +106,17 @@ class that owns it.
 2. **Subjects** — `Runner::SubjectPipeline#call` resolves target files (explicit,
    `source:<glob>`, or `Git::ChangedFiles`), then `AST::Parser#call` runs
    `Prism.parse` and `AST::SubjectFinder` (a `Prism::Visitor`) emits one
-   `Evilution::Subject` per `def` node. Optional descendant/target/line-range filters follow.
+   `Evilution::Subject` per `def` node (kind `:method`), plus one per
+   `Data.define` / `Struct.new` assigned to a constant or used as a superclass
+   outside any method (kind `:constant`, named after the constant). Optional
+   descendant/target/line-range filters follow.
 3. **Baseline** — `Runner::BaselineRunner#call` builds the integration from
    `Runner::INTEGRATIONS` (`rspec`/`minitest`/`test_unit`) and records spec files
    that already fail *before* any mutation, so their mutations aren't miscounted.
    An optional `Runner::Canary` proves the pipeline can observe a known mutation.
 4. **Mutations** — `Runner::MutationPlanner#call` flat-maps subjects through
-   `Mutator::Registry#mutations_for`. The registry instantiates each operator and
+   `Mutator::Registry#mutations_for`. The registry instantiates each operator whose
+   `subject_kinds` include the subject's kind (`:method` by default) and
    runs `operator.call(subject, filter:)`; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
    builds an immutable `Evilution::Mutation`. The planner then **deduplicates**
@@ -193,6 +198,10 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
    - The operator's registered name is auto-derived from the class name
      (`MyThing` → `my_thing`); that string is the `operator` field in JSON output
      and is part of the public contract, so name it deliberately.
+   - Operators see method subjects only. One that also applies to value-object
+     definitions outside a method overrides `self.subject_kinds` to return
+     `%i[method constant]`; a constant subject's node is the definition's
+     `CallNode`.
 
 2. **Require it** in `lib/evilution.rb` alongside the other
    `require_relative "evilution/mutator/operator/..."` lines.

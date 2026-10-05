@@ -257,6 +257,96 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with value-object definitions outside any method" do
+    def subjects_in(source)
+      tmpfile = Tempfile.new(["value_objects", ".rb"])
+      tmpfile.write(source)
+      tmpfile.close
+      parser.call(tmpfile.path)
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "makes a constant subject of a top-level definition" do
+      subjects = subjects_in("Point = Data.define(:x, :y)\n")
+
+      expect(subjects.length).to eq(1)
+      point = subjects.first
+      expect(point.name).to eq("Point")
+      expect(point.kind).to eq(:constant)
+      expect(point.line_number).to eq(1)
+      expect(point.source).to eq("Data.define(:x, :y)")
+      expect(point.node).to be_a(Prism::CallNode)
+    end
+
+    it "qualifies the name with the enclosing scope" do
+      subjects = subjects_in("module Geo\n  class Shape\n    Size = Struct.new(:w, :h)\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Geo::Shape::Size"])
+    end
+
+    it "names a constant path assignment by its path" do
+      subjects = subjects_in("module Geo; end\nGeo::Point = Data.define(:x, :y)\n")
+
+      expect(subjects.map(&:name)).to eq(["Geo::Point"])
+      expect(subjects.first.source).to eq("Data.define(:x, :y)")
+      expect(subjects.first.node).to be_a(Prism::CallNode)
+    end
+
+    it "names a root constant path without the leading ::" do
+      expect(subjects_in("::Point = Data.define(:x, :y)\n").map(&:name)).to eq(["Point"])
+    end
+
+    it "scopes the block of a constant path definition under its path" do
+      subjects = subjects_in("Geo::Size = Struct.new(:w, :h) do\n  def area = w * h\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Geo::Size", "Geo::Size#area"])
+    end
+
+    it "still finds methods in the value of other constants" do
+      source = "Handler = Class.new do\n  def handle = 1\nend\nGeo::Tool = Class.new do\n  def use = 2\nend\nGeo::LIMIT = 5\n"
+
+      expect(subjects_in(source).map { |s| [s.name, s.kind] }).to eq([["#handle", :method], ["#use", :method]])
+    end
+
+    it "makes a constant subject of a superclass definition, named after the class" do
+      subjects = subjects_in("module Geo\n  class Coord < Data.define(:lat, :lng)\n    def north? = lat.positive?\n  end\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["Geo::Coord", :constant], ["Geo::Coord#north?", :method]])
+      expect(subjects.first.source).to eq("Data.define(:lat, :lng)")
+      expect(subjects.first.line_number).to eq(2)
+    end
+
+    it "covers the block and scopes what is defined in it under the constant" do
+      source = "class Shape\n  Size = Struct.new(:w, :h) do\n    self::Unit = Data.define(:n, :s)\n\n    " \
+               "def area = w * h\n  end\nend\n"
+      subjects = subjects_in(source)
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq(
+        [["Shape::Size", :constant], ["Shape::Size::Unit", :constant], ["Shape::Size#area", :method]]
+      )
+      expect(subjects.first.source).to start_with("Struct.new(:w, :h) do\n")
+      expect(subjects.first.source).to end_with("end")
+    end
+
+    it "makes method subjects of kind :method" do
+      expect(subjects_in("class Foo\n  def bar = 1\nend\n").map(&:kind)).to eq([:method])
+    end
+
+    it "ignores other constants and definitions not assigned to a constant" do
+      source = "class Shape\n  LIMIT = 5\n  Other = Foo.new(:a, :b)\n  Struct.new(:a, :b).new(1, 2)\n  " \
+               "Wrapped = Struct.new(:a, :b).freeze\n  class Sub < Base; end\nend\n"
+
+      expect(subjects_in(source)).to be_empty
+    end
+
+    it "ignores a definition inside a method, which the method's subject covers" do
+      subjects = subjects_in("class Foo\n  def build\n    Class.new { const_set(:P, Struct.new(:a, :b)) }\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Foo#build"])
+    end
+  end
+
   context "with namespaced class methods" do
     let(:namespaced_class_method_source) do
       <<~RUBY

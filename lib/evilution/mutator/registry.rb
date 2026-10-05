@@ -179,6 +179,8 @@ class Evilution::Mutator::Registry
 
   def mutations_for(subject, filter: nil, operator_options: {})
     @operators.flat_map do |operator_class|
+      next [] unless operator_class.subject_kinds.include?(subject.kind)
+
       operator = build_operator(operator_class, operator_options)
       operator.call(subject, filter: filter)
     end
