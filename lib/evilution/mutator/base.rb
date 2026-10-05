@@ -84,12 +84,12 @@ class Evilution::Mutator::Base < Prism::Visitor
       replacement_bytesize: replacement.bytesize
     )
 
-    mutation = build_mutation_record(node, surgery, slices)
+    mutation = build_mutation_record(node, surgery, slices, offset)
     @mutations << mutation
     mutation
   end
 
-  def build_mutation_record(node, surgery, slices)
+  def build_mutation_record(node, surgery, slices, offset)
     Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
@@ -101,7 +101,8 @@ class Evilution::Mutator::Base < Prism::Visitor
         column: node.location.start_column
       ),
       parse_status: surgery.status,
-      eval_source: build_eval_source(surgery)
+      eval_source: build_eval_source(surgery, offset),
+      restore_source: build_restore_source(offset)
     )
   end
 
@@ -112,10 +113,24 @@ class Evilution::Mutator::Base < Prism::Visitor
   # them at apply time. Passing the subject's file path lets the neutralizer
   # skip files the parent never preloaded — those are lazy plugin files whose
   # DSL calls are still needed for the child fork's first-time load.
-  def build_eval_source(surgery)
+  # A scope subject's mutation sits inside its `scope` call, which must run
+  # again for the mutated body to replace the loaded one, so that one call is
+  # kept.
+  def build_eval_source(surgery, offset)
     return surgery.source unless surgery.ok?
 
-    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path)
+    keep_offset = @subject.kind == :scope ? offset : nil
+    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, keep_offset: keep_offset)
+  end
+
+  # Re-evaluating any mutation of a file redefines all its methods, which is
+  # how an in-process run puts a mutated method back. Class-body calls are
+  # neutralized in that source, so a mutated scope would stay installed; the
+  # original file with just that scope declaration kept replaces it again.
+  def build_restore_source(offset)
+    return nil unless @subject.kind == :scope
+
+    @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, keep_offset: offset)
   end
 
   NEWLINE_BYTE = 10
@@ -158,10 +173,11 @@ class Evilution::Mutator::Base < Prism::Visitor
   end
 
   # The kinds of Subject the operator mutates. Operators work on method
-  # bodies; one that also has something to say about a constant subject
-  # (a definition outside any method) adds :constant.
+  # bodies, and on the body of a scope declaration, which is the body of the
+  # class method it defines; one that also has something to say about a
+  # constant subject (a definition outside any method) adds :constant.
   def self.subject_kinds
-    %i[method]
+    %i[method scope]
   end
 
   @parse_cache = {}

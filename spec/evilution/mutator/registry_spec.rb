@@ -322,10 +322,11 @@ RSpec.describe Evilution::Mutator::Registry do
                                node: node, kind: kind)
       end
 
-      it "runs operators on method subjects by default" do
+      it "runs operators on method and scope subjects by default" do
         registry.register(nil_out(nil))
 
         expect(registry.mutations_for(subject_of(:method)).length).to eq(1)
+        expect(registry.mutations_for(subject_of(:scope)).length).to eq(1)
         expect(registry.mutations_for(subject_of(:constant))).to be_empty
       end
 

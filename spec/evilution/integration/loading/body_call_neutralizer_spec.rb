@@ -53,6 +53,36 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call with keep_offset" do
+    let(:src) do
+      <<~RUBY
+        class Order
+          scope :paid, -> { where(paid: true) }
+          scope :open, -> { where(open: nil) }
+        end
+      RUBY
+    end
+
+    it "keeps the class-body call that contains the offset and neutralizes the others" do
+      offset = src.index("nil")
+
+      expect(neutralizer.call(src, keep_offset: offset))
+        .to eq("class Order\n  ()\n  scope :open, -> { where(open: nil) }\nend\n")
+    end
+
+    it "keeps a call whose first byte is the offset" do
+      offset = src.index("scope :open")
+
+      expect(neutralizer.call(src, keep_offset: offset)).to include("scope :open")
+    end
+
+    it "neutralizes a call that ends just before the offset" do
+      offset = src.index("}\n  scope :open") + 1
+
+      expect(neutralizer.call(src, keep_offset: offset)).not_to include("scope :paid")
+    end
+  end
+
   describe "#call" do
     it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY

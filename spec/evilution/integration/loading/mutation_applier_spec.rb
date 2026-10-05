@@ -287,4 +287,32 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       end
     end
   end
+
+  describe "#restore" do
+    after do
+      Object.send(:remove_const, :EkaxRestoredScopes) if Object.const_defined?(:EkaxRestoredScopes)
+    end
+
+    it "evaluates the mutation's restore source" do
+      restoring = double("Mutation", file_path: source_path,
+                                     restore_source: "module EkaxRestoredScopes; def self.value = :original; end\n")
+
+      applier.restore(restoring)
+
+      expect(EkaxRestoredScopes.value).to eq(:original)
+    end
+
+    it "does nothing for a mutation without a restore source" do
+      expect { applier.restore(double("Mutation", file_path: source_path, restore_source: nil)) }
+        .not_to output.to_stderr
+      expect { applier.restore(mutation) }.not_to raise_error
+    end
+
+    it "warns instead of raising when the restore source fails to evaluate" do
+      broken = double("Mutation", file_path: source_path, restore_source: "raise ArgumentError, 'nope'\n")
+
+      expect { applier.restore(broken) }
+        .to output(/\[evilution\] could not restore #{Regexp.escape(source_path)}: ArgumentError: nope/).to_stderr
+    end
+  end
 end

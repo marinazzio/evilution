@@ -4,6 +4,7 @@ require "prism"
 require_relative "version"
 require_relative "spec_ast_cache"
 require_relative "ast/value_object_definition"
+require_relative "ast/scope_declaration"
 
 class Evilution::ExampleFilter
   VALID_FALLBACKS = %i[full_file unresolved].freeze
@@ -128,6 +129,15 @@ class Evilution::ExampleFilter
 
     def visit_constant_path_write_node(node)
       within_value_object(node, node.target.name.to_s) { super }
+    end
+
+    # A scope declaration names the class method its specs call
+    # (`scope :for_owner, -> { }` -> `for_owner`), like a def; nothing inside
+    # its body names anything closer.
+    def visit_call_node(node)
+      return super unless target_within?(node) && Evilution::AST::ScopeDeclaration.body_of(node)
+
+      @token = Evilution::AST::ScopeDeclaration.scope_name(node)
     end
 
     private

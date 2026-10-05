@@ -419,8 +419,8 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       let(:model_source) do
         <<~RUBY
           class Order
-            scope :for_owner, ->(owner) do
-              owner ? where(owner: owner) : none
+            after_commit :notify, if: ->(order) do
+              order.paid? && order.total.positive?
             end
 
             def total

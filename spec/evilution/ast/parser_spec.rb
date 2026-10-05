@@ -431,6 +431,113 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with scope declarations in a class body" do
+    def scope_subjects(source)
+      tmpfile = Tempfile.new(["scopes", ".rb"])
+      tmpfile.write(source)
+      tmpfile.close
+
+      parser.call(tmpfile.path).select { |s| s.kind == :scope }
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+
+    it "makes a subject named after the class method the scope defines" do
+      subjects = scope_subjects(<<~RUBY)
+        module Shop
+          class Order
+            scope :for_owner, ->(owner) { owner ? where(owner: owner) : none }
+          end
+        end
+      RUBY
+
+      expect(subjects.map(&:name)).to eq(["Shop::Order.for_owner"])
+    end
+
+    it "spans the whole scope call and mutates the lambda" do
+      subjects = scope_subjects(<<~RUBY)
+        class Order
+          scope :recent,
+                -> { where(recent: true) }
+        end
+      RUBY
+
+      subject = subjects.first
+      expect([subject.line_number, subject.source]).to eq([2, "scope :recent,\n        -> { where(recent: true) }"])
+      expect(subject.node).to be_a(Prism::LambdaNode)
+    end
+
+    it "mutates the block of a lambda or proc call" do
+      subjects = scope_subjects(<<~RUBY)
+        class Order
+          scope :paid, lambda { where(paid: true) }
+          scope :open, proc { where(open: true) }
+        end
+      RUBY
+
+      expect(subjects.map(&:name)).to eq(["Order.paid", "Order.open"])
+      expect(subjects.map(&:node)).to all(be_a(Prism::BlockNode))
+    end
+
+    it "skips scopes whose body is not a literal lambda" do
+      subjects = scope_subjects(<<~RUBY)
+        class Order
+          scope :active, ActiveQuery
+          scope :named, method(:build)
+          scope :dynamic, :lambda_name
+          scope name_var, -> { all }
+        end
+      RUBY
+
+      expect(subjects).to be_empty
+    end
+
+    it "skips scope calls that are not direct statements of a class body" do
+      subjects = scope_subjects(<<~RUBY)
+        module Publishable
+          scope :published, -> { where(published: true) }
+
+          included do
+            scope :drafts, -> { where(published: false) }
+          end
+        end
+
+        class Order
+          class << self
+            scope :hidden, -> { all }
+          end
+
+          def self.build
+            scope :inner, -> { all }
+          end
+
+          relation.scope :other, -> { all }
+        end
+      RUBY
+
+      expect(subjects).to be_empty
+    end
+
+    it "keeps method subjects alongside scopes" do
+      tmpfile = Tempfile.new(["scopes", ".rb"])
+      tmpfile.write(<<~RUBY)
+        class Order
+          scope :paid, -> { where(paid: true) }
+
+          def total
+            1
+          end
+        end
+      RUBY
+      tmpfile.close
+
+      expect(parser.call(tmpfile.path).map { |s| [s.name, s.kind] })
+        .to eq([["Order.paid", :scope], ["Order#total", :method]])
+    ensure
+      tmpfile.unlink if tmpfile
+    end
+  end
+
   context "with value-object definitions outside any method" do
     def subjects_in(source)
       tmpfile = Tempfile.new(["value_objects", ".rb"])

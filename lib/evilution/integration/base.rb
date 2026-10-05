@@ -25,6 +25,8 @@ class Evilution::Integration::Base
 
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
+  ensure
+    @mutation_applier.restore(mutation)
   end
 
   private

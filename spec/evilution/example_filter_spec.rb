@@ -114,6 +114,56 @@ RSpec.describe Evilution::ExampleFilter do
       expect(locations).to eq(["#{spec_path}:2"])
     end
 
+    it "extracts the scope name when mutation.line is in a scope declaration" do
+      src = <<~RUBY
+        class Order
+          scope :for_owner, ->(owner) do
+            owner ? where(owner: owner) : none
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Order do
+          it "filters by owner" do
+            Order.for_owner(user)
+          end
+          it "other thing" do
+            Order.new
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:2"])
+    end
+
+    it "extracts the method name when mutation.line is in a def after a scope declaration" do
+      src = <<~RUBY
+        class Order
+          scope :for_owner, ->(owner) { where(owner: owner) }
+
+          def total
+            1
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Order do
+          it "filters by owner" do
+            Order.for_owner(user)
+          end
+          it "sums" do
+            Order.new.total
+          end
+        end
+      RUBY
+
+      locations = filter.call(mutation(original_source: src, line: 5), [spec_path])
+
+      expect(locations).to eq(["#{spec_path}:5"])
+    end
+
     it "extracts the constant name when mutation.line is in a value-object definition" do
       src = <<~RUBY
         module Geo

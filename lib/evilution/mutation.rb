@@ -8,10 +8,14 @@ class Evilution::Mutation
   Slice = Data.define(:original, :mutated)
   Location = Data.define(:file_path, :line, :column)
 
-  attr_reader :subject, :operator_name, :parse_status, :location
+  # restore_source: the source that puts back what applying this mutation
+  # changed and re-evaluating another mutation of the file would not -- a
+  # scope declaration (see Mutator::Base#build_restore_source). nil when
+  # nothing needs restoring.
+  attr_reader :subject, :operator_name, :parse_status, :location, :restore_source
 
   def initialize(subject:, operator_name:, sources:, location:,
-                 slice: nil, parse_status: :ok, eval_source: nil)
+                 slice: nil, parse_status: :ok, eval_source: nil, restore_source: nil)
     @subject = subject
     @operator_name = operator_name
     @sources = sources
@@ -19,6 +23,7 @@ class Evilution::Mutation
     @slice = slice
     @parse_status = parse_status
     @eval_source = eval_source
+    @restore_source = restore_source
     @diff = nil
   end
 

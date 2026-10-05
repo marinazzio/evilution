@@ -60,13 +60,17 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # strips method definitions that subsequent sibling statements (alias, etc.)
   # depend on, producing cascading NameError. Callers that don't pass a path
   # get the legacy always-neutralize behavior.
-  def call(source, file_path: nil)
+  #
+  # `keep_offset` (optional) spares the one class-body call whose source
+  # contains that byte offset: a mutation inside a scope body only takes
+  # effect if the mutated file re-runs that `scope` call to replace it.
+  def call(source, file_path: nil, keep_offset: nil)
     return source if file_path && !preloaded?(file_path)
 
     result = Prism.parse(source)
     return source if result.failure?
 
-    edits = collect_edits(result.value)
+    edits = collect_edits(result.value, keep_offset)
     return source if edits.empty?
 
     apply_edits(source, edits)
@@ -78,9 +82,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     self.class.preloaded_features.include?(File.expand_path(file_path))
   end
 
-  def collect_edits(tree)
+  def collect_edits(tree, keep_offset)
     edits = []
-    walker = Walker.new(IDEMPOTENT_CALLS, edits)
+    walker = Walker.new(IDEMPOTENT_CALLS, edits, keep_offset)
     walker.visit(tree)
     edits
   end
@@ -94,10 +98,11 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   end
 
   class Walker < Prism::Visitor
-    def initialize(allowlist, edits)
+    def initialize(allowlist, edits, keep_offset)
       super()
       @allowlist = allowlist
       @edits = edits
+      @keep_offset = keep_offset
     end
 
     def visit_class_node(node)
@@ -130,8 +135,13 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
         next if @allowlist.include?(stmt.name)
         next if stmt.receiver && !stmt.receiver.is_a?(Prism::SelfNode)
 
-        @edits << [stmt.location.start_offset, replacement_end_offset(stmt)]
+        edit = [stmt.location.start_offset, replacement_end_offset(stmt)]
+        @edits << edit unless kept?(edit)
       end
+    end
+
+    def kept?((start_offset, end_offset))
+      @keep_offset && @keep_offset >= start_offset && @keep_offset < end_offset
     end
 
     # Prism CallNode location ends at the close of the call syntax (e.g. the

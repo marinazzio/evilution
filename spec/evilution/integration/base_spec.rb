@@ -210,6 +210,7 @@ RSpec.describe Evilution::Integration::Base do
       it "delegates mutation application to the applier and skips run_tests when the applier returns a failure" do
         failure = { passed: false, error: "injected" }
         expect(applier).to receive(:call).with(mutation).and_return(failure)
+        allow(applier).to receive(:restore)
 
         result = integration.call(mutation)
 
@@ -219,10 +220,27 @@ RSpec.describe Evilution::Integration::Base do
 
       it "proceeds to run_tests when the applier returns nil" do
         expect(applier).to receive(:call).with(mutation).and_return(nil)
+        allow(applier).to receive(:restore)
 
         integration.call(mutation)
 
         expect(events).to include(:run_tests)
+      end
+
+      it "restores the original after the tests have run" do
+        allow(applier).to receive(:call).with(mutation).and_return(nil)
+        allow(applier).to receive(:restore) { events << :restore }
+
+        integration.call(mutation)
+
+        expect(events).to eq(%i[ensure_framework_loaded run_tests restore])
+      end
+
+      it "restores the original when applying the mutation failed" do
+        allow(applier).to receive(:call).with(mutation).and_return({ passed: false, error: "injected" })
+        expect(applier).to receive(:restore).with(mutation)
+
+        integration.call(mutation)
       end
     end
   end

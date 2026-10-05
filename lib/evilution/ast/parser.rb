@@ -3,6 +3,7 @@
 require "prism"
 require_relative "../ast"
 require_relative "value_object_definition"
+require_relative "scope_declaration"
 
 module Evilution::AST
   class Parser
@@ -57,6 +58,7 @@ module Evilution::AST
       @context.push(constant_name(node.constant_path))
       superclass = node.superclass
       add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
+      add_scope_subjects(node.body)
       within_scope(singleton: false) { super }
       @context.pop
     end
@@ -112,8 +114,17 @@ module Evilution::AST
       @context.pop
     end
 
-    def add_subject(node, name, kind)
-      loc = node.location
+    # `scope :recent, -> { ... }` defines the class method `recent`. The
+    # subject spans the whole declaration and mutates its body.
+    def add_scope_subjects(body)
+      ScopeDeclaration.in_body(body).each do |declaration|
+        name = "#{@context.join("::")}.#{ScopeDeclaration.scope_name(declaration)}"
+        add_subject(ScopeDeclaration.body_of(declaration), name, :scope, span: declaration)
+      end
+    end
+
+    def add_subject(node, name, kind, span: node)
+      loc = span.location
       source = @source.byteslice(loc.start_offset, loc.end_offset - loc.start_offset)
                       .force_encoding(@source.encoding)
 

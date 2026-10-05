@@ -21,8 +21,8 @@ RSpec.describe Evilution::AST::UncoveredCode do
       class Order
         STATUSES = %w[draft paid].freeze
 
-        scope :for_owner, ->(owner) do
-          owner ? where(owner: owner) : none
+        after_commit :notify, if: ->(order) do
+          order.paid? && order.total.positive?
         end
 
         def total
@@ -160,6 +160,17 @@ RSpec.describe Evilution::AST::UncoveredCode do
       class Guarded
       rescue LoadError
         nil
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([])
+  end
+
+  it "treats scope declarations as covered by their subject" do
+    source = <<~RUBY
+      class Order
+        scope :paid,
+              -> { where(paid: true) }
       end
     RUBY
 

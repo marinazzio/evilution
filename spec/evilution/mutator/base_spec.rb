@@ -37,7 +37,7 @@ RSpec.describe Evilution::Mutator::Base do
       code = "log()"
       tree = Prism.parse(code).value
       node = tree.statements.body.first
-      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method)
 
       filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
       operator = operator_class.new
@@ -62,7 +62,7 @@ RSpec.describe Evilution::Mutator::Base do
       fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
       file_source = File.read(fixture_path)
       tree = Prism.parse(file_source).value
-      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree)
+      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree, kind: :method)
 
       result = operator_class.new.call(subject_obj)
       age_check = result.find { |m| m.line == 10 }
@@ -87,7 +87,7 @@ RSpec.describe Evilution::Mutator::Base do
       code = "config[:font_size]\n"
       tree = Prism.parse(code).value
       node = tree.statements.body.first
-      subject_obj = double("Subject", name: "Test#m", file_path: "x.rb", node: node)
+      subject_obj = double("Subject", name: "Test#m", file_path: "x.rb", node: node, kind: :method)
 
       operator = operator_class.new
       operator.instance_variable_set(:@file_source, code)
@@ -114,7 +114,7 @@ RSpec.describe Evilution::Mutator::Base do
 
       fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
       tree = Prism.parse(File.read(fixture_path)).value
-      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree)
+      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree, kind: :method)
 
       result = operator_class.new.call(subject_obj)
 
@@ -137,7 +137,7 @@ RSpec.describe Evilution::Mutator::Base do
       fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
       file_source = File.read(fixture_path)
       tree = Prism.parse(file_source).value
-      subject_obj = double("Subject", name: "User#initialize", file_path: fixture_path, node: tree)
+      subject_obj = double("Subject", name: "User#initialize", file_path: fixture_path, node: tree, kind: :method)
 
       result = operator_class.new.call(subject_obj)
       init_def = result.find { |m| m.line == 4 }
@@ -164,7 +164,7 @@ RSpec.describe Evilution::Mutator::Base do
       code = "info()"
       tree = Prism.parse(code).value
       node = tree.statements.body.first
-      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node)
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method)
 
       filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
       operator = operator_class.new
@@ -188,7 +188,7 @@ RSpec.describe Evilution::Mutator::Base do
 
       fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
       tree = Prism.parse(File.read(fixture_path)).value
-      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree)
+      subject_obj = double("Subject", name: "User#adult?", file_path: fixture_path, node: tree, kind: :method)
 
       operator = operator_class.new
       first = operator.call(subject_obj).length
@@ -207,7 +207,7 @@ RSpec.describe Evilution::Mutator::Base do
       operator = described_class.new
       operator.instance_variable_set(:@file_source, file_source)
       operator.instance_variable_set(:@filter, nil)
-      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb"))
+      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method))
       operator
     end
 
@@ -254,7 +254,7 @@ RSpec.describe Evilution::Mutator::Base do
       operator = described_class.new
       operator.instance_variable_set(:@file_source, source)
       operator.instance_variable_set(:@filter, nil)
-      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb"))
+      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method))
       operator
     end
 
@@ -305,7 +305,7 @@ RSpec.describe Evilution::Mutator::Base do
   describe "#build_eval_source" do
     let(:operator) do
       op = described_class.new
-      op.instance_variable_set(:@subject, double("Subject", file_path: "x.rb"))
+      op.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method))
       op
     end
 
@@ -313,16 +313,88 @@ RSpec.describe Evilution::Mutator::Base do
       surgery = Evilution::AST::SourceSurgeon.apply("a = 1\n", offset: 0, length: 1, replacement: "@")
 
       expect(surgery).not_to be_ok
-      expect(operator.send(:build_eval_source, surgery)).to eq(surgery.source)
+      expect(operator.send(:build_eval_source, surgery, 0)).to eq(surgery.source)
     end
 
     it "returns a neutralized String for parseable surgery" do
       surgery = Evilution::AST::SourceSurgeon.apply("a = 1\n", offset: 4, length: 1, replacement: "2")
 
-      result = operator.send(:build_eval_source, surgery)
+      result = operator.send(:build_eval_source, surgery, 4)
 
       expect(result).to be_a(String)
       expect(result).to eq("a = 2\n")
+    end
+
+    context "with a preloaded file of scope declarations" do
+      let(:source) do
+        <<~RUBY
+          class Order
+            scope :paid, -> { where(paid: true) }
+            scope :open, -> { where(open: nil) }
+          end
+        RUBY
+      end
+      let(:tmpfile) do
+        file = Tempfile.new(["scopes", ".rb"])
+        file.write(source)
+        file.close
+        file
+      end
+      let(:operator_class) do
+        Class.new(described_class) do
+          def visit_nil_node(node)
+            add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "true",
+                         node: node)
+          end
+        end
+      end
+
+      before do
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set[File.expand_path(tmpfile.path)]
+      end
+
+      after do
+        Evilution::Integration::Loading::BodyCallNeutralizer.reset_preload_snapshot!
+        tmpfile.unlink
+      end
+
+      let(:lambda_node) { Prism.parse(source).value.statements.body.first.body.body.last.arguments.arguments.last }
+
+      def mutation_for(kind)
+        subject = Evilution::Subject.new(name: "Order.open", file_path: tmpfile.path, line_number: 3,
+                                         source: "", node: lambda_node, kind: kind)
+        operator_class.new.call(subject).first
+      end
+
+      def eval_source_for(kind)
+        mutation_for(kind).eval_source
+      end
+
+      it "keeps the scope declaration a scope subject's mutation is in" do
+        expect(eval_source_for(:scope))
+          .to eq("class Order\n  ()\n  scope :open, -> { where(open: true) }\nend\n")
+      end
+
+      it "neutralizes every class-body call for a method subject" do
+        expect(eval_source_for(:method)).to eq("class Order\n  ()\n  ()\nend\n")
+      end
+
+      it "gives a scope subject's mutation the original declaration to restore" do
+        expect(mutation_for(:scope).restore_source)
+          .to eq("class Order\n  ()\n  scope :open, -> { where(open: nil) }\nend\n")
+      end
+
+      it "gives a method subject's mutation nothing to restore" do
+        expect(mutation_for(:method).restore_source).to be_nil
+      end
+
+      it "leaves both sources whole for a file the parent never loaded" do
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set.new
+        mutation = mutation_for(:scope)
+
+        expect([mutation.eval_source, mutation.restore_source])
+          .to eq([source.sub("open: nil", "open: true"), source])
+      end
     end
   end
 

@@ -35,6 +35,11 @@ RSpec.describe Evilution::Mutation do
     expect(mutation.mutated_source).to include("@age > 18")
   end
 
+  it "has no restore_source unless one is given" do
+    expect(mutation.restore_source).to be_nil
+    expect(build_mutation(restore_source: "class User; end\n").restore_source).to eq("class User; end\n")
+  end
+
   it "exposes original_slice covering affected lines" do
     expect(mutation.original_slice).to eq("  @age >= 18\n")
   end

@@ -6,6 +6,7 @@ require_relative "constant_pinner"
 require_relative "concern_state_cleaner"
 require_relative "source_evaluator"
 require_relative "redefinition_recovery"
+require_relative "../../diagnostic"
 
 # Composes the load-time pipeline that applies a mutation's new source to the
 # running VM: syntax-validate -> pin top-level constants (beats Zeitwerk) ->
@@ -43,6 +44,18 @@ class Evilution::Integration::Loading::MutationApplier
     failure_result(e, "syntax error in mutated source: #{e.message}")
   rescue ScriptError, StandardError => e
     failure_result(e, "#{e.class}: #{e.message}")
+  end
+
+  # Evaluates the mutation's restore_source, if it has one. Runs after the
+  # tests: a failure here must not change the mutation's result, so it is
+  # reported and swallowed.
+  def restore(mutation)
+    source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
+    return unless source
+
+    @source_evaluator.call(source, mutation.file_path)
+  rescue ScriptError, StandardError => e
+    Evilution::Diagnostic.warn("[evilution] could not restore #{mutation.file_path}: #{e.class}: #{e.message}")
   end
 
   private
