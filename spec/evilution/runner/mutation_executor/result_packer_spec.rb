@@ -39,7 +39,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
         parent_rss_kb: 2048,
         error_message: "msg",
         error_class: "RuntimeError",
-        error_backtrace: ["a.rb:1"]
+        error_backtrace: ["a.rb:1"],
+        known_failures_only: false
       )
     end
   end
@@ -55,6 +56,15 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       expect(rebuilt.killing_test).to eq("spec/foo_spec.rb:10")
       expect(rebuilt.error_class).to eq("RuntimeError")
       expect(rebuilt.error_backtrace).to eq(["a.rb:1"])
+      expect(rebuilt.known_failures_only?).to be(false)
+    end
+
+    it "carries the known-failures flag across" do
+      flagged = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, known_failures_only: true)
+
+      rebuilt = packer.rebuild(mutation, packer.compact(flagged))
+
+      expect(rebuilt.known_failures_only?).to be(true)
     end
   end
 end

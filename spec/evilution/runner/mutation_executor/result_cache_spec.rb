@@ -83,6 +83,17 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       described_class.new(backend).store(mutation, infra_crash(mutation))
     end
 
+    # The baseline that discounts such a kill belongs to the run that saw it.
+    it "is a no-op for a kill in which only already-failing examples failed" do
+      backend = instance_double(Evilution::Cache)
+      allow(backend).to receive(:store)
+      flagged = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, known_failures_only: true)
+
+      described_class.new(backend).store(mutation, flagged)
+
+      expect(backend).not_to have_received(:store)
+    end
+
     it "stores killed results with status/duration/killing_test/test_command" do
       mut = mutation
       backend = instance_double("Cache")

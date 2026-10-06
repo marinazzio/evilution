@@ -14,6 +14,11 @@ class Evilution::Baseline
     def failed?
       !failed_spec_files.empty?
     end
+
+    # Every example known to have failed before any mutation ran.
+    def failed_example_ids
+      failures.flat_map(&:failed_ids).to_set
+    end
   end
 
   # spec_selector: the object `run` resolves with (integration layout plus
@@ -137,7 +142,7 @@ class Evilution::Baseline
     detail = FailureFormatter.new.call(failure).map { |line| "  #{line}" }
     Evilution::Diagnostic.warn(
       ["[evilution] Baseline failed for #{failure.spec_file}; " \
-       "surviving mutations it covers will be reported neutral.", *detail].join("\n")
+       "a mutation that fails only its already-failing examples will be reported neutral.", *detail].join("\n")
     )
     failure
   end

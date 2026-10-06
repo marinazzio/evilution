@@ -163,11 +163,18 @@ class that owns it.
    `Isolation::Fork#classify_status`: `:timeout` → `:killed` (crash) →
    `:unresolved` → `:error` → `:survived` (tests passed) → default `:killed`.
    A `NeutralizationPipeline` can reclassify results into `:neutral` — either
-   because the covering spec already failed at baseline (`Neutralizer::BaselineFailed`)
-   or because the test process crashed on infrastructure rather than on the
-   mutation (`Neutralizer::InfraError`). Each records a `Result::NeutralReason`,
-   since the two want opposite responses. A survivor is re-run against its whole
-   spec file before it is reported (`Integration::RSpec#confirm_survivor?`), so a
+   because the tests failed on nothing but examples that were already failing
+   at baseline (`Neutralizer::BaselineFailed`) or because the test process
+   crashed on infrastructure rather than on the mutation
+   (`Neutralizer::InfraError`). Each records a `Result::NeutralReason`, since
+   the two want opposite responses. For the first, the baseline reports the
+   ids of its failing examples (`Integration::RSpec::ExampleIds`, absolute path
+   plus position, so they compare across working directories), the RSpec
+   integration is built with them (`known_failures:`), and a failed run whose
+   failed examples are all among them comes back flagged
+   `known_failures_only`; a survivor is never neutralized. A survivor is re-run
+   against its whole spec file before it is reported
+   (`Integration::RSpec#confirm?`), as is a targeted run flagged that way, so a
    narrowed example set cannot invent one; after a parallel pass,
    `MutationExecutor::InfraRetry` re-runs the infrastructure-neutralised
    mutations serially, once the contention that caused them is gone.

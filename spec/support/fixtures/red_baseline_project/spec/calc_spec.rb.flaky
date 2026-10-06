@@ -1,0 +1,24 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "calc"
+
+# One example fails the first time the file is ever run -- which is the
+# baseline -- and passes from then on. `half` is covered by nothing.
+RSpec.describe Calc do
+  it "doubles" do
+    expect(described_class.new.double(4)).to eq(8)
+  end
+
+  it "triples" do
+    expect(described_class.new.triple(2)).to eq(6)
+  end
+
+  it "fails once" do
+    marker = File.expand_path("../.ran_once", __dir__)
+    first_run = !File.exist?(marker)
+    File.write(marker, "")
+
+    expect(first_run).to be(false)
+  end
+end

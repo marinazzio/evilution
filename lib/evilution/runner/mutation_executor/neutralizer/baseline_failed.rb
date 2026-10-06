@@ -4,6 +4,17 @@ require_relative "../neutralizer"
 require_relative "../../../result/mutation_result"
 require_relative "../../../result/neutral_reason"
 
+# Reclassifies a kill as :neutral when the tests failed on nothing but
+# examples that were already failing before any mutation ran.
+#
+# Such an example fails whatever the mutation is, so every mutation it runs
+# against would count as killed and a red spec file would score full marks.
+# The failure says nothing about the mutation: it has no verdict.
+#
+# A survivor is left alone, whatever the baseline did. Its tests passed, the
+# examples that were red in the baseline included, so the gap it reports is
+# real -- and neutralizing it, as used to happen for every survivor a red spec
+# file covered, hid exactly the mutations a reader needs to see.
 class Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed
   def initialize(config:, spec_resolver:, fallback_dir:)
     @config = config
@@ -12,18 +23,21 @@ class Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed
   end
 
   def call(result, baseline_result:)
-    return result unless result.survived? && baseline_result && baseline_result.failed?
+    return result unless result.killed? && result.known_failures_only?
 
-    return neutralize(result, nil) if @config.spec_files.any?
-
-    failed = baseline_result.failed_spec_files
-    spec_file = covering_specs(result.mutation.file_path).find { |spec| failed.include?(spec) }
-    return result unless spec_file
-
-    neutralize(result, spec_file)
+    neutralize(result, red_spec(result, baseline_result))
   end
 
   private
+
+  # The red spec file to name: one covering the mutated source. A run given
+  # its spec files explicitly has no single one to point at.
+  def red_spec(result, baseline_result)
+    return nil if @config.spec_files.any? || baseline_result.nil?
+
+    failed = baseline_result.failed_spec_files
+    covering_specs(result.mutation.file_path).find { |spec| failed.include?(spec) }
+  end
 
   # The spec files the baseline ran for this source: every file the resolver
   # returns (a spec_selector may map one source to several), or the fallback

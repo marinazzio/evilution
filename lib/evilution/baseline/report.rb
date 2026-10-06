@@ -7,20 +7,26 @@ require_relative "../baseline"
 # numbers, so it marshals over the pipe whatever the test framework is.
 #
 # The detail is bounded here, in the child: a spec file with a thousand failing
-# examples has nothing more to say after the first few.
+# examples has nothing more to say after the first few. Their ids are kept in
+# far greater number, since a mutation run is compared against all of them.
 module Evilution::Baseline::Report
   MAX_EXAMPLES = 10
+  MAX_IDS = 1000
   MAX_MESSAGE_LENGTH = 300
   MESSAGE_LINES = 3
   ERROR_LINES = 5
   ELLIPSIS = "..."
 
-  def self.build(passed:, failures: [], error: nil)
+  # failed_ids: every failing example, named so a mutation run can recognise
+  # it again (see Integration::RSpec::ExampleIds); empty where the framework
+  # does not provide such names.
+  def self.build(passed:, failures: [], error: nil, failed_ids: [])
     {
       passed: passed ? true : false,
       failure_count: failures.length,
       failures: failures.first(MAX_EXAMPLES).map { |failure| example(failure) },
-      error: error_excerpt(error)
+      error: error_excerpt(error),
+      failed_ids: failed_ids.first(MAX_IDS)
     }
   end
 

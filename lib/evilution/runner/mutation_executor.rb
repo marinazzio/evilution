@@ -30,7 +30,7 @@ class Evilution::Runner::MutationExecutor
   end
 
   def call(mutations, baseline_result = nil)
-    integration = @baseline_runner.build_integration
+    integration = @baseline_runner.build_integration(baseline_result)
     spec_resolver = baseline_failed?(baseline_result) ? @baseline_runner.neutralization_resolver : nil
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)

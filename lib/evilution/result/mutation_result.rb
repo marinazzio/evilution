@@ -9,8 +9,11 @@ class Evilution::Result::MutationResult
 
   attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason
 
+  # known_failures_only: the tests failed, but every example that did was
+  # already failing before any mutation ran, so the failure says nothing
+  # about this one.
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
-                 test_command: nil, memory: nil, error: nil, neutral_reason: nil)
+                 test_command: nil, memory: nil, error: nil, neutral_reason: nil, known_failures_only: false)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -21,6 +24,7 @@ class Evilution::Result::MutationResult
     @memory = memory
     @error = error
     @neutral_reason = neutral_reason
+    @known_failures_only = known_failures_only == true
     freeze
   end
 
@@ -52,6 +56,10 @@ class Evilution::Result::MutationResult
 
   def error_backtrace
     @error.is_a?(Evilution::Result::ErrorInfo) ? @error.backtrace : nil
+  end
+
+  def known_failures_only?
+    @known_failures_only
   end
 
   def killed?

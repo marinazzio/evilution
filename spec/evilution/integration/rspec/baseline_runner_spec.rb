@@ -148,7 +148,7 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
         end
       RUBY
 
-      expect(run_baseline(@dir)).to eq(passed: true, failure_count: 0, failures: [], error: nil)
+      expect(run_baseline(@dir)).to eq(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [])
     end
 
     it "reports each failing example with its id, description and first error line" do
@@ -166,6 +166,8 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
       expect(report[:passed]).to be(false)
       expect(report[:failure_count]).to eq(2)
       expect(report[:error]).to be_nil
+      spec_path = File.realpath(File.join(@dir, "spec/x_spec.rb"))
+      expect(report[:failed_ids]).to eq(["#{spec_path}[1:2]", "#{spec_path}[1:3]"])
       expect(report[:failures]).to eq(
         [
           { id: "./spec/x_spec.rb[1:2]", description: "x compares",
@@ -185,6 +187,7 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
 
       expect(report[:passed]).to be(false)
       expect(report[:failures]).to eq([])
+      expect(report[:failed_ids]).to eq([])
       expect(report[:error]).to include("An error occurred while loading ./spec/x_spec.rb")
       expect(report[:error]).to include("uninitialized constant UndefinedThing")
     end

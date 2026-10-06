@@ -67,6 +67,12 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     Evilution::Result::MutationResult.new(mutation: mutation, status: :survived, duration: 0.01)
   end
 
+  # A failed run in which only examples the baseline already saw failing failed.
+  def discounted_kill(mutation)
+    Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 0.01,
+                                          known_failures_only: true)
+  end
+
   def error_result(mutation, error_class:, error_message: "boom", error_backtrace: [])
     Evilution::Result::MutationResult.new(
       mutation: mutation, status: :error, duration: 0.01,
@@ -224,7 +230,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
           error_result(infra_mut, error_class: "LoadError",
                                   error_backtrace: ["spec/spec_helper.rb:3:in `require'"])
         else
-          survived_result(baseline_mut)
+          discounted_kill(baseline_mut)
         end
       end
       baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"])
@@ -232,6 +238,39 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       execution = build(cfg, isolator: isolator).call([infra_mut, baseline_mut], baseline)
 
       expect(execution.results.map(&:status)).to eq(%i[neutral neutral])
+      expect(execution.results.last.neutral_reason.detail).to eq("spec")
+    end
+
+    it "leaves a survivor a survivor under a red baseline" do
+      cfg = config(jobs: 1, fallback_to_full_suite: true)
+      mut = mutation(file: "lib/foo.rb")
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| survived_result(mutation) }
+      baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"])
+
+      execution = build(cfg, isolator: isolator).call([mut], baseline)
+
+      expect(execution.results.map(&:status)).to eq([:survived])
+    end
+
+    it "hands the baseline result to the integration it builds" do
+      cfg = config(jobs: 1)
+      received = :unset
+      baseline_runner = instance_double(
+        Evilution::Runner::BaselineRunner,
+        neutralization_resolver: ->(_f) {}, neutralization_fallback_dir: "spec"
+      )
+      allow(baseline_runner).to receive(:build_integration) do |baseline_result|
+        received = baseline_result
+        ->(_m) { "cmd" }
+      end
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+      baseline = instance_double(Evilution::Baseline::Result, failed?: false, failed_spec_files: [])
+
+      build(cfg, isolator: isolator, baseline_runner: baseline_runner).call([mutation], baseline)
+
+      expect(received).to be(baseline)
     end
 
     it "feeds the built integration into the test command, not the baseline runner" do
@@ -259,7 +298,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
         neutralization_fallback_dir: "spec/fallback"
       )
       isolator = instance_double(Evilution::Isolation::Fork)
-      allow(isolator).to receive(:call) { |mutation:, **| survived_result(mutation) }
+      allow(isolator).to receive(:call) { |mutation:, **| discounted_kill(mutation) }
       baseline = instance_double(
         Evilution::Baseline::Result, failed?: true,
                                      failed_spec_files: ["spec/resolved_spec.rb"]
@@ -269,6 +308,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
                   .call([mut], baseline)
 
       expect(execution.results.map(&:status)).to eq([:neutral])
+      expect(execution.results.first.neutral_reason.detail).to eq("spec/resolved_spec.rb")
     end
   end
 

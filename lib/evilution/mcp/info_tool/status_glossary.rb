@@ -32,8 +32,8 @@ module Evilution::MCP::InfoTool::StatusGlossary
     },
     {
       "status" => "neutral",
-      "meaning" => "Baseline tests already failed before the mutation was applied — pre-existing " \
-                   "test-suite problem (flaky spec, infra collision, fixture setup failure). " \
+      "meaning" => "No verdict: the tests failed only on examples that were already failing before " \
+                   "the mutation was applied, or the test process crashed on infrastructure. " \
                    "Not a meaningful mutation signal.",
       "counted_in_score" => false
     },

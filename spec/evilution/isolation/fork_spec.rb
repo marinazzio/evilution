@@ -426,6 +426,15 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to include("unexpected ')'")
     end
 
+    it "carries the known-failures flag of a failed run back from the child" do
+      test_command = ->(_m) { { passed: false, known_failures_only: true } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_killed
+      expect(result.known_failures_only?).to be(true)
+    end
+
     it "captures error_class and error_backtrace from child" do
       test_command = ->(_m) { raise ArgumentError, "bad arg" }
 

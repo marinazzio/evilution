@@ -21,8 +21,13 @@ class Evilution::Integration::RSpec::ResultBuilder
     }
   end
 
-  def from_run(status, command, detector, examples_loaded: nil)
+  # known_failures_only: every example that failed was already failing in the
+  # baseline. Still a failed run, but flagged, so it is not taken for a kill.
+  def from_run(status, command, detector, examples_loaded: nil, known_failures_only: false)
     return { passed: true, test_command: command } if status.zero?
+    # Before the crash check: an example that was already failing may fail by
+    # raising now, and a crash in it is no more a kill than its failure was.
+    return { passed: false, known_failures_only: true, test_command: command } if known_failures_only
 
     if detector.only_crashes?
       classes = detector.unique_crash_classes

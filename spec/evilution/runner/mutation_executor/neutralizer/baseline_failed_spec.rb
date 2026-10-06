@@ -3,6 +3,7 @@
 require "evilution/config"
 require "evilution/mutation"
 require "evilution/result/mutation_result"
+require "evilution/result/memory_stats"
 require "evilution/runner/mutation_executor/neutralizer/baseline_failed"
 
 RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed do
@@ -10,15 +11,17 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed 
     instance_double(Evilution::Mutation, file_path: file)
   end
 
-  def survived(mut)
-    Evilution::Result::MutationResult.new(mutation: mut, status: :survived, duration: 0.01)
+  def result(status, known_failures_only: false, **)
+    Evilution::Result::MutationResult.new(mutation: mutation, status: status, duration: 0.01,
+                                          known_failures_only: known_failures_only, **)
   end
 
-  def killed(mut)
-    Evilution::Result::MutationResult.new(mutation: mut, status: :killed, duration: 0.01)
+  # A kill in which only examples the baseline already saw failing failed.
+  def discounted_kill(**)
+    result(:killed, known_failures_only: true, **)
   end
 
-  def baseline_failed(failed_files: [])
+  def baseline(failed_files: ["spec/foo_spec.rb"])
     instance_double("BaselineResult", failed?: true, failed_spec_files: failed_files)
   end
 
@@ -29,110 +32,107 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed 
     described_class.new(config: cfg, spec_resolver: spec_resolver, fallback_dir: fallback_dir)
   end
 
-  it "returns the result unchanged when result is not survived" do
-    r = killed(mutation)
-    expect(neutralizer.call(r, baseline_result: baseline_failed)).to be(r)
-  end
+  describe "what it leaves alone" do
+    it "keeps a survivor a survivor, even under a red baseline" do
+      survivor = result(:survived)
 
-  it "does NOT neutralize a non-survived result even when config.spec_files would force neutralization" do
-    nz = neutralizer(spec_files: ["spec/foo_spec.rb"])
-    r = killed(mutation)
-    out = nz.call(r, baseline_result: baseline_failed)
-    expect(out).to be(r)
-    expect(out.status).to eq(:killed)
-  end
-
-  it "returns the result unchanged when baseline_result is nil" do
-    r = survived(mutation)
-    expect(neutralizer.call(r, baseline_result: nil)).to be(r)
-  end
-
-  it "returns the result unchanged when baseline did not fail" do
-    r = survived(mutation)
-    baseline_ok = instance_double("BaselineResult", failed?: false)
-    expect(neutralizer.call(r, baseline_result: baseline_ok)).to be(r)
-  end
-
-  it "neutralizes survived results unconditionally when config.spec_files is non-empty" do
-    nz = neutralizer(spec_files: ["spec/foo_spec.rb"])
-    r = survived(mutation)
-    out = nz.call(r, baseline_result: baseline_failed)
-    expect(out.status).to eq(:neutral)
-  end
-
-  it "neutralizes when resolved spec_file is in baseline.failed_spec_files" do
-    resolver = ->(_f) { "spec/foo_spec.rb" }
-    nz = neutralizer(spec_resolver: resolver)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec/foo_spec.rb"])
-    expect(nz.call(r, baseline_result: bl).status).to eq(:neutral)
-  end
-
-  it "does NOT neutralize when resolved spec_file is not in baseline.failed_spec_files" do
-    resolver = ->(_f) { "spec/foo_spec.rb" }
-    nz = neutralizer(spec_resolver: resolver)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec/other_spec.rb"])
-    expect(nz.call(r, baseline_result: bl)).to be(r)
-  end
-
-  it "uses fallback_dir when spec_resolver returns nil and the run falls back to the full suite" do
-    resolver = ->(_f) {}
-    nz = neutralizer(spec_resolver: resolver, fallback_dir: "spec", fallback_to_full_suite: true)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec"])
-    expect(nz.call(r, baseline_result: bl).status).to eq(:neutral)
-  end
-
-  # without the fallback the baseline never ran the directory, so an
-  # unresolved source has nothing that could have been failing.
-  it "does not neutralize an unresolved source when the run does not fall back to the full suite" do
-    resolver = ->(_f) {}
-    nz = neutralizer(spec_resolver: resolver, fallback_dir: "spec", fallback_to_full_suite: false)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec"])
-    expect(nz.call(r, baseline_result: bl)).to be(r)
-  end
-
-  # The spec_selector returns every spec covering the source (spec_mappings).
-  it "neutralizes when any of several resolved spec files failed in the baseline" do
-    resolver = ->(_f) { ["spec/foo_spec.rb", "spec/foo_edge_spec.rb"] }
-    nz = neutralizer(spec_resolver: resolver)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec/foo_edge_spec.rb"])
-    out = nz.call(r, baseline_result: bl)
-    expect(out.status).to eq(:neutral)
-    expect(out.neutral_reason).to eq(Evilution::Result::NeutralReason.baseline_failure("spec/foo_edge_spec.rb"))
-  end
-
-  it "resolves the mutated source's own path" do
-    resolver = ->(path) { path == "lib/foo.rb" ? ["spec/foo_spec.rb"] : [] }
-    nz = neutralizer(spec_resolver: resolver)
-    bl = baseline_failed(failed_files: ["spec/foo_spec.rb"])
-    expect(nz.call(survived(mutation(file: "lib/foo.rb")), baseline_result: bl).status).to eq(:neutral)
-  end
-
-  it "does NOT neutralize when none of several resolved spec files failed" do
-    resolver = ->(_f) { ["spec/foo_spec.rb", "spec/foo_edge_spec.rb"] }
-    nz = neutralizer(spec_resolver: resolver)
-    r = survived(mutation)
-    bl = baseline_failed(failed_files: ["spec/other_spec.rb"])
-    expect(nz.call(r, baseline_result: bl)).to be(r)
-  end
-  describe "the reason it records" do
-    it "names the spec file that was already failing" do
-      result = neutralizer.call(survived(mutation), baseline_result: baseline_failed(failed_files: ["spec/foo_spec.rb"]))
-
-      expect(result.neutral_reason)
-        .to eq(Evilution::Result::NeutralReason.baseline_failure("spec/foo_spec.rb"))
+      expect(neutralizer.call(survivor, baseline_result: baseline)).to be(survivor)
     end
 
-    # With an explicit --spec there is no per-file resolution to name.
-    it "records no spec when the run was given explicit spec files" do
-      neutral = neutralizer(spec_files: ["spec/a_spec.rb"])
-                .call(survived(mutation), baseline_result: baseline_failed)
+    it "keeps a survivor when the run was given its spec files explicitly" do
+      survivor = result(:survived)
 
-      expect(neutral.neutral_reason).to eq(Evilution::Result::NeutralReason.baseline_failure(nil))
+      expect(neutralizer(spec_files: ["spec/foo_spec.rb"]).call(survivor, baseline_result: baseline)).to be(survivor)
+    end
+
+    it "keeps a kill in which something new failed" do
+      kill = result(:killed)
+
+      expect(neutralizer.call(kill, baseline_result: baseline)).to be(kill)
+    end
+
+    it "keeps results of other statuses, flagged or not" do
+      %i[timeout error unresolved equivalent].each do |status|
+        other = result(status, known_failures_only: true)
+
+        expect(neutralizer.call(other, baseline_result: baseline)).to be(other)
+      end
+    end
+  end
+
+  describe "a kill in which only already-failing examples failed" do
+    it "becomes neutral" do
+      out = neutralizer.call(discounted_kill, baseline_result: baseline)
+
+      expect(out.status).to eq(:neutral)
+    end
+
+    it "names the red spec file covering the mutated source" do
+      out = neutralizer.call(discounted_kill, baseline_result: baseline)
+
+      expect(out.neutral_reason).to eq(Evilution::Result::NeutralReason.baseline_failure("spec/foo_spec.rb"))
+    end
+
+    it "picks the red one among several covering spec files" do
+      nz = neutralizer(spec_resolver: ->(_f) { ["spec/green_spec.rb", "spec/red_spec.rb"] })
+
+      out = nz.call(discounted_kill, baseline_result: baseline(failed_files: ["spec/red_spec.rb"]))
+
+      expect(out.neutral_reason.detail).to eq("spec/red_spec.rb")
+    end
+
+    it "names no spec file when the run was given its spec files explicitly" do
+      out = neutralizer(spec_files: ["spec/a_spec.rb", "spec/b_spec.rb"])
+            .call(discounted_kill, baseline_result: baseline(failed_files: ["spec/a_spec.rb"]))
+
+      expect(out.status).to eq(:neutral)
+      expect(out.neutral_reason).to eq(Evilution::Result::NeutralReason.baseline_failure(nil))
+    end
+
+    it "names no spec file when none covering the source was red" do
+      out = neutralizer.call(discounted_kill, baseline_result: baseline(failed_files: ["spec/other_spec.rb"]))
+
+      expect(out.status).to eq(:neutral)
+      expect(out.neutral_reason.detail).to be_nil
+    end
+
+    it "names no spec file when there is no baseline result to consult" do
+      out = neutralizer.call(discounted_kill, baseline_result: nil)
+
+      expect(out.status).to eq(:neutral)
+      expect(out.neutral_reason.detail).to be_nil
+    end
+
+    it "names the fallback directory for an unresolved source when the run falls back to the full suite" do
+      nz = neutralizer(spec_resolver: ->(_f) {}, fallback_dir: "test", fallback_to_full_suite: true)
+
+      out = nz.call(discounted_kill, baseline_result: baseline(failed_files: ["test"]))
+
+      expect(out.neutral_reason.detail).to eq("test")
+    end
+
+    it "does not name the fallback directory when the run does not fall back" do
+      nz = neutralizer(spec_resolver: ->(_f) {}, fallback_dir: "test", fallback_to_full_suite: false)
+
+      out = nz.call(discounted_kill, baseline_result: baseline(failed_files: ["test"]))
+
+      expect(out.neutral_reason.detail).to be_nil
+    end
+
+    it "carries the run's duration, command, memory and error over" do
+      memory = Evilution::Result::MemoryStats.from_fields(child_rss_kb: 10)
+      kill = discounted_kill(test_command: "rspec spec/foo_spec.rb", memory: memory)
+
+      out = neutralizer.call(kill, baseline_result: baseline)
+
+      expect(out.mutation).to be(kill.mutation)
+      expect(out.duration).to eq(0.01)
+      expect(out.test_command).to eq("rspec spec/foo_spec.rb")
+      expect(out.child_rss_kb).to eq(10)
+    end
+
+    it "is no longer flagged once neutral" do
+      expect(neutralizer.call(discounted_kill, baseline_result: baseline).known_failures_only?).to be(false)
     end
   end
 end

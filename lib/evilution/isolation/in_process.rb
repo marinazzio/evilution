@@ -106,7 +106,8 @@ class Evilution::Isolation::InProcess
         message: result[:error],
         klass: result[:error_class],
         backtrace: result[:error_backtrace]
-      )
+      ),
+      known_failures_only: result[:known_failures_only]
     )
   end
 end

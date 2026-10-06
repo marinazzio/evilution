@@ -33,3 +33,4 @@ Style/OneClassPerFile:
 Metrics/ParameterLists:
   Exclude:
     - "lib/evilution/result/summary.rb"
+    - "lib/evilution/result/mutation_result.rb"

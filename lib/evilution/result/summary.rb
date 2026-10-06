@@ -25,10 +25,10 @@ class Evilution::Result::Summary
     freeze
   end
 
-  # The survivors a red baseline turned neutral, gathered under the spec file
-  # that was red and paired with why it was. They are out of the score, so a
-  # baseline that was red for a reason of its own hides real gaps behind full
-  # marks unless the report says they are there.
+  # The kills not counted because only examples already failing in the
+  # baseline failed, gathered under the spec file that was red and paired with
+  # why it was. They are out of the score, so a red spec file would read as
+  # full marks unless the report says they are there.
   def baseline_neutralizations
     baseline_neutralized_results.group_by { |result| result.neutral_reason.detail }.map do |spec_file, results|
       Evilution::Result::BaselineNeutralization.new(

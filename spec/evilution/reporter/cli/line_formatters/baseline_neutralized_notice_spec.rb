@@ -28,23 +28,24 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNoti
       expect(formatter.format(summary_with)).to be_nil
     end
 
-    it "says how many survivors a red spec file turned neutral, and why it was red" do
+    it "says how many kills a red spec file left uncounted, and why it was red" do
       failure = spec_failure("spec/x_helper_spec.rb", examples: [example_failure], example_count: 1)
       summary = summary_with(neutralization(spec_file: "spec/x_helper_spec.rb", count: 24, failures: [failure]))
 
       expect(formatter.format(summary)).to eq(
-        "! 24 survivors reclassified neutral because baseline failed for spec/x_helper_spec.rb; " \
-        "they may be real gaps.\n    " \
+        "! 24 kills not counted for spec/x_helper_spec.rb: only examples already failing in the baseline " \
+        "failed, so those mutations have no verdict.\n    " \
         "./spec/x_helper_spec.rb[1:1] XHelper greets -- NameError: nope"
       )
     end
 
-    it "speaks of a single survivor in the singular" do
+    it "speaks of a single kill in the singular" do
       failure = spec_failure("spec/a_spec.rb", error: "timed out after 30s")
       summary = summary_with(neutralization(spec_file: "spec/a_spec.rb", count: 1, failures: [failure]))
 
       expect(formatter.format(summary)).to eq(
-        "! 1 survivor reclassified neutral because baseline failed for spec/a_spec.rb; it may be a real gap.\n    " \
+        "! 1 kill not counted for spec/a_spec.rb: only examples already failing in the baseline failed, " \
+        "so that mutation has no verdict.\n    " \
         "timed out after 30s"
       )
     end
@@ -53,7 +54,8 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNoti
       summary = summary_with(neutralization(spec_file: "spec/a_spec.rb", count: 2, failures: []))
 
       expect(formatter.format(summary)).to eq(
-        "! 2 survivors reclassified neutral because baseline failed for spec/a_spec.rb; they may be real gaps."
+        "! 2 kills not counted for spec/a_spec.rb: only examples already failing in the baseline failed, " \
+        "so those mutations have no verdict."
       )
     end
 
@@ -62,8 +64,8 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNoti
       summary = summary_with(neutralization(spec_file: nil, count: 3, failures: failures))
 
       expect(formatter.format(summary)).to eq(
-        "! 3 survivors reclassified neutral because baseline failed for spec/a_spec.rb, spec/b_spec.rb; " \
-        "they may be real gaps.\n    " \
+        "! 3 kills not counted for spec/a_spec.rb, spec/b_spec.rb: only examples already failing in the " \
+        "baseline failed, so those mutations have no verdict.\n    " \
         "spec/a_spec.rb:\n      boom\n    " \
         "spec/b_spec.rb:\n      bang"
       )
@@ -73,7 +75,8 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNoti
       summary = summary_with(neutralization(spec_file: nil, count: 3, failures: []))
 
       expect(formatter.format(summary)).to eq(
-        "! 3 survivors reclassified neutral because baseline failed; they may be real gaps."
+        "! 3 kills not counted: only examples already failing in the baseline failed, " \
+        "so those mutations have no verdict."
       )
     end
 
@@ -85,8 +88,10 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNoti
 
       expect(formatter.format(summary).lines.map(&:chomp)).to eq(
         [
-          "! 2 survivors reclassified neutral because baseline failed for spec/a_spec.rb; they may be real gaps.",
-          "! 5 survivors reclassified neutral because baseline failed for spec/b_spec.rb; they may be real gaps."
+          "! 2 kills not counted for spec/a_spec.rb: only examples already failing in the baseline failed, " \
+          "so those mutations have no verdict.",
+          "! 5 kills not counted for spec/b_spec.rb: only examples already failing in the baseline failed, " \
+          "so those mutations have no verdict."
         ]
       )
     end

@@ -3,6 +3,7 @@
 require "stringio"
 require_relative "../rspec"
 require_relative "../../baseline"
+require_relative "example_ids"
 
 class Evilution::Integration::RSpec::BaselineRunner
   def call(spec_file)
@@ -35,7 +36,10 @@ class Evilution::Integration::RSpec::BaselineRunner
     return Evilution::Baseline::Report.build(passed: true) if passed
 
     failures = failed_examples
-    Evilution::Baseline::Report.build(passed: false, failures: failures, error: failures.empty? ? output : nil)
+    Evilution::Baseline::Report.build(
+      passed: false, failures: failures, error: failures.empty? ? output : nil,
+      failed_ids: Evilution::Integration::RSpec::ExampleIds.failed(::RSpec.world)
+    )
   end
 
   def failed_examples

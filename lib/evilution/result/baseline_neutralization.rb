@@ -2,8 +2,9 @@
 
 require_relative "../result"
 
-# The survivors one red spec file turned neutral, with why it was red.
+# The kills one red spec file left uncounted -- mutations whose tests failed
+# on nothing but examples that were already failing -- with why it was red.
 #
-# spec_file is nil when the run was given its spec files explicitly: a survivor
-# is then neutral whichever of them was red, so failures holds all of them.
+# spec_file is nil when no single red file can be named, as in a run given
+# its spec files explicitly; failures then holds all of them.
 Evilution::Result::BaselineNeutralization = Data.define(:spec_file, :count, :failures)

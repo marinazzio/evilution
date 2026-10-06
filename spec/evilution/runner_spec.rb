@@ -1000,7 +1000,8 @@ RSpec.describe Evilution::Runner do
     it "passes spec_files to the RSpec integration" do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything,
-              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
+              known_failures: anything)
         .and_call_original
 
       runner.call
@@ -1020,7 +1021,8 @@ RSpec.describe Evilution::Runner do
 
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything,
-              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
+              known_failures: anything)
         .and_call_original
 
       empty_runner.call
@@ -1438,38 +1440,53 @@ RSpec.describe Evilution::Runner do
       allow(isolator).to receive(:call).and_return(survived_result)
     end
 
-    it "reclassifies survived mutations as neutral when baseline spec fails" do
-      baseline_result = Evilution::Baseline::Result.new(
-        failed_spec_files: Set["spec/example_spec.rb"],
-        duration: 0.5
-      )
-      baseline = instance_double(Evilution::Baseline)
-      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
-      allow(baseline).to receive(:call).and_return(baseline_result)
+    # A run in which only examples the baseline already saw failing failed.
+    let(:discounted_kill) do
+      Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 0.1,
+                                            known_failures_only: true)
+    end
 
+    def stub_red_baseline(failures: [])
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set["spec/example_spec.rb"], duration: 0.5, failures: failures
+      )
+      allow(Evilution::Baseline).to receive(:new).and_return(instance_double(Evilution::Baseline, call: baseline_result))
+      stub_resolved_spec
+    end
+
+    def stub_resolved_spec
       spec_resolver = instance_double(Evilution::SpecResolver)
       allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
       allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
+    end
+
+    it "keeps a survivor a survivor when the baseline spec fails" do
+      stub_red_baseline
+
+      result = runner.call
+
+      expect(result.results.first.status).to eq(:survived)
+      expect(result.survived).to eq(1)
+      expect(result.neutral).to eq(0)
+    end
+
+    it "reclassifies a kill as neutral when only already-failing examples failed" do
+      stub_red_baseline
+      isolator = instance_double(Evilution::Isolation::Fork, call: discounted_kill)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
 
       result = runner.call
 
       expect(result.results.first.status).to eq(:neutral)
-      expect(result.survived).to eq(0)
+      expect(result.killed).to eq(0)
       expect(result.neutral).to eq(1)
     end
 
     it "hands the baseline's failure detail to the summary" do
       failure = Evilution::Baseline::SpecFailure.new(spec_file: "spec/example_spec.rb", error: "boom")
-      baseline_result = Evilution::Baseline::Result.new(
-        failed_spec_files: Set["spec/example_spec.rb"], duration: 0.5, failures: [failure]
-      )
-      baseline = instance_double(Evilution::Baseline)
-      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
-      allow(baseline).to receive(:call).and_return(baseline_result)
-
-      spec_resolver = instance_double(Evilution::SpecResolver)
-      allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
-      allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
+      stub_red_baseline(failures: [failure])
+      isolator = instance_double(Evilution::Isolation::Fork, call: discounted_kill)
+      allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
 
       summary = runner.call
 
@@ -1547,7 +1564,17 @@ RSpec.describe Evilution::Runner do
         allow(isolator).to receive(:call).and_return(survived_result)
       end
 
-      it "neutralizes survived mutations using minitest resolver" do
+      let(:discounted_test_kill) do
+        Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 0.1,
+                                              known_failures_only: true)
+      end
+
+      before do
+        isolator = instance_double(Evilution::Isolation::Fork, call: discounted_test_kill)
+        allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+      end
+
+      it "names the red test file through the minitest resolver" do
         baseline_result = Evilution::Baseline::Result.new(
           failed_spec_files: Set["test/example_test.rb"],
           duration: 0.5
@@ -1565,6 +1592,7 @@ RSpec.describe Evilution::Runner do
         result = minitest_runner.call
 
         expect(result.results.first.status).to eq(:neutral)
+        expect(result.results.first.neutral_reason.detail).to eq("test/example_test.rb")
       end
 
       # A baseline in which the whole test/ directory failed.
@@ -1592,22 +1620,24 @@ RSpec.describe Evilution::Runner do
         described_class.new(config: cfg).call
       end
 
-      it "uses minitest fallback_dir for neutralization when resolver returns nil and the run falls back" do
+      it "names the minitest fallback dir when the resolver returns nil and the run falls back" do
         result = run_with_failed_test_dir(fallback_to_full_suite: true)
 
-        expect(result.results.first.status).to eq(:neutral)
+        expect(result.results.first.neutral_reason.detail).to eq("test")
       end
 
       # without the fallback the baseline never ran test/, so a
       # failing "test" entry says nothing about this unresolved source.
-      it "does not neutralize an unresolved source via the fallback dir when the run does not fall back" do
+      it "does not name the fallback dir for an unresolved source when the run does not fall back" do
         result = run_with_failed_test_dir(fallback_to_full_suite: false)
 
-        expect(result.results.first.status).not_to eq(:neutral)
+        expect(result.results.first.neutral_reason.detail).to be_nil
       end
     end
 
-    it "does not count neutral mutations toward fail_fast" do
+    # A survivor is a survivor whatever the baseline did, so it stops a
+    # fail-fast run like any other.
+    it "counts survivors under a red baseline toward fail_fast" do
       mutation2 = double(
         "Mutation2",
         subject: subject_obj,
@@ -1657,8 +1687,8 @@ RSpec.describe Evilution::Runner do
 
       result = ff_runner.call
 
-      expect(result.total).to eq(2)
-      expect(result).not_to be_truncated
+      expect(result.total).to eq(1)
+      expect(result).to be_truncated
     end
 
     context "with --no-baseline" do
@@ -2701,7 +2731,8 @@ RSpec.describe Evilution::Runner do
 
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything,
-              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything)
+              related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
+              known_failures: anything)
         .and_call_original
 
       hooked_runner = described_class.new(

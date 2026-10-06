@@ -24,6 +24,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     fallback_to_full_suite: false,
     spec_selector: nil,
     example_filter: nil,
+    known_failures: [],
     framework_loader: FrameworkLoader.new,
     test_file_resolver: nil,
     example_filter_applier: nil,
@@ -44,6 +45,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @crash_detector_lifecycle = crash_detector_lifecycle
     @result_builder = result_builder
     @state_guard = state_guard
+    @known_failures = known_failures.to_set
     super(hooks: hooks)
   end
 
@@ -71,7 +73,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     return @result_builder.unresolved_example(mutation) if targets.nil?
 
     result = run_targets(targets)
-    return result unless confirm_survivor?(result, targets, files)
+    return result unless confirm?(result, targets, files)
 
     run_targets(files)
   end
@@ -85,8 +87,12 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   # So a survivor is re-run against the whole resolved file, and that run is the
   # one reported. Only survivors pay for it, and only where the subset was
   # actually narrower than the file.
-  def confirm_survivor?(result, targets, files)
-    result[:passed] && targets != files
+  #
+  # The same goes for a subset in which nothing failed but examples that were
+  # failing before any mutation ran: that is no verdict either, and the rest of
+  # the file may hold one.
+  def confirm?(result, targets, files)
+    (result[:passed] || result[:known_failures_only]) && targets != files
   end
 
   def run_targets(targets)
@@ -142,7 +148,8 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       claim_rspec_streams(out, err)
       detector = @crash_detector_lifecycle.register
       status = ::RSpec::Core::Runner.run(args, err, out)
-      @result_builder.from_run(status, command, detector, examples_loaded:)
+      flagged = known_failures_only?(status)
+      @result_builder.from_run(status, command, detector, examples_loaded:, known_failures_only: flagged)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
@@ -188,12 +195,23 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     nil
   end
 
+  # Whether the run failed on nothing but examples the baseline already saw
+  # failing. Decided here, in the process that ran them: the names of every
+  # failing example need not travel back, only the answer.
+  def known_failures_only?(status)
+    return false if status.zero? || @known_failures.empty?
+
+    failed = ExampleIds.failed(::RSpec.world)
+    !failed.empty? && failed.all? { |id| @known_failures.include?(id) }
+  end
+
   def reset_examples
     ::RSpec.respond_to?(:clear_examples) ? ::RSpec.clear_examples : ::RSpec.reset
   end
 end
 
 require_relative "rspec/framework_loader"
+require_relative "rspec/example_ids"
 require_relative "rspec/test_file_resolver"
 require_relative "rspec/unresolved_spec_warner"
 require_relative "rspec/example_filter_applier"

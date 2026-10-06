@@ -889,6 +889,92 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(runs.first).not_to include("spec/some_spec.rb")
     end
 
+    context "with examples the baseline already saw failing" do
+      let(:known) { ["/p/spec/some_spec.rb[1:1]"] }
+
+      def integration_with(filter_result)
+        allow(example_filter).to receive(:call).and_return(filter_result)
+        described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter, known_failures: known)
+      end
+
+      def stub_runs(*statuses)
+        runs = []
+        allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+          runs << args
+          statuses.shift
+        end
+        runs
+      end
+
+      it "flags a failed run in which nothing else failed" do
+        stub_runs(1)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed).and_return(known)
+
+        result = integration_with(["spec/some_spec.rb"]).call(mutation)
+
+        expect(result).to include(passed: false, known_failures_only: true)
+      end
+
+      it "does not flag a run in which something new failed too" do
+        stub_runs(1)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed)
+          .and_return(known + ["/p/spec/some_spec.rb[1:2]"])
+
+        result = integration_with(["spec/some_spec.rb"]).call(mutation)
+
+        expect(result).to include(passed: false)
+        expect(result).not_to include(:known_failures_only)
+      end
+
+      it "does not flag a failed run that names no failed example" do
+        stub_runs(1)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed).and_return([])
+
+        expect(integration_with(["spec/some_spec.rb"]).call(mutation)).not_to include(:known_failures_only)
+      end
+
+      it "does not look for failed examples after a passing run" do
+        stub_runs(0)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed)
+
+        integration_with(["spec/some_spec.rb"]).call(mutation)
+
+        expect(Evilution::Integration::RSpec::ExampleIds).not_to have_received(:failed)
+      end
+
+      # A targeted subset that fails only on known failures is no verdict; the
+      # rest of the file may still kill the mutation.
+      it "re-runs the whole file when a targeted subset failed only on known failures" do
+        runs = stub_runs(1, 1)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed)
+          .and_return(known, known + ["/p/spec/some_spec.rb[1:5]"])
+
+        result = integration_with(["spec/some_spec.rb:12"]).call(mutation)
+
+        expect(runs.length).to eq(2)
+        expect(runs.last).to include("spec/some_spec.rb")
+        expect(result).not_to include(:known_failures_only)
+      end
+
+      it "does not re-run when the whole file was already run" do
+        runs = stub_runs(1)
+        allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed).and_return(known)
+
+        integration_with(["spec/some_spec.rb"]).call(mutation)
+
+        expect(runs.length).to eq(1)
+      end
+    end
+
+    it "does not flag a failed run when the baseline saw no failures" do
+      allow(example_filter).to receive(:call).and_return(["spec/some_spec.rb"])
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+      allow(Evilution::Integration::RSpec::ExampleIds).to receive(:failed).and_return(["/p/spec/some_spec.rb[1:1]"])
+      plain = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)
+
+      expect(plain.call(mutation)).not_to include(:known_failures_only)
+    end
+
     it "returns an unresolved result when filter returns nil" do
       allow(example_filter).to receive(:call).and_return(nil)
       filtered = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: example_filter)

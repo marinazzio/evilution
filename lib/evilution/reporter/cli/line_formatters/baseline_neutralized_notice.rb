@@ -3,12 +3,12 @@
 require_relative "../line_formatters"
 require_relative "../../../baseline"
 
-# A survivor covered by a spec file that was already red is recorded neutral
-# and drops out of the score. When the file was red for a reason of its own --
-# the baseline process, not the spec -- those neutrals are survivors nobody
-# sees, and the run prints full marks. So the score never goes out without
-# saying how many survivors went that way, for which spec file, and why it
-# was red.
+# An example that was failing before any mutation ran fails in every mutation
+# run it takes part in. Where nothing else failed, that failure is not a kill:
+# the mutation is recorded neutral and drops out of the score. Left unsaid, a
+# red spec file would read as full marks, so the score never goes out without
+# saying how many kills were not counted, for which spec file, and why it was
+# red.
 class Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNotice
   DETAIL_INDENT = "    "
 
@@ -27,9 +27,10 @@ class Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNotice
 
   def headline(neutralization)
     count = neutralization.count
-    subject = count == 1 ? "1 survivor" : "#{count} survivors"
-    caveat = count == 1 ? "it may be a real gap" : "they may be real gaps"
-    "! #{subject} reclassified neutral because baseline failed#{spec_files(neutralization)}; #{caveat}."
+    subject = count == 1 ? "1 kill" : "#{count} kills"
+    verdict = count == 1 ? "that mutation has no verdict" : "those mutations have no verdict"
+    "! #{subject} not counted#{spec_files(neutralization)}: only examples already failing in the baseline " \
+      "failed, so #{verdict}."
   end
 
   def spec_files(neutralization)

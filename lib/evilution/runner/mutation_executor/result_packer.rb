@@ -15,7 +15,8 @@ class Evilution::Runner::MutationExecutor::ResultPacker
       parent_rss_kb: result.parent_rss_kb,
       error_message: result.error_message,
       error_class: result.error_class,
-      error_backtrace: result.error_backtrace
+      error_backtrace: result.error_backtrace,
+      known_failures_only: result.known_failures_only?
     }
   end
 
@@ -35,7 +36,8 @@ class Evilution::Runner::MutationExecutor::ResultPacker
         message: data[:error_message],
         klass: data[:error_class],
         backtrace: data[:error_backtrace]
-      )
+      ),
+      known_failures_only: data[:known_failures_only]
     )
   end
 end

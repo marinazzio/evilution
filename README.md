@@ -119,7 +119,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--example-targeting MODE`   | String  | `lexical`    | How targeting picks examples: `lexical` (name-grep example bodies for the mutated method/class), `coverage` (run only the examples that actually execute the mutated line, from a cached line-coverage map), or `full_file` (run all resolved examples). |
 | `--example-targeting-fallback MODE` | String | `full_file` | Behavior when no example matches: `full_file` (run the whole spec file) or `unresolved` (skip the mutation as `:unresolved`). |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
-| `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures and marks those mutations as `neutral`. |
+| `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures, so that a mutation whose tests fail only on those is recorded `neutral` rather than killed. |
 | `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
@@ -260,7 +260,7 @@ All keys recognised under `schema_version: 1`:
 | `quiet`                      | Boolean                       | `false`                                | Suppress output.                                                                                                                         |
 | `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
 | `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
-| `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (marked `:neutral`).                                                             |
+| `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (a mutation failing only on those is `:neutral`).                                                          |
 | `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`).              |
 | `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
@@ -327,12 +327,12 @@ Schema:
     "survived": "integer — mutations NOT detected (test passed = gap in coverage)",
     "timed_out": "integer — mutations that exceeded timeout",
     "errors": "integer   — mutations that caused unexpected errors",
-    "neutral": "integer  — mutations whose tests already failed before mutation (baseline failure)",
+    "neutral": "integer  — mutations with no verdict: their tests failed only on examples that were already failing in the baseline, or the test process crashed on infrastructure",
     "equivalent": "integer — mutations proven to have identical behavior to the original",
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
     "unresolved_target_files": "array of strings (optional) — target files that resolved to no spec at all; present only when non-empty, and the run fails when it is",
     "infra_retried": "integer (optional) — mutations a parallel pass could not judge because the test process crashed on infrastructure, re-run serially afterwards; present only when non-zero",
-    "baseline_neutralized": "integer (optional) — survivors recorded neutral because a spec file covering them was red in the baseline; they may be real gaps; present only when non-zero",
+    "baseline_neutralized": "integer (optional) — kills not counted because only examples already failing in the baseline failed; those mutations are recorded neutral; present only when non-zero",
     "baseline_failures": "array (optional) — one entry per spec file that was red in the baseline: { spec_file, error: string|null — what stopped the file outside any example (load error, runner exception, timeout, a baseline process that died), failing_examples: integer — every failing example, examples: [{ id, description, message }] — the first few of them }; present only when non-empty",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
@@ -435,7 +435,7 @@ Compatibility policy for the `1.x` gem line:
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
 | `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
 | `error`      | Mutation caused an unexpected error (syntax error, boot failure, etc.) | excluded from denominator |
-| `neutral`    | Baseline tests already failed before mutation, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
+| `neutral`    | No verdict: the tests failed only on examples that were already failing in the baseline, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
@@ -467,10 +467,15 @@ On evilution's own `lib/evilution/reporter/json/subjects.rb` this moved the repo
 
 ### Neutral Mutations
 
-Neutral covers two unrelated situations that want opposite responses: a spec file that was already red before any mutation ran, and a test process that died on infrastructure rather than on the mutation. Each neutral records which, and the report groups by it, naming the spec or the error class (GH #1606):
+Neutral means the run has no verdict on a mutation. It covers two unrelated situations that want opposite responses, and each neutral records which; the report groups by it, naming the spec or the error class (GH #1606):
+
+- **The tests failed, but only on examples that were already failing before any mutation ran.** Such an example fails whatever the mutation is, so its failure is not a kill. Nothing that was passing caught the mutation either, but the red example might have, once fixed.
+- **The test process died on infrastructure** rather than on the mutation.
 
 ```
 Score: 100.00% (10/10 verified of 17 mutations, 7 neutral)
+! 7 kills not counted for spec/tally_spec.rb: only examples already failing in the baseline failed, so those mutations have no verdict.
+    ./spec/tally_spec.rb[1:3] Tally adds -- NameError: undefined local variable or method 'tally'
 
 Neutral mutations (7, not verified):
   baseline already failing (spec/tally_spec.rb):
@@ -478,19 +483,17 @@ Neutral mutations (7, not verified):
     integer_literal: lib/tally.rb:9
 ```
 
-The score line names the remainder whenever the run left mutations out of the denominator, because full marks over a fraction of a run otherwise reads as a verdict on all of it. A clean run still prints the plain `Score: 100.00% (17/17)`.
+The score line names the remainder whenever the run left mutations out of the denominator, because full marks over a fraction of a run otherwise reads as a verdict on all of it. A clean run still prints the plain `Score: 100.00% (17/17)`. The line under it says how many kills were not counted, for which spec file, and why the baseline was red for it — the failing examples with their first error line, or the error that stopped the file before any example ran. The same detail is printed to stderr once per red spec file as soon as the baseline finishes, and is in JSON output as `summary.baseline_neutralized` and `summary.baseline_failures`.
 
-Under the score the report says how many survivors went that way, for which spec file, and why the baseline was red for it — the failing examples with their first error line, or the error that stopped the file before any example ran:
+What a red baseline does not do:
 
-```
-Score: 100.00% (10/10 verified of 17 mutations, 7 neutral)
-! 7 survivors reclassified neutral because baseline failed for spec/tally_spec.rb; they may be real gaps.
-    ./spec/tally_spec.rb[1:3] Tally adds -- NameError: undefined local variable or method 'tally'
-```
+- **It does not touch a kill in which something that was passing failed too.** That is a kill like any other.
+- **It does not touch survivors.** A mutation whose tests passed is a survivor whatever the baseline did — including when the baseline's failure did not happen again in the mutation run (a flaky example, a failure of the baseline process itself). Earlier versions recorded every survivor covered by a red spec file as neutral, which hid exactly those gaps.
+- **It does not second-guess a baseline failure with no failing example to name** — a file that did not load, a timeout, a baseline process that died. A mutation run that hits the same problem reports `error` or `timeout` itself.
 
-The same detail is printed to stderr once per red spec file as soon as the baseline finishes, and is in JSON output as `summary.baseline_neutralized` and `summary.baseline_failures`. A spec file that is green under plain `rspec` but red here is failing in the baseline process, not in the spec — the detail is what tells the two apart.
+Recognising an already-failing example needs the test framework to name the examples that failed in a mutation run. That is in place for RSpec; under Minitest and Test::Unit a test that is red in the baseline still makes the mutations it runs against count as killed, so fix the red test first there.
 
-Those seven mutations were survivors until the spec file went red — a neutral of this kind is a hidden coverage gap, not a clean bill of health. JSON output carries `neutral_reason` as `{ kind, detail }` on neutral entries that have one; `detail` is null where no single spec can be named (an explicit `--spec` run), and the field is absent on a result recorded without a reason, which the text report shows as `reason not recorded`.
+JSON output carries `neutral_reason` as `{ kind, detail }` on neutral entries that have one; `detail` is null where no single spec can be named (an explicit `--spec` run), and the field is absent on a result recorded without a reason, which the text report shows as `reason not recorded`.
 
 ### Per-Subject Scores
 
@@ -879,7 +882,7 @@ A score describes only the mutations that got a verdict. Four fields say what it
 |---|---|---|
 | `summary.unresolved_target_files` | A file you named resolved to no spec and was never tested; the run fails on this alone | Write a spec, pass `--spec`, or map it in `spec_mappings` — do not trust the score until this is empty |
 | `subjects[].reached == false` | Mutations were generated for that method but none got a verdict | The method is untested even where its file scores well; start here rather than with `survived[]` |
-| `neutral[].neutral_reason.kind == "baseline_failure"` | The spec file was already red before any mutation ran; `detail` names it | Read `summary.baseline_failures` for why it was red, and fix that first — nothing about these mutations is measurable until it is green |
+| `neutral[].neutral_reason.kind == "baseline_failure"` | The mutation's tests failed only on examples that were already failing before any mutation ran; `detail` names the red spec file | Read `summary.baseline_failures` for why it was red, and fix that first — these mutations have no verdict until it is green |
 | `neutral[].neutral_reason.kind == "infra_error"` | The test process crashed on infrastructure (DB lock, timeout); `detail` names the class | Not a coverage gap. Give parallel workers their own database, or run `-j 1` |
 
 `summary.infra_retried` reports how many mutations had to be re-run serially because of the last case; a large number means the parallel run was fighting shared infrastructure rather than measuring your suite.

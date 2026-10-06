@@ -34,6 +34,9 @@ class Evilution::Runner::MutationExecutor::ResultCache
     return unless @backend
     return unless result.killed? || result.timeout?
     return if infra_crash?(result)
+    # Nor is one where only already-failing examples failed: the baseline
+    # that says so belongs to this run, and the cache keeps no trace of it.
+    return if result.known_failures_only?
 
     @backend.store(mutation,
                    status: result.status,

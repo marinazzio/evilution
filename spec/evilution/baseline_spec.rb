@@ -413,7 +413,8 @@ RSpec.describe Evilution::Baseline do
       baseline_with(runner).call(subjects)
 
       expect(Evilution::Diagnostic).to have_received(:warn).once.with(
-        "[evilution] Baseline failed for spec/user_spec.rb; surviving mutations it covers will be reported neutral.\n  " \
+        "[evilution] Baseline failed for spec/user_spec.rb; " \
+        "a mutation that fails only its already-failing examples will be reported neutral.\n  " \
         "./spec/user_spec.rb[1:1] User works -- NameError: nope"
       )
     end
@@ -458,6 +459,23 @@ RSpec.describe Evilution::Baseline do
       result = described_class.new(failed_spec_files: Set.new, duration: 2.5)
 
       expect(result.duration).to eq(2.5)
+    end
+
+    describe "#failed_example_ids" do
+      it "gathers the ids of every failing example across spec files" do
+        failures = [
+          Evilution::Baseline::SpecFailure.new(spec_file: "spec/a_spec.rb", failed_ids: ["/p/a[1:1]", "/p/a[1:2]"]),
+          Evilution::Baseline::SpecFailure.new(spec_file: "spec/b_spec.rb", failed_ids: ["/p/b[1:1]"]),
+          Evilution::Baseline::SpecFailure.new(spec_file: "spec/c_spec.rb", error: "timed out")
+        ]
+        result = described_class.new(failed_spec_files: Set["spec/a_spec.rb"], duration: 0.0, failures: failures)
+
+        expect(result.failed_example_ids).to eq(Set["/p/a[1:1]", "/p/a[1:2]", "/p/b[1:1]"])
+      end
+
+      it "is empty for a green baseline" do
+        expect(described_class.new(failed_spec_files: Set.new, duration: 0.0).failed_example_ids).to eq(Set.new)
+      end
     end
 
     describe "#failed?" do

@@ -8,19 +8,21 @@ class Evilution::Baseline
   # Why one spec file was red in the baseline: the examples that failed, or the
   # error that stopped it before any example could -- a load error, a runner
   # that raised, a timeout. example_count is every failing example; examples
-  # holds only the first few.
-  SpecFailure = Data.define(:spec_file, :examples, :example_count, :error) do
+  # holds only the first few, for display; failed_ids names all of them the
+  # way a mutation run does, for comparison.
+  SpecFailure = Data.define(:spec_file, :examples, :example_count, :error, :failed_ids) do
     def self.from_report(spec_file, report)
       examples = Array(report[:failures]).map { |failure| ExampleFailure.new(**failure) }
       new(
         spec_file: spec_file,
         examples: examples,
         example_count: report[:failure_count] || examples.length,
-        error: report[:error]
+        error: report[:error],
+        failed_ids: Array(report[:failed_ids])
       )
     end
 
-    def initialize(spec_file:, examples: [], example_count: 0, error: nil)
+    def initialize(spec_file:, examples: [], example_count: 0, error: nil, failed_ids: [])
       super
     end
 

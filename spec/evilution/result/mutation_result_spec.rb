@@ -272,4 +272,26 @@ RSpec.describe Evilution::Result::MutationResult do
       expect(result.neutral_reason).to eq(reason)
     end
   end
+
+  describe "#known_failures_only?" do
+    let(:plain_mutation) { double("Mutation") }
+
+    it "is false unless said otherwise" do
+      expect(described_class.new(mutation: plain_mutation, status: :killed).known_failures_only?).to be(false)
+    end
+
+    it "is true when the run failed only on examples already failing" do
+      result = described_class.new(mutation: plain_mutation, status: :killed, known_failures_only: true)
+
+      expect(result.known_failures_only?).to be(true)
+    end
+
+    it "is false for anything but true" do
+      [nil, false, "yes", 1].each do |value|
+        result = described_class.new(mutation: plain_mutation, status: :killed, known_failures_only: value)
+
+        expect(result.known_failures_only?).to be(false)
+      end
+    end
+  end
 end

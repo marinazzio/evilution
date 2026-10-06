@@ -18,6 +18,15 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.mutation).to eq(mutation)
     end
 
+    it "carries the known-failures flag of a failed run" do
+      test_command = ->(_m) { { passed: false, known_failures_only: true } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_killed
+      expect(result.known_failures_only?).to be(true)
+    end
+
     it "returns survived when test command passes" do
       test_command = ->(_m) { { passed: true } }
 

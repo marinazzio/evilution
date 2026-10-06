@@ -33,6 +33,16 @@ RSpec.describe Evilution::Baseline::SpecFailure do
       expect(described_class.from_report("spec/a_spec.rb", report.merge(error: "bad")).error).to eq("bad")
     end
 
+    it "carries the ids of every failing example" do
+      with_ids = described_class.from_report("spec/a_spec.rb", report.merge(failed_ids: ["/p/a_spec.rb[1:1]"]))
+
+      expect(with_ids.failed_ids).to eq(["/p/a_spec.rb[1:1]"])
+    end
+
+    it "has no ids for a report that gives none" do
+      expect(failure.failed_ids).to eq([])
+    end
+
     it "tolerates a report holding only the pass flag" do
       bare = described_class.from_report("spec/a_spec.rb", { passed: false })
 
@@ -53,6 +63,7 @@ RSpec.describe Evilution::Baseline::SpecFailure do
       expect(failure.examples).to eq([])
       expect(failure.example_count).to eq(0)
       expect(failure.error).to be_nil
+      expect(failure.failed_ids).to eq([])
     end
   end
 

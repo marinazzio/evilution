@@ -6,7 +6,7 @@ RSpec.describe Evilution::Baseline::Report do
   describe ".build" do
     it "reports a passing run with no failures" do
       expect(described_class.build(passed: true))
-        .to eq(passed: true, failure_count: 0, failures: [], error: nil)
+        .to eq(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [])
     end
 
     it "coerces a truthy pass flag to true" do
@@ -102,6 +102,21 @@ RSpec.describe Evilution::Baseline::Report do
       expect(first.length).to eq(described_class::MAX_MESSAGE_LENGTH)
       expect(first).to end_with("...")
       expect(second).to eq("NameError: nope")
+    end
+
+    it "carries the ids of the failing examples" do
+      report = described_class.build(passed: false, failed_ids: ["/p/spec/a_spec.rb[1:1]", "/p/spec/a_spec.rb[1:2]"])
+
+      expect(report[:failed_ids]).to eq(["/p/spec/a_spec.rb[1:1]", "/p/spec/a_spec.rb[1:2]"])
+    end
+
+    it "keeps far more ids than it lists examples, but not without end" do
+      ids = Array.new(described_class::MAX_IDS + 5, &:to_s)
+
+      report = described_class.build(passed: false, failed_ids: ids)
+
+      expect(report[:failed_ids]).to eq(ids.first(described_class::MAX_IDS))
+      expect(described_class::MAX_IDS).to be > described_class::MAX_EXAMPLES
     end
 
     it "drops an error that is only whitespace" do

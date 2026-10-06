@@ -102,6 +102,25 @@ RSpec.describe Evilution::Integration::RSpec::ResultBuilder do
       end
     end
 
+    it "flags a failed run in which only known failures failed" do
+      allow(detector).to receive(:only_crashes?).and_return(false)
+
+      expect(builder.from_run(1, "rspec foo", detector, examples_loaded: 3, known_failures_only: true))
+        .to eq(passed: false, known_failures_only: true, test_command: "rspec foo")
+    end
+
+    it "flags it even when the known failure crashed this time" do
+      allow(detector).to receive(:only_crashes?).and_return(true)
+
+      expect(builder.from_run(1, "rspec foo", detector, known_failures_only: true))
+        .to eq(passed: false, known_failures_only: true, test_command: "rspec foo")
+    end
+
+    it "does not flag a passing run" do
+      expect(builder.from_run(0, "rspec foo", detector, known_failures_only: true))
+        .to eq(passed: true, test_command: "rspec foo")
+    end
+
     it "keeps plain fail behavior when examples_loaded is positive" do
       result = builder.from_run(1, "rspec args", detector, examples_loaded: 3)
       expect(result).to eq({ passed: false, test_command: "rspec args" })
