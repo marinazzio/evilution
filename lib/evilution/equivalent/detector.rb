@@ -7,6 +7,7 @@ require_relative "heuristic/dead_code"
 require_relative "heuristic/arithmetic_identity"
 require_relative "heuristic/comment_marking"
 require_relative "heuristic/void_context"
+require_relative "heuristic/guarded_index_fetch"
 
 require_relative "../equivalent"
 
@@ -40,7 +41,8 @@ class Evilution::Equivalent::Detector
       Evilution::Equivalent::Heuristic::DeadCode.new,
       Evilution::Equivalent::Heuristic::ArithmeticIdentity.new,
       Evilution::Equivalent::Heuristic::CommentMarking.new,
-      Evilution::Equivalent::Heuristic::VoidContext.new
+      Evilution::Equivalent::Heuristic::VoidContext.new,
+      Evilution::Equivalent::Heuristic::GuardedIndexFetch.new
     ]
   end
 end
