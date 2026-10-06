@@ -5,6 +5,7 @@ require_relative "test_unit_crash_detector"
 require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
+require_relative "../baseline"
 
 require_relative "../integration"
 
