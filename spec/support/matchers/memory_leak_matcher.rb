@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
+require_relative "memory_growth_probe"
+
+# Growth over @iterations runs of the block, read once the block has stopped
+# warming up (see MemoryGrowthProbe). A round counts as settled when it grows
+# the process by no more than a quarter of the allowed growth.
 RSpec::Matchers.define :leak_memory do
+  settled_fraction = 4
+
   chain :over do |iterations|
     @iterations = iterations
   end
@@ -15,17 +22,8 @@ RSpec::Matchers.define :leak_memory do
 
     skip "RSS measurement unavailable" unless Evilution::Memory.rss_kb
 
-    GC.start
-    GC.compact if GC.respond_to?(:compact)
-    rss_before = Evilution::Memory.rss_kb
-
-    @iterations.times { block.call }
-
-    GC.start
-    GC.compact if GC.respond_to?(:compact)
-    rss_after = Evilution::Memory.rss_kb
-
-    @actual_growth_kb = rss_after - rss_before
+    probe = MemoryGrowthProbe.new(iterations: @iterations, settled_below_kb: @max_growth_kb / settled_fraction)
+    @actual_growth_kb = probe.call(&block)
     @actual_growth_kb > @max_growth_kb
   end
 
