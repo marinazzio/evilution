@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "evilution/baseline"
+
 RSpec.describe Evilution::Result::Summary do
   let(:mutation) { double("Mutation") }
 
@@ -18,6 +20,80 @@ RSpec.describe Evilution::Result::Summary do
   end
 
   subject(:summary) { described_class.new(results: results, duration: 5.2) }
+
+  describe "baseline neutralization" do
+    def neutralized(spec_file)
+      Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :neutral,
+        neutral_reason: Evilution::Result::NeutralReason.baseline_failure(spec_file)
+      )
+    end
+
+    def infra_neutral
+      Evilution::Result::MutationResult.new(
+        mutation: mutation, status: :neutral,
+        neutral_reason: Evilution::Result::NeutralReason.infra_error("SQLite3::BusyException")
+      )
+    end
+
+    let(:failure_a) { Evilution::Baseline::SpecFailure.new(spec_file: "spec/a_spec.rb", error: "boom") }
+    let(:failure_b) { Evilution::Baseline::SpecFailure.new(spec_file: "spec/b_spec.rb", error: "bang") }
+
+    def summary_of(results, failures = [failure_a, failure_b])
+      described_class.new(results: results, baseline_failures: failures)
+    end
+
+    it "has no baseline failures unless given some" do
+      expect(summary.baseline_failures).to eq([])
+      expect(summary.baseline_failures).to be_frozen
+    end
+
+    it "exposes the baseline failures it was given" do
+      expect(summary_of([]).baseline_failures).to eq([failure_a, failure_b])
+    end
+
+    it "reports nothing when no survivor was neutralized by the baseline" do
+      neutral_summary = summary_of([make_result(:killed), make_result(:neutral), infra_neutral])
+
+      expect(neutral_summary.baseline_neutralizations).to eq([])
+      expect(neutral_summary.baseline_neutralized).to eq(0)
+    end
+
+    it "groups neutralized survivors by the spec file that was red, with its failure" do
+      neutral_summary = summary_of(
+        [neutralized("spec/a_spec.rb"), neutralized("spec/b_spec.rb"), neutralized("spec/a_spec.rb"), infra_neutral]
+      )
+
+      expect(neutral_summary.baseline_neutralizations).to eq(
+        [
+          Evilution::Result::BaselineNeutralization.new(spec_file: "spec/a_spec.rb", count: 2, failures: [failure_a]),
+          Evilution::Result::BaselineNeutralization.new(spec_file: "spec/b_spec.rb", count: 1, failures: [failure_b])
+        ]
+      )
+    end
+
+    it "counts every survivor the baseline neutralized" do
+      neutral_summary = summary_of([neutralized("spec/a_spec.rb"), neutralized("spec/b_spec.rb"), infra_neutral])
+
+      expect(neutral_summary.baseline_neutralized).to eq(2)
+    end
+
+    it "attaches every baseline failure when the survivor names no spec file" do
+      neutral_summary = summary_of([neutralized(nil)])
+
+      expect(neutral_summary.baseline_neutralizations).to eq(
+        [Evilution::Result::BaselineNeutralization.new(spec_file: nil, count: 1, failures: [failure_a, failure_b])]
+      )
+    end
+
+    it "keeps a neutralization whose spec file has no recorded failure" do
+      neutral_summary = summary_of([neutralized("spec/a_spec.rb")], [])
+
+      expect(neutral_summary.baseline_neutralizations).to eq(
+        [Evilution::Result::BaselineNeutralization.new(spec_file: "spec/a_spec.rb", count: 1, failures: [])]
+      )
+    end
+  end
 
   describe "#total" do
     it "returns the total number of results" do

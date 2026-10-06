@@ -7,6 +7,7 @@ require_relative "minitest_crash_detector"
 require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
+require_relative "../baseline"
 
 require_relative "../integration"
 
@@ -47,12 +48,21 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     options = ::Minitest.process_args(["--seed", "0"])
     options[:io] = out
     reporter = ::Minitest::CompositeReporter.new
-    reporter << ::Minitest::SummaryReporter.new(out, options)
+    summary = ::Minitest::SummaryReporter.new(out, options)
+    reporter << summary
     initialize_minitest_state(reporter, options)
     reporter.start
     dispatch_minitest_suites(reporter, options)
     reporter.report
-    reporter.passed?
+    Evilution::Baseline::Report.build(passed: reporter.passed?, failures: baseline_failures(summary))
+  end
+
+  # The summary reporter keeps every result that did not pass, skips included.
+  def self.baseline_failures(summary)
+    summary.results.reject(&:skipped?).map do |result|
+      class_name = result.respond_to?(:class_name) ? result.class_name : result.class.name
+      { id: "#{class_name}##{result.name}", description: "", message: result.failure.message }
+    end
   end
 
   # Mirror Minitest.run's preamble: seed setup + plugin init. Without seeding

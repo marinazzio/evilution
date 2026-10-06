@@ -971,6 +971,7 @@ RSpec.describe Evilution::Integration::RSpec do
       $LOAD_PATH.delete(spec_dir)
 
       runner = described_class.baseline_runner
+      allow(RSpec).to receive(:clear_examples)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       runner.call("spec/some_spec.rb")

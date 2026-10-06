@@ -332,6 +332,8 @@ Schema:
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
     "unresolved_target_files": "array of strings (optional) — target files that resolved to no spec at all; present only when non-empty, and the run fails when it is",
     "infra_retried": "integer (optional) — mutations a parallel pass could not judge because the test process crashed on infrastructure, re-run serially afterwards; present only when non-zero",
+    "baseline_neutralized": "integer (optional) — survivors recorded neutral because a spec file covering them was red in the baseline; they may be real gaps; present only when non-zero",
+    "baseline_failures": "array (optional) — one entry per spec file that was red in the baseline: { spec_file, error: string|null — what stopped the file outside any example (load error, runner exception, timeout, a baseline process that died), failing_examples: integer — every failing example, examples: [{ id, description, message }] — the first few of them }; present only when non-empty",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
     "duration": "float   — total wall-clock seconds, rounded to 4 decimals",
@@ -477,6 +479,16 @@ Neutral mutations (7, not verified):
 ```
 
 The score line names the remainder whenever the run left mutations out of the denominator, because full marks over a fraction of a run otherwise reads as a verdict on all of it. A clean run still prints the plain `Score: 100.00% (17/17)`.
+
+Under the score the report says how many survivors went that way, for which spec file, and why the baseline was red for it — the failing examples with their first error line, or the error that stopped the file before any example ran:
+
+```
+Score: 100.00% (10/10 verified of 17 mutations, 7 neutral)
+! 7 survivors reclassified neutral because baseline failed for spec/tally_spec.rb; they may be real gaps.
+    ./spec/tally_spec.rb[1:3] Tally adds -- NameError: undefined local variable or method 'tally'
+```
+
+The same detail is printed to stderr once per red spec file as soon as the baseline finishes, and is in JSON output as `summary.baseline_neutralized` and `summary.baseline_failures`. A spec file that is green under plain `rspec` but red here is failing in the baseline process, not in the spec — the detail is what tells the two apart.
 
 Those seven mutations were survivors until the spec file went red — a neutral of this kind is a hidden coverage gap, not a clean bill of health. JSON output carries `neutral_reason` as `{ kind, detail }` on neutral entries that have one; `detail` is null where no single spec can be named (an explicit `--spec` run), and the field is absent on a result recorded without a reason, which the text report shows as `reason not recorded`.
 
@@ -686,7 +698,7 @@ What survives trimming matters when you are deciding whether to trust a score:
 
 - `neutral` entries — and with them each `neutral_reason` — are dropped at `summary` and `minimal`. Use `full` to see why mutations were neutralised.
 - `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary` and `survived`.
-- Everything inside `summary` survives at every level, including `unresolved_target_files`, `infra_retried` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
+- Everything inside `summary` survives at every level, including `unresolved_target_files`, `infra_retried`, `baseline_neutralized`, `baseline_failures` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
 
 ### Enriched Survived Entries
 
@@ -867,7 +879,7 @@ A score describes only the mutations that got a verdict. Four fields say what it
 |---|---|---|
 | `summary.unresolved_target_files` | A file you named resolved to no spec and was never tested; the run fails on this alone | Write a spec, pass `--spec`, or map it in `spec_mappings` — do not trust the score until this is empty |
 | `subjects[].reached == false` | Mutations were generated for that method but none got a verdict | The method is untested even where its file scores well; start here rather than with `survived[]` |
-| `neutral[].neutral_reason.kind == "baseline_failure"` | The spec file was already red before any mutation ran; `detail` names it | Fix that spec first — nothing about these mutations is measurable until it is green |
+| `neutral[].neutral_reason.kind == "baseline_failure"` | The spec file was already red before any mutation ran; `detail` names it | Read `summary.baseline_failures` for why it was red, and fix that first — nothing about these mutations is measurable until it is green |
 | `neutral[].neutral_reason.kind == "infra_error"` | The test process crashed on infrastructure (DB lock, timeout); `detail` names the class | Not a coverage gap. Give parallel workers their own database, or run `-j 1` |
 
 `summary.infra_retried` reports how many mutations had to be re-run serially because of the last case; a large number means the parallel run was fighting shared infrastructure rather than measuring your suite.

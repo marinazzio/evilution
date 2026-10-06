@@ -7,6 +7,8 @@ RSpec.describe Evilution::Baseline do
 
   subject(:baseline) { described_class.new(spec_resolver: spec_resolver, timeout: 5) }
 
+  let(:failure_for) { ->(spec_file) { Evilution::Baseline::SpecFailure.new(spec_file: spec_file) } }
+
   describe "#call" do
     let(:subject1) { double("Subject1", file_path: "lib/user.rb") }
     let(:subject2) { double("Subject2", file_path: "lib/user.rb") }
@@ -18,8 +20,8 @@ RSpec.describe Evilution::Baseline do
     end
 
     it "returns a result with failed spec files" do
-      allow(baseline).to receive(:run_spec_file).with("spec/user_spec.rb").and_return(false)
-      allow(baseline).to receive(:run_spec_file).with("spec/order_spec.rb").and_return(true)
+      allow(baseline).to receive(:check_spec_file).with("spec/user_spec.rb").and_return(failure_for.call("spec/user_spec.rb"))
+      allow(baseline).to receive(:check_spec_file).with("spec/order_spec.rb").and_return(nil)
 
       result = baseline.call([subject1, subject2, subject3])
 
@@ -27,16 +29,16 @@ RSpec.describe Evilution::Baseline do
     end
 
     it "deduplicates spec files from multiple subjects" do
-      allow(baseline).to receive(:run_spec_file).with("spec/user_spec.rb").and_return(true)
-      allow(baseline).to receive(:run_spec_file).with("spec/order_spec.rb").and_return(true)
+      allow(baseline).to receive(:check_spec_file).with("spec/user_spec.rb").and_return(nil)
+      allow(baseline).to receive(:check_spec_file).with("spec/order_spec.rb").and_return(nil)
 
       baseline.call([subject1, subject2, subject3])
 
-      expect(baseline).to have_received(:run_spec_file).with("spec/user_spec.rb").once
+      expect(baseline).to have_received(:check_spec_file).with("spec/user_spec.rb").once
     end
 
     it "returns empty set when all specs pass" do
-      allow(baseline).to receive(:run_spec_file).and_return(true)
+      allow(baseline).to receive(:check_spec_file).and_return(nil)
 
       result = baseline.call([subject1, subject3])
 
@@ -52,7 +54,7 @@ RSpec.describe Evilution::Baseline do
     it "treats unresolvable spec files as fallback directory" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
-      allow(baseline).to receive(:run_spec_file).with("spec").and_return(false)
+      allow(baseline).to receive(:check_spec_file).with("spec").and_return(failure_for.call("spec"))
 
       result = baseline.call([subject1])
 
@@ -65,7 +67,7 @@ RSpec.describe Evilution::Baseline do
       )
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
-      allow(minitest_baseline).to receive(:run_spec_file).with("test").and_return(false)
+      allow(minitest_baseline).to receive(:check_spec_file).with("test").and_return(failure_for.call("test"))
 
       result = minitest_baseline.call([subject1])
 
@@ -75,7 +77,7 @@ RSpec.describe Evilution::Baseline do
     it "warns when falling back to full test suite" do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
-      allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
+      allow(baseline).to receive(:check_spec_file).with("spec").and_return(nil)
 
       expect { baseline.call([subject1]) }
         .to output(
@@ -89,7 +91,7 @@ RSpec.describe Evilution::Baseline do
       allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return(nil)
       allow(spec_resolver).to receive(:suggest).with("lib/user.rb")
                                                .and_return("spec/unit/user_spec.rb")
-      allow(baseline).to receive(:run_spec_file).with("spec").and_return(true)
+      allow(baseline).to receive(:check_spec_file).with("spec").and_return(nil)
 
       expect { baseline.call([subject1]) }
         .to output(
@@ -106,32 +108,32 @@ RSpec.describe Evilution::Baseline do
       it "runs the resolved specs of every subject" do
         allow(selector).to receive(:call).with("lib/user.rb").and_return(["spec/user_spec.rb"])
         allow(selector).to receive(:call).with("lib/order.rb").and_return(["spec/order_spec.rb"])
-        allow(selector_baseline).to receive(:run_spec_file).and_return(true)
+        allow(selector_baseline).to receive(:check_spec_file).and_return(nil)
 
         selector_baseline.call([subject1, subject3])
 
-        expect(selector_baseline).to have_received(:run_spec_file).with("spec/user_spec.rb")
-        expect(selector_baseline).to have_received(:run_spec_file).with("spec/order_spec.rb")
+        expect(selector_baseline).to have_received(:check_spec_file).with("spec/user_spec.rb")
+        expect(selector_baseline).to have_received(:check_spec_file).with("spec/order_spec.rb")
       end
 
       it "runs every spec file the selector returns" do
         allow(selector).to receive(:call).with("lib/user.rb")
                                          .and_return(["spec/user_spec.rb", "spec/user_edge_spec.rb"])
-        allow(selector_baseline).to receive(:run_spec_file).and_return(true)
+        allow(selector_baseline).to receive(:check_spec_file).and_return(nil)
 
         selector_baseline.call([subject1])
 
-        expect(selector_baseline).to have_received(:run_spec_file).with("spec/user_spec.rb")
-        expect(selector_baseline).to have_received(:run_spec_file).with("spec/user_edge_spec.rb")
+        expect(selector_baseline).to have_received(:check_spec_file).with("spec/user_spec.rb")
+        expect(selector_baseline).to have_received(:check_spec_file).with("spec/user_edge_spec.rb")
       end
 
       it "treats a nil selection as unresolved" do
         allow(selector).to receive(:call).with("lib/user.rb").and_return(nil)
         allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return(nil)
-        allow(selector_baseline).to receive(:run_spec_file).with("spec").and_return(true)
+        allow(selector_baseline).to receive(:check_spec_file).with("spec").and_return(nil)
 
         expect { selector_baseline.call([subject1]) }.to output(/No matching test found/).to_stderr
-        expect(selector_baseline).to have_received(:run_spec_file).with("spec")
+        expect(selector_baseline).to have_received(:check_spec_file).with("spec")
       end
     end
 
@@ -147,33 +149,33 @@ RSpec.describe Evilution::Baseline do
       end
 
       it "does not run the fallback directory for an unresolved source" do
-        allow(strict_baseline).to receive(:run_spec_file).and_return(true)
+        allow(strict_baseline).to receive(:check_spec_file).and_return(nil)
 
         result = strict_baseline.call([subject1, subject3])
 
-        expect(strict_baseline).to have_received(:run_spec_file).once
-        expect(strict_baseline).to have_received(:run_spec_file).with("spec/order_spec.rb")
+        expect(strict_baseline).to have_received(:check_spec_file).once
+        expect(strict_baseline).to have_received(:check_spec_file).with("spec/order_spec.rb")
         expect(result.failed_spec_files).to be_empty
       end
 
       it "warns for each distinct unresolved source file" do
         allow(spec_resolver).to receive(:call).with("lib/order.rb").and_return(nil)
         allow(spec_resolver).to receive(:suggest).with("lib/order.rb").and_return(nil)
-        allow(strict_baseline).to receive(:run_spec_file).and_return(true)
+        allow(strict_baseline).to receive(:check_spec_file).and_return(nil)
 
         expect { strict_baseline.call([subject1, subject3]) }
           .to output(%r{lib/user\.rb.*\n.*lib/order\.rb}).to_stderr
       end
 
       it "warns once per unresolved source file" do
-        allow(strict_baseline).to receive(:run_spec_file).and_return(true)
+        allow(strict_baseline).to receive(:check_spec_file).and_return(nil)
 
         expect { strict_baseline.call([subject1, subject2]) }
           .to output(%r{\A[^\n]*No matching test found for lib/user\.rb[^\n]*\n\z}).to_stderr
       end
 
       it "says the source's mutations will be unresolved, not that the full suite runs" do
-        allow(strict_baseline).to receive(:run_spec_file).and_return(true)
+        allow(strict_baseline).to receive(:check_spec_file).and_return(nil)
 
         expected = "No matching test found for lib/user.rb, marking its mutations unresolved. " \
                    "Use --spec to specify the test file, or --fallback-full-suite to run the whole suite."
@@ -183,7 +185,7 @@ RSpec.describe Evilution::Baseline do
 
       it "keeps the best-guess hint" do
         allow(spec_resolver).to receive(:suggest).with("lib/user.rb").and_return("test/models/user_test.rb")
-        allow(strict_baseline).to receive(:run_spec_file).and_return(true)
+        allow(strict_baseline).to receive(:check_spec_file).and_return(nil)
 
         expect { strict_baseline.call([subject1]) }
           .to output(%r{marking its mutations unresolved\. Pass --spec test/models/user_test\.rb \(best guess\)})
@@ -207,24 +209,24 @@ RSpec.describe Evilution::Baseline do
       end
 
       it "runs the explicit spec files and skips auto-discovery" do
-        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(true)
+        allow(baseline).to receive(:check_spec_file).with("spec/explicit_spec.rb").and_return(nil)
 
         baseline.call([subject1, subject3])
 
-        expect(baseline).to have_received(:run_spec_file).with("spec/explicit_spec.rb").once
-        expect(baseline).not_to have_received(:run_spec_file).with("spec/user_spec.rb")
-        expect(baseline).not_to have_received(:run_spec_file).with("spec/order_spec.rb")
+        expect(baseline).to have_received(:check_spec_file).with("spec/explicit_spec.rb").once
+        expect(baseline).not_to have_received(:check_spec_file).with("spec/user_spec.rb")
+        expect(baseline).not_to have_received(:check_spec_file).with("spec/order_spec.rb")
       end
 
       it "does not fire the 'No matching test found' warning when test_files is provided" do
-        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(true)
+        allow(baseline).to receive(:check_spec_file).with("spec/explicit_spec.rb").and_return(nil)
 
         expect { baseline.call([subject1]) }
           .not_to output(/no matching test/i).to_stderr
       end
 
       it "reports failed explicit spec files" do
-        allow(baseline).to receive(:run_spec_file).with("spec/explicit_spec.rb").and_return(false)
+        allow(baseline).to receive(:check_spec_file).with("spec/explicit_spec.rb").and_return(failure_for.call("spec/explicit_spec.rb"))
 
         result = baseline.call([subject1])
 
@@ -233,7 +235,7 @@ RSpec.describe Evilution::Baseline do
     end
 
     it "records duration" do
-      allow(baseline).to receive(:run_spec_file).and_return(true)
+      allow(baseline).to receive(:check_spec_file).and_return(nil)
 
       result = baseline.call([subject1])
 
@@ -263,16 +265,18 @@ RSpec.describe Evilution::Baseline do
       slow_baseline = described_class.new(spec_resolver: spec_resolver, timeout: 0.2)
       read_io, write_io = IO.pipe
       pid = Process.spawn(RbConfig.ruby, "-e", "sleep 5")
-      passed = :unset
+      failure = :unset
 
       begin
-        expect { passed = slow_baseline.read_result(read_io, pid, "spec/user_spec.rb") }
+        expect { failure = slow_baseline.read_result(read_io, pid, "spec/user_spec.rb") }
           .to output(%r{Baseline for spec/user_spec\.rb timed out after 0\.2s; treating it as failing}).to_stderr
       ensure
         read_io.close
         write_io.close
       end
-      expect(passed).to be(false)
+      expect(failure).to eq(
+        Evilution::Baseline::SpecFailure.new(spec_file: "spec/user_spec.rb", error: "timed out after 0.2s")
+      )
     end
 
     # The stand-in child keeps a copy of the pipe's write end open, as a real
@@ -291,6 +295,19 @@ RSpec.describe Evilution::Baseline do
       held_write_end.close if held_write_end
     end
 
+    it "says a spec file that passes is passing" do
+      passing = described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: ->(_f) { true })
+
+      expect(passing.run_spec_file("spec/user_spec.rb")).to be(true)
+    end
+
+    it "says a spec file that fails is failing" do
+      allow(Evilution::Diagnostic).to receive(:warn)
+      failing = described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: ->(_f) { false })
+
+      expect(failing.run_spec_file("spec/user_spec.rb")).to be(false)
+    end
+
     it "raises when fork_spec_runner called without runner" do
       no_runner = described_class.new(spec_resolver: spec_resolver, timeout: 5)
 
@@ -299,7 +316,132 @@ RSpec.describe Evilution::Baseline do
     end
   end
 
+  # A red baseline turns every survivor its spec file covers neutral, so the
+  # reason it went red has to reach the reader. These run a real fork; the
+  # warning is observed through Diagnostic because the child reopens stderr.
+  describe "failure detail" do
+    let(:subjects) { [double("Subject", file_path: "lib/user.rb")] }
+
+    before do
+      allow(spec_resolver).to receive(:call).with("lib/user.rb").and_return("spec/user_spec.rb")
+      allow(Evilution::Diagnostic).to receive(:warn)
+    end
+
+    def baseline_with(runner)
+      described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: runner)
+    end
+
+    def report(**)
+      Evilution::Baseline::Report.build(passed: false, **)
+    end
+
+    it "records no failure for a passing spec file" do
+      result = baseline_with(->(_f) { Evilution::Baseline::Report.build(passed: true) }).call(subjects)
+
+      expect(result.failures).to eq([])
+      expect(result.failed_spec_files).to be_empty
+      expect(Evilution::Diagnostic).not_to have_received(:warn)
+    end
+
+    it "records the failing examples the runner reported" do
+      runner = lambda do |_f|
+        report(failures: [{ id: "./spec/user_spec.rb[1:1]", description: "User works", message: "NameError: nope" }])
+      end
+
+      result = baseline_with(runner).call(subjects)
+
+      expect(result.failed_spec_files).to contain_exactly("spec/user_spec.rb")
+      expect(result.failures).to eq(
+        [
+          Evilution::Baseline::SpecFailure.new(
+            spec_file: "spec/user_spec.rb",
+            example_count: 1,
+            examples: [
+              Evilution::Baseline::ExampleFailure.new(
+                id: "./spec/user_spec.rb[1:1]", description: "User works", message: "NameError: nope"
+              )
+            ]
+          )
+        ]
+      )
+    end
+
+    it "records a failure without detail for a runner that only answers false" do
+      result = baseline_with(->(_f) { false }).call(subjects)
+
+      expect(result.failures).to eq([Evilution::Baseline::SpecFailure.new(spec_file: "spec/user_spec.rb")])
+    end
+
+    it "records the exception when the runner raises" do
+      result = baseline_with(->(_f) { raise ArgumentError, "bad helper" }).call(subjects)
+
+      expect(result.failures.first.error).to eq("ArgumentError: bad helper")
+    end
+
+    it "records a load error raised by the runner" do
+      result = baseline_with(->(_f) { raise LoadError, "cannot load such file -- nope" }).call(subjects)
+
+      expect(result.failures.first.error).to eq("LoadError: cannot load such file -- nope")
+    end
+
+    it "records the exit status of a child that died without reporting" do
+      result = baseline_with(->(_f) { exit!(3) }).call(subjects)
+
+      expect(result.failures.first.error).to eq("baseline process ended without reporting (exit status 3)")
+    end
+
+    it "records the signal that killed a child" do
+      result = baseline_with(->(_f) { Process.kill("KILL", Process.pid) }).call(subjects)
+
+      expect(result.failures.first.error).to eq("baseline process ended without reporting (signal 9)")
+    end
+
+    it "records an error raised in the parent while reading the child" do
+      broken = baseline_with(->(_f) { true })
+      allow(broken).to receive(:fork_spec_runner).and_raise(Errno::EAGAIN, "fork")
+
+      result = broken.call(subjects)
+
+      expect(result.failures.first.error).to match(/\AErrno::EAGAIN: /)
+    end
+
+    it "warns once for the failing spec file, with the failure detail" do
+      runner = lambda do |_f|
+        report(failures: [{ id: "./spec/user_spec.rb[1:1]", description: "User works", message: "NameError: nope" }])
+      end
+
+      baseline_with(runner).call(subjects)
+
+      expect(Evilution::Diagnostic).to have_received(:warn).once.with(
+        "[evilution] Baseline failed for spec/user_spec.rb; surviving mutations it covers will be reported neutral.\n  " \
+        "./spec/user_spec.rb[1:1] User works -- NameError: nope"
+      )
+    end
+
+    it "does not add a second warning to the timeout report" do
+      slow = described_class.new(spec_resolver: spec_resolver, timeout: 0.2, runner: ->(_f) { sleep 5 })
+
+      result = slow.call(subjects)
+
+      expect(Evilution::Diagnostic).to have_received(:warn).once.with(/timed out after 0\.2s/)
+      expect(result.failures.first.error).to eq("timed out after 0.2s")
+    end
+  end
+
   describe Evilution::Baseline::Result do
+    it "has no failures unless given some" do
+      result = described_class.new(failed_spec_files: Set.new, duration: 0.0)
+
+      expect(result.failures).to eq([])
+    end
+
+    it "exposes failures" do
+      failure = Evilution::Baseline::SpecFailure.new(spec_file: "spec/user_spec.rb")
+      result = described_class.new(failed_spec_files: Set["spec/user_spec.rb"], duration: 0.0, failures: [failure])
+
+      expect(result.failures).to eq([failure])
+    end
+
     it "is frozen" do
       result = described_class.new(failed_spec_files: Set.new, duration: 0.0)
 

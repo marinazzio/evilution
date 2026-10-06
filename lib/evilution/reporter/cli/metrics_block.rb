@@ -3,6 +3,7 @@
 require_relative "../cli"
 require_relative "line_formatters/mutations"
 require_relative "line_formatters/score"
+require_relative "line_formatters/baseline_neutralized_notice"
 require_relative "line_formatters/error_rate_warning"
 require_relative "line_formatters/unresolved_rate_warning"
 require_relative "line_formatters/unresolved_targets"
@@ -15,6 +16,7 @@ class Evilution::Reporter::CLI::MetricsBlock
   DEFAULT_LINES = [
     Evilution::Reporter::CLI::LineFormatters::Mutations.new,
     Evilution::Reporter::CLI::LineFormatters::Score.new,
+    Evilution::Reporter::CLI::LineFormatters::BaselineNeutralizedNotice.new,
     Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning.new,
     Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning.new,
     Evilution::Reporter::CLI::LineFormatters::UnresolvedTargets.new,

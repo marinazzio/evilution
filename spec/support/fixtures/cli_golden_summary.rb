@@ -47,6 +47,10 @@ module CliGoldenSummary
       0
     end
 
+    def baseline_neutralizations
+      []
+    end
+
     def neutral_results_by_reason
       neutral_results.group_by(&:neutral_reason).to_a
     end

@@ -1458,6 +1458,27 @@ RSpec.describe Evilution::Runner do
       expect(result.neutral).to eq(1)
     end
 
+    it "hands the baseline's failure detail to the summary" do
+      failure = Evilution::Baseline::SpecFailure.new(spec_file: "spec/example_spec.rb", error: "boom")
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set["spec/example_spec.rb"], duration: 0.5, failures: [failure]
+      )
+      baseline = instance_double(Evilution::Baseline)
+      allow(Evilution::Baseline).to receive(:new).and_return(baseline)
+      allow(baseline).to receive(:call).and_return(baseline_result)
+
+      spec_resolver = instance_double(Evilution::SpecResolver)
+      allow(Evilution::SpecResolver).to receive(:new).and_return(spec_resolver)
+      allow(spec_resolver).to receive(:call).with("lib/example.rb", any_args).and_return("spec/example_spec.rb")
+
+      summary = runner.call
+
+      expect(summary.baseline_failures).to eq([failure])
+      expect(summary.baseline_neutralizations).to eq(
+        [Evilution::Result::BaselineNeutralization.new(spec_file: "spec/example_spec.rb", count: 1, failures: [failure])]
+      )
+    end
+
     it "keeps survived mutations when baseline spec passes" do
       baseline_result = Evilution::Baseline::Result.new(
         failed_spec_files: Set.new,

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "evilution/baseline"
+
 require "json"
 require "evilution/reporter/json"
 require "evilution/result/mutation_result"
@@ -391,6 +393,74 @@ RSpec.describe Evilution::Reporter::JSON do
         parsed = JSON.parse(reporter.call(neutral_summary))
 
         expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+
+      it "says nothing about the baseline when it neutralized nothing" do
+        parsed = JSON.parse(reporter.call(neutral_summary))
+
+        expect(parsed["summary"]).not_to have_key("baseline_neutralized")
+        expect(parsed["summary"]).not_to have_key("baseline_failures")
+      end
+
+      context "when the baseline was red" do
+        let(:baseline_failure) do
+          Evilution::Baseline::SpecFailure.new(
+            spec_file: "spec/user_spec.rb",
+            example_count: 1,
+            examples: [
+              Evilution::Baseline::ExampleFailure.new(
+                id: "./spec/user_spec.rb[1:1]", description: "User works", message: "NameError: nope"
+              )
+            ]
+          )
+        end
+
+        let(:neutralized_result) do
+          Evilution::Result::MutationResult.new(
+            mutation: neutral_mutation,
+            status: :neutral,
+            neutral_reason: Evilution::Result::NeutralReason.baseline_failure("spec/user_spec.rb")
+          )
+        end
+
+        let(:red_summary) do
+          Evilution::Result::Summary.new(
+            results: [killed_result, neutralized_result, neutralized_result],
+            baseline_failures: [baseline_failure]
+          )
+        end
+
+        it "counts the survivors the baseline turned neutral" do
+          parsed = JSON.parse(reporter.call(red_summary))
+
+          expect(parsed["summary"]["baseline_neutralized"]).to eq(2)
+        end
+
+        it "says why each spec file was red" do
+          parsed = JSON.parse(reporter.call(red_summary))
+
+          expect(parsed["summary"]["baseline_failures"]).to eq(
+            [
+              {
+                "spec_file" => "spec/user_spec.rb",
+                "error" => nil,
+                "failing_examples" => 1,
+                "examples" => [
+                  { "id" => "./spec/user_spec.rb[1:1]", "description" => "User works", "message" => "NameError: nope" }
+                ]
+              }
+            ]
+          )
+        end
+
+        it "reports a red spec file even when it neutralized no survivor" do
+          summary = Evilution::Result::Summary.new(results: [killed_result], baseline_failures: [baseline_failure])
+
+          parsed = JSON.parse(reporter.call(summary))
+
+          expect(parsed["summary"]["baseline_failures"].length).to eq(1)
+          expect(parsed["summary"]).not_to have_key("baseline_neutralized")
+        end
       end
     end
 

@@ -8,9 +8,10 @@ require_relative "../reporter"
 require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
-  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new)
+  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new)
     @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
     @subjects = subjects
+    @baseline = baseline
   end
 
   def call(summary)
@@ -104,11 +105,13 @@ class Evilution::Reporter::JSON
   end
 
   # What the run had to say about itself rather than about the mutations: a
-  # target that was never tested, work that had to be redone serially.
+  # target that was never tested, work that had to be redone serially,
+  # survivors a red baseline took out of the score.
   def append_diagnostic_summary_fields(data, summary)
     data[:unresolved_target_files] = summary.unresolved_target_files if summary.unresolved_targets?
     data[:infra_retried] = summary.infra_retried if summary.infra_retried.positive?
     data[:uncovered_code] = summary.uncovered_code if summary.uncovered_code?
+    data.merge!(@baseline.call(summary))
   end
 
   def build_mutation_detail(result)
@@ -184,3 +187,4 @@ class Evilution::Reporter::JSON
 end
 
 require_relative "json/subjects"
+require_relative "json/baseline"

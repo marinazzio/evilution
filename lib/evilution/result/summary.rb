@@ -3,13 +3,15 @@
 require_relative "../result"
 require_relative "coverage_gap_grouper"
 require_relative "subject_scorer"
+require_relative "baseline_neutralization"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
-              :target_file_count, :infra_retried, :uncovered_code
+              :target_file_count, :infra_retried, :uncovered_code, :baseline_failures
 
   def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
-                 unresolved_target_files: [], target_file_count: nil, infra_retried: 0, uncovered_code: [])
+                 unresolved_target_files: [], target_file_count: nil, infra_retried: 0, uncovered_code: [],
+                 baseline_failures: [])
     @results = results
     @duration = duration
     @truncated = truncated
@@ -19,7 +21,24 @@ class Evilution::Result::Summary
     @target_file_count = target_file_count
     @infra_retried = infra_retried
     @uncovered_code = uncovered_code.freeze
+    @baseline_failures = baseline_failures.freeze
     freeze
+  end
+
+  # The survivors a red baseline turned neutral, gathered under the spec file
+  # that was red and paired with why it was. They are out of the score, so a
+  # baseline that was red for a reason of its own hides real gaps behind full
+  # marks unless the report says they are there.
+  def baseline_neutralizations
+    baseline_neutralized_results.group_by { |result| result.neutral_reason.detail }.map do |spec_file, results|
+      Evilution::Result::BaselineNeutralization.new(
+        spec_file: spec_file, count: results.length, failures: baseline_failures_for(spec_file)
+      )
+    end
+  end
+
+  def baseline_neutralized
+    baseline_neutralized_results.length
   end
 
   # Neutral results gathered by the reason they were recorded, which is what the
@@ -173,5 +192,19 @@ class Evilution::Result::Summary
     end
 
     max_rss && (max_rss / 1024.0)
+  end
+
+  private
+
+  def baseline_neutralized_results
+    neutral_results.select { |result| result.neutral_reason && result.neutral_reason.kind == :baseline_failure }
+  end
+
+  # No spec file named means the run was given its spec files explicitly, and
+  # any of them being red neutralizes the survivor.
+  def baseline_failures_for(spec_file)
+    return baseline_failures if spec_file.nil?
+
+    baseline_failures.select { |failure| failure.spec_file == spec_file }
   end
 end

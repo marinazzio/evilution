@@ -555,12 +555,20 @@ RSpec.describe Evilution::Integration::Minitest do
       failing_file.close!
     end
 
-    it "returns true when the baseline test file passes" do
-      expect(described_class.run_baseline_test_file(passing_file.path)).to be true
+    it "reports a pass when the baseline test file passes" do
+      expect(described_class.run_baseline_test_file(passing_file.path))
+        .to eq(Evilution::Baseline::Report.build(passed: true))
     end
 
-    it "returns false when the baseline test file fails" do
-      expect(described_class.run_baseline_test_file(failing_file.path)).to be false
+    it "reports a failure when the baseline test file fails" do
+      expect(described_class.run_baseline_test_file(failing_file.path)[:passed]).to be false
+    end
+
+    it "names the failing test with its message" do
+      report = described_class.run_baseline_test_file(failing_file.path)
+
+      expect(report[:failure_count]).to eq(1)
+      expect(report[:failures]).to eq([{ id: "#{unique}#test_case", description: "", message: "intentional" }])
     end
 
     it "loads and runs the test methods from the given file" do
@@ -616,16 +624,30 @@ RSpec.describe Evilution::Integration::Minitest do
   describe ".run_baseline_minitest" do
     after { Minitest::Runnable.runnables.clear }
 
-    it "returns true when all registered runnables pass" do
+    it "reports a pass when all registered runnables pass" do
       Class.new(Minitest::Test) { define_method(:test_ok) { assert true } }
 
-      expect(described_class.run_baseline_minitest).to be true
+      expect(described_class.run_baseline_minitest).to eq(Evilution::Baseline::Report.build(passed: true))
     end
 
-    it "returns false when a registered runnable fails" do
+    it "reports a failure when a registered runnable fails" do
       Class.new(Minitest::Test) { define_method(:test_bad) { assert false } }
 
-      expect(described_class.run_baseline_minitest).to be false
+      expect(described_class.run_baseline_minitest[:passed]).to be false
+    end
+
+    it "reports an error raised by a test with its class" do
+      Class.new(Minitest::Test) { define_method(:test_raises) { raise ArgumentError, "bad input" } }
+
+      message = described_class.run_baseline_minitest[:failures].first[:message]
+
+      expect(message).to start_with("ArgumentError: bad input")
+    end
+
+    it "does not count a skipped test as a failure" do
+      Class.new(Minitest::Test) { define_method(:test_skipped) { skip "later" } }
+
+      expect(described_class.run_baseline_minitest).to eq(Evilution::Baseline::Report.build(passed: true))
     end
 
     it "seeds Minitest before dispatch so a nil seed does not raise a TypeError" do

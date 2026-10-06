@@ -5,8 +5,8 @@ require_relative "process_cleanup"
 require_relative "diagnostic"
 
 class Evilution::Baseline
-  Result = Struct.new(:failed_spec_files, :duration) do
-    def initialize(**)
+  Result = Struct.new(:failed_spec_files, :duration, :failures) do
+    def initialize(failed_spec_files:, duration:, failures: [])
       super
       freeze
     end
@@ -38,18 +38,20 @@ class Evilution::Baseline
 
   def call(subjects)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    spec_files = baseline_spec_files(subjects)
-    failed = Set.new
-
-    spec_files.each do |spec_file|
-      failed.add(spec_file) unless run_spec_file(spec_file)
-    end
+    failures = baseline_spec_files(subjects).filter_map { |spec_file| check_spec_file(spec_file) }
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-    Result.new(failed_spec_files: failed, duration: duration)
+    Result.new(failed_spec_files: failures.to_set(&:spec_file), duration: duration, failures: failures)
   end
 
   def run_spec_file(spec_file)
+    check_spec_file(spec_file).nil?
+  end
+
+  # nil when the spec file passed, otherwise why it did not. Anything that
+  # stops the baseline from getting an answer counts as failing, and is
+  # recorded as the reason.
+  def check_spec_file(spec_file)
     raise Evilution::Error, "no baseline runner configured" unless @runner
 
     read_io, write_io = IO.pipe
@@ -58,11 +60,11 @@ class Evilution::Baseline
     read_result(read_io, pid, spec_file)
   rescue Evilution::Error
     raise
-  rescue StandardError
-    false
+  rescue StandardError => e
+    warned(SpecFailure.new(spec_file: spec_file, error: "#{e.class}: #{e.message}"))
   ensure
-    read_io&.close
-    write_io&.close
+    read_io.close if read_io
+    write_io.close if write_io
   end
 
   def fork_spec_runner(spec_file, read_io, write_io)
@@ -72,28 +74,24 @@ class Evilution::Baseline
       $stdout.reopen(File::NULL, "w")
       $stderr.reopen(File::NULL, "w")
 
-      passed = runner.call(spec_file)
-      Marshal.dump({ passed: passed }, write_io)
+      report = child_report(runner, spec_file)
+      Marshal.dump(report, write_io)
       write_io.close
-      exit!(passed ? 0 : 1)
+      exit!(report[:passed] ? 0 : 1)
     end
   end
 
   GRACE_PERIOD = 0.5
 
   def read_result(read_io, pid, spec_file)
-    if read_io.wait_readable(@timeout)
-      data = read_io.read
-      Process.wait(pid)
-      return false if data.empty?
+    return timed_out(pid, spec_file) unless read_io.wait_readable(@timeout)
 
-      result = Marshal.load(data)
-      result[:passed]
-    else
-      terminate_child(pid)
-      warn_timeout(spec_file)
-      false
-    end
+    data = read_io.read
+    _, status = Process.wait2(pid)
+    return warned(SpecFailure.new(spec_file: spec_file, error: unreported_error(status))) if data.empty?
+
+    report = Marshal.load(data)
+    report[:passed] ? nil : warned(SpecFailure.from_report(spec_file, report))
   end
 
   def warn_timeout(spec_file)
@@ -114,6 +112,35 @@ class Evilution::Baseline
   end
 
   private
+
+  # Runs in the child. A runner that raises -- a spec helper that cannot load,
+  # a framework that is not there -- is a failure with a reason, not a child
+  # that dies without a word.
+  def child_report(runner, spec_file)
+    Report.from(runner.call(spec_file))
+  rescue StandardError, ScriptError => e
+    Report.build(passed: false, error: "#{e.class}: #{e.message}")
+  end
+
+  def timed_out(pid, spec_file)
+    terminate_child(pid)
+    warn_timeout(spec_file)
+    SpecFailure.new(spec_file: spec_file, error: "timed out after #{@timeout}s")
+  end
+
+  def unreported_error(status)
+    cause = status.signaled? ? "signal #{status.termsig}" : "exit status #{status.exitstatus}"
+    "baseline process ended without reporting (#{cause})"
+  end
+
+  def warned(failure)
+    detail = FailureFormatter.new.call(failure).map { |line| "  #{line}" }
+    Evilution::Diagnostic.warn(
+      ["[evilution] Baseline failed for #{failure.spec_file}; " \
+       "surviving mutations it covers will be reported neutral.", *detail].join("\n")
+    )
+    failure
+  end
 
   def baseline_spec_files(subjects)
     return Array(@test_files).uniq if @test_files && !@test_files.empty?
@@ -151,3 +178,7 @@ class Evilution::Baseline
     @fallback_to_full_suite ? "#{hint}." : "#{hint}, or --fallback-full-suite to run the whole suite."
   end
 end
+
+require_relative "baseline/report"
+require_relative "baseline/spec_failure"
+require_relative "baseline/failure_formatter"

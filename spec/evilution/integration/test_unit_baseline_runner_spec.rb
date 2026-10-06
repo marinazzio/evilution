@@ -32,7 +32,7 @@ RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
   end
 
   describe ".run_baseline_test_file" do
-    it "returns true when all loaded tests pass" do
+    it "reports a pass when all loaded tests pass" do
       path = write_test_file("passing_test.rb", <<~RUBY)
         require "test-unit"
 
@@ -45,10 +45,10 @@ RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
 
       result = described_class.run_baseline_test_file(path)
 
-      expect(result).to be true
+      expect(result).to eq(Evilution::Baseline::Report.build(passed: true))
     end
 
-    it "returns false when at least one loaded test fails" do
+    it "reports a failure when at least one loaded test fails" do
       path = write_test_file("failing_test.rb", <<~RUBY)
         require "test-unit"
 
@@ -61,7 +61,28 @@ RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
 
       result = described_class.run_baseline_test_file(path)
 
-      expect(result).to be false
+      expect(result[:passed]).to be false
+    end
+
+    it "names each failing test with its first message line" do
+      path = write_test_file("detail_test.rb", <<~RUBY)
+        require "test-unit"
+
+        class TestUnitBaselineDetail < Test::Unit::TestCase
+          def test_passes = assert_equal(1, 1)
+          def test_fails = assert_equal(1, 2, "numbers differ")
+          def test_raises = raise(ArgumentError, "bad input")
+          def test_pending = pend("later")
+        end
+      RUBY
+
+      result = described_class.run_baseline_test_file(path)
+
+      expect(result[:failure_count]).to eq(2)
+      expect(result[:failures].map { |failure| failure[:id] })
+        .to contain_exactly("test_fails(TestUnitBaselineDetail)", "test_raises(TestUnitBaselineDetail)")
+      expect(result[:failures].map { |failure| failure[:message] })
+        .to contain_exactly(a_string_starting_with("numbers differ"), "ArgumentError: bad input")
     end
 
     it "loads every *_test.rb under a directory when given a directory" do
@@ -81,7 +102,7 @@ RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
 
       result = described_class.run_baseline_test_file(File.join(tmpdir, "nested"))
 
-      expect(result).to be true
+      expect(result[:passed]).to be true
     end
 
     it "does not print test output to the parent process stdout" do
