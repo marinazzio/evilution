@@ -83,6 +83,8 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # it is guarded and the block is followed by a ConcernRedeclaration call,
   # which re-declares the spared statement alone on the classes that include
   # the concern already. Both are added on existing lines, so no line moves.
+  # An `aasm` machine inside such a block is treated the same way one level
+  # down: its other declarations are guarded, not blanked.
   # When it is a callback declaration (`validate ... if: -> { }`), it is
   # wrapped in a CallbackRedeclaration call, which puts what the re-run
   # registers in the place of what the declaration registered before.
@@ -192,12 +194,25 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
       block = Evilution::AST::IncludedBlock.of(stmt)
       return unless block && block.body.is_a?(Prism::StatementsNode)
 
-      block.body.body.grep(Prism::CallNode).each do |call|
-        start_offset = call.location.start_offset
-        @edits << [start_offset, start_offset, GUARD] unless kept?(edit_for(call))
-      end
+      guard_others(block)
       end_offset = stmt.location.end_offset
       @edits << [end_offset, end_offset, REDECLARE]
+    end
+
+    # Guards every call of a block but the one holding the offset. When that
+    # one is an `aasm` machine, its own declarations are guarded the same way
+    # rather than blanked: a class that includes the concern later needs the
+    # whole machine, and one that includes it already only the mutated event.
+    def guard_others(block)
+      block.body.body.grep(Prism::CallNode).each do |call|
+        if kept?(edit_for(call))
+          machine = Evilution::AST::AasmDeclaration.machine_block(call)
+          guard_others(machine) if machine && machine.body.is_a?(Prism::StatementsNode)
+        else
+          start_offset = call.location.start_offset
+          @edits << [start_offset, start_offset, GUARD]
+        end
+      end
     end
 
     def neutralizable?(stmt)

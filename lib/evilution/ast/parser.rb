@@ -50,7 +50,10 @@ module Evilution::AST
 
     def visit_module_node(node)
       @context.push(constant_name(node.constant_path))
-      IncludedBlock.in_body(node.body).each { |block| add_scope_subjects(block.body) }
+      IncludedBlock.in_body(node.body).each do |block|
+        add_scope_subjects(block.body)
+        add_aasm_subjects(block.body)
+      end
       within_scope(singleton: false) { super }
       @context.pop
     end
@@ -134,7 +137,8 @@ module Evilution::AST
     # A guard or callback written out inside `aasm do ... end` runs when the
     # method its event or state defines is called (`ship`, `paid?`), and is
     # named after it. The subject spans that declaration and mutates the
-    # callable's body; one event may hold several.
+    # callable's body; one event may hold several. A machine declared in a
+    # concern's `included` block is named after the concern.
     def add_aasm_subjects(body)
       AasmDeclaration.in_body(body).each do |callable|
         name = "#{@context.join("::")}##{callable.method_name}"

@@ -119,7 +119,9 @@ class that owns it.
    keyword values (`guard: -> { }`, also inside arrays), those of the event's
    `transitions`, and callback blocks (`before { }`) -- kind `:aasm`, named
    `Class#event` / `Class#state?` after the method the declaration defines, so
-   one event may contribute several subjects of the same name; and one per
+   one event may contribute several subjects of the same name (a machine in a
+   concern's `included do ... end` is found too, and named after the concern);
+   and one per
    literal callable of a class-body callback or validation declaration
    (`validate`, `validates`, `validates_*`, `before_*`, `after_*`, `around_*`)
    -- an `if:` / `unless:` condition, or the callback itself as a block or
@@ -255,7 +257,12 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      holding the mutation is blanked. AASM stores what an event or state holds
      by value, so re-running one replaces it; the machine's own callbacks
      (`after_all_transitions`) accumulate, which is why the rest of the block
-     must not run again and why they get no subjects.
+     must not run again and why they get no subjects. For a machine inside a
+     concern's `included` block the two mechanisms combine: the block is kept
+     and followed by `ConcernRedeclaration.call(self)`, and both its other
+     calls and the machine's other declarations are guarded with
+     `ConcernRedeclaration.skipping?` instead of blanked -- a class that
+     includes the concern later needs the whole machine.
 
 2. **Require it** in `lib/evilution.rb` alongside the other
    `require_relative "evilution/mutator/operator/..."` lines.

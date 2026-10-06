@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe Shippable do
+  def with_address(klass)
+    klass.new.tap { |record| record.address = "1 Main St" }
+  end
+
+  it "ships an order with an address, firing the machine's own callback once" do
+    order = with_address(Order)
+
+    order.ship!
+
+    expect(order).to be_shipped
+    expect(order.transitions_seen).to eq(1)
+  end
+
+  it "does not ship an order without an address" do
+    expect(Order.new.may_ship?).to be(false)
+  end
+
+  it "guards a class that includes the concern later the same way" do
+    require "parcel"
+
+    expect(with_address(Parcel).may_ship?).to be(true)
+    expect(Parcel.new.may_ship?).to be(false)
+  end
+
+  it "keeps the rest of the machine" do
+    expect(Order.aasm.states.map(&:name)).to eq(%i[paid shipped])
+    expect(Order.aasm.events.map(&:name)).to eq(%i[ship refund])
+    expect(Order.new.may_refund?).to be(true)
+  end
+end

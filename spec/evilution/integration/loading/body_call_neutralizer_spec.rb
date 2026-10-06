@@ -259,6 +259,64 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call with keep_offset inside an aasm block of a concern's included block" do
+    let(:skipping) { "::Evilution::Integration::Loading::ConcernRedeclaration.skipping?" }
+    let(:redeclare) { "::Evilution::Integration::Loading::ConcernRedeclaration.call(self)" }
+    let(:src) do
+      <<~RUBY
+        module Shippable
+          extend ActiveSupport::Concern
+
+          included do
+            include AASM
+            aasm column: :status do
+              after_all_transitions :log
+              state :paid, initial: true
+              event :ship, guard: -> { address? } do
+                transitions from: :paid, to: :shipped
+              end
+              event :cancel do
+                transitions from: :paid, to: :paid
+              end
+            end
+          end
+        end
+      RUBY
+    end
+
+    # A class that includes the concern later runs all of it, so nothing is
+    # blanked; one that includes it already runs it again with every other
+    # declaration skipped.
+    it "guards the other statements of the block and the other declarations of the machine" do
+      expect(neutralizer.call(src, keep_offset: src.index("address?"))).to eq(<<~RUBY)
+        module Shippable
+          extend ActiveSupport::Concern
+
+          included do
+            #{skipping} or include AASM
+            aasm column: :status do
+              #{skipping} or after_all_transitions :log
+              #{skipping} or state :paid, initial: true
+              event :ship, guard: -> { address? } do
+                transitions from: :paid, to: :shipped
+              end
+              #{skipping} or event :cancel do
+                transitions from: :paid, to: :paid
+              end
+            end
+          end; #{redeclare}
+        end
+      RUBY
+    end
+
+    it "produces source that parses, with every line where it was" do
+      result = neutralizer.call(src, keep_offset: src.index("address?"))
+
+      expect(Prism.parse(result)).to be_success
+      expect(result.lines.length).to eq(src.lines.length)
+    end
+  end
+
   describe "#call" do
     it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY

@@ -896,4 +896,46 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects).to eq([])
     end
   end
+
+  describe "AASM subjects in a concern's included block" do
+    def subjects_for(code)
+      file = Tempfile.new(["shippable", ".rb"])
+      file.write(code)
+      file.close
+      described_class.new.call(file.path)
+    ensure
+      file.unlink
+    end
+
+    let(:code) do
+      <<~RUBY
+        module Shippable
+          extend ActiveSupport::Concern
+
+          included do
+            include AASM
+
+            aasm do
+              state :paid, before_exit: -> { leaving }
+              event :ship, guard: -> { address? } do
+                transitions from: :paid, to: :shipped
+              end
+            end
+          end
+
+          aasm do
+            event :stray, guard: -> { 1 }
+          end
+        end
+      RUBY
+    end
+
+    it "makes a subject of each guard and callback, named after the concern" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :aasm }
+
+      expect(subjects.map(&:name)).to eq(["Shippable#paid?", "Shippable#ship"])
+      expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { leaving }", "-> { address? }"])
+      expect(subjects.map(&:line_number)).to eq([8, 9])
+    end
+  end
 end
