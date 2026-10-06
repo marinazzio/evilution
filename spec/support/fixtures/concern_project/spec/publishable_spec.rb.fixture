@@ -1,0 +1,19 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe Publishable do
+  it "shows a visitor only what is published, on a class loaded before the run" do
+    expect(Article.visible(false).map { |row| row[:title] }).to eq(["live"])
+  end
+
+  it "shows the same on a class that includes the concern later" do
+    require "post"
+
+    expect(Post.visible(false).map { |row| row[:title] }).to eq(["live"])
+  end
+
+  it "declares the rest of the block once per class" do
+    expect(Article.tracked).to eq([:publishable])
+  end
+end

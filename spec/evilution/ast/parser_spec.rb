@@ -499,12 +499,22 @@ RSpec.describe Evilution::AST::Parser do
         module Publishable
           scope :published, -> { where(published: true) }
 
-          included do
+          prepended do
             scope :drafts, -> { where(published: false) }
+          end
+
+          included do
+            if legacy?
+              scope :nested, -> { all }
+            end
           end
         end
 
         class Order
+          included do
+            scope :stray, -> { all }
+          end
+
           class << self
             scope :hidden, -> { all }
           end
@@ -793,6 +803,50 @@ RSpec.describe Evilution::AST::Parser do
 
     it "keeps the method subjects of the class" do
       expect(subjects_for(code).reject { |subject| subject.kind == :aasm }.map(&:name)).to eq(["Shop::Order#ready?"])
+    end
+  end
+
+  describe "scope subjects in a concern's included block" do
+    def subjects_for(code)
+      file = Tempfile.new(["concern", ".rb"])
+      file.write(code)
+      file.close
+      described_class.new.call(file.path)
+    ensure
+      file.unlink
+    end
+
+    let(:code) do
+      <<~RUBY
+        module Shop
+          module Publishable
+            extend ActiveSupport::Concern
+
+            included do
+              validates :title, presence: true
+              scope :published, -> { where(published: true) }
+              scope :named, by_name
+            end
+
+            scope :outside, -> { 1 }
+
+            def publish! = true
+          end
+        end
+      RUBY
+    end
+
+    it "makes a scope subject named after the concern" do
+      scopes = subjects_for(code).select { |subject| subject.kind == :scope }
+
+      expect(scopes.map(&:name)).to eq(["Shop::Publishable.published"])
+      expect(scopes.first.node.slice).to eq("-> { where(published: true) }")
+      expect(scopes.first.line_number).to eq(7)
+      expect(scopes.first.source).to eq("scope :published, -> { where(published: true) }")
+    end
+
+    it "keeps the concern's methods as subjects" do
+      expect(subjects_for(code).map(&:name)).to include("Shop::Publishable#publish!")
     end
   end
 end

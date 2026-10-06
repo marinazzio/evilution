@@ -177,6 +177,19 @@ RSpec.describe Evilution::AST::UncoveredCode do
     expect(uncovered(source)).to eq([])
   end
 
+  it "reports the statements of a concern's included block, not the block around them" do
+    source = <<~RUBY
+      module Publishable
+        included do
+          validates :title, presence: true
+          scope :published, -> { where(published: true) }
+        end
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([3..3])
+  end
+
   it "returns nothing for an empty file" do
     expect(uncovered("")).to eq([])
   end

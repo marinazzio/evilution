@@ -302,6 +302,31 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(EkaxRestoredScopes.value).to eq(:original)
     end
 
+    # A concern ignores an `included` block it is handed twice from the same
+    # place, so the one the mutation registered has to be cleared first.
+    it "clears concern state for the file before evaluating the restore source" do
+      order = []
+      cleaner = instance_double(Evilution::Integration::Loading::ConcernStateCleaner)
+      evaluator = instance_double(Evilution::Integration::Loading::SourceEvaluator)
+      allow(cleaner).to receive(:call) { |path| order << [:clean, path] }
+      allow(evaluator).to receive(:call) { |_source, path| order << [:eval, path] }
+      restoring = double("Mutation", file_path: source_path, restore_source: "1\n")
+
+      described_class.new(concern_state_cleaner: cleaner, source_evaluator: evaluator).restore(restoring)
+
+      expect(order).to eq([[:clean, source_path], [:eval, source_path]])
+    end
+
+    it "leaves concern state alone for a mutation without a restore source" do
+      cleaner = instance_double(Evilution::Integration::Loading::ConcernStateCleaner)
+      allow(cleaner).to receive(:call)
+
+      described_class.new(concern_state_cleaner: cleaner)
+                     .restore(double("Mutation", file_path: source_path, restore_source: nil))
+
+      expect(cleaner).not_to have_received(:call)
+    end
+
     it "does nothing for a mutation without a restore source" do
       expect { applier.restore(double("Mutation", file_path: source_path, restore_source: nil)) }
         .not_to output.to_stderr

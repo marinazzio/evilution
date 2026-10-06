@@ -2,10 +2,12 @@
 
 require "prism"
 require_relative "../ast"
+require_relative "included_block"
 
 # The lines of a file that hold code no subject covers: statements written in
 # a class, module or `class << self` body, or at the top level, outside every
-# method -- `scope` lambdas, callback macros, constant lists. Mutations are
+# method -- `scope` lambdas, callback macros, constant lists -- or in a
+# concern's `included` block, which is a class body written elsewhere. Mutations are
 # generated per subject, so a run aimed at these lines generates none of its
 # own, and saying so is the only way a reader can tell "nothing to mutate"
 # from "nothing reached".
@@ -42,6 +44,9 @@ module Evilution::AST::UncoveredCode
 
   def self.expand(node)
     return statements(node.body) if SCOPE_NODES.any? { |type| node.is_a?(type) }
+
+    included = Evilution::AST::IncludedBlock.of(node)
+    return statements(included.body) if included
     return [] if bare_visibility?(node)
 
     [node]

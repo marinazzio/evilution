@@ -3,6 +3,8 @@
 require "prism"
 require_relative "../loading"
 require_relative "../../ast/aasm_declaration"
+require_relative "../../ast/included_block"
+require_relative "concern_redeclaration"
 
 # Strip non-idempotent class/module-body side-effect calls from a mutated
 # source before re-eval. Such calls (e.g. dry-monads `register_mixin`, plugin
@@ -33,6 +35,10 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # warnings turns into an error for every mutation of the file. `()` evaluates
   # to nil without the warning on every supported Ruby (`(nil)` still warns on 3.3).
   REPLACEMENT = "()"
+
+  REDECLARATION = "::Evilution::Integration::Loading::ConcernRedeclaration"
+  GUARD = "#{REDECLARATION}.skipping? or ".freeze
+  REDECLARE = "; #{REDECLARATION}.call(self)".freeze
 
   class << self
     attr_writer :preloaded_features
@@ -69,6 +75,11 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # the offset is spared inside its block: re-running one declaration replaces
   # it, while re-running the whole machine would register its
   # `after_all_transitions`-style callbacks a second time.
+  # When it is a concern's `included` block, the block is kept whole, since
+  # classes that include the concern later run all of it; every other call in
+  # it is guarded and the block is followed by a ConcernRedeclaration call,
+  # which re-declares the spared statement alone on the classes that include
+  # the concern already. Both are added on existing lines, so no line moves.
   def call(source, file_path: nil, keep_offset: nil)
     return source if file_path && !preloaded?(file_path)
 
@@ -96,8 +107,8 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
 
   def apply_edits(source, edits)
     bytes = source.b
-    edits.sort_by!(&:first).reverse_each do |start_offset, end_offset|
-      bytes[start_offset, end_offset - start_offset] = REPLACEMENT
+    edits.sort_by!(&:first).reverse_each do |start_offset, end_offset, replacement|
+      bytes[start_offset, end_offset - start_offset] = replacement.b
     end
     bytes.force_encoding(source.encoding)
   end
@@ -140,11 +151,31 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
 
         edit = edit_for(stmt)
         if kept?(edit)
-          scan_machine(stmt)
+          scan_kept(stmt)
         else
           @edits << edit
         end
       end
+    end
+
+    def scan_kept(stmt)
+      scan_machine(stmt)
+      scan_included(stmt)
+    end
+
+    # A kept `included` block stays whole. Its other calls are guarded rather
+    # than blanked, and what follows it re-declares the spared one on the
+    # classes that include the concern already.
+    def scan_included(stmt)
+      block = Evilution::AST::IncludedBlock.of(stmt)
+      return unless block && block.body.is_a?(Prism::StatementsNode)
+
+      block.body.body.grep(Prism::CallNode).each do |call|
+        start_offset = call.location.start_offset
+        @edits << [start_offset, start_offset, GUARD] unless kept?(edit_for(call))
+      end
+      end_offset = stmt.location.end_offset
+      @edits << [end_offset, end_offset, REDECLARE]
     end
 
     def neutralizable?(stmt)
@@ -167,10 +198,10 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     end
 
     def edit_for(call)
-      [call.location.start_offset, replacement_end_offset(call)]
+      [call.location.start_offset, replacement_end_offset(call), REPLACEMENT]
     end
 
-    def kept?((start_offset, end_offset))
+    def kept?((start_offset, end_offset, _replacement))
       @keep_offset && @keep_offset >= start_offset && @keep_offset < end_offset
     end
 

@@ -113,7 +113,8 @@ class that owns it.
    outside any method (kind `:constant`, named after the constant), plus one per
    `scope :name, -> { }` / `lambda { }` / `proc { }` written directly in a class
    body (kind `:scope`, named `Class.name` after the class method it defines;
-   it spans the declaration and its node is the body), plus one per literal
+   it spans the declaration and its node is the body; a scope declared in a
+   concern's `included do ... end` is named after the concern), plus one per literal
    callable inside an `event` or `state` of a class-body `aasm do ... end` --
    keyword values (`guard: -> { }`, also inside arrays), those of the event's
    `transitions`, and callback blocks (`before { }`) -- kind `:aasm`, named
@@ -218,6 +219,15 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      the original file with the same call kept; `Integration::Base#call`
      evaluates it after the tests, since in-process runs restore methods only
      by re-evaluating the next mutation's source, where scopes are blanked.
+   - A scope in a concern's `included` block has two audiences. The kept
+     `included` call registers the mutated block for classes that include the
+     concern later (`ConcernStateCleaner` clears the old one first, on apply
+     and on restore: a concern ignores a block handed to it twice from the
+     same place). For classes that include it already, the eval source guards
+     every other call of the block with `ConcernRedeclaration.skipping?` and
+     follows the block with `ConcernRedeclaration.call(self)`, which runs the
+     block on each of them with the guard up, so only the scope is declared
+     again. Both additions go on existing lines; no line number moves.
    - An aasm subject works the same way, one level down: the `aasm` call is
      kept, and inside its block every declaration but the `event` or `state`
      holding the mutation is blanked. AASM stores what an event or state holds

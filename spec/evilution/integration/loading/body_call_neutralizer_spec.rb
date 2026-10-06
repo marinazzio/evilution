@@ -150,6 +150,66 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call with keep_offset inside a concern's included block" do
+    let(:skipping) { "::Evilution::Integration::Loading::ConcernRedeclaration.skipping?" }
+    let(:redeclare) { "::Evilution::Integration::Loading::ConcernRedeclaration.call(self)" }
+    let(:src) do
+      <<~RUBY
+        module Publishable
+          extend ActiveSupport::Concern
+          register :publishable
+
+          included do
+            validates :title, presence: true
+            limit = 3
+            scope :published, -> { where(published: true) }
+            scope :recent, -> { order(:id).limit(limit) }
+          end
+
+          def publish! = true
+        end
+      RUBY
+    end
+
+    it "keeps the block, guards its other calls and re-declares on the classes that include the concern" do
+      expect(neutralizer.call(src, keep_offset: src.index("published: true"))).to eq(<<~RUBY)
+        module Publishable
+          extend ActiveSupport::Concern
+          ()
+
+          included do
+            #{skipping} or validates :title, presence: true
+            limit = 3
+            scope :published, -> { where(published: true) }
+            #{skipping} or scope :recent, -> { order(:id).limit(limit) }
+          end; #{redeclare}
+
+          def publish! = true
+        end
+      RUBY
+    end
+
+    it "keeps every line where it was" do
+      result = neutralizer.call(src, keep_offset: src.index("published: true"))
+
+      expect(result.lines.length).to eq(src.lines.length)
+      expect(Prism.parse(result)).to be_success
+    end
+
+    it "neutralizes the whole block when the offset is elsewhere" do
+      result = neutralizer.call(src, keep_offset: src.index("register"))
+
+      expect(result).not_to include("included")
+      expect(result).to include("register :publishable")
+    end
+
+    it "treats a kept call that only looks like an included block as any other" do
+      plain = "class Order\n  included(base) do\n    scope :a, -> { nil }\n  end\nend\n"
+
+      expect(neutralizer.call(plain, keep_offset: plain.index("nil"))).to eq(plain)
+    end
+  end
+
   describe "#call" do
     it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY

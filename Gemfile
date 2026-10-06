@@ -7,6 +7,7 @@ gemspec
 
 group :development, :test do
   gem "aasm", ">= 5.5", require: false
+  gem "activesupport", ">= 7.1", require: false
   gem "bundler-audit", require: false
   gem "irb"
   gem "minitest", "~> 6.0"

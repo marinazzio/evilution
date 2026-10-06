@@ -178,6 +178,25 @@ RSpec.describe Evilution::Integration::Loading::ConcernStateCleaner do
       end
     end
 
+    it "resolves a relative target path against the project inside an isolated worker" do
+      previous_flag = Evilution.instance_variable_get(:@in_isolated_worker)
+      relative = "spec/support/fixtures/concern_in_project.rb"
+      mod = Module.new
+      mod.extend(ActiveSupport::Concern)
+      mod.instance_variable_set(:@_included_block, block_at(File.join(Evilution::PROJECT_ROOT, relative)))
+
+      Dir.mktmpdir("evilution_concern_sandbox") do |sandbox|
+        Dir.chdir(sandbox) do
+          Evilution.in_isolated_worker!
+          cleaner.call(relative)
+        end
+      end
+
+      expect(mod.instance_variable_defined?(:@_included_block)).to be false
+    ensure
+      Evilution.instance_variable_set(:@in_isolated_worker, previous_flag)
+    end
+
     it "expands a relative target path before matching" do
       Dir.mktmpdir("evilution_concern_rel") do |dir|
         target_path = File.join(dir, "concern_rel.rb")

@@ -48,11 +48,14 @@ class Evilution::Integration::Loading::MutationApplier
 
   # Evaluates the mutation's restore_source, if it has one. Runs after the
   # tests: a failure here must not change the mutation's result, so it is
-  # reported and swallowed.
+  # reported and swallowed. Concern state is cleared first, as it is before
+  # applying: a concern ignores an `included` block handed to it twice from
+  # the same place, and would keep the mutated one.
   def restore(mutation)
     source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
     return unless source
 
+    @concern_state_cleaner.call(mutation.file_path)
     @source_evaluator.call(source, mutation.file_path)
   rescue ScriptError, StandardError => e
     Evilution::Diagnostic.warn("[evilution] could not restore #{mutation.file_path}: #{e.class}: #{e.message}")
