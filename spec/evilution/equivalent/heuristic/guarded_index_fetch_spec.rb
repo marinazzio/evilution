@@ -98,6 +98,10 @@ RSpec.describe Evilution::Equivalent::Heuristic::GuardedIndexFetch do
       expect(verdicts("parenthesized_sequence_guard")).to eq([false, false])
     end
 
+    it "does not take a parenthesized sequence for its first statement" do
+      expect(verdicts("parenthesized_sequence_ending_elsewhere")).to eq([false, false])
+    end
+
     it "does not match a parenthesized condition that is not the read" do
       expect(verdicts("parenthesized_unrelated_guard")).to eq([false])
     end
@@ -270,6 +274,204 @@ RSpec.describe Evilution::Equivalent::Heuristic::GuardedIndexFetch do
 
     it "does not match a read inside a nested method definition" do
       expect(verdicts("inside_nested_def")).to eq([false, false])
+    end
+  end
+
+  describe "early exits" do
+    describe "guard shapes" do
+      %w[return_unless return_value_unless raise_unless fail_unless].each do |method_name|
+        it "matches the read after `#{method_name.tr("_", " ")}`, never the guard itself" do
+          expect(verdicts(method_name)).to eq([false, true])
+        end
+      end
+
+      it "matches after an unless block that ends in an exit" do
+        expect(verdicts("block_unless")).to eq([false, true])
+      end
+
+      it "does not match after an unless that does not exit" do
+        expect(verdicts("unless_without_exit")).to eq([false, false])
+      end
+
+      it "does not match when the exit is not the block's last statement" do
+        expect(verdicts("unless_exit_not_last")).to eq([false, false])
+      end
+
+      # The else branch is guarded by the unless itself. What follows the whole
+      # statement is left alone: an else can do anything to the receiver on
+      # its way through.
+      it "matches the else branch of an unless-exit, but not what follows it" do
+        expect(verdicts("unless_with_else")).to eq([false, true, false])
+      end
+
+      it "matches after `cond or return`" do
+        expect(verdicts("or_return")).to eq([false, true])
+      end
+
+      it "matches after `cond || raise`" do
+        expect(verdicts("double_pipe_raise")).to eq([false, true])
+      end
+
+      it "does not match after `cond or` something that does not leave" do
+        expect(verdicts("or_without_exit")).to eq([false, false])
+      end
+
+      it "does not match after `other or return`" do
+        expect(verdicts("or_exit_on_other")).to eq([false])
+      end
+
+      it "does not take a raise sent to a receiver for an exit" do
+        expect(verdicts("raise_on_receiver_unless")).to eq([false, false])
+      end
+
+      it "does not take any bare call for an exit" do
+        expect(verdicts("bare_call_unless")).to eq([false, false])
+      end
+
+      it "does not match after an empty unless" do
+        expect(verdicts("empty_unless")).to eq([false, false])
+      end
+
+      it "does not match after `cond and return`" do
+        expect(verdicts("and_return")).to eq([false, false])
+      end
+
+      it "matches the rest of an iteration after next" do
+        expect(verdicts("next_unless")).to eq([false, true])
+      end
+
+      it "matches the rest of an iteration after break" do
+        expect(verdicts("break_unless")).to eq([false, true])
+      end
+    end
+
+    describe "conditions that exit when the key is missing" do
+      %w[return_if_nil return_if_blank return_if_negated return_if_not].each do |method_name|
+        it "matches after `#{method_name.tr("_", " ")}`" do
+          expect(verdicts(method_name)).to eq([false, true])
+        end
+      end
+
+      it "matches after an exit on a missing key predicate" do
+        expect(verdicts("return_if_key_missing")).to eq([true])
+        expect(verdicts("return_if_negated_key")).to eq([true])
+      end
+
+      it "matches when the missing-key test is either side of an or" do
+        expect(verdicts("return_if_nil_or_other")).to eq([false, true])
+        expect(verdicts("return_if_nil_first_or_other")).to eq([false, true])
+      end
+
+      it "sees through parentheses, but not into a sequence" do
+        expect(verdicts("return_if_parenthesized_nil")).to eq([false, true])
+        expect(verdicts("return_if_parenthesized_sequence")).to eq([false, false])
+      end
+
+      it "does not match an or, or parentheses, around tests of something else" do
+        expect(verdicts("return_if_unrelated_or")).to eq([false])
+        expect(verdicts("return_if_parenthesized_other")).to eq([false])
+      end
+
+      it "does not match a missing-key test on another read" do
+        expect(verdicts("return_if_other_read_nil")).to eq([false, false])
+      end
+
+      it "does not match the negation of something that is not the read" do
+        expect(verdicts("return_if_not_other")).to eq([false])
+      end
+
+      it "does not match when the missing-key test is one side of an and" do
+        expect(verdicts("return_if_nil_and_other")).to eq([false, false])
+      end
+
+      it "does not match after an exit taken when the key is there" do
+        expect(verdicts("return_if_present")).to eq([false, false])
+      end
+
+      it "does not match after an exit on a test that says nothing about presence" do
+        expect(verdicts("return_if_empty")).to eq([false, false])
+      end
+
+      it "matches when the read is one conjunct of an unless condition" do
+        expect(verdicts("return_unless_conjunct")).to eq([false, true])
+      end
+
+      it "does not match when the read is one disjunct of an unless condition" do
+        expect(verdicts("return_unless_disjunct")).to eq([false, false])
+      end
+
+      it "matches after an if block that exits" do
+        expect(verdicts("if_block_exit")).to eq([false, true])
+      end
+
+      it "does not match after an if-exit that has an else" do
+        expect(verdicts("if_exit_with_else")).to eq([false, false])
+      end
+
+      it "requires the same key" do
+        expect(verdicts("exit_guard_other_key")).to eq([false, false])
+      end
+    end
+
+    describe "where the read is" do
+      it "does not match a read before the guard" do
+        expect(verdicts("read_before_guard")).to eq([false, false])
+      end
+
+      it "matches a read nested in a later statement" do
+        expect(verdicts("read_in_later_branch")).to eq([false, true])
+        expect(verdicts("read_in_later_block")).to eq([false, true])
+      end
+
+      it "matches through an inner statement list when the guard is in an outer one" do
+        expect(verdicts("guard_in_outer_list")).to eq([false, true])
+      end
+
+      it "does not match when the guard only ends an inner branch" do
+        expect(verdicts("guard_in_inner_list_only")).to eq([false, false])
+      end
+
+      it "does not match when the guard only ends an earlier block's iteration" do
+        expect(verdicts("guard_in_earlier_block")).to eq([false, false])
+      end
+
+      it "does not match a read inside a lambda" do
+        expect(verdicts("read_in_lambda_after_guard")).to eq([false, false])
+      end
+
+      it "does not match a read in a rescue clause" do
+        expect(verdicts("read_in_rescue_after_guard")).to eq([false, false])
+      end
+
+      it "does not match a block parameter shadowing the receiver" do
+        expect(verdicts("guard_then_shadowing_block")).to eq([false, false])
+      end
+    end
+
+    describe "a receiver that changes after the guard" do
+      it "does not match when the receiver is reassigned in between" do
+        expect(verdicts("reassigned_after_guard")).to eq([false, false])
+      end
+
+      it "does not match when the receiver is mutated in between" do
+        expect(verdicts("mutated_after_guard")).to eq([false, false])
+      end
+
+      it "does not match when the statement holding the read mutates the receiver" do
+        expect(verdicts("mutated_in_read_statement")).to eq([false, false])
+      end
+
+      it "matches when only the guard's own exit branch changes the receiver" do
+        expect(verdicts("guard_that_cleans_up_before_leaving")).to eq([false, true])
+      end
+
+      it "goes by the last guard before the read" do
+        expect(verdicts("guarded_again_after_a_change")).to eq([false, false, true])
+      end
+
+      it "matches when the receiver is mutated only after the read's statement" do
+        expect(verdicts("mutated_after_read")).to eq([false, true])
+      end
     end
   end
 

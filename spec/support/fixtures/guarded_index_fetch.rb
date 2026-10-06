@@ -108,6 +108,12 @@ class GuardedIndexFetchFixture
     end
   end
 
+  def parenthesized_sequence_ending_elsewhere(config, enabled)
+    if (config[:k]; enabled)
+      config[:k]
+    end
+  end
+
   def disjunct_guard(config, enabled)
     if enabled || config[:k]
       config[:k]
@@ -375,6 +381,384 @@ class GuardedIndexFetchFixture
         settings[:k]
       end
     end
+  end
+
+  # Early exits: the guard and the read are sibling statements.
+
+  def return_unless(config)
+    return unless config[:k]
+
+    config[:k]
+  end
+
+  def return_value_unless(config)
+    return :none unless config[:k]
+
+    config[:k]
+  end
+
+  def raise_unless(config)
+    raise ArgumentError, "no k" unless config[:k]
+
+    config[:k]
+  end
+
+  def fail_unless(config)
+    fail "no k" unless config[:k]
+
+    config[:k]
+  end
+
+  def block_unless(config, log)
+    unless config[:k]
+      log << :missing
+      return
+    end
+
+    config[:k]
+  end
+
+  def unless_without_exit(config, log)
+    log << :missing unless config[:k]
+
+    config[:k]
+  end
+
+  def unless_exit_not_last(config, log)
+    unless config[:k]
+      return if log
+      log << :missing
+    end
+
+    config[:k]
+  end
+
+  def unless_with_else(config)
+    unless config[:k]
+      return
+    else
+      config[:k]
+    end
+
+    config[:k]
+  end
+
+  def return_if_nil(config)
+    return if config[:k].nil?
+
+    config[:k]
+  end
+
+  def return_if_blank(config)
+    return if config[:k].blank?
+
+    config[:k]
+  end
+
+  def return_if_negated(config)
+    return if !config[:k]
+
+    config[:k]
+  end
+
+  def return_if_not(config)
+    return if not config[:k]
+
+    config[:k]
+  end
+
+  def return_if_key_missing(config)
+    return unless config.key?(:k)
+
+    config[:k]
+  end
+
+  def return_if_negated_key(config)
+    return if !config.key?(:k)
+
+    config[:k]
+  end
+
+  def return_if_nil_or_other(config, other)
+    return if other || config[:k].nil?
+
+    config[:k]
+  end
+
+  def return_if_nil_and_other(config, other)
+    return if other && config[:k].nil?
+
+    config[:k]
+  end
+
+  def return_if_present(config)
+    return if config[:k]
+
+    config[:k]
+  end
+
+  def return_if_empty(config)
+    return if config[:k].empty?
+
+    config[:k]
+  end
+
+  def return_unless_conjunct(config, enabled)
+    return unless enabled && config[:k]
+
+    config[:k]
+  end
+
+  def return_unless_disjunct(config, enabled)
+    return unless enabled || config[:k]
+
+    config[:k]
+  end
+
+  def if_block_exit(config)
+    if config[:k].nil?
+      return
+    end
+
+    config[:k]
+  end
+
+  def if_exit_with_else(config, log)
+    if config[:k].nil?
+      return
+    else
+      log << :present
+    end
+
+    config[:k]
+  end
+
+  def or_return(config)
+    config[:k] or return
+
+    config[:k]
+  end
+
+  def double_pipe_raise(config)
+    config[:k] || raise(KeyError)
+
+    config[:k]
+  end
+
+  def and_return(config)
+    config[:k] and return
+
+    config[:k]
+  end
+
+  def next_unless(config, items)
+    items.map do |item|
+      next unless config[:k]
+
+      item + config[:k]
+    end
+  end
+
+  def break_unless(config, items)
+    items.each do |item|
+      break unless config[:k]
+
+      item << config[:k]
+    end
+  end
+
+  def return_if_other_read_nil(config)
+    return if config[:other].nil?
+
+    config[:k]
+  end
+
+  def return_if_not_other(config, other)
+    return if !other
+
+    config[:k]
+  end
+
+  def return_if_unrelated_or(config, other, another)
+    return if other || another
+
+    config[:k]
+  end
+
+  def return_if_parenthesized_other(config, other)
+    return if (other)
+
+    config[:k]
+  end
+
+  def return_if_nil_first_or_other(config, other)
+    return if config[:k].nil? || other
+
+    config[:k]
+  end
+
+  def return_if_parenthesized_nil(config)
+    return if (config[:k].nil?)
+
+    config[:k]
+  end
+
+  def return_if_parenthesized_sequence(config, other)
+    return if (config[:k].nil?; other)
+
+    config[:k]
+  end
+
+  def or_without_exit(config, log)
+    config[:k] or log.push(:missing)
+
+    config[:k]
+  end
+
+  def or_exit_on_other(config, other)
+    other or return
+
+    config[:k]
+  end
+
+  def raise_on_receiver_unless(config, log)
+    log.raise unless config[:k]
+
+    config[:k]
+  end
+
+  def bare_call_unless(config)
+    warn "missing" unless config[:k]
+
+    config[:k]
+  end
+
+  def empty_unless(config)
+    unless config[:k]
+    end
+
+    config[:k]
+  end
+
+  def guard_that_cleans_up_before_leaving(config)
+    unless config[:k]
+      config.clear
+      return
+    end
+
+    config[:k]
+  end
+
+  def guarded_again_after_a_change(config)
+    return unless config[:k]
+
+    config.clear
+    return unless config[:k]
+
+    config[:k]
+  end
+
+  def read_before_guard(config)
+    value = config[:k]
+    return unless config[:k]
+
+    value
+  end
+
+  def read_in_later_branch(config, other)
+    return unless config[:k]
+
+    if other
+      other << config[:k]
+    end
+  end
+
+  def read_in_later_block(config, items)
+    return unless config[:k]
+
+    items.each { |item| item << config[:k] }
+  end
+
+  def guard_in_outer_list(config, other)
+    return unless config[:k]
+
+    if other
+      other.clear
+      other << config[:k]
+    end
+  end
+
+  def guard_in_inner_list_only(config, other)
+    if other
+      return unless config[:k]
+    end
+
+    config[:k]
+  end
+
+  def guard_in_earlier_block(config, items)
+    items.each do |_item|
+      next unless config[:k]
+    end
+
+    config[:k]
+  end
+
+  def exit_guard_other_key(config)
+    return unless config[:a]
+
+    config[:b]
+  end
+
+  def reassigned_after_guard(config)
+    return unless config[:k]
+
+    config = {}
+    config[:k]
+  end
+
+  def mutated_after_guard(config)
+    return unless config[:k]
+
+    config.delete(:k)
+    config[:k]
+  end
+
+  def mutated_in_read_statement(config, items)
+    return unless config[:k]
+
+    items.each do |item|
+      item << config[:k]
+      config.clear
+    end
+  end
+
+  def mutated_after_read(config)
+    return unless config[:k]
+
+    value = config[:k]
+    config.clear
+    value
+  end
+
+  def read_in_lambda_after_guard(config)
+    return unless config[:k]
+
+    -> { config[:k] }
+  end
+
+  def read_in_rescue_after_guard(config)
+    return unless config[:k]
+
+    yield
+  rescue StandardError
+    config[:k]
+  end
+
+  def guard_then_shadowing_block(config, items)
+    return unless config[:k]
+
+    items.each { |config| config[:k] }
   end
 
   def settings = {}
