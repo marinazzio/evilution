@@ -39,7 +39,10 @@ RSpec.describe "AASM guard subjects", :aggregate_failures do
       out, err, status = Open3.capture3(*command(isolation), chdir: dir)
       raise "evilution failed (#{status.exitstatus}): #{err}" if out.strip.empty?
 
-      JSON.parse(out)
+      report = JSON.parse(out)
+      raise "evilution failed (#{status.exitstatus}): #{report["error"]}" if report.key?("error")
+
+      report
     end
   end
 

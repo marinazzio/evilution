@@ -9,6 +9,7 @@ gem "prism", "~> 1.5.0"
 # minitest 6.x requires prism ~> 1.5; restrict here so we exercise prism 1.5.x without conflict.
 
 group :development, :test do
+  gem "aasm", ">= 5.5", require: false
   gem "minitest", "~> 5.0"
   gem "rake", "~> 13.4"
   gem "rspec", "~> 3.0"
