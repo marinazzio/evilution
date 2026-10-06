@@ -10,7 +10,8 @@ require_relative "../heuristic"
 #
 # The read in the guard itself is a different matter: `if config.fetch(:k)`
 # raises where `if config[:k]` took the other branch. Only reads inside the
-# guarded part match.
+# guarded part match -- the branch a guard opens, or the statements after a
+# guard that leaves (`return unless config[:k]`).
 #
 # A heuristic, not a proof: a hash with a default value passes the guard with
 # the key absent, and a method-call receiver may answer with another object
@@ -33,12 +34,13 @@ class Evilution::Equivalent::Heuristic::GuardedIndexFetch
   private
 
   # Walks outwards from the read. Each step asks whether the node just left
-  # was the guarded part of its parent; a scope the guard does not reach into
-  # ends the walk.
+  # was the guarded part of its parent, or a statement that follows an early
+  # exit in its parent's list; a scope the guard does not reach into ends the
+  # walk.
   def guarded?(path, read)
     path.each_cons(2).reverse_each do |parent, child|
       return false if scope_boundary?(parent, read)
-      return true if Guard.new(parent, read).protects?(child)
+      return true if Guard.new(parent, read).protects?(child) || EarlyExit.new(parent, read).protects?(child)
     end
     false
   end
@@ -60,3 +62,4 @@ require_relative "guarded_index_fetch/index_read"
 require_relative "guarded_index_fetch/condition"
 require_relative "guarded_index_fetch/disturbance"
 require_relative "guarded_index_fetch/guard"
+require_relative "guarded_index_fetch/early_exit"
