@@ -21,8 +21,8 @@ RSpec.describe Evilution::AST::UncoveredCode do
       class Order
         STATUSES = %w[draft paid].freeze
 
-        after_commit :notify, if: ->(order) do
-          order.paid? && order.total.positive?
+        has_many :items, ->(order) do
+          where(order: order).where(visible: true)
         end
 
         def total
@@ -188,6 +188,20 @@ RSpec.describe Evilution::AST::UncoveredCode do
     RUBY
 
     expect(uncovered(source)).to eq([3..3])
+  end
+
+  it "treats callback declarations with a literal condition or body as covered by their subject" do
+    source = <<~RUBY
+      class Order
+        after_commit :notify, if: ->(order) do
+          order.paid? && order.total.positive?
+        end
+        before_save { self.total = 0 }
+        before_save :named
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([6..6])
   end
 
   it "returns nothing for an empty file" do

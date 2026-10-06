@@ -6,6 +6,7 @@ require_relative "value_object_definition"
 require_relative "scope_declaration"
 require_relative "aasm_declaration"
 require_relative "included_block"
+require_relative "callback_declaration"
 
 module Evilution::AST
   class Parser
@@ -63,6 +64,7 @@ module Evilution::AST
       add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
       add_scope_subjects(node.body)
       add_aasm_subjects(node.body)
+      add_callback_subjects(node.body)
       within_scope(singleton: false) { super }
       @context.pop
     end
@@ -137,6 +139,17 @@ module Evilution::AST
       AasmDeclaration.in_body(body).each do |callable|
         name = "#{@context.join("::")}##{callable.method_name}"
         add_subject(callable.body, name, :aasm, span: callable.declaration)
+      end
+    end
+
+    # A condition or a callback written out in a declaration such as
+    # `validate :credit_limit, if: -> { ... }` defines no method to be named
+    # after, so it is named the way the declaration reads:
+    # `Order.validate(:credit_limit)`. The subject spans the declaration and
+    # mutates the callable's body.
+    def add_callback_subjects(body)
+      CallbackDeclaration.in_body(body).each do |callable|
+        add_subject(callable.body, "#{@context.join("::")}.#{callable.label}", :callback, span: callable.declaration)
       end
     end
 

@@ -119,8 +119,7 @@ class Evilution::Mutator::Base < Prism::Visitor
   def build_eval_source(surgery, offset)
     return surgery.source unless surgery.ok?
 
-    keep_offset = redeclared_subject? ? offset : nil
-    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, keep_offset: keep_offset)
+    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, **redeclaration(offset))
   end
 
   # Re-evaluating any mutation of a file redefines all its methods, which is
@@ -131,16 +130,27 @@ class Evilution::Mutator::Base < Prism::Visitor
   def build_restore_source(offset)
     return nil unless redeclared_subject?
 
-    @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, keep_offset: offset)
+    @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, **redeclaration(offset))
   end
 
   # Subjects whose body is written inside a class-body declaration and only
   # takes effect when that declaration runs again.
-  REDECLARED_KINDS = %i[scope aasm].freeze
+  REDECLARED_KINDS = %i[scope aasm callback].freeze
   private_constant :REDECLARED_KINDS
 
   def redeclared_subject?
     REDECLARED_KINDS.include?(@subject.kind)
+  end
+
+  # What the neutralizer needs to keep a redeclared subject's declaration:
+  # where the mutation is, and the lines the declaration takes up in the
+  # file as it was loaded -- which is where the callbacks it registered then
+  # say they come from, whatever the mutation does to its length.
+  def redeclaration(offset)
+    return {} unless redeclared_subject?
+
+    first = @subject.line_number
+    { keep_offset: offset, keep_lines: first..(first + @subject.source.count("\n")) }
   end
 
   NEWLINE_BYTE = 10
@@ -183,12 +193,12 @@ class Evilution::Mutator::Base < Prism::Visitor
   end
 
   # The kinds of Subject the operator mutates. Operators work on method
-  # bodies, and on the bodies of callables handed to a scope or aasm
-  # declaration, which run as the methods those define; one that also has
+  # bodies, and on the bodies of callables handed to a scope, aasm or
+  # callback declaration, which run as part of the class's behaviour; one that also has
   # something to say about a constant subject (a definition outside any
   # method) adds :constant.
   def self.subject_kinds
-    %i[method scope aasm]
+    %i[method scope aasm callback]
   end
 
   @parse_cache = {}

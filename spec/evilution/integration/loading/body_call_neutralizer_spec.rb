@@ -210,6 +210,55 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call with keep_offset inside a callback declaration" do
+    let(:helper) { "::Evilution::Integration::Loading::CallbackRedeclaration.call" }
+    let(:src) do
+      <<~RUBY
+        class Order
+          before_save :first
+          validate :credit_limit, if: -> { paid? } # why
+          before_save do
+            self.total = nil
+          end
+        end
+      RUBY
+    end
+
+    it "wraps the declaration on its own line, with the lines it was loaded from" do
+      result = neutralizer.call(src, keep_offset: src.index("paid?"), keep_lines: 3..3)
+
+      expect(result).to eq(<<~RUBY)
+        class Order
+          ()
+          #{helper}(self, __FILE__, 3..3) { validate :credit_limit, if: -> { paid? } } # why
+          ()
+        end
+      RUBY
+    end
+
+    it "wraps a declaration with a do block and keeps every line where it was" do
+      result = neutralizer.call(src, keep_offset: src.index("nil"), keep_lines: 4..6)
+
+      expect(result.lines[3..5].join).to eq(
+        "  #{helper}(self, __FILE__, 4..6) { before_save do\n    self.total = nil\n  end }\n"
+      )
+      expect(result.lines.length).to eq(src.lines.length - 0)
+      expect(Prism.parse(result)).to be_success
+    end
+
+    it "keeps the declaration unwrapped when no lines are given" do
+      result = neutralizer.call(src, keep_offset: src.index("paid?"))
+
+      expect(result).to include("  validate :credit_limit, if: -> { paid? } # why")
+    end
+
+    it "does not wrap a kept call that is not a callback declaration" do
+      scopes = "class Order\n  scope :open, -> { nil }\nend\n"
+
+      expect(neutralizer.call(scopes, keep_offset: scopes.index("nil"), keep_lines: 2..2)).to eq(scopes)
+    end
+  end
+
   describe "#call" do
     it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY

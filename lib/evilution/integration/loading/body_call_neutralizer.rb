@@ -4,6 +4,8 @@ require "prism"
 require_relative "../loading"
 require_relative "../../ast/aasm_declaration"
 require_relative "../../ast/included_block"
+require_relative "../../ast/callback_declaration"
+require_relative "callback_redeclaration"
 require_relative "concern_redeclaration"
 
 # Strip non-idempotent class/module-body side-effect calls from a mutated
@@ -39,6 +41,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   REDECLARATION = "::Evilution::Integration::Loading::ConcernRedeclaration"
   GUARD = "#{REDECLARATION}.skipping? or ".freeze
   REDECLARE = "; #{REDECLARATION}.call(self)".freeze
+  CALLBACKS = "::Evilution::Integration::Loading::CallbackRedeclaration"
 
   class << self
     attr_writer :preloaded_features
@@ -80,13 +83,18 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # it is guarded and the block is followed by a ConcernRedeclaration call,
   # which re-declares the spared statement alone on the classes that include
   # the concern already. Both are added on existing lines, so no line moves.
-  def call(source, file_path: nil, keep_offset: nil)
+  # When it is a callback declaration (`validate ... if: -> { }`), it is
+  # wrapped in a CallbackRedeclaration call, which puts what the re-run
+  # registers in the place of what the declaration registered before.
+  # `keep_lines` is where that was: the declaration's lines in the file as it
+  # was loaded.
+  def call(source, file_path: nil, keep_offset: nil, keep_lines: nil)
     return source if file_path && !preloaded?(file_path)
 
     result = Prism.parse(source)
     return source if result.failure?
 
-    edits = collect_edits(result.value, keep_offset)
+    edits = collect_edits(result.value, keep_offset, keep_lines)
     return source if edits.empty?
 
     apply_edits(source, edits)
@@ -98,9 +106,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     self.class.preloaded_features.include?(File.expand_path(file_path))
   end
 
-  def collect_edits(tree, keep_offset)
+  def collect_edits(tree, keep_offset, keep_lines)
     edits = []
-    walker = Walker.new(IDEMPOTENT_CALLS, edits, keep_offset)
+    walker = Walker.new(IDEMPOTENT_CALLS, edits, keep_offset, keep_lines)
     walker.visit(tree)
     edits
   end
@@ -114,11 +122,12 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   end
 
   class Walker < Prism::Visitor
-    def initialize(allowlist, edits, keep_offset)
+    def initialize(allowlist, edits, keep_offset, keep_lines)
       super()
       @allowlist = allowlist
       @edits = edits
       @keep_offset = keep_offset
+      @keep_lines = keep_lines
     end
 
     def visit_class_node(node)
@@ -161,6 +170,19 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     def scan_kept(stmt)
       scan_machine(stmt)
       scan_included(stmt)
+      wrap_callbacks(stmt)
+    end
+
+    # A kept callback declaration runs inside a block handed to
+    # CallbackRedeclaration, opened and closed on the declaration's own lines.
+    def wrap_callbacks(stmt)
+      return unless @keep_lines && Evilution::AST::CallbackDeclaration.match?(stmt)
+
+      start_offset = stmt.location.start_offset
+      end_offset = stmt.location.end_offset
+      lines = "#{@keep_lines.first}..#{@keep_lines.last}"
+      @edits << [start_offset, start_offset, "#{CALLBACKS}.call(self, __FILE__, #{lines}) { "]
+      @edits << [end_offset, end_offset, " }"]
     end
 
     # A kept `included` block stays whole. Its other calls are guarded rather

@@ -1,0 +1,36 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe Order do
+  def order(**attributes)
+    described_class.new(title: "book", total: 500, paid: false, rush: false, **attributes)
+  end
+
+  it "runs its steps once each, in the order they are declared" do
+    record = order.tap(&:valid?)
+
+    expect(record.steps).to eq(%i[first queued last])
+  end
+
+  it "keeps a subclass's own step after the inherited ones" do
+    record = PriorityOrder.new(title: "book", total: 1, paid: false, rush: false).tap(&:valid?)
+
+    expect(record.steps).to eq(%i[first queued last own])
+  end
+
+  it "checks the credit limit of a paid order only" do
+    expect(order(paid: true).tap(&:valid?).errors[:total]).to eq(["over the limit"])
+    expect(order(paid: false).tap(&:valid?).errors[:total]).to eq([])
+  end
+
+  it "requires a title unless the order is paid" do
+    expect(order(title: nil, paid: false).tap(&:valid?).errors[:title]).to eq(["can't be blank"])
+    expect(order(title: nil, paid: true, total: 1).tap(&:valid?).errors[:title]).to eq([])
+  end
+
+  it "lists each validator once" do
+    expect(described_class.validators.length).to eq(1)
+    expect(PriorityOrder.validators.length).to eq(1)
+  end
+end

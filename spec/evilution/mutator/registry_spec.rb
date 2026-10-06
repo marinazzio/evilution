@@ -322,6 +322,12 @@ RSpec.describe Evilution::Mutator::Registry do
                                node: node, kind: kind)
       end
 
+      it "runs operators on callback subjects by default" do
+        registry.register(nil_out(nil))
+
+        expect(registry.mutations_for(subject_of(:callback)).length).to eq(1)
+      end
+
       it "runs operators on method, scope and aasm subjects by default" do
         registry.register(nil_out(nil))
 

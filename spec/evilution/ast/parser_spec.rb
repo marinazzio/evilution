@@ -849,4 +849,51 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects_for(code).map(&:name)).to include("Shop::Publishable#publish!")
     end
   end
+
+  describe "callback subjects" do
+    def subjects_for(code)
+      file = Tempfile.new(["callbacks", ".rb"])
+      file.write(code)
+      file.close
+      described_class.new.call(file.path)
+    ensure
+      file.unlink
+    end
+
+    let(:code) do
+      <<~RUBY
+        module Shop
+          class Order
+            validate :credit_limit, if: -> { paid? }
+            before_save do
+              self.total = 0
+            end
+            before_save :named
+
+            def paid? = true
+          end
+        end
+      RUBY
+    end
+
+    it "makes a subject of each literal condition and callback, named as its declaration reads" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :callback }
+
+      expect(subjects.map(&:name)).to eq(["Shop::Order.validate(:credit_limit)", "Shop::Order.before_save"])
+      expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { paid? }", "do\n      self.total = 0\n    end"])
+    end
+
+    it "spans the declaration" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :callback }
+
+      expect(subjects.map(&:line_number)).to eq([3, 4])
+      expect(subjects.last.source).to eq("before_save do\n      self.total = 0\n    end")
+    end
+
+    it "does not look inside a module body" do
+      subjects = subjects_for("module Shop\n  before_save { 1 }\nend")
+
+      expect(subjects).to eq([])
+    end
+  end
 end

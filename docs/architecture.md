@@ -119,7 +119,12 @@ class that owns it.
    keyword values (`guard: -> { }`, also inside arrays), those of the event's
    `transitions`, and callback blocks (`before { }`) -- kind `:aasm`, named
    `Class#event` / `Class#state?` after the method the declaration defines, so
-   one event may contribute several subjects of the same name. Optional
+   one event may contribute several subjects of the same name; and one per
+   literal callable of a class-body callback or validation declaration
+   (`validate`, `validates`, `validates_*`, `before_*`, `after_*`, `around_*`)
+   -- an `if:` / `unless:` condition, or the callback itself as a block or
+   lambda -- kind `:callback`, named as the declaration reads
+   (`Order.validate(:credit_limit)`, `Order.before_save`). Optional
    descendant/target/line-range filters follow.
 3. **Baseline** — `Runner::BaselineRunner#call` builds the integration from
    `Runner::INTEGRATIONS` (`rspec`/`minitest`/`test_unit`) and records spec files
@@ -127,7 +132,7 @@ class that owns it.
    An optional `Runner::Canary` proves the pipeline can observe a known mutation.
 4. **Mutations** — `Runner::MutationPlanner#call` flat-maps subjects through
    `Mutator::Registry#mutations_for`. The registry instantiates each operator whose
-   `subject_kinds` include the subject's kind (`:method`, `:scope` and `:aasm` by default) and
+   `subject_kinds` include the subject's kind (`:method`, `:scope`, `:aasm` and `:callback` by default) and
    runs `operator.call(subject, filter:)`; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
    builds an immutable `Evilution::Mutation`. The planner then **deduplicates**
@@ -209,7 +214,7 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
    - The operator's registered name is auto-derived from the class name
      (`MyThing` → `my_thing`); that string is the `operator` field in JSON output
      and is part of the public contract, so name it deliberately.
-   - Operators see method, scope and aasm subjects. One that also applies to value-object
+   - Operators see method, scope, aasm and callback subjects. One that also applies to value-object
      definitions outside a method overrides `self.subject_kinds` to return
      `%i[method constant]`; a constant subject's node is the definition's
      `CallNode`.
@@ -228,6 +233,16 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      follows the block with `ConcernRedeclaration.call(self)`, which runs the
      block on each of them with the guard up, so only the scope is declared
      again. Both additions go on existing lines; no line number moves.
+   - A callback subject's declaration is kept too, wrapped in
+     `CallbackRedeclaration.call(self, __FILE__, lines) { ... }`. Callbacks do
+     not replace on re-declaration: a symbol callback moves to the end of its
+     chain, a block or validator is added beside the first. The helper reads
+     the chains, runs the declaration and rebuilds them through
+     `__update_callbacks`, so the new callbacks sit where the ones this
+     declaration registered before were. Those are found by the source
+     location of their procs the first time (`lines` is the declaration's
+     range in the file as loaded) and from the helper's own record afterwards,
+     since evaluated source has blanked siblings and its line numbers drift.
    - An aasm subject works the same way, one level down: the `aasm` call is
      kept, and inside its block every declaration but the `event` or `state`
      holding the mutation is blanked. AASM stores what an event or state holds
