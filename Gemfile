@@ -6,6 +6,7 @@ source "https://rubygems.org"
 gemspec
 
 group :development, :test do
+  gem "aasm", ">= 5.5", require: false
   gem "bundler-audit", require: false
   gem "irb"
   gem "minitest", "~> 6.0"

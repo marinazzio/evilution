@@ -396,6 +396,70 @@ RSpec.describe Evilution::Mutator::Base do
           .to eq([source.sub("open: nil", "open: true"), source])
       end
     end
+
+    context "with a preloaded file holding an aasm machine" do
+      let(:source) do
+        <<~RUBY
+          class Order
+            aasm do
+              state :paid
+              event :ship, guard: -> { nil } do
+                transitions from: :paid, to: :paid
+              end
+            end
+          end
+        RUBY
+      end
+      let(:tmpfile) do
+        file = Tempfile.new(["machine", ".rb"])
+        file.write(source)
+        file.close
+        file
+      end
+      let(:operator_class) do
+        Class.new(described_class) do
+          def visit_nil_node(node)
+            add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "true",
+                         node: node)
+          end
+        end
+      end
+      let(:guard_node) do
+        event = Prism.parse(source).value.statements.body.first.body.body.first.block.body.body.last
+        event.arguments.arguments.last.elements.first.value
+      end
+      let(:mutation) do
+        subject = Evilution::Subject.new(name: "Order#ship", file_path: tmpfile.path, line_number: 4,
+                                         source: "", node: guard_node, kind: :aasm)
+        operator_class.new.call(subject).first
+      end
+
+      before do
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set[File.expand_path(tmpfile.path)]
+      end
+
+      after do
+        Evilution::Integration::Loading::BodyCallNeutralizer.reset_preload_snapshot!
+        tmpfile.unlink
+      end
+
+      it "re-runs only the mutated event" do
+        expect(mutation.eval_source).to eq(<<~RUBY)
+          class Order
+            aasm do
+              ()
+              event :ship, guard: -> { true } do
+                transitions from: :paid, to: :paid
+              end
+            end
+          end
+        RUBY
+      end
+
+      it "restores the original event" do
+        expect(mutation.restore_source).to eq(source.sub("state :paid", "()"))
+      end
+    end
   end
 
   describe "#byteslice_source" do

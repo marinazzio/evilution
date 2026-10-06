@@ -2,6 +2,7 @@
 
 require "prism"
 require_relative "../loading"
+require_relative "../../ast/aasm_declaration"
 
 # Strip non-idempotent class/module-body side-effect calls from a mutated
 # source before re-eval. Such calls (e.g. dry-monads `register_mixin`, plugin
@@ -64,6 +65,10 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # `keep_offset` (optional) spares the one class-body call whose source
   # contains that byte offset: a mutation inside a scope body only takes
   # effect if the mutated file re-runs that `scope` call to replace it.
+  # When that call is an `aasm` machine, only the `event` or `state` holding
+  # the offset is spared inside its block: re-running one declaration replaces
+  # it, while re-running the whole machine would register its
+  # `after_all_transitions`-style callbacks a second time.
   def call(source, file_path: nil, keep_offset: nil)
     return source if file_path && !preloaded?(file_path)
 
@@ -131,13 +136,38 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
       return unless body_node.is_a?(Prism::StatementsNode)
 
       body_node.body.each do |stmt|
-        next unless stmt.is_a?(Prism::CallNode)
-        next if @allowlist.include?(stmt.name)
-        next if stmt.receiver && !stmt.receiver.is_a?(Prism::SelfNode)
+        next unless neutralizable?(stmt)
 
-        edit = [stmt.location.start_offset, replacement_end_offset(stmt)]
+        edit = edit_for(stmt)
+        if kept?(edit)
+          scan_machine(stmt)
+        else
+          @edits << edit
+        end
+      end
+    end
+
+    def neutralizable?(stmt)
+      return false unless stmt.is_a?(Prism::CallNode)
+      return false if @allowlist.include?(stmt.name)
+
+      stmt.receiver.nil? || stmt.receiver.is_a?(Prism::SelfNode)
+    end
+
+    # Inside a kept `aasm` block every call is a declaration of the machine,
+    # so all of them but the one holding the offset go.
+    def scan_machine(stmt)
+      block = Evilution::AST::AasmDeclaration.machine_block(stmt)
+      return unless block && block.body.is_a?(Prism::StatementsNode)
+
+      block.body.body.grep(Prism::CallNode).each do |declaration|
+        edit = edit_for(declaration)
         @edits << edit unless kept?(edit)
       end
+    end
+
+    def edit_for(call)
+      [call.location.start_offset, replacement_end_offset(call)]
     end
 
     def kept?((start_offset, end_offset))

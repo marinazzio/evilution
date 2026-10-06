@@ -138,6 +138,57 @@ RSpec.describe Evilution::ExampleFilter do
       expect(locations).to eq(["#{spec_path}:2"])
     end
 
+    it "extracts the event name when mutation.line is in an aasm event" do
+      src = <<~RUBY
+        class Order
+          aasm do
+            state :paid, before_exit: -> { leaving }
+            event :ship do
+              transitions from: :paid, to: :shipped, guard: -> { ready? }
+            end
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe Order do
+          it "ships" do
+            order.ship!
+          end
+          it "is paid" do
+            order.paid?
+          end
+          it "other thing" do
+            Order.new
+          end
+        end
+      RUBY
+
+      expect(filter.call(mutation(original_source: src, line: 5), [spec_path])).to eq(["#{spec_path}:2"])
+      expect(filter.call(mutation(original_source: src, line: 3), [spec_path])).to eq(["#{spec_path}:5"])
+    end
+
+    it "falls back to the class name for an aasm line outside every event and state" do
+      src = <<~RUBY
+        class Order
+          aasm do
+            after_all_transitions -> { log }
+          end
+        end
+      RUBY
+      spec_path = write_source(<<~RUBY)
+        RSpec.describe "machine" do
+          it "ships" do
+            parcel.ship!
+          end
+          it "builds" do
+            Order.new
+          end
+        end
+      RUBY
+
+      expect(filter.call(mutation(original_source: src, line: 3), [spec_path])).to eq(["#{spec_path}:5"])
+    end
+
     it "extracts the method name when mutation.line is in a def after a scope declaration" do
       src = <<~RUBY
         class Order

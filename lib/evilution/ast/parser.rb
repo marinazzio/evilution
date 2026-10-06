@@ -4,6 +4,7 @@ require "prism"
 require_relative "../ast"
 require_relative "value_object_definition"
 require_relative "scope_declaration"
+require_relative "aasm_declaration"
 
 module Evilution::AST
   class Parser
@@ -59,6 +60,7 @@ module Evilution::AST
       superclass = node.superclass
       add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
       add_scope_subjects(node.body)
+      add_aasm_subjects(node.body)
       within_scope(singleton: false) { super }
       @context.pop
     end
@@ -120,6 +122,17 @@ module Evilution::AST
       ScopeDeclaration.in_body(body).each do |declaration|
         name = "#{@context.join("::")}.#{ScopeDeclaration.scope_name(declaration)}"
         add_subject(ScopeDeclaration.body_of(declaration), name, :scope, span: declaration)
+      end
+    end
+
+    # A guard or callback written out inside `aasm do ... end` runs when the
+    # method its event or state defines is called (`ship`, `paid?`), and is
+    # named after it. The subject spans that declaration and mutates the
+    # callable's body; one event may hold several.
+    def add_aasm_subjects(body)
+      AasmDeclaration.in_body(body).each do |callable|
+        name = "#{@context.join("::")}##{callable.method_name}"
+        add_subject(callable.body, name, :aasm, span: callable.declaration)
       end
     end
 

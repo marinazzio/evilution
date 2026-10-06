@@ -2,7 +2,9 @@
 
 # What mutations are generated for and reported against. A :method subject is
 # a method definition; a :constant subject is a definition assigned to a
-# constant outside any method, such as `Point = Data.define(:x, :y)`.
+# constant outside any method, such as `Point = Data.define(:x, :y)`. A :scope
+# or :aasm subject is the body of a callable handed to a class-body
+# declaration.
 class Evilution::Subject
   attr_reader :name, :file_path, :line_number, :source, :node, :kind
 

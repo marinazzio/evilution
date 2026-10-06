@@ -5,6 +5,7 @@ require_relative "version"
 require_relative "spec_ast_cache"
 require_relative "ast/value_object_definition"
 require_relative "ast/scope_declaration"
+require_relative "ast/aasm_declaration"
 
 class Evilution::ExampleFilter
   VALID_FALLBACKS = %i[full_file unresolved].freeze
@@ -134,13 +135,27 @@ class Evilution::ExampleFilter
     # A scope declaration names the class method its specs call
     # (`scope :for_owner, -> { }` -> `for_owner`), like a def; nothing inside
     # its body names anything closer.
+    #
+    # An aasm event or state names the methods its specs call (`event :ship`
+    # -> `ship!`, `state :paid` -> `paid?`), which share its name as a word.
     def visit_call_node(node)
-      return super unless target_within?(node) && Evilution::AST::ScopeDeclaration.body_of(node)
+      return super unless target_within?(node)
 
-      @token = Evilution::AST::ScopeDeclaration.scope_name(node)
+      token = declaration_token(node)
+      return super unless token
+
+      @token = token
     end
 
     private
+
+    def declaration_token(node)
+      if Evilution::AST::ScopeDeclaration.body_of(node)
+        Evilution::AST::ScopeDeclaration.scope_name(node)
+      else
+        Evilution::AST::AasmDeclaration.token_at(node, @target_line)
+      end
+    end
 
     def within_value_object(node, name)
       return yield unless Evilution::AST::ValueObjectDefinition.match?(node.value)

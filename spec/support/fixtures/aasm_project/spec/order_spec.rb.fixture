@@ -1,0 +1,20 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe Order do
+  it "ships an order with an address, once" do
+    $transitions = 0
+    order = Order.new
+    order.address = "1 Main St"
+
+    order.ship!
+
+    expect(order).to be_shipped
+    expect($transitions).to eq(1)
+  end
+
+  it "does not ship an order without an address" do
+    expect(Order.new.may_ship?).to be(false)
+  end
+end

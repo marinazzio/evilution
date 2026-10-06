@@ -83,6 +83,73 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call with keep_offset inside an aasm block" do
+    let(:src) do
+      <<~RUBY
+        class Order
+          validates :address, presence: true
+          aasm column: :status do
+            after_all_transitions :log
+            state :paid, before_exit: -> { leaving }
+            event :ship, guard: -> { address? } do
+              transitions from: :paid, to: :shipped
+            end
+            event :cancel do
+              transitions from: :paid, to: :paid
+            end
+          end
+        end
+      RUBY
+    end
+
+    it "keeps the machine call but only the event the offset is in" do
+      expect(neutralizer.call(src, keep_offset: src.index("address?"))).to eq(<<~RUBY)
+        class Order
+          ()
+          aasm column: :status do
+            ()
+            ()
+            event :ship, guard: -> { address? } do
+              transitions from: :paid, to: :shipped
+            end
+            ()
+          end
+        end
+      RUBY
+    end
+
+    it "keeps only the state the offset is in" do
+      result = neutralizer.call(src, keep_offset: src.index("leaving"))
+
+      expect(result).to include("state :paid, before_exit: -> { leaving }")
+      expect(result).not_to include("event")
+      expect(result).not_to include("after_all_transitions")
+    end
+
+    it "leaves statements of the block that are not calls in place" do
+      with_assignment = src.sub("after_all_transitions :log", "limit = 3")
+
+      result = neutralizer.call(with_assignment, keep_offset: with_assignment.index("address?"))
+
+      expect(result).to include("limit = 3")
+    end
+
+    it "neutralizes the whole machine when the offset is elsewhere" do
+      result = neutralizer.call(src, keep_offset: src.index("validates"))
+
+      expect(result).to eq("class Order\n  validates :address, presence: true\n  ()\nend\n")
+    end
+
+    it "takes a heredoc of a neutralized sibling with it" do
+      heredoc = src.sub("after_all_transitions :log", "note <<~TEXT\n      hello\n    TEXT")
+
+      result = neutralizer.call(heredoc, keep_offset: heredoc.index("address?"))
+
+      expect(result).not_to include("hello")
+      expect(Prism.parse(result)).to be_success
+    end
+  end
+
   describe "#call" do
     it "replaces a registry-style call inside a module body with ()" do
       src = <<~RUBY

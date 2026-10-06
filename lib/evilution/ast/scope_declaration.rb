@@ -2,6 +2,7 @@
 
 require "prism"
 require_relative "../ast"
+require_relative "literal_callable"
 
 # An ActiveRecord scope declared with a literal body:
 # `scope :recent, -> { where(recent: true) }`, or with `lambda { }` /
@@ -13,9 +14,6 @@ require_relative "../ast"
 # body takes effect. A scope whose body is an object or a variable has no
 # body of its own to mutate.
 module Evilution::AST::ScopeDeclaration
-  BLOCK_CALLS = %i[lambda proc].freeze
-  private_constant :BLOCK_CALLS
-
   # The scope declarations among a class body's direct statements.
   def self.in_body(body)
     statements = body.is_a?(Prism::BeginNode) ? body.statements : body
@@ -29,7 +27,7 @@ module Evilution::AST::ScopeDeclaration
   def self.body_of(node)
     return nil unless scope_call?(node)
 
-    callable_body(node.arguments.arguments[1])
+    Evilution::AST::LiteralCallable.body_of(node.arguments.arguments[1])
   end
 
   def self.scope_name(node)
@@ -43,12 +41,5 @@ module Evilution::AST::ScopeDeclaration
     args.length == 2 && args.first.is_a?(Prism::SymbolNode)
   end
 
-  def self.callable_body(node)
-    return node if node.is_a?(Prism::LambdaNode)
-    return nil unless node.is_a?(Prism::CallNode) && node.receiver.nil? && BLOCK_CALLS.include?(node.name)
-
-    node.block if node.block.is_a?(Prism::BlockNode)
-  end
-
-  private_class_method :scope_call?, :callable_body
+  private_class_method :scope_call?
 end

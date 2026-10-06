@@ -113,24 +113,34 @@ class Evilution::Mutator::Base < Prism::Visitor
   # them at apply time. Passing the subject's file path lets the neutralizer
   # skip files the parent never preloaded — those are lazy plugin files whose
   # DSL calls are still needed for the child fork's first-time load.
-  # A scope subject's mutation sits inside its `scope` call, which must run
-  # again for the mutated body to replace the loaded one, so that one call is
-  # kept.
+  # A scope or aasm subject's mutation sits inside a class-body declaration,
+  # which must run again for the mutated body to replace the loaded one, so
+  # that one declaration is kept.
   def build_eval_source(surgery, offset)
     return surgery.source unless surgery.ok?
 
-    keep_offset = @subject.kind == :scope ? offset : nil
+    keep_offset = redeclared_subject? ? offset : nil
     @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, keep_offset: keep_offset)
   end
 
   # Re-evaluating any mutation of a file redefines all its methods, which is
   # how an in-process run puts a mutated method back. Class-body calls are
-  # neutralized in that source, so a mutated scope would stay installed; the
-  # original file with just that scope declaration kept replaces it again.
+  # neutralized in that source, so a mutated scope or aasm callable would stay
+  # installed; the original file with just that declaration kept replaces it
+  # again.
   def build_restore_source(offset)
-    return nil unless @subject.kind == :scope
+    return nil unless redeclared_subject?
 
     @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, keep_offset: offset)
+  end
+
+  # Subjects whose body is written inside a class-body declaration and only
+  # takes effect when that declaration runs again.
+  REDECLARED_KINDS = %i[scope aasm].freeze
+  private_constant :REDECLARED_KINDS
+
+  def redeclared_subject?
+    REDECLARED_KINDS.include?(@subject.kind)
   end
 
   NEWLINE_BYTE = 10
@@ -173,11 +183,12 @@ class Evilution::Mutator::Base < Prism::Visitor
   end
 
   # The kinds of Subject the operator mutates. Operators work on method
-  # bodies, and on the body of a scope declaration, which is the body of the
-  # class method it defines; one that also has something to say about a
-  # constant subject (a definition outside any method) adds :constant.
+  # bodies, and on the bodies of callables handed to a scope or aasm
+  # declaration, which run as the methods those define; one that also has
+  # something to say about a constant subject (a definition outside any
+  # method) adds :constant.
   def self.subject_kinds
-    %i[method scope]
+    %i[method scope aasm]
   end
 
   @parse_cache = {}

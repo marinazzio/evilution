@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tempfile"
+
 RSpec.describe Evilution::AST::Parser do
   subject(:parser) { described_class.new }
 
@@ -746,6 +748,51 @@ RSpec.describe Evilution::AST::Parser do
       expect(even_subject.source).to include("n.even?")
     ensure
       tmpfile&.unlink
+    end
+  end
+  describe "AASM subjects" do
+    def subjects_for(code)
+      file = Tempfile.new(["aasm_model", ".rb"])
+      file.write(code)
+      file.close
+      described_class.new.call(file.path)
+    ensure
+      file.unlink
+    end
+
+    let(:code) do
+      <<~RUBY
+        module Shop
+          class Order
+            aasm do
+              state :paid, before_exit: -> { leaving }
+              event :ship, guard: -> { address? } do
+                transitions from: :paid, to: :shipped, guard: -> { ready? }
+              end
+            end
+
+            def ready? = true
+          end
+        end
+      RUBY
+    end
+
+    it "makes a subject of each guard and callback, named after the method its event or state defines" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :aasm }
+
+      expect(subjects.map(&:name)).to eq(["Shop::Order#paid?", "Shop::Order#ship", "Shop::Order#ship"])
+    end
+
+    it "points each subject's node at the callable and spans its declaration" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :aasm }
+
+      expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { leaving }", "-> { address? }", "-> { ready? }"])
+      expect(subjects.map(&:line_number)).to eq([4, 5, 5])
+      expect(subjects.last.source).to start_with("event :ship").and end_with("end")
+    end
+
+    it "keeps the method subjects of the class" do
+      expect(subjects_for(code).reject { |subject| subject.kind == :aasm }.map(&:name)).to eq(["Shop::Order#ready?"])
     end
   end
 end

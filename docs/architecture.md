@@ -14,7 +14,8 @@ For deeper dives on two subsystems that have their own docs, see
 Evilution parses each target file with [Prism](https://github.com/ruby/prism)
 into an AST with exact byte offsets. Every method becomes a *subject*, and so
 does every value-object definition outside a method (`Point = Data.define(:x)`)
-and every scope declared with a literal body (`scope :recent, -> { ... }`). Each
+and every scope declared with a literal body (`scope :recent, -> { ... }`),
+and every guard or callback written out inside an AASM `event` or `state`. Each
 mutation *operator* walks a subject's AST and emits *mutations* — byte-range
 edits applied by source-level surgery (no AST unparsing). For every mutation,
 evilution copies the file, applies the edit, runs the covering specs in an
@@ -112,7 +113,12 @@ class that owns it.
    outside any method (kind `:constant`, named after the constant), plus one per
    `scope :name, -> { }` / `lambda { }` / `proc { }` written directly in a class
    body (kind `:scope`, named `Class.name` after the class method it defines;
-   it spans the declaration and its node is the body). Optional
+   it spans the declaration and its node is the body), plus one per literal
+   callable inside an `event` or `state` of a class-body `aasm do ... end` --
+   keyword values (`guard: -> { }`, also inside arrays), those of the event's
+   `transitions`, and callback blocks (`before { }`) -- kind `:aasm`, named
+   `Class#event` / `Class#state?` after the method the declaration defines, so
+   one event may contribute several subjects of the same name. Optional
    descendant/target/line-range filters follow.
 3. **Baseline** — `Runner::BaselineRunner#call` builds the integration from
    `Runner::INTEGRATIONS` (`rspec`/`minitest`/`test_unit`) and records spec files
@@ -120,7 +126,7 @@ class that owns it.
    An optional `Runner::Canary` proves the pipeline can observe a known mutation.
 4. **Mutations** — `Runner::MutationPlanner#call` flat-maps subjects through
    `Mutator::Registry#mutations_for`. The registry instantiates each operator whose
-   `subject_kinds` include the subject's kind (`:method` and `:scope` by default) and
+   `subject_kinds` include the subject's kind (`:method`, `:scope` and `:aasm` by default) and
    runs `operator.call(subject, filter:)`; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
    builds an immutable `Evilution::Mutation`. The planner then **deduplicates**
@@ -202,7 +208,7 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
    - The operator's registered name is auto-derived from the class name
      (`MyThing` → `my_thing`); that string is the `operator` field in JSON output
      and is part of the public contract, so name it deliberately.
-   - Operators see method and scope subjects. One that also applies to value-object
+   - Operators see method, scope and aasm subjects. One that also applies to value-object
      definitions outside a method overrides `self.subject_kinds` to return
      `%i[method constant]`; a constant subject's node is the definition's
      `CallNode`.
@@ -212,6 +218,12 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      the original file with the same call kept; `Integration::Base#call`
      evaluates it after the tests, since in-process runs restore methods only
      by re-evaluating the next mutation's source, where scopes are blanked.
+   - An aasm subject works the same way, one level down: the `aasm` call is
+     kept, and inside its block every declaration but the `event` or `state`
+     holding the mutation is blanked. AASM stores what an event or state holds
+     by value, so re-running one replaces it; the machine's own callbacks
+     (`after_all_transitions`) accumulate, which is why the rest of the block
+     must not run again and why they get no subjects.
 
 2. **Require it** in `lib/evilution.rb` alongside the other
    `require_relative "evilution/mutator/operator/..."` lines.
