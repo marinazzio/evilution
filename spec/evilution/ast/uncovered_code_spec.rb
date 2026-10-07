@@ -5,13 +5,13 @@ require "evilution/ast/parser"
 require "evilution/ast/uncovered_code"
 
 RSpec.describe Evilution::AST::UncoveredCode do
-  def uncovered(source, lines: nil)
+  def uncovered(source, lines: nil, mutated_lines: [])
     tmpfile = Tempfile.new(["uncovered", ".rb"])
     tmpfile.write(source)
     tmpfile.close
     subjects = Evilution::AST::Parser.new.call(tmpfile.path)
 
-    described_class.call(tmpfile.path, subjects, lines: lines)
+    described_class.call(tmpfile.path, subjects, lines: lines, mutated_lines: mutated_lines)
   ensure
     tmpfile.unlink if tmpfile
   end
@@ -206,5 +206,62 @@ RSpec.describe Evilution::AST::UncoveredCode do
 
   it "returns nothing for an empty file" do
     expect(uncovered("")).to eq([])
+  end
+
+  it "leaves out require and require_relative statements" do
+    source = <<~RUBY
+      require "set"
+      require_relative "base"
+
+      LIMIT = 10
+
+      class Order
+        require "json"
+        STATUSES = %w[draft paid].freeze
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([4..4, 8..8])
+  end
+
+  it "reports a require called on a receiver" do
+    source = <<~RUBY
+      Kernel.require "set"
+    RUBY
+
+    expect(uncovered(source)).to eq([1..1])
+  end
+
+  it "leaves out a statement that a mutation targets" do
+    source = <<~RUBY
+      class Order
+        LIMIT = 10
+        alias_method :sum, :total
+
+        def total
+          1
+        end
+      end
+    RUBY
+
+    expect(uncovered(source, mutated_lines: [3])).to eq([2..2])
+  end
+
+  it "leaves out every line of a multi-line statement that a mutation targets" do
+    source = <<~RUBY
+      class Order
+        alias_method(
+          :sum,
+          :total
+        )
+        LIMIT = 10
+      end
+    RUBY
+
+    expect(uncovered(source, mutated_lines: [2])).to eq([6..6])
+  end
+
+  it "keeps a statement sharing no line with a mutation" do
+    expect(uncovered(model, mutated_lines: [3, 9])).to eq([2..2, 4..6])
   end
 end

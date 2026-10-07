@@ -38,6 +38,7 @@ class Evilution::Runner
     baseline_result = run_baseline(subjects)
 
     plan = mutation_planner.call(subjects)
+    subject_pipeline.report_uncovered_code(plan.mutated_lines)
     release_subject_nodes(subjects)
     clear_operator_caches
     execution = run_mutations(plan.enabled, baseline_result)

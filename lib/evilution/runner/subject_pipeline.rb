@@ -14,7 +14,7 @@ class Evilution::Runner::SubjectPipeline
 
   def call
     subjects = parse_subjects
-    report_uncovered_code(subjects)
+    @subjects_by_file = subjects.group_by(&:file_path)
     subjects = filter_by_descendants(subjects) if descendants_target?
     subjects = filter_by_target(subjects) if method_target?
     subjects = filter_by_line_ranges(subjects) if config.line_ranges?
@@ -25,8 +25,24 @@ class Evilution::Runner::SubjectPipeline
     @target_files ||= resolve_target_files
   end
 
-  # The targeted lines that hold code outside every subject, as
-  # `{ file:, lines: ["2-4", "9"] }` per file, once #call has run.
+  # Warns about the targeted lines that hold code outside every subject and
+  # that no mutation reached either. mutated_lines: the lines mutations were
+  # generated for, per file -- known only once #call's subjects are planned.
+  #
+  # A line range is checked as given; a whole file only when it has no
+  # subjects at all -- every class with an `include` or a constant would
+  # otherwise warn.
+  def report_uncovered_code(mutated_lines = {})
+    by_file = @subjects_by_file || {}
+    @subjects_by_file = nil
+    @uncovered_code = target_files.filter_map do |file|
+      uncovered_entry(file, by_file.fetch(file, []), mutated_lines.fetch(file, []))
+    end
+    @uncovered_code.each { |entry| warn_uncovered(entry) }
+  end
+
+  # Those lines, as `{ file:, lines: ["2-4", "9"] }` per file, once
+  # #report_uncovered_code has run.
   def uncovered_code
     @uncovered_code || []
   end
@@ -39,20 +55,11 @@ class Evilution::Runner::SubjectPipeline
     target_files.flat_map { |file| parser.call(file) }
   end
 
-  # A line range is checked as given; a whole file only when it has no
-  # subjects at all -- every class with an `include` or a constant would
-  # otherwise warn.
-  def report_uncovered_code(subjects)
-    by_file = subjects.group_by(&:file_path)
-    @uncovered_code = target_files.filter_map { |file| uncovered_entry(file, by_file.fetch(file, [])) }
-    @uncovered_code.each { |entry| warn_uncovered(entry) }
-  end
-
-  def uncovered_entry(file, file_subjects)
+  def uncovered_entry(file, file_subjects, mutated_lines)
     range = config.line_ranges[file]
     return unless range || file_subjects.empty?
 
-    lines = Evilution::AST::UncoveredCode.call(file, file_subjects, lines: range)
+    lines = Evilution::AST::UncoveredCode.call(file, file_subjects, lines: range, mutated_lines: mutated_lines)
     { file: file, lines: lines.map { |run| line_label(run) } } unless lines.empty?
   end
 

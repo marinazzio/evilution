@@ -13,24 +13,34 @@ require_relative "included_block"
 # from "nothing reached".
 #
 # Visibility keywords without arguments (`private`) carry no behaviour of
-# their own and are left out.
+# their own and are left out, as are `require` and `require_relative`: loading
+# a file is not something a mutation of this one could test.
+#
+# A few operators do reach class-body statements -- an `alias_method`, an
+# `include` -- through the first method of the scope. A statement holding a
+# line a mutation was generated for is targeted after all, and is left out
+# whole.
 module Evilution::AST::UncoveredCode
   SCOPE_NODES = [Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode].freeze
   VISIBILITY_KEYWORDS = %i[private protected public module_function].freeze
-  private_constant :SCOPE_NODES, :VISIBILITY_KEYWORDS
+  LOAD_METHODS = %i[require require_relative].freeze
+  private_constant :SCOPE_NODES, :VISIBILITY_KEYWORDS, :LOAD_METHODS
 
   # subjects: those parsed from file_path; lines: the Range to keep, or nil
-  # for the whole file. Returns the uncovered lines as merged Ranges, in
+  # for the whole file; mutated_lines: the lines of file_path that mutations
+  # were generated for. Returns the uncovered lines as merged Ranges, in
   # source order.
-  def self.call(file_path, subjects, lines:)
+  def self.call(file_path, subjects, lines:, mutated_lines: [])
     covered = subjects.flat_map { |subject| subject_lines(subject) }.to_set
-    uncovered = code_lines(File.read(file_path)).reject { |line| covered.include?(line) }
+    uncovered = code_lines(File.read(file_path), mutated_lines).reject { |line| covered.include?(line) }
     uncovered = uncovered.select { |line| lines.cover?(line) } if lines
     merge(uncovered.uniq)
   end
 
-  def self.code_lines(source)
-    statements(Prism.parse(source).value.statements).flat_map { |node| node_lines(node) }
+  def self.code_lines(source, mutated_lines)
+    statements(Prism.parse(source).value.statements)
+      .reject { |node| mutated_lines.any? { |line| line.between?(node.start_line, node.end_line) } }
+      .flat_map { |node| node_lines(node) }
   end
 
   def self.statements(body)
@@ -47,9 +57,13 @@ module Evilution::AST::UncoveredCode
 
     included = Evilution::AST::IncludedBlock.of(node)
     return statements(included.body) if included
-    return [] if bare_visibility?(node)
+    return [] if bare_visibility?(node) || load_call?(node)
 
     [node]
+  end
+
+  def self.load_call?(node)
+    node.is_a?(Prism::CallNode) && node.receiver.nil? && LOAD_METHODS.include?(node.name)
   end
 
   def self.bare_visibility?(node)
@@ -69,5 +83,6 @@ module Evilution::AST::UncoveredCode
     lines.slice_when { |a, b| b != a + 1 }.map { |run| run.first..run.last }
   end
 
-  private_class_method :code_lines, :statements, :expand, :bare_visibility?, :node_lines, :subject_lines, :merge
+  private_class_method :code_lines, :statements, :expand, :bare_visibility?, :load_call?, :node_lines,
+                       :subject_lines, :merge
 end

@@ -439,7 +439,8 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
           )
           pipeline = described_class.new(config, parser: parser)
 
-          expect { expect(pipeline.call).to be_empty }
+          expect(pipeline.call).to be_empty
+          expect { pipeline.report_uncovered_code }
             .to output("[evilution] #{file}:2-4 holds code outside every subject (class-body code such as " \
                        "DSL calls and constants is not mutated); no mutations target those lines.\n").to_stderr
           expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2-4"] }])
@@ -455,7 +456,8 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
           )
           pipeline = described_class.new(config, parser: parser)
 
-          expect { expect(pipeline.call.map(&:name)).to eq(["Order#total"]) }
+          expect(pipeline.call.map(&:name)).to eq(["Order#total"])
+          expect { pipeline.report_uncovered_code }
             .to output(/#{Regexp.escape(file)}:3-4 holds code outside every subject/).to_stderr
         end
       end
@@ -470,6 +472,61 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
           pipeline = described_class.new(config, parser: parser)
 
           expect { pipeline.call }.not_to output.to_stderr
+          expect { pipeline.report_uncovered_code }.not_to output.to_stderr
+          expect(pipeline.uncovered_code).to eq([])
+        end
+      end
+
+      it "says nothing until the report is asked for" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", model_source)
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (2..4) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+
+          expect { pipeline.call }.not_to output.to_stderr
+          expect(pipeline.uncovered_code).to eq([])
+        end
+      end
+
+      it "leaves out the statements that mutations were generated for" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", <<~RUBY)
+            class Order
+              LIMIT = 10
+              alias_method :sum, :total
+
+              def total
+                1
+              end
+            end
+          RUBY
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (1..4) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+          pipeline.call
+
+          expect { pipeline.report_uncovered_code(file => [3]) }
+            .to output(/#{Regexp.escape(file)}:2 holds code outside every subject/).to_stderr
+          expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2"] }])
+        end
+      end
+
+      it "stays silent when every uncovered statement was mutated" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/order.rb", model_source)
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (2..4) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+          pipeline.call
+
+          expect { pipeline.report_uncovered_code(file => [2]) }.not_to output.to_stderr
           expect(pipeline.uncovered_code).to eq([])
         end
       end
@@ -491,7 +548,10 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
         pipeline = described_class.new(config, parser: parser)
 
-        expect { pipeline.call }.to output(/#{Regexp.escape(file)}:2, 6 holds code outside every subject/).to_stderr
+        pipeline.call
+
+        expect { pipeline.report_uncovered_code }
+          .to output(/#{Regexp.escape(file)}:2, 6 holds code outside every subject/).to_stderr
         expect(pipeline.uncovered_code).to eq([{ file: file, lines: %w[2 6] }])
       end
     end
@@ -510,7 +570,9 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
         pipeline = described_class.new(config, parser: parser)
 
-        expect { pipeline.call }.not_to output.to_stderr
+        pipeline.call
+
+        expect { pipeline.report_uncovered_code }.not_to output.to_stderr
         expect(pipeline.uncovered_code).to eq([])
       end
     end
@@ -521,7 +583,9 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)
         pipeline = described_class.new(config, parser: parser)
 
-        expect { pipeline.call }.not_to output.to_stderr
+        pipeline.call
+
+        expect { pipeline.report_uncovered_code }.not_to output.to_stderr
       end
     end
   end
