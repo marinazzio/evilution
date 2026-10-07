@@ -1059,7 +1059,8 @@ RSpec.describe Evilution::Runner do
 
     it "dispatches to Integration::Minitest" do
       expect(Evilution::Integration::Minitest).to receive(:new)
-        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything, spec_selector: anything).and_call_original
+        .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything, spec_selector: anything,
+              known_failures: []).and_call_original
 
       runner.call
     end
@@ -1080,7 +1081,7 @@ RSpec.describe Evilution::Runner do
 
       expect(Evilution::Integration::Minitest).to receive(:new)
         .with(test_files: ["test/example_test.rb"], hooks: nil, fallback_to_full_suite: anything,
-              spec_selector: anything).and_call_original
+              spec_selector: anything, known_failures: []).and_call_original
 
       minitest_runner.call
     end

@@ -102,6 +102,85 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
     end
   end
 
+  describe "tests that were already failing in the baseline" do
+    def build_integration(test_file:, known_failures:)
+      described_class.new(test_files: [test_file], known_failures: known_failures)
+    end
+
+    it "flags a failed run in which nothing else failed" do
+      path = write_test_file("test/known_test.rb", <<~RUBY)
+        require "test-unit"
+        class RunTestsKnown < Test::Unit::TestCase
+          def test_ok; assert_equal 1, 1; end
+          def test_red; assert_equal 1, 2; end
+        end
+      RUBY
+      integration = build_integration(test_file: path, known_failures: ["test_red(RunTestsKnown)"])
+
+      expect(integration.send(:run_tests, mutation)).to eq(
+        passed: false, known_failures_only: true, test_command: "ruby -Itest #{path}"
+      )
+    end
+
+    it "does not flag a run in which something new failed too" do
+      path = write_test_file("test/known_and_new_test.rb", <<~RUBY)
+        require "test-unit"
+        class RunTestsKnownAndNew < Test::Unit::TestCase
+          def test_green; assert_equal 1, 2; end
+          def test_red; assert_equal 1, 2; end
+        end
+      RUBY
+      integration = build_integration(test_file: path, known_failures: ["test_red(RunTestsKnownAndNew)"])
+
+      result = integration.send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(result).not_to include(:known_failures_only)
+    end
+
+    # A test that was already failing may fail by raising now; that is no
+    # more a verdict than its failure was.
+    it "flags a run in which the already-failing test raised" do
+      path = write_test_file("test/known_raises_test.rb", <<~RUBY)
+        require "test-unit"
+        class RunTestsKnownRaises < Test::Unit::TestCase
+          def test_red; raise ArgumentError, "boom"; end
+        end
+      RUBY
+      integration = build_integration(test_file: path, known_failures: ["test_red(RunTestsKnownRaises)"])
+
+      result = integration.send(:run_tests, mutation)
+
+      expect(result).to include(known_failures_only: true)
+      expect(result).not_to include(:test_crashed)
+    end
+
+    it "does not flag a passing run" do
+      path = write_test_file("test/known_passes_test.rb", <<~RUBY)
+        require "test-unit"
+        class RunTestsKnownPasses < Test::Unit::TestCase
+          def test_red; assert_equal 1, 1; end
+        end
+      RUBY
+      integration = build_integration(test_file: path, known_failures: ["test_red(RunTestsKnownPasses)"])
+
+      expect(integration.send(:run_tests, mutation)).to eq(passed: true, test_command: "ruby -Itest #{path}")
+    end
+
+    it "does not flag a failed run when the baseline saw no failures" do
+      path = write_test_file("test/unknown_test.rb", <<~RUBY)
+        require "test-unit"
+        class RunTestsUnknown < Test::Unit::TestCase
+          def test_red; assert_equal 1, 2; end
+        end
+      RUBY
+
+      result = build_integration(test_file: path, known_failures: []).send(:run_tests, mutation)
+
+      expect(result).not_to include(:known_failures_only)
+    end
+  end
+
   describe "0 dispatched tests" do
     it "returns an Evilution::Error result when the test file registers no Test::Unit subclasses" do
       path = write_test_file("test/empty_test.rb", "# no test-unit classes here\n")

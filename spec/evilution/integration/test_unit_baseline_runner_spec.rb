@@ -85,6 +85,22 @@ RSpec.describe Evilution::Integration::TestUnit, "baseline runner" do
         .to contain_exactly(a_string_starting_with("numbers differ"), "ArgumentError: bad input")
     end
 
+    it "names every failing test the way a mutation run does" do
+      path = write_test_file("ids_test.rb", <<~RUBY)
+        require "test-unit"
+
+        class TestUnitBaselineIds < Test::Unit::TestCase
+          def test_passes = assert_equal(1, 1)
+          def test_fails = assert_equal(1, 2)
+          def test_raises = raise(ArgumentError, "bad input")
+          def test_pending = pend("later")
+        end
+      RUBY
+
+      expect(described_class.run_baseline_test_file(path)[:failed_ids])
+        .to contain_exactly("test_fails(TestUnitBaselineIds)", "test_raises(TestUnitBaselineIds)")
+    end
+
     it "loads every *_test.rb under a directory when given a directory" do
       Dir.mkdir(File.join(tmpdir, "nested"))
       write_test_file("nested/a_test.rb", <<~RUBY)

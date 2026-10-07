@@ -491,7 +491,7 @@ What a red baseline does not do:
 - **It does not touch survivors.** A mutation whose tests passed is a survivor whatever the baseline did — including when the baseline's failure did not happen again in the mutation run (a flaky example, a failure of the baseline process itself). Earlier versions recorded every survivor covered by a red spec file as neutral, which hid exactly those gaps.
 - **It does not second-guess a baseline failure with no failing example to name** — a file that did not load, a timeout, a baseline process that died. A mutation run that hits the same problem reports `error` or `timeout` itself.
 
-Recognising an already-failing example needs the test framework to name the examples that failed in a mutation run. That is in place for RSpec; under Minitest and Test::Unit a test that is red in the baseline still makes the mutations it runs against count as killed, so fix the red test first there.
+Recognising an already-failing example needs the test framework to name the examples that failed, the same way in the baseline and in a mutation run. RSpec examples are named by spec file and position, Minitest tests as `Class#test`, Test::Unit tests as `test(Class)`. Two Minitest test classes without a name that share a test method name cannot be told apart.
 
 JSON output carries `neutral_reason` as `{ kind, detail }` on neutral entries that have one; `detail` is null where no single spec can be named (an explicit `--spec` run), and the field is absent on a result recorded without a reason, which the text report shows as `reason not recorded`.
 

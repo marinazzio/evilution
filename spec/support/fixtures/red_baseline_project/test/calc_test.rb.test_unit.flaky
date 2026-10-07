@@ -1,0 +1,25 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "test-unit"
+require "calc"
+
+# One test fails the first time the file is ever run -- which is the
+# baseline -- and passes from then on. `half` is covered by nothing.
+class CalcTest < Test::Unit::TestCase
+  def test_doubles
+    assert_equal 8, Calc.new.double(4)
+  end
+
+  def test_triples
+    assert_equal 6, Calc.new.triple(2)
+  end
+
+  def test_fails_once
+    marker = File.expand_path("../.ran_once", __dir__)
+    first_run = !File.exist?(marker)
+    File.write(marker, "")
+
+    assert_false first_run
+  end
+end

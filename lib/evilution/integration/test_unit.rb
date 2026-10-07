@@ -2,6 +2,7 @@
 
 require_relative "base"
 require_relative "test_unit_crash_detector"
+require_relative "known_failures"
 require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
@@ -41,20 +42,24 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
     require_relative "test_unit/framework_loader"
     require_relative "test_unit/subject_class_registry"
     require_relative "test_unit/dispatcher"
+    require_relative "test_unit/test_ids"
     FrameworkLoader.new.call
     files = baseline_test_files(test_file)
     Evilution::Integration::Loading::TestLoadPath.add!(files)
     new_classes = SubjectClassRegistry.newly_loaded do
       files.each { |f| load(File.expand_path(f)) }
     end
-    result = Dispatcher.call(new_classes, name: "evilution baseline")
-    Evilution::Baseline::Report.build(passed: result.passed?, failures: baseline_failures(result))
+    baseline_report(Dispatcher.call(new_classes, name: "evilution baseline"))
   end
 
-  # Only failures and errors fail a run; pendings, omissions and notifications
-  # are faults too, and are left out.
+  def self.baseline_report(result)
+    Evilution::Baseline::Report.build(
+      passed: result.passed?, failures: baseline_failures(result), failed_ids: TestIds.failed(result)
+    )
+  end
+
   def self.baseline_failures(result)
-    (result.failures + result.errors).map do |fault|
+    TestIds.faults(result).map do |fault|
       { id: fault.test_name, description: "", message: fault.message }
     end
   end
@@ -63,12 +68,15 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
     File.directory?(test_file) ? Dir.glob(File.join(test_file, "**/*_test.rb")) : [test_file]
   end
 
-  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil)
+  # known_failures: the ids of the tests the baseline saw failing (see TestIds).
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [])
     require_relative "test_unit/framework_loader"
     require_relative "test_unit/subject_class_registry"
     require_relative "test_unit/dispatcher"
     require_relative "test_unit/test_file_resolver"
     require_relative "test_unit/result_builder"
+    require_relative "test_unit/test_ids"
+    @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
     @framework_loader = FrameworkLoader.new
     @file_resolver = TestFileResolver.new(
       test_files: test_files,
@@ -107,6 +115,10 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
 
     detector = reset_crash_detector
     result = Dispatcher.call(new_classes, name: "evilution-mutation")
+    # Before the crash check: a test that was already failing may fail by
+    # raising now, and a crash in it is no more a kill than its failure was.
+    return ResultBuilder.known_failures_only(command) if @known_failures.only?(TestIds.failed(result))
+
     result.faults.each { |fault| detector.record(fault) }
     ResultBuilder.call(passed: result.passed?, command: command, detector: detector)
   end

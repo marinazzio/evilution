@@ -152,6 +152,76 @@ RSpec.describe Evilution::Integration::Minitest do
     end
   end
 
+  describe "#call with tests that were already failing in the baseline" do
+    subject(:integration) do
+      described_class.new(test_files: ["test/some_test.rb"], known_failures: ["CalcTest#test_red"])
+    end
+
+    before { allow(integration).to receive(:load) }
+
+    def failing(name, error: Minitest::Assertion.new("no"))
+      result = Minitest::Result.new(name)
+      result.klass = "CalcTest"
+      result.failures << error
+      result
+    end
+
+    def stub_failures(*results)
+      allow_any_instance_of(described_class).to receive(:dispatch_minitest_suites) do |reporter, _options|
+        Class.new(Minitest::Test) { define_method(:test_stub) { assert true } }
+        results.each { |result| reporter.record(result) }
+      end
+    end
+
+    it "flags a failed run in which nothing else failed" do
+      stub_failures(failing("test_red"))
+
+      expect(integration.call(mutation)).to eq(
+        passed: false, known_failures_only: true, test_command: "ruby -Itest test/some_test.rb"
+      )
+    end
+
+    it "does not flag a run in which something new failed too" do
+      stub_failures(failing("test_red"), failing("test_green"))
+
+      result = integration.call(mutation)
+
+      expect(result).to include(passed: false)
+      expect(result).not_to include(:known_failures_only)
+    end
+
+    # A test that was already failing may fail by raising now; that is no
+    # more a verdict than its failure was.
+    it "flags a run in which the already-failing test raised" do
+      stub_failures(failing("test_red", error: Minitest::UnexpectedError.new(NoMethodError.new("undefined"))))
+
+      result = integration.call(mutation)
+
+      expect(result).to include(known_failures_only: true)
+      expect(result).not_to include(:test_crashed)
+    end
+
+    it "does not flag a passing run" do
+      stub_minitest_run(passed: true)
+
+      expect(integration.call(mutation)).to eq(passed: true, test_command: "ruby -Itest test/some_test.rb")
+    end
+
+    it "does not flag a failed run when the baseline saw no failures" do
+      stub_failures(failing("test_red"))
+      plain = described_class.new(test_files: ["test/some_test.rb"])
+      allow(plain).to receive(:load)
+
+      expect(plain.call(mutation)).not_to include(:known_failures_only)
+    end
+
+    it "reports a run of no tests as an error, whatever the baseline saw" do
+      stub_minitest_no_tests
+
+      expect(integration.call(mutation)[:error]).to include("no Minitest tests executed")
+    end
+  end
+
   describe "#call when zero tests run" do
     before do
       stub_minitest_no_tests # dispatch registers no runnable -> 0 test methods
@@ -569,6 +639,10 @@ RSpec.describe Evilution::Integration::Minitest do
 
       expect(report[:failure_count]).to eq(1)
       expect(report[:failures]).to eq([{ id: "#{unique}#test_case", description: "", message: "intentional" }])
+    end
+
+    it "names the failing test the way a mutation run does" do
+      expect(described_class.run_baseline_test_file(failing_file.path)[:failed_ids]).to eq(["#{unique}#test_case"])
     end
 
     it "loads and runs the test methods from the given file" do

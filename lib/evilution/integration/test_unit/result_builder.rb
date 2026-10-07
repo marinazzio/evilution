@@ -21,6 +21,12 @@ module Evilution::Integration::TestUnit::ResultBuilder
     end
   end
 
+  # Every test that failed was already failing in the baseline. Still a
+  # failed run, but flagged, so it is not taken for a kill.
+  def known_failures_only(command)
+    { passed: false, known_failures_only: true, test_command: command }
+  end
+
   def no_tests_ran(command)
     {
       passed: false,

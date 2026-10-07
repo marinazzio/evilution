@@ -2,6 +2,7 @@
 
 require "stringio"
 require_relative "base"
+require_relative "known_failures"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 require_relative "../related_spec_heuristic"
@@ -45,7 +46,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @crash_detector_lifecycle = crash_detector_lifecycle
     @result_builder = result_builder
     @state_guard = state_guard
-    @known_failures = known_failures.to_set
+    @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
     super(hooks: hooks)
   end
 
@@ -201,8 +202,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def known_failures_only?(status)
     return false if status.zero? || @known_failures.empty?
 
-    failed = ExampleIds.failed(::RSpec.world)
-    !failed.empty? && failed.all? { |id| @known_failures.include?(id) }
+    @known_failures.only?(ExampleIds.failed(::RSpec.world))
   end
 
   def reset_examples

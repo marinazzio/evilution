@@ -70,11 +70,26 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration
     end
 
-    it "does not hand known failures to an integration that takes none" do
-      runner = described_class.new(config(integration: :minitest), hooks: nil)
-      baseline_result = Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 0.0)
+    {
+      minitest: [Evilution::Integration::Minitest, "CalcTest#test_red"],
+      test_unit: [Evilution::Integration::TestUnit, "test_red(CalcTest)"]
+    }.each do |name, (klass, failed_id)|
+      it "hands the baseline's failing test ids to the #{name} integration" do
+        runner = described_class.new(config(integration: name), hooks: nil)
+        failure = Evilution::Baseline::SpecFailure.new(spec_file: "test/calc_test.rb", failed_ids: [failed_id])
+        baseline_result = Evilution::Baseline::Result.new(failed_spec_files: Set["test/calc_test.rb"], duration: 0.0,
+                                                          failures: [failure])
+        expect(klass).to receive(:new).with(hash_including(known_failures: Set[failed_id])).and_call_original
 
-      expect(runner.build_integration(baseline_result)).to be_a(Evilution::Integration::Minitest)
+        runner.build_integration(baseline_result)
+      end
+
+      it "hands the #{name} integration no known failures without a baseline result" do
+        runner = described_class.new(config(integration: name), hooks: nil)
+        expect(klass).to receive(:new).with(hash_including(known_failures: [])).and_call_original
+
+        runner.build_integration
+      end
     end
 
     it "forwards the hooks object to the integration" do

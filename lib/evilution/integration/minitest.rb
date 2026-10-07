@@ -4,6 +4,7 @@ require "stringio"
 require_relative "base"
 require_relative "../diagnostic"
 require_relative "minitest_crash_detector"
+require_relative "known_failures"
 require_relative "loading/test_load_path"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
@@ -54,14 +55,15 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     reporter.start
     dispatch_minitest_suites(reporter, options)
     reporter.report
-    Evilution::Baseline::Report.build(passed: reporter.passed?, failures: baseline_failures(summary))
+    Evilution::Baseline::Report.build(
+      passed: reporter.passed?, failures: baseline_failures(summary), failed_ids: TestIds.failed(summary)
+    )
   end
 
   # The summary reporter keeps every result that did not pass, skips included.
   def self.baseline_failures(summary)
     summary.results.reject(&:skipped?).map do |result|
-      class_name = result.respond_to?(:class_name) ? result.class_name : result.class.name
-      { id: "#{class_name}##{result.name}", description: "", message: result.failure.message }
+      { id: TestIds.of(result), description: "", message: result.failure.message }
     end
   end
 
@@ -102,8 +104,10 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     }
   end
 
-  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil)
+  # known_failures: the ids of the tests the baseline saw failing (see TestIds).
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [])
     @test_files = test_files
+    @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
     @minitest_loaded = false
     @spec_selector = spec_selector || Evilution::SpecSelector.new(
       spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
@@ -149,6 +153,9 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     run = run_minitest(build_args(mutation), detector)
 
     return no_tests_ran_result(command) if run[:count].zero?
+    # Before the crash check: a test that was already failing may fail by
+    # raising now, and a crash in it is no more a kill than its failure was.
+    return known_failures_only_result(command) if @known_failures.only?(run[:failed_ids])
 
     build_minitest_result(run[:passed], command, detector)
   end
@@ -168,6 +175,12 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
       error_class: "Evilution::Error",
       test_command: command
     }
+  end
+
+  # Every test that failed was already failing in the baseline. Still a
+  # failed run, but flagged, so it is not taken for a kill.
+  def known_failures_only_result(command)
+    { passed: false, known_failures_only: true, test_command: command }
   end
 
   def unresolved_result(mutation)
@@ -200,7 +213,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     dispatch_minitest_suites(reporter, options)
     reporter.report
 
-    { passed: summary.passed?, count: minitest_method_count }
+    { passed: summary.passed?, count: minitest_method_count, failed_ids: TestIds.failed(summary) }
   end
 
   # Attach evilution's own reporters to the composite AFTER plugin init, and
@@ -303,3 +316,5 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     end
   end
 end
+
+require_relative "minitest/test_ids"

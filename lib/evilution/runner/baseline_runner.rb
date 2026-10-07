@@ -34,18 +34,19 @@ class Evilution::Runner::BaselineRunner
     end
   end
 
-  # baseline_result: what the baseline found, when it ran. The examples it saw
+  # baseline_result: what the baseline found, when it ran. The tests it saw
   # failing are handed to the integration, which can then tell a mutation run
   # that fails on nothing else from one that kills.
   def build_integration(baseline_result = nil)
     klass = integration_class
-    kwargs = base_integration_kwargs
-    kwargs.merge!(rspec_integration_kwargs(baseline_result)) if klass == Evilution::Integration::RSpec
+    kwargs = base_integration_kwargs(baseline_result)
+    kwargs.merge!(rspec_integration_kwargs) if klass == Evilution::Integration::RSpec
     klass.new(**kwargs)
   end
 
-  def base_integration_kwargs
+  def base_integration_kwargs(baseline_result = nil)
     {
+      known_failures: baseline_result ? baseline_result.failed_example_ids : [],
       test_files: config.spec_files.empty? ? nil : config.spec_files,
       hooks: hooks,
       fallback_to_full_suite: config.fallback_to_full_suite?,
@@ -53,11 +54,10 @@ class Evilution::Runner::BaselineRunner
     }
   end
 
-  def rspec_integration_kwargs(baseline_result = nil)
+  def rspec_integration_kwargs
     {
       related_specs_heuristic: config.related_specs_heuristic?,
-      example_filter: build_example_filter,
-      known_failures: baseline_result ? baseline_result.failed_example_ids : []
+      example_filter: build_example_filter
     }
   end
 
