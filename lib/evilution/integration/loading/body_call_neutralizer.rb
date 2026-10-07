@@ -19,8 +19,9 @@ require_relative "concern_redeclaration"
 # or module body (not inside a def). Calls on a small allowlist of patterns
 # known to be idempotent (`include`, `attr_*`, visibility modifiers, etc.)
 # are preserved; everything else has its source range replaced with `()`.
-# The replacement is shorter than the call it replaces, so edits are applied
-# from the end of the source backwards to keep earlier offsets valid.
+# A call spanning several lines leaves its line breaks behind, so the source
+# keeps its line count. Edits are applied from the end of the source backwards
+# to keep earlier offsets valid.
 class Evilution::Integration::Loading::BodyCallNeutralizer
   IDEMPOTENT_CALLS = %i[
     include extend prepend using
@@ -96,7 +97,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     result = Prism.parse(source)
     return source if result.failure?
 
-    edits = collect_edits(result.value, keep_offset, keep_lines)
+    edits = collect_edits(source, result.value, keep_offset, keep_lines)
     return source if edits.empty?
 
     apply_edits(source, edits)
@@ -108,9 +109,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     self.class.preloaded_features.include?(File.expand_path(file_path))
   end
 
-  def collect_edits(tree, keep_offset, keep_lines)
+  def collect_edits(source, tree, keep_offset, keep_lines)
     edits = []
-    walker = Walker.new(IDEMPOTENT_CALLS, edits, keep_offset, keep_lines)
+    walker = Walker.new(source, IDEMPOTENT_CALLS, edits, keep_offset, keep_lines)
     walker.visit(tree)
     edits
   end
@@ -124,8 +125,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   end
 
   class Walker < Prism::Visitor
-    def initialize(allowlist, edits, keep_offset, keep_lines)
+    def initialize(source, allowlist, edits, keep_offset, keep_lines)
       super()
+      @source = source
       @allowlist = allowlist
       @edits = edits
       @keep_offset = keep_offset
@@ -203,11 +205,15 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     # one is an `aasm` machine, its own declarations are guarded the same way
     # rather than blanked: a class that includes the concern later needs the
     # whole machine, and one that includes it already only the mutated event.
+    # When it is a callback declaration, it is wrapped as it would be in a
+    # class body: the block runs as the including class, so that is whose
+    # chains CallbackRedeclaration rebuilds.
     def guard_others(block)
       block.body.body.grep(Prism::CallNode).each do |call|
         if kept?(edit_for(call))
           machine = Evilution::AST::AasmDeclaration.machine_block(call)
           guard_others(machine) if machine && machine.body.is_a?(Prism::StatementsNode)
+          wrap_callbacks(call)
         else
           start_offset = call.location.start_offset
           @edits << [start_offset, start_offset, GUARD]
@@ -234,8 +240,13 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
       end
     end
 
+    # The lines a blanked call took up are kept as empty lines: everything
+    # after it then sits on the line it has in the file, which is where a proc
+    # created by this source says it was written.
     def edit_for(call)
-      [call.location.start_offset, replacement_end_offset(call), REPLACEMENT]
+      start_offset = call.location.start_offset
+      end_offset = replacement_end_offset(call)
+      [start_offset, end_offset, REPLACEMENT + ("\n" * @source.byteslice(start_offset...end_offset).count("\n"))]
     end
 
     def kept?((start_offset, end_offset, _replacement))

@@ -126,7 +126,8 @@ class that owns it.
    (`validate`, `validates`, `validates_*`, `before_*`, `after_*`, `around_*`)
    -- an `if:` / `unless:` condition, or the callback itself as a block or
    lambda -- kind `:callback`, named as the declaration reads
-   (`Order.validate(:credit_limit)`, `Order.before_save`). Optional
+   (`Order.validate(:credit_limit)`, `Order.before_save`; one in a concern's
+   `included do ... end` is named after the concern). Optional
    descendant/target/line-range filters follow.
 3. **Baseline** — `Runner::BaselineRunner#call` builds the integration from
    `Runner::INTEGRATIONS` (`rspec`/`minitest`/`test_unit`) and records spec files
@@ -251,7 +252,14 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      declaration registered before were. Those are found by the source
      location of their procs the first time (`lines` is the declaration's
      range in the file as loaded) and from the helper's own record afterwards,
-     since evaluated source has blanked siblings and its line numbers drift.
+     since a mutation may add or remove lines. In a concern's `included` block
+     the declaration is wrapped the same way inside the kept block, whose
+     other calls are guarded: run on a class that includes the concern already
+     it replaces that class's callbacks in place, run by a class including it
+     later it simply declares. `BodyCallNeutralizer` leaves a blanked call's
+     line breaks behind, so the evaluated source keeps the file's line numbers
+     and a class loaded during one mutation can be matched by location in the
+     next.
    - An aasm subject works the same way, one level down: the `aasm` call is
      kept, and inside its block every declaration but the `event` or `state`
      holding the mutation is blanked. AASM stores what an event or state holds

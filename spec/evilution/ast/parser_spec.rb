@@ -938,4 +938,39 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects.map(&:line_number)).to eq([8, 9])
     end
   end
+
+  describe "callback subjects in a concern's included block" do
+    def subjects_for(code)
+      file = Tempfile.new(["publishable", ".rb"])
+      file.write(code)
+      file.close
+      described_class.new.call(file.path)
+    ensure
+      file.unlink
+    end
+
+    let(:code) do
+      <<~RUBY
+        module Publishable
+          extend ActiveSupport::Concern
+
+          included do
+            validates :title, presence: true, if: -> { published? }
+            before_save { self.slug = title }
+            before_save :named
+          end
+
+          before_save { 1 }
+        end
+      RUBY
+    end
+
+    it "makes a subject of each literal condition and callback, named after the concern" do
+      subjects = subjects_for(code).select { |subject| subject.kind == :callback }
+
+      expect(subjects.map(&:name)).to eq(["Publishable.validates(:title)", "Publishable.before_save"])
+      expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { published? }", "{ self.slug = title }"])
+      expect(subjects.map(&:line_number)).to eq([5, 6])
+    end
+  end
 end

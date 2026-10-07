@@ -1,0 +1,44 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+# Each behaviour is checked on Order, loaded before the run, and on Invoice,
+# which includes the concern only once an example asks for it.
+RSpec.describe Reviewable do
+  def record(klass, **attributes)
+    klass.new(title: "book", total: 500, paid: false, rush: false, **attributes)
+  end
+
+  def models
+    require "invoice"
+    [Order, Invoice]
+  end
+
+  it "runs its steps once each, in the order they are declared" do
+    models.each do |klass|
+      expect(record(klass).tap(&:valid?).steps).to eq(%i[first queued last])
+    end
+  end
+
+  it "keeps a subclass's own step after the inherited ones" do
+    expect(record(PriorityOrder, total: 1).tap(&:valid?).steps).to eq(%i[first queued last own])
+  end
+
+  it "checks the credit limit of a paid record only" do
+    models.each do |klass|
+      expect(record(klass, paid: true).tap(&:valid?).errors[:total]).to eq(["over the limit"])
+      expect(record(klass).tap(&:valid?).errors[:total]).to eq([])
+    end
+  end
+
+  it "requires a title unless the record is paid" do
+    models.each do |klass|
+      expect(record(klass, title: nil).tap(&:valid?).errors[:title]).to eq(["can't be blank"])
+      expect(record(klass, title: nil, paid: true, total: 1).tap(&:valid?).errors[:title]).to eq([])
+    end
+  end
+
+  it "lists each validator once" do
+    expect([*models, PriorityOrder].map { |klass| klass.validators.length }).to eq([1, 1, 1])
+  end
+end

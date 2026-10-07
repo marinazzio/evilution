@@ -20,9 +20,9 @@ require_relative "../loading"
 # "Last time" is the file's own load the first time round, and those
 # callbacks are recognised by where their procs were written (or by having
 # been dropped as duplicates). After that the module goes by what it
-# registered itself: the source it is called from has its other class-body
-# calls blanked, multi-line ones included, so a proc created there reports a
-# line that may belong to another declaration of the real file.
+# registered itself: a mutation can add or remove lines, so a proc created by
+# the mutated source may report a line that belongs to another declaration of
+# the real file.
 module Evilution::Integration::Loading::CallbackRedeclaration
   CONDITIONS = %i[@if @unless].freeze
   private_constant :CONDITIONS

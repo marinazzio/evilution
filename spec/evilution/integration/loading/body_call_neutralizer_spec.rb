@@ -113,6 +113,8 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
               transitions from: :paid, to: :shipped
             end
             ()
+
+
           end
         end
       RUBY
@@ -137,7 +139,8 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     it "neutralizes the whole machine when the offset is elsewhere" do
       result = neutralizer.call(src, keep_offset: src.index("validates"))
 
-      expect(result).to eq("class Order\n  validates :address, presence: true\n  ()\nend\n")
+      expect(result).to eq("class Order\n  validates :address, presence: true\n  ()#{"\n" * 10}end\n")
+      expect(result.lines.length).to eq(src.lines.length)
     end
 
     it "takes a heredoc of a neutralized sibling with it" do
@@ -232,6 +235,8 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
           ()
           #{helper}(self, __FILE__, 3..3) { validate :credit_limit, if: -> { paid? } } # why
           ()
+
+
         end
       RUBY
     end
@@ -314,6 +319,85 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
       expect(Prism.parse(result)).to be_success
       expect(result.lines.length).to eq(src.lines.length)
+    end
+  end
+
+  describe "#call with keep_offset inside a callback declaration of a concern's included block" do
+    let(:skipping) { "::Evilution::Integration::Loading::ConcernRedeclaration.skipping?" }
+    let(:redeclare) { "::Evilution::Integration::Loading::ConcernRedeclaration.call(self)" }
+    let(:callbacks) { "::Evilution::Integration::Loading::CallbackRedeclaration.call" }
+    let(:src) do
+      <<~RUBY
+        module Publishable
+          extend ActiveSupport::Concern
+
+          included do
+            before_save :first
+            validates :title, presence: true, if: -> { published? }
+            before_save :last
+          end
+        end
+      RUBY
+    end
+
+    # Run on a class that includes the concern already, only the mutated
+    # declaration runs, and its callbacks take the place of the old ones; run
+    # by a class including it later, the whole block declares as written.
+    it "wraps the declaration in place and guards the others" do
+      expect(neutralizer.call(src, keep_offset: src.index("published?"), keep_lines: 6..6)).to eq(<<~RUBY)
+        module Publishable
+          extend ActiveSupport::Concern
+
+          included do
+            #{skipping} or before_save :first
+            #{callbacks}(self, __FILE__, 6..6) { validates :title, presence: true, if: -> { published? } }
+            #{skipping} or before_save :last
+          end; #{redeclare}
+        end
+      RUBY
+    end
+
+    it "does not wrap it when no lines are given" do
+      result = neutralizer.call(src, keep_offset: src.index("published?"))
+
+      expect(result).to include("    validates :title, presence: true, if: -> { published? }\n")
+    end
+
+    it "does not wrap a kept scope of the block" do
+      scopes = src.sub("validates :title, presence: true, if: -> { published? }", "scope :live, -> { nil }")
+
+      result = neutralizer.call(scopes, keep_offset: scopes.index("nil"), keep_lines: 6..6)
+
+      expect(result).to include("    scope :live, -> { nil }\n")
+    end
+  end
+
+  describe "line numbers" do
+    let(:src) do
+      <<~RUBY
+        class Order
+          register :orders,
+                   with: :defaults
+          has_many :items, -> do
+            where(visible: true)
+          end
+
+          def total = 1
+        end
+      RUBY
+    end
+
+    # A proc created by the evaluated source says where it was written by
+    # that source's line numbers; they have to be the file's.
+    it "leaves a blanked call's line breaks behind, so what follows keeps its line" do
+      result = neutralizer.call(src)
+
+      expect(result).to eq("class Order\n  ()\n\n  ()\n\n\n\n  def total = 1\nend\n")
+      expect(result.lines.index("  def total = 1\n")).to eq(src.lines.index("  def total = 1\n"))
+    end
+
+    it "adds no line break for a call on a single line" do
+      expect(neutralizer.call("class Order\n  register :orders\nend\n")).to eq("class Order\n  ()\nend\n")
     end
   end
 
@@ -699,7 +783,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
         # The heredoc terminator's trailing newline is excluded from the
         # replacement, so the `()` and the closing `end` stay on
         # separate lines (no `()end` collision).
-        expect(result).to include("  ()\nend")
+        expect(result).to match(/^  \(\)\n+end$/)
         expect(result).not_to include("()end")
       end
 
@@ -737,7 +821,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  ()\nend\n")
+        expect(result).to eq("module Foo\n  ()\n\n\nend\n")
         expect(result).not_to include("run_cmd")
         expect(result).not_to include("echo building")
         expect(result).not_to include("CMD")
@@ -755,7 +839,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  ()\nend\n")
+        expect(result).to eq("module Foo\n  ()\n\n\nend\n")
         expect(result).not_to include("run_cmd")
         expect(result).not_to include("echo building")
         expect(result).not_to include("CMD")
@@ -775,7 +859,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  ()\nend\n")
+        expect(result).to eq("module Foo\n  ()\n\n\nend\n")
         expect(result).not_to include("def_thing")
         expect(result).not_to include("heredoc body line")
       end
@@ -793,7 +877,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
 
         result = neutralize(src)
 
-        expect(result).to eq("module Foo\n  ()\nend\n")
+        expect(result).to eq("module Foo\n  ()\n\n\nend\n")
         expect(result).not_to include("def_thing")
         expect(result).not_to include("heredoc body line")
       end

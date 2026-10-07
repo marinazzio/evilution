@@ -53,6 +53,7 @@ module Evilution::AST
       IncludedBlock.in_body(node.body).each do |block|
         add_scope_subjects(block.body)
         add_aasm_subjects(block.body)
+        add_callback_subjects(block.body)
       end
       within_scope(singleton: false) { super }
       @context.pop
@@ -150,7 +151,8 @@ module Evilution::AST
     # `validate :credit_limit, if: -> { ... }` defines no method to be named
     # after, so it is named the way the declaration reads:
     # `Order.validate(:credit_limit)`. The subject spans the declaration and
-    # mutates the callable's body.
+    # mutates the callable's body. In a concern's `included` block it is named
+    # after the concern.
     def add_callback_subjects(body)
       CallbackDeclaration.in_body(body).each do |callable|
         add_subject(callable.body, "#{@context.join("::")}.#{callable.label}", :callback, span: callable.declaration)
