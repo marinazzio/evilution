@@ -332,6 +332,7 @@ Schema:
     "unresolved": "integer — mutations where no spec file resolved (coverage gap, not a failure)",
     "unresolved_target_files": "array of strings (optional) — target files that resolved to no spec at all; present only when non-empty, and the run fails when it is",
     "infra_retried": "integer (optional) — mutations a parallel pass could not judge because the test process crashed on infrastructure, re-run serially afterwards; present only when non-zero",
+    "uncovered_code": "array (optional) — targeted lines that hold code outside every subject, so no mutation was generated for them: [{ file, lines: ['2-4', '9'] }]; checked for a line range as given, and for a whole file only when it has no subject at all; present only when non-empty",
     "baseline_neutralized": "integer (optional) — kills not counted because only examples already failing in the baseline failed; those mutations are recorded neutral; present only when non-zero",
     "baseline_failures": "array (optional) — one entry per spec file that was red in the baseline: { spec_file, error: string|null — what stopped the file outside any example (load error, runner exception, timeout, a baseline process that died), failing_examples: integer — every failing example, examples: [{ id, description, message }] — the first few of them }; present only when non-empty",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
@@ -683,7 +684,7 @@ The server exposes the following tools:
 |---|---|
 | `evilution-mutate` | Run mutation testing on target files with structured JSON results |
 | `evilution-session` | Inspect mutation testing history — `action: list` browses saved sessions, `action: show` displays one, `action: diff` compares two (fixed/new/persistent survivors, score delta) |
-| `evilution-info` | Discovery before mutation — `action: subjects` lists mutatable methods with mutation counts, `action: tests` resolves which specs cover given sources, `action: environment` dumps the effective config, `action: statuses` returns the mutation-result status glossary, `action: feedback` returns the public Discussions URL plus consent + privacy guidance for posting feedback |
+| `evilution-info` | Discovery before mutation — `action: subjects` lists the mutation subjects (methods, and class-body subjects such as scopes and callback declarations) with mutation counts, `action: tests` resolves which specs cover given sources, `action: environment` dumps the effective config, `action: statuses` returns the mutation-result status glossary, `action: feedback` returns the public Discussions URL plus consent + privacy guidance for posting feedback |
 
 ### Verbosity Control
 
@@ -701,7 +702,7 @@ What survives trimming matters when you are deciding whether to trust a score:
 
 - `neutral` entries — and with them each `neutral_reason` — are dropped at `summary` and `minimal`. Use `full` to see why mutations were neutralised.
 - `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary` and `survived`.
-- Everything inside `summary` survives at every level, including `unresolved_target_files`, `infra_retried`, `baseline_neutralized`, `baseline_failures` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
+- Everything inside `summary` survives at every level, including `unresolved_target_files`, `uncovered_code`, `infra_retried`, `baseline_neutralized`, `baseline_failures` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
 
 ### Enriched Survived Entries
 
@@ -850,6 +851,14 @@ Methods whose body overlaps the requested range are included. Mix targeted and w
 evilution run lib/foo.rb:15-30 lib/bar.rb --format json
 ```
 
+A range is matched against subjects, and not every line belongs to one. Methods are subjects, and so are scopes, AASM guards and callbacks, callback and validation declarations, and `Data.define` / `Struct.new` definitions (see step 2 under [Internals](#internals-for-context-not-for-direct-use)). Other class-body code — a constant list, a serializer attribute, a DSL call evilution does not know — is not. When the range holds such code, the run says so on stderr and in `summary.uncovered_code`:
+
+```
+[evilution] app/models/order.rb:12-14 holds code outside every subject (class-body code such as DSL calls and constants is not mutated); no mutations target those lines.
+```
+
+Read `0 mutations` next to that message as "not measured", not as "nothing to test".
+
 ### 4. Method-name targeted scan
 
 ```bash
@@ -876,12 +885,13 @@ Pass multiple file paths on a single invocation to amortise startup cost. The fr
 
 ### What to read before acting on a score
 
-A score describes only the mutations that got a verdict. Four fields say what it leaves out, and each points at a different action:
+A score describes only the mutations that got a verdict. Five fields say what it leaves out, and each points at a different action:
 
 | Field | Meaning | What to do |
 |---|---|---|
 | `summary.unresolved_target_files` | A file you named resolved to no spec and was never tested; the run fails on this alone | Write a spec, pass `--spec`, or map it in `spec_mappings` — do not trust the score until this is empty |
 | `subjects[].reached == false` | Mutations were generated for that method but none got a verdict | The method is untested even where its file scores well; start here rather than with `survived[]` |
+| `summary.uncovered_code` | Lines you targeted hold code outside every subject — class-body code such as constant lists or DSL calls evilution does not treat as a subject — so no mutation was generated for them; the same is printed to stderr | A run that reports `0 mutations` for those lines has not shown they are tested. Target the methods that code calls, or cover it with ordinary tests |
 | `neutral[].neutral_reason.kind == "baseline_failure"` | The mutation's tests failed only on examples that were already failing before any mutation ran; `detail` names the red spec file | Read `summary.baseline_failures` for why it was red, and fix that first — these mutations have no verdict until it is green |
 | `neutral[].neutral_reason.kind == "infra_error"` | The test process crashed on infrastructure (DB lock, timeout); `detail` names the class | Not a coverage gap. Give parallel workers their own database, or run `-j 1` |
 

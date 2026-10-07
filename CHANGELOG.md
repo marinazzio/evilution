@@ -2,6 +2,77 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.4.0] - 2026-10-07
+
+Two things in this release. Code that lives in a class body rather than in a method — scopes, AASM guards, callback conditions, value-object definitions — is now mutated, where a run aimed at it used to report `0 mutations`. And the `default` profile grows from 111 to 136 operators, with two more in `strict`. Mutation scores will move on both counts — every new subject and every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
+
+A red baseline also means something different now: it no longer hides survivors, and it no longer lets an already-failing example count as a kill. See "Changed".
+
+Most of the subject and baseline work comes from a field report on a Rails application running 1.3.0 (GH #1740–#1744).
+
+### Added
+
+- **Subjects outside `def`** — subjects were methods only, so a file or a line range holding nothing but class-body code got no mutations at all:
+  - **Value-object definitions** — `Point = Data.define(:x, :y)` and `class Coord < Struct.new(:lat, :lng)` outside any method are subjects of their own, named after the constant and mutated by the operators that apply to them. `--target Foo` matches a value-object constant named `Foo` (PR #1738, GH #1683)
+  - **ActiveRecord scopes** — `scope :recent, -> { where(recent: true) }` with a literal body is a subject named after the class method it defines (`Order.recent`) and mutated like a method body (PR #1747, GH #1742)
+  - **AASM guards and callbacks** — lambdas and blocks written out inside an `event` or `state` declaration, named after the method the declaration defines (`Order#ship`, `Order#paid?`) (PR #1755, GH #1750)
+  - **Callback and validation declarations** — the conditions and bodies of `validate :credit_limit, if: -> { paid? }`, `before_save { ... }`, `before_action ..., unless: -> { ... }`, named the way the declaration reads (`Order.validate(:credit_limit)`, `Order.before_save`). The mutated declaration takes the place of the original in its callback chain, so the two do not sit side by side and mask each other (PR #1759, GH #1749)
+  - **The same three inside a concern's `included do ... end` block**, named after the concern (`Publishable.published`, `Shippable#ship`, `Publishable.validates(:title)`) and re-declared on every class that already includes it (PRs #1757, #1764, #1766; GH #1748, #1756, #1758)
+- **A warning when targeted lines hold code no subject covers** — a line range, or a whole file with no subject at all, that contains class-body code outside every subject (DSL calls, constant lists) now says so on stderr and in JSON as `summary.uncovered_code` (`[{ file, lines: ["2-4", "9"] }]`), instead of a bare `0 mutations` that reads as "nothing to test here" (PR #1746, GH #1741)
+- **Seven operators for modern syntax (`default` profile)** — pattern matching, anonymous arguments and `Data` / `Struct` (epic GH #1428):
+  - **`data_struct_member`** — drops a member, or swaps adjacent members, of a `Data.define` / `Struct.new` definition (PR #1685, GH #1543)
+  - **`pin_operator_removal`** — `in ^expected` to `in expected`: the pattern captures instead of comparing (PR #1686, GH #1544)
+  - **`rightward_assignment`** — `value => [a, b]` to `value in [a, b]`: a mismatch returns `false` instead of raising (PR #1687, GH #1545)
+  - **`numbered_parameter_swap`** — `pairs.map { _1 - _2 }` to `pairs.map { _2 - _1 }` (PR #1688, GH #1546)
+  - **`forwarded_argument_drop`** — `g(*, **, &)` to `g(**, &)`; a `...` signature is spelled out so one part can be left out (PR #1690, GH #1547)
+  - **`pattern_wildcard_widening`** — `in [a, b]` to `in [a, b, *]`, `in { age: Integer }` to `in { age: _ }`: the pattern accepts shapes it rejected (PR #1692, GH #1548)
+  - **`no_matching_pattern_else`** — adds an empty `else` to a `case/in` that has none, so an unmatched value yields `nil` instead of raising (PR #1694, GH #1549)
+- **Seven operators for arguments, numbers and declarations (`default` profile)** (epic GH #1429):
+  - **`argument_order_permutation`** — `compute(a, b)` to `compute(b, a)` for calls, `super` and `yield`. Calls that take arguments in any order, such as `OptionParser#on`, can be silenced with `ignore_patterns` (PR #1706, GH #1550)
+  - **`keyword_value_swap`** — `compute(x: a, y: b)` to `compute(x: b, y: a)`, keeping the keys (PR #1707, GH #1551)
+  - **`comparison_operand_swap`** — `x.age <=> y.age` to `y.age <=> x.age`: reverses a sort block or a custom ordering (PR #1710, GH #1554)
+  - **`integer_division_to_fdiv`** — `a / b` to `a.fdiv(b)`: integer division keeps its remainder (PR #1712, GH #1555)
+  - **`off_by_one_boundary`** — `n.times` to `(n - 1).times`, `items.first(n)` to `items.first(n - 1)`, for counts held in a variable (PR #1713, GH #1556)
+  - **`format_specifier_swap`** — `format("%05d", n)` to `format("%d", n)`, `"%.2f"` to `"%f"` / `"%s"` (PR #1714, GH #1557)
+  - **`alias_removal`** — drops an `alias` or `alias_method` declaration (PR #1719, GH #1561)
+- **Seven structural regexp operators (`default` profile)** — built on `regexp_parser`, so each edits one token of the pattern rather than one byte (epic GH #1426; PR #1722, GH #1721):
+  - **`regexp_character_type_complement`** — `/\d+/` to `/\D+/`, `/\bword/` to `/\Bword/` (PR #1725, GH #1525)
+  - **`regexp_anchor_promotion`** — `^` to `\A`, `$` and `\Z` to `\z`: the pattern stops matching around newlines (PR #1726, GH #1526)
+  - **`regexp_alternation_branch_deletion`** — `/cat|dog/` to `/dog/` and `/cat/` (PR #1727, GH #1527)
+  - **`regexp_quantifier_minimum_swap`** — `*` to `+` and back, keeping lazy and possessive markers, so only the empty case changes (PR #1728, GH #1528)
+  - **`regexp_capture_to_passive`** — `/id=(\d+)/` to `/id=(?:\d+)/`: `$1` and `m[1]` lose their value (PR #1729, GH #1529)
+  - **`regexp_named_group_rename`** — `/(?<user>\w+)@/` to `/(?<_user>\w+)@/`: `m[:user]` no longer finds it (PR #1730, GH #1530)
+  - **`regexp_option_removal`** — drops `i` or `m` where it changes what the pattern matches (PR #1731, GH #1531)
+- **Four operators for `rescue` and `return` (`default` profile)** (epic GH #1425):
+  - **`rescue_handler_promotion`** — runs a rescue handler instead of the code it protects, so the happy path never runs (PR #1732, GH #1519)
+  - **`rescue_handler_concatenation`** — runs the handler after the protected code as well, so a successful run also does what the handler does (PR #1733, GH #1520)
+  - **`rescue_else_concatenation`** — moves the `else` body into the protected code, so an error it raises is now rescued (PR #1734, GH #1521)
+  - **`return_keyword_removal`** — `return :neg if x.negative?` to `:neg if x.negative?`: control flow continues past a guard clause (PR #1735, GH #1522)
+- **Two operators in the `strict` profile**:
+  - **`exception_swallow`** — `record.save!` to `record.save! rescue nil`, for statements that raise by convention: a survivor means no test makes it fail and checks the error comes out (PR #1716, GH #1558)
+  - **`statement_reorder`** — swaps two adjacent statements that both act, to surface side effects whose order is never asserted (PR #1717, GH #1559)
+- **`ignore_patterns` accepts every method name** — names ending in `?`, `!` or `=` and operator methods are written as they are (`call{name=valid?|save!}`, `call{name=<=>}`); names made of reserved characters go in quotes (`call{name='|'}`). They used to raise `ConfigError`, which left the new operators' noisiest call sites impossible to silence. See `docs/ast_pattern_syntax.md` (PR #1737, GH #1715)
+- **`index_to_fetch` under a guard on the same key is equivalent** — `config.fetch(:size)` cannot raise inside `if config[:size]`, nor after `return unless config[:size]`; both forms are now reported `equivalent` instead of surviving on every run (PRs #1754, #1763; GH #1744, #1753)
+- **A red baseline says why it was red** — the failing examples with their first error line, or the error that stopped the file before any example ran (load error, timeout, a baseline process that died), on stderr once the baseline finishes, under the score line, and in JSON as `summary.baseline_failures`. The baseline used to report pass or fail and nothing else (PR #1752, GH #1743)
+
+### Changed
+
+- **A red baseline no longer hides survivors, and no longer counts as a kill** — every survivor covered by a spec file that was red in the baseline used to be recorded `neutral`, although its tests had passed: real gaps disappeared behind full marks. And where the red example failed again in the mutation run, every mutation it ran against was reported `killed`. Now a survivor stays a survivor whatever the baseline did, and a mutation is `neutral` only when its tests failed on nothing but examples that were already failing. `summary.baseline_neutralized` counts those. Expect a lower score on a project with a red or flaky spec file — the earlier one was wrong in both directions (PR #1762, GH #1751)
+- **The same under Minitest and Test::Unit** — tests are named `Class#test` and `test(Class)` in the baseline and in a mutation run alike (PR #1768, GH #1761)
+- **`send_mutation` swaps rounding modes** — `round` to `floor` and `ceil` (PR #1712, GH #1555)
+- **Dependencies** — `regexp_parser` (`>= 2.9, < 3`, the range RuboCop uses) is a new runtime dependency. `diff-lcs` is capped below 2 while `rspec-expectations` requires `< 2.0` (PRs #1722, #1704)
+- **Run the MCP server through `bundle exec`** — the README setup now shows `"command": "bundle", "args": ["exec", "evilution", "mcp"]`, so the project's `Gemfile.lock` decides which gem versions are loaded (PR #1704, GH #1684)
+
+### Fixed
+
+- **Methods inside `class << self` are named as class methods** — they were listed as `Gateway#create_group`, so `--target Gateway.create_group` matched nothing and `Gateway.` / `Gateway#` selected the wrong set (PR #1745, GH #1740)
+- **`regex_simplification` no longer mutates group syntax as if it were a quantifier or an anchor** — `/(?:ab)+/` became `/(:ab)+/`, a lookahead became a capture of `=a`, and anchors inside a `(?#comment)` were "removed", producing mutants that could never be killed (PR #1723, GH #1720)
+- **`pattern_matching_array` keeps the constant of a deconstruct pattern** — mutating `Point[x, y]` also removed the `Point` check, and parenthesized, qualified and find patterns lost their shape (PR #1693, GH #1691; fix by [@mikamikasuki](https://github.com/mikamikasuki))
+- **`keyword_argument` no longer removes an anonymous `**` the body forwards** — `def call(*, **, &)` forwarding `target.call(*, **, &)` produced a mutant Ruby rejects (PR #1695, GH #1689)
+- **A gem activation conflict is reported as one** — with the MCP server started outside Bundler, RubyGems activated `diff-lcs` 2.0 and RSpec then refused to load; the run stopped at the proof-of-life canary with a message about the canary. It now names the conflict and the fix (PR #1704, GH #1684)
+- **Eight more advisory messages can no longer be turned into errors** — a project that raises on warnings promoted evilution's own notices ("HTML report written to …", "coverage targeting unavailable", …) to exceptions; they now go through `Evilution::Diagnostic` like the rest (PR #1739, GH #1591)
+- **In-process RSpec runs no longer keep about 1 MB per mutation** — each run with a suite hook left its examples reachable through `RSpec::Core::AnonymousExampleGroup` for the life of the process (65 MB to 220 MB over 150 runs, flat after the fix) (PR #1765; fix by [@gipcompany](https://github.com/gipcompany))
+
 ## [1.3.0] - 2026-09-28
 
 Operator expansion release: the `default` profile grows from 88 to 111 operators, mostly around call sites and blocks, and several existing operators gain new replacements. Mutation scores will move — every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
