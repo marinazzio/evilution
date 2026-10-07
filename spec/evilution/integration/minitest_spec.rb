@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "tempfile"
 require "tmpdir"
 require "securerandom"
@@ -38,6 +39,7 @@ RSpec.describe Evilution::Integration::Minitest do
   # test methods from that registry, so a stubbed dispatch must register a
   # runnable to mimic a real run. Clear the registry after each example.
   after { Minitest::Runnable.runnables.clear }
+  after { described_class.test_classes.clear }
 
   # Stub the version-dispatch helper rather than ::Minitest.__run directly so
   # the stubs work whether the installed Minitest is 5.x (has __run) or 6.x
@@ -1095,6 +1097,104 @@ RSpec.describe Evilution::Integration::Minitest do
         $LOADED_FEATURES.delete(helper)
         Object.send(:remove_const, :EV52HF_HELPER_LOADED) if defined?(EV52HF_HELPER_LOADED)
       end
+    end
+  end
+
+  # One process runs every mutation under in_process isolation, and a test
+  # class registers with Minitest only when it is first defined.
+  describe "running the same test file for several mutations in one process" do
+    let(:tmpdir) { Dir.mktmpdir("minitest_reload_spec") }
+    let(:tag) { SecureRandom.hex(4) }
+    let(:runs) { [] }
+
+    before { Thread.current[:evilution_minitest_runs] = runs }
+
+    after do
+      Thread.current[:evilution_minitest_runs] = nil
+      FileUtils.rm_rf(tmpdir)
+    end
+
+    def write_test_file(name, body)
+      path = File.join(tmpdir, name)
+      File.write(path, body)
+      path
+    end
+
+    def class_style(name, label)
+      write_test_file(name, <<~RUBY)
+        class ReloadTest#{tag}#{label} < Minitest::Test
+          def test_runs
+            Thread.current[:evilution_minitest_runs] << "#{label}"
+            assert true
+          end
+        end
+      RUBY
+    end
+
+    def run_tests(path)
+      described_class.new(test_files: [path]).send(:run_tests, mutation)
+    end
+
+    it "runs the tests for every mutation, not the first only" do
+      path = class_style("calc_test.rb", "A")
+      integration = described_class.new(test_files: [path])
+
+      results = Array.new(3) { integration.send(:run_tests, mutation) }
+
+      expect(results).to all(include(passed: true))
+      expect(runs).to eq(%w[A A A])
+    end
+
+    it "runs them for an integration built after another one loaded the file" do
+      path = class_style("calc_test.rb", "A")
+
+      expect(run_tests(path)).to include(passed: true)
+      expect(run_tests(path)).to include(passed: true)
+      expect(runs).to eq(%w[A A])
+    end
+
+    it "runs only the tests of the files resolved for the mutation" do
+      first = class_style("a_test.rb", "A")
+      second = class_style("b_test.rb", "B")
+
+      run_tests(first)
+      run_tests(second)
+      run_tests(first)
+
+      expect(runs).to eq(%w[A B A])
+    end
+
+    # What a spec-style `describe` does: a new class on every load, where a
+    # named class would be reopened.
+    it "runs a file that builds its test class anew on each load once per mutation" do
+      path = write_test_file("calc_spec.rb", <<~RUBY)
+        Class.new(Minitest::Test) do
+          def test_runs
+            Thread.current[:evilution_minitest_runs] << "spec"
+            assert true
+          end
+        end
+      RUBY
+
+      results = Array.new(3) { run_tests(path) }
+
+      expect(results).to all(include(passed: true))
+      expect(runs).to eq(%w[spec spec spec])
+    end
+
+    it "still reports a failing test as a failure on a later mutation" do
+      path = write_test_file("fail_test.rb", <<~RUBY)
+        class ReloadFailTest#{tag} < Minitest::Test
+          def test_fails
+            assert_equal 1, 2
+          end
+        end
+      RUBY
+
+      results = Array.new(2) { run_tests(path) }
+
+      expect(results.map { |result| result[:passed] }).to eq([false, false])
+      expect(results.map { |result| result[:error] }).to eq([nil, nil])
     end
   end
 end

@@ -13,6 +13,7 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
   let(:mutation) { double("mutation", file_path: "lib/foo.rb") }
 
   after { FileUtils.rm_rf(tmpdir) }
+  after { described_class.test_classes.clear }
 
   def write_test_file(filename, body)
     path = File.join(tmpdir, filename)
@@ -274,6 +275,74 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
     ensure
       $LOADED_FEATURES.delete(helper)
       Object.send(:remove_const, :EV52HF_TU_HELPER) if defined?(EV52HF_TU_HELPER)
+    end
+  end
+
+  # One process runs every mutation under in_process isolation, and a test
+  # class counts as newly loaded only when it is first defined.
+  describe "running the same test file for several mutations in one process" do
+    let(:runs) { [] }
+    let(:tag) { File.basename(tmpdir).delete("^a-zA-Z0-9") }
+
+    before { Thread.current[:evilution_test_unit_runs] = runs }
+    after { Thread.current[:evilution_test_unit_runs] = nil }
+
+    def class_style(name, label)
+      write_test_file("test/#{name}", <<~RUBY)
+        require "test-unit"
+        class ReloadTest#{tag}#{label} < Test::Unit::TestCase
+          def test_runs
+            Thread.current[:evilution_test_unit_runs] << "#{label}"
+            assert true
+          end
+        end
+      RUBY
+    end
+
+    def run_tests(path)
+      build_integration(test_file: path).send(:run_tests, mutation)
+    end
+
+    it "runs the tests for every mutation, not the first only" do
+      integration = build_integration(test_file: class_style("calc_test.rb", "A"))
+
+      results = Array.new(3) { integration.send(:run_tests, mutation) }
+
+      expect(results).to all(include(passed: true))
+      expect(runs).to eq(%w[A A A])
+    end
+
+    it "runs them for an integration built after another one loaded the file" do
+      path = class_style("calc_test.rb", "A")
+
+      expect(run_tests(path)).to include(passed: true)
+      expect(run_tests(path)).to include(passed: true)
+      expect(runs).to eq(%w[A A])
+    end
+
+    it "runs only the tests of the files resolved for the mutation" do
+      first = class_style("a_test.rb", "A")
+      second = class_style("b_test.rb", "B")
+
+      run_tests(first)
+      run_tests(second)
+      run_tests(first)
+
+      expect(runs).to eq(%w[A B A])
+    end
+
+    it "still reports a failing test as a failure on a later mutation" do
+      path = write_test_file("test/fail_test.rb", <<~RUBY)
+        require "test-unit"
+        class ReloadFail#{tag} < Test::Unit::TestCase
+          def test_fails; assert_equal 1, 2; end
+        end
+      RUBY
+
+      results = Array.new(2) { run_tests(path) }
+
+      expect(results.map { |result| result[:passed] }).to eq([false, false])
+      expect(results.map { |result| result[:error] }).to eq([nil, nil])
     end
   end
 end

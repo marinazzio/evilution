@@ -13,16 +13,12 @@ RSpec.describe "A red baseline", :aggregate_failures do
 
   # Where each framework keeps the fixture's tests, and how evilution is told
   # to run them.
-  #
-  # Minitest and Test::Unit are run under fork isolation only. Both register a
-  # test class when it is first defined, so a process that loads the same test
-  # file for a second mutation finds no tests to run in it.
   frameworks = {
     "RSpec" => { file: "spec/calc_spec.rb", variant: "%s", flags: [], isolations: %w[fork in_process] },
     "Minitest" => { file: "test/calc_test.rb", variant: "minitest.%s", flags: %w[--integration minitest],
-                    isolations: %w[fork] },
+                    isolations: %w[fork in_process] },
     "Test::Unit" => { file: "test/calc_test.rb", variant: "test_unit.%s", flags: %w[--integration test-unit],
-                      isolations: %w[fork] }
+                      isolations: %w[fork in_process] }
   }
 
   # The fixture's tests are kept under other names so this suite does not

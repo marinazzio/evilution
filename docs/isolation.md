@@ -132,6 +132,23 @@ the MCP server is a long-lived process that handles runs from different
 projects — preloading one project's Rails stack into a shared process would
 poison subsequent runs.
 
+## Test files under `in_process` (Minitest, Test::Unit)
+
+Under `in_process` one process runs every mutation, and Minitest and
+Test::Unit learn of a test class only when it is first defined: loading its
+file a second time reopens the class and registers nothing. Each test file is
+therefore loaded once per process, and the classes it registered are
+dispatched again for every later mutation
+(`Integration::Loading::TestClassCache`).
+
+The consequence is that code in the body of a test file runs once. Tests
+generated at load time from the code under test (`OPS.each { |op|
+define_method("test_#{op}") { … } }`) keep the set built on the first load,
+and state held on a test class carries over from one mutation to the next.
+Under `fork` every child loads the file itself, so use `--isolation fork` for
+a suite that depends on either. RSpec is unaffected: it is reset and its spec
+files are loaded again for each mutation.
+
 ## Sandboxed working directory
 
 Every isolator runs `test_command.call` inside a per-mutation scratch

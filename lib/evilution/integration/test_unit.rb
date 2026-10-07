@@ -4,6 +4,7 @@ require_relative "base"
 require_relative "test_unit_crash_detector"
 require_relative "known_failures"
 require_relative "loading/test_load_path"
+require_relative "loading/test_class_cache"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 require_relative "../baseline"
@@ -28,6 +29,12 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
   # that we defer support to a follow-up if a project surfaces needing it.
   def self.spec_resolver
     Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
+  end
+
+  # Shared by every instance: the canary and the mutation runs build their
+  # own, and a file loaded for one must not be loaded again for the other.
+  def self.test_classes
+    @test_classes ||= Evilution::Integration::Loading::TestClassCache.new { SubjectClassRegistry.descendants }
   end
 
   def self.baseline_options
@@ -125,16 +132,15 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
 
   def load_test_classes(files)
     Evilution::Integration::Loading::TestLoadPath.add!(files)
-    SubjectClassRegistry.newly_loaded do
-      files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
-    end
+    paths = files.map { |f| File.expand_path(f, Evilution.project_base_dir) }
+    self.class.test_classes.fetch(paths) { |path| load(path) }
   end
 
   # Test::Unit has no public registry-clear analogous to
-  # Minitest::Runnable.runnables.clear. SubjectClassRegistry's newly_loaded
-  # block scopes each dispatch to classes loaded in *this* round, so stale
-  # classes from prior mutations sit dormant on ObjectSpace without polluting
-  # the run. #reset_state stays as a contract no-op for parity with Minitest.
+  # Minitest::Runnable.runnables.clear. Each dispatch is handed the classes of
+  # the files resolved for this mutation, so classes of other files sit
+  # dormant on ObjectSpace without polluting the run. #reset_state stays as a
+  # contract no-op for parity with Minitest.
   def reset_state
     # no-op — see comment above
   end
