@@ -22,8 +22,8 @@ transaction block with a half-delivered exception. The mask is
 [load-bearing for transaction correctness][rails-handle-interrupt].
 
 That mask interacts badly with `Timeout.timeout`. The Timeout gem schedules a
-timer thread which fires `Thread#raise Timeout::Error` at the main thread when
-the deadline hits. Ruby receives the `raise`, inspects the interrupt mask, sees
+timer thread which fires `Thread#raise` at the main thread when the deadline
+hits. Ruby receives the `raise`, inspects the interrupt mask, sees
 `Exception => :never`, and **queues the exception for later delivery** — "later"
 meaning "when the masked block exits". If the mutant is stuck in an infinite
 loop inside the transaction, the block never exits, the queued exception is
@@ -56,6 +56,26 @@ The same hazard applies to any Ruby code that uses
 `Queue`, `ActiveSupport::Notifications::Fanout` listeners, and custom cleanup
 blocks that wrap "must complete" sections. If your target code can touch any
 of those, prefer `--isolation fork`.
+
+## How `in_process` ends a run that is out of time
+
+The timeout raises `Evilution::Isolation::InProcess::Expired` into the run. It
+is a `SignalException`, not a `Timeout::Error`, because it has to end the
+whole test run. A test framework rescues nearly everything a test raises:
+handed a `Timeout::Error`, it records one failed test and moves on to the
+next, which may reach the same endless loop with no timer left to stop it.
+Minitest, Test::Unit and RSpec all let a `SignalException` through, so the run
+stops at once and the mutation is reported as timed out rather than killed.
+
+It is not an `Interrupt` either. Tooling that handles Ctrl-C — maxitest, for
+one — rescues `Interrupt` and skips every test from then on, which would turn
+each later mutation in the process into a survivor.
+
+One raise is all there is. Code under test, or a test, that rescues
+`Exception` or `SignalException` and then loops again cannot be stopped from
+inside its own process; use `--isolation fork` for it. The same goes for a
+mutant that crashes the Ruby VM: under `fork` that costs one child, under
+`in_process` the whole run.
 
 ## Parent-process preload
 

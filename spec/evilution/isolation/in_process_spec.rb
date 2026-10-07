@@ -56,6 +56,60 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result).to be_timeout
     end
 
+    # A test framework rescues what a test raises and moves on to the next
+    # one, which may reach the same endless loop.
+    it "returns timeout when the run rescues the error and carries on" do
+      test_command = lambda { |_m|
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
+        begin
+          sleep 10
+        rescue NoMemoryError, SignalException, SystemExit
+          raise
+        rescue Exception # rubocop:disable Lint/RescueException
+          nil
+        end
+        sleep 0.01 while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
+
+      expect(result).to be_timeout
+    end
+
+    it "stops the run with an exception test frameworks let through" do
+      expect(described_class::Expired.ancestors).to include(SignalException)
+    end
+
+    # Some test tooling takes an Interrupt for the user's Ctrl-C: it rescues it
+    # and skips every test from then on, in that run and in the ones after it.
+    it "returns timeout when the run rescues Interrupt and carries on" do
+      test_command = lambda { |_m|
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
+        begin
+          sleep 10
+        rescue Interrupt
+          nil
+        end
+        sleep 0.01 while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 0.1)
+
+      expect(result).to be_timeout
+    end
+
+    it "returns error, not timeout, when the code under test raises Timeout::Error itself" do
+      test_command = ->(_m) { raise Timeout::Error, "upstream took too long" }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_error
+      expect(result).not_to be_timeout
+      expect(result.error_message).to eq("upstream took too long")
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 

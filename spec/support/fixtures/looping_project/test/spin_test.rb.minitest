@@ -1,0 +1,14 @@
+# frozen_string_literal: true
+
+require "minitest/autorun"
+require_relative "../lib/spin"
+
+class SpinTest < Minitest::Test
+  def test_counts_to_three
+    assert_equal 3, Spin.new.count(3)
+  end
+
+  def test_counts_to_five
+    assert_equal 5, Spin.new.count(5)
+  end
+end

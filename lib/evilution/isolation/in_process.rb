@@ -9,6 +9,22 @@ require_relative "../result/mutation_result"
 require_relative "../isolation"
 
 class Evilution::Isolation::InProcess
+  # Raised into the run when its time is up. A SignalException, because the
+  # timeout has to end the whole test run and a test framework rescues nearly
+  # everything a test raises, Timeout::Error included: it would record one
+  # failed test and go on to the next, which may reach the same endless loop
+  # with no timer left to stop it. Minitest, Test::Unit and RSpec all let a
+  # SignalException through.
+  #
+  # Not an Interrupt, though it is one of those: tooling that handles the
+  # user's Ctrl-C (maxitest) rescues Interrupt and skips every test from then
+  # on, for the rest of the process.
+  class Expired < SignalException
+    def initialize(_message = nil)
+      super("SIGALRM")
+    end
+  end
+
   @null_out = File.open(File::NULL, "w")
   @null_err = File.open(File::NULL, "w")
 
@@ -33,7 +49,7 @@ class Evilution::Isolation::InProcess
   private
 
   # The Dir.chdir block is inside the Timeout.timeout block so that a
-  # Timeout::Error raised mid-call still unwinds through Dir.chdir's ensure
+  # timeout raised mid-call still unwinds through Dir.chdir's ensure
   # and restores the parent CWD before the rescue clause runs. The sandbox
   # contains any relative-path writes from path-relativizing mutations
   # (EV-wqxu / GH #1278). Evilution.with_isolated_worker signals the rest of
@@ -41,7 +57,7 @@ class Evilution::Isolation::InProcess
   # SourceEvaluator/Integration) to anchor project-relative paths to
   # PROJECT_ROOT for the duration of the call.
   def execute_with_timeout(mutation, test_command, timeout, sandbox_dir)
-    result = Timeout.timeout(timeout) do
+    result = Timeout.timeout(timeout, Expired) do
       Evilution.with_isolated_worker do
         Dir.chdir(sandbox_dir) do
           suppress_output { test_command.call(mutation) }
@@ -49,7 +65,7 @@ class Evilution::Isolation::InProcess
       end
     end
     { timeout: false }.merge(result)
-  rescue Timeout::Error
+  rescue Expired
     { timeout: true }
   rescue ScriptError, StandardError => e
     {
