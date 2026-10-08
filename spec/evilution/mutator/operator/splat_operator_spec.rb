@@ -113,6 +113,32 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       splat_mutations = mutations.select { |m| m.operator_name == "splat_operator" }
       expect(splat_mutations).to be_empty
     end
+
+    # A positional argument cannot follow a keyword splat either:
+    # `bar(**a, b)` is a syntax error, so only the first `**` can be demoted.
+    it "mutates only the first double-splat when another double-splat follows it" do
+      mutations = mutations_for("def foo\n  bar(**a, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, **b)\nend\n"])
+    end
+
+    it "mutates only the first of three double-splats" do
+      mutations = mutations_for("def foo\n  bar(**a, **b, **c)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, **b, **c)\nend\n"])
+    end
+
+    it "mutates only the first double-splat when a positional argument comes before both" do
+      mutations = mutations_for("def foo\n  bar(x, **a, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(x, a, **b)\nend\n"])
+    end
+
+    it "does not mutate a double-splat that follows a double-splat and a kwarg" do
+      mutations = mutations_for("def foo\n  bar(**a, k: v, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, k: v, **b)\nend\n"])
+    end
   end
 
   describe "valid Ruby output" do
@@ -125,7 +151,8 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
         "def foo\n  bar(x, **opts)\nend\n",
         "def foo\n  {**opts}\nend\n",
         "def foo\n  {a: 1, **rest}\nend\n",
-        "def foo\n  {key: bar(**opts)}\nend\n"
+        "def foo\n  {key: bar(**opts)}\nend\n",
+        "def foo\n  bar(**a, **b)\nend\n"
       ]
 
       sources.each do |source|
@@ -255,16 +282,6 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       mutations = mutations_for("def foo\n  bar(k: v, **f(*x))\nend\n")
 
       expect(mutations.map(&:mutated_source)).to include("def foo\n  bar(k: v, **f(x))\nend\n")
-    end
-  end
-
-  describe "kwarg-after-splat detection across multiple splats" do
-    it "still mutates a later double-splat that is not preceded by any kwarg" do
-      mutations = mutations_for("def foo\n  bar(**a, **b)\nend\n")
-
-      sources = mutations.map(&:mutated_source)
-      expect(sources).to include("def foo\n  bar(a, **b)\nend\n")
-      expect(sources).to include("def foo\n  bar(**a, b)\nend\n")
     end
   end
 

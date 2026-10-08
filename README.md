@@ -628,7 +628,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `pattern_matching_alternative` | Remove/reorder alternatives | `pat1 \| pat2` -> `pat1` |
 | `pattern_matching_array` | Remove/wildcard array elements | `[a, b]` -> `[a, _]` |
 | `yield_statement` | Remove yield or its arguments | `yield(x)` -> `yield` |
-| `splat_operator` | Remove splat/double-splat (skips `**` in a hash literal, `**` after a keyword argument, and the rest of a pattern) | `foo(*args)` -> `foo(args)` |
+| `splat_operator` | Remove splat/double-splat (skips `**` in a hash literal, `**` after a keyword argument or another `**`, and the rest of a pattern) | `foo(*args)` -> `foo(args)` |
 | `defined_check` | Replace `defined?` with `true` | `defined?(x)` -> `true` |
 | `regex_capture` | Swap or nil-ify capture refs | `$1` -> `$2`, `$1` -> `nil` |
 | `loop_flip` | Swap while/until loops | `while cond` -> `until cond` |
