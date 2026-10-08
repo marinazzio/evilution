@@ -159,6 +159,16 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
       end
     end
 
+    # ComplexLiteral replaces the literal as a whole; `nili` is not a value.
+    it "leaves the integer part of a complex literal alone" do
+      Tempfile.create(["integer_literal", ".rb"]) do |file|
+        File.write(file.path, "class Sample\n  def value\n    5i + 2\n  end\nend\n")
+        mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+
+        expect(mutations.map { |m| m.mutated_source.lines[2].strip }).to eq(["5i + 0", "5i + 3", "5i + 1", "5i + 167", "5i + nil"])
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_zero")
 
