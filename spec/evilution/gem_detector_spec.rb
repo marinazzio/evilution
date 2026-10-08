@@ -277,6 +277,20 @@ RSpec.describe Evilution::GemDetector do
         expect(entry).to eq(bb_flat)
       end
 
+      # An exact entry anywhere in the targets outranks the subdirectory of
+      # an earlier one, whichever of the two spellings the entry uses.
+      it "prefers a later target that is a flat hyphenated entry over an earlier subdirectory match" do
+        write_gemspec(@tmp, "aa")
+        write_gemspec(@tmp, "aa-extra")
+        write_gem_entry(@tmp, "aa")
+        FileUtils.mkdir_p(File.join(@tmp, "lib", "aa"))
+        flat = File.join(@tmp, "lib", "aa-extra.rb")
+        File.write(flat, "module AaExtra; end\n")
+
+        entry = described_class.gem_entry_for(@tmp, target_paths: [File.join(@tmp, "lib", "aa", "thing.rb"), flat])
+        expect(entry).to eq(flat)
+      end
+
       it "skips a nil entry in target_paths without raising" do
         write_gemspec(@tmp, "dotenv")
         write_gemspec(@tmp, "dotenv-rails")

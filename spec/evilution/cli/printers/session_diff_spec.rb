@@ -42,6 +42,13 @@ RSpec.describe Evilution::CLI::Printers::SessionDiff do
       expect(io.string).to include("+15.00%")
     end
 
+    it "prints killed out of total for base and head" do
+      described_class.new(result, format: :text).render(io)
+
+      expect(io.string).to include("Base score:   70.00%  (7/10 killed)")
+      expect(io.string).to include("Head score:   85.00%  (17/20 killed)")
+    end
+
     it "prints fixed section when non-empty" do
       described_class.new(result, format: :text).render(io)
       expect(io.string).to include("Fixed")

@@ -111,6 +111,27 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       build(cfg, isolator: isolator).call(mutations, nil)
     end
 
+    it "hands the baseline result and the built integration to the parallel strategy" do
+      mutations = [mutation, mutation]
+      baseline_result = double("BaselineResult", failed?: false)
+      integration = ->(_m) { "cmd" }
+      baseline_runner = instance_double(
+        Evilution::Runner::BaselineRunner, build_integration: integration, neutralization_fallback_dir: "spec"
+      )
+      parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+      allow(parallel_strategy).to receive(:call).and_return(
+        Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
+      )
+      allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+      build(config(jobs: 2), isolator: instance_double(Evilution::Isolation::Fork), baseline_runner: baseline_runner)
+        .call(mutations, baseline_result)
+
+      expect(baseline_runner).to have_received(:build_integration).with(baseline_result)
+      expect(parallel_strategy).to have_received(:call)
+        .with(mutations, baseline_result: baseline_result, integration: integration)
+    end
+
     # EV-j0bv / GH #1607: contention only exists while the pool runs, so a
     # mutation it could not judge is re-run once the pool is done.
     it "re-runs infra-neutralised results serially after a parallel pass" do

@@ -190,6 +190,26 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       expect(Evilution::Coverage::MapBuilder).to have_received(:new)
     end
 
+    it "builds and saves the coverage map for the absolute target and spec paths" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).with("lib/foo.rb").and_return(["spec/foo_spec.rb"])
+      target = File.join(Evilution::PROJECT_ROOT, "lib/foo.rb")
+      spec = File.join(Evilution::PROJECT_ROOT, "spec/foo_spec.rb")
+      map = Evilution::Coverage::Map.new(index: {}, built_files: [])
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["x"], save: nil)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      allow(Evilution::Coverage::MapBuilder).to receive(:new)
+        .and_return(instance_double(Evilution::Coverage::MapBuilder, call: map))
+      allow(Evilution::Integration::RSpec).to receive(:new).and_return(Evilution::Integration::RSpec.allocate)
+
+      described_class.new(cfg).build_integration
+
+      expect(Evilution::Coverage::MapBuilder).to have_received(:new).with(spec_files: [spec], target_files: [target])
+      expect(store).to have_received(:stale_files).with([target, spec])
+      expect(store).to have_received(:save).with(map, [target, spec])
+    end
+
     it "falls back to lexical when the target source resolves to no spec file" do
       cfg = config(integration: :rspec, example_targeting: true,
                    example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])

@@ -24,6 +24,31 @@ RSpec.describe Evilution::AST::SorbetSigDetector do
       end
     end
 
+    # The clause wraps the body in one more node, so the sig sits an odd
+    # number of levels below the root.
+    context "with a sig in a class body that has an ensure clause" do
+      let(:source) do
+        <<~RUBY
+          class Foo
+            sig { returns(Integer) }
+            def bar
+              42
+            end
+          ensure
+            cleanup
+          end
+        RUBY
+      end
+
+      it "returns the byte range of the sig block" do
+        expect(detector.call(source).map { |range| source.byteslice(range) }).to eq(["sig { returns(Integer) }"])
+      end
+
+      it "returns the line range of the sig block" do
+        expect(detector.line_ranges(source)).to eq([2..2])
+      end
+    end
+
     context "with multi-line sig block" do
       let(:source) do
         <<~RUBY

@@ -99,6 +99,20 @@ RSpec.describe Evilution::CLI::Commands::Compare do
       expect(summary["alive_only_current"]).to eq(0)
     end
 
+    it "tells a survivor of the first run from one of the second" do
+      session = JSON.parse(File.read(evilution_path))
+      session["killed"] << session["survived"].pop.merge("status" => "killed")
+      fixed = Tempfile.new(["fixed", ".json"])
+      fixed.write(JSON.generate(session))
+      fixed.flush
+
+      run_with(files: [evilution_path, fixed.path])
+
+      expect(JSON.parse(out.string)["summary"]).to include("alive_only_against" => 1, "alive_only_current" => 0)
+    ensure
+      fixed.close!
+    end
+
     it "emits single-line JSON (no pretty-print)" do
       run_with(files: [mutant_path, evilution_path])
       # @stdout.puts appends exactly one trailing newline; rest must be single line.

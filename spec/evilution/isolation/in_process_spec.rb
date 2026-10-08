@@ -341,6 +341,15 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result.memory_delta_kb).to eq(500)
     end
 
+    it "reports the rss before the run as the parent's and the rss after as the child's" do
+      allow(Evilution::Memory).to receive(:rss_kb).and_return(1000, 1500)
+      test_command = ->(_m) { { passed: false } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect([result.parent_rss_kb, result.child_rss_kb]).to eq([1000, 1500])
+    end
+
     it "reports a negative rss delta when memory shrinks during a run" do
       allow(Evilution::Memory).to receive(:rss_kb).and_return(2000, 1200)
       test_command = ->(_m) { { passed: false } }

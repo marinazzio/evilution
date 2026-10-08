@@ -85,6 +85,12 @@ RSpec.describe Evilution::Feedback::SetupWarning do
       expect(message).to include("10 / 10")
     end
 
+    it "reports errored out of total mutations in the generic hint" do
+      results = Array.new(9) { errored_result(error_class: "Foo::CustomError") } + [killed_result]
+
+      expect(described_class.call(summary_with(results))).to include("Foo::CustomError (9 / 10)")
+    end
+
     it "returns nil when errored mutations span many distinct classes (no dominant pattern)" do
       results = [
         errored_result(error_class: "NameError"),
