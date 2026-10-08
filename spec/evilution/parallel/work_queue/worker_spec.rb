@@ -37,6 +37,46 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
     end
   end
 
+  describe ".install_child_signal_handlers" do
+    # The child reports how it ended through its exit status: 100 + signal
+    # number when the signal came back with its default handling, 3 when the
+    # handler raised instead.
+    def wait_for_signal(dir, ready_io)
+      Evilution::TempDirTracker.tracked_dirs.each { |tracked| Evilution::TempDirTracker.unregister(tracked) }
+      Evilution::TempDirTracker.register(dir)
+      described_class.install_child_signal_handlers
+      ready_io.puts("ready")
+      sleep 30
+      exit!(4)
+    rescue SignalException => e
+      exit!(100 + e.signo)
+    rescue StandardError
+      exit!(3)
+    end
+
+    def exit_status_after(signal, dir)
+      read_io, write_io = IO.pipe
+      pid = fork { wait_for_signal(dir, write_io) }
+      write_io.close
+      read_io.gets
+      Process.kill(signal, pid)
+      Process.wait2(pid).last.exitstatus
+    ensure
+      read_io.close
+    end
+
+    %w[INT TERM].each do |signal|
+      it "cleans up, then raises #{signal} again with its default handling" do
+        dir = Dir.mktmpdir("evilution-worker-signal")
+
+        expect(exit_status_after(signal, dir)).to eq(100 + Signal.list.fetch(signal))
+        expect(Dir.exist?(dir)).to be(false)
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+  end
+
   describe "#kill terminates the whole process group" do
     it "kills grandchildren forked by the worker block, not just the worker" do
       Dir.mktmpdir do |dir|

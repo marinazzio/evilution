@@ -39,6 +39,18 @@ RSpec.describe Evilution::Equivalent::Heuristic::VoidContext do
       expect(heuristic.match?(mutation)).to be true
     end
 
+    it "matches a call spanning several lines by its opening line" do
+      subj = subject_for("each_multiline_void")
+      line = find_line_in_method(subj, ".each")
+      mutation = double("Mutation",
+                        operator_name: "collection_replacement",
+                        subject: subj,
+                        line: line,
+                        diff: "- [1, 2, 3].each do |x|\n+ [1, 2, 3].map do |x|")
+
+      expect(heuristic.match?(mutation)).to be true
+    end
+
     it "matches in a method with multiple statements" do
       subj = subject_for("each_void_multi_statement")
       line = find_line_in_method(subj, ".each")

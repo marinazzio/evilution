@@ -84,6 +84,22 @@ RSpec.describe Evilution::SpecAstCache do
       expect(it_block.body_text).to include("# not a comment")
     end
 
+    it "keeps the code on both sides of a stripped comment" do
+      path = write_spec(<<~RUBY)
+        RSpec.describe Foo do
+          it "thing" do
+            foo_method # gone
+            bar_method # gone too
+            baz_method
+          end
+        end
+      RUBY
+
+      it_block = cache.fetch(path).find { |b| b.kind == :it }
+
+      expect(it_block.body_text).to eq("foo_method \n    bar_method \n    baz_method")
+    end
+
     it "collects nested describe/context/it blocks" do
       path = write_spec(<<~RUBY)
         RSpec.describe Foo do

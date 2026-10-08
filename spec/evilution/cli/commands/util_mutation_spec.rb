@@ -45,6 +45,13 @@ RSpec.describe Evilution::CLI::Commands::UtilMutation do
       expect(tmpfile).to have_received(:flush)
     end
 
+    it "parses the source and labels its subjects with the file path" do
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Prism).to have_received(:parse).with("def foo; x + y; end")
+      expect(Evilution::AST::SubjectFinder).to have_received(:new).with("def foo; x + y; end", "/tmp/eval.rb")
+    end
+
     it "invokes the printer with the mutations and format" do
       described_class.new(parsed, stdout: out, stderr: err).call
       expect(Evilution::CLI::Printers::UtilMutation).to have_received(:new).with(mutations, format: :text)

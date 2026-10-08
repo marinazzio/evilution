@@ -279,6 +279,22 @@ RSpec.describe Evilution::Baseline do
       )
     end
 
+    it "kills a child that ignores the request to terminate" do
+      read_io, write_io = IO.pipe
+      pid = Process.spawn(RbConfig.ruby, "-e", "trap('TERM') {}; $stdout.puts 'ready'; $stdout.flush; sleep 30",
+                          out: write_io)
+      write_io.close
+      read_io.gets
+
+      baseline.terminate_child(pid)
+
+      expect { Process.kill(0, pid) }.to raise_error(Errno::ESRCH)
+    ensure
+      read_io.close
+      Evilution::ProcessCleanup.safe_kill("KILL", pid)
+      Evilution::ProcessCleanup.safe_wait(pid)
+    end
+
     # The stand-in child keeps a copy of the pipe's write end open, as a real
     # hung child would, so the parent waits out the timeout instead of EOF.
     it "names the spec file in the timeout report when run through run_spec_file" do
