@@ -12,20 +12,31 @@ require_relative "../operator"
 # that pass the argument are unaffected, which is what separates this from a
 # mutation that breaks every call site.
 #
-# Ruby allows a required parameter to follow an optional one, so each optional
-# is mutated on its own and the rest of the signature stays as written.
+# Optional parameters have to sit side by side, so only the ends of a run of
+# them are mutated; a required parameter in the middle would split it in two.
+# The first can always join the required parameters before it. The last can
+# join those after it, unless a rest parameter follows: a required parameter
+# cannot stand between an optional one and `*rest`. The rest of the signature
+# stays as written.
 # KeywordArgument owns optional keyword parameters. Blocks are left alone: a
 # block ignores arity, so a missing argument arrives as nil rather than raising,
 # and making its parameter required would change nothing.
 class Evilution::Mutator::Operator::OptionalParameterToRequired < Evilution::Mutator::Base
   def visit_def_node(node)
     parameters = node.parameters
-    parameters.optionals.each { |optional| require_parameter(optional) } if parameters
+    mutable_optionals(parameters).each { |optional| require_parameter(optional) } if parameters
 
     super
   end
 
   private
+
+  def mutable_optionals(parameters)
+    optionals = parameters.optionals
+    return optionals.first(1) if parameters.rest
+
+    [optionals.first, optionals.last].compact.uniq
+  end
 
   def require_parameter(node)
     location = node.location

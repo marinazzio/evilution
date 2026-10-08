@@ -6,6 +6,7 @@ require_relative "../diagnostic"
 require_relative "minitest_crash_detector"
 require_relative "known_failures"
 require_relative "loading/test_load_path"
+require_relative "loading/test_class_cache"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 require_relative "../baseline"
@@ -96,6 +97,12 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     end
   end
 
+  # Shared by every instance: the canary and the mutation runs build their
+  # own, and a file loaded for one must not be loaded again for the other.
+  def self.test_classes
+    @test_classes ||= Evilution::Integration::Loading::TestClassCache.new { ::Minitest::Runnable.runnables.dup }
+  end
+
   def self.baseline_options
     {
       runner: baseline_runner,
@@ -146,8 +153,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   def execute_minitest(mutation, files, command)
-    Evilution::Integration::Loading::TestLoadPath.add!(files)
-    files.each { |f| load(File.expand_path(f, Evilution.project_base_dir)) }
+    load_test_classes(files)
 
     detector = reset_crash_detector
     run = run_minitest(build_args(mutation), detector)
@@ -158,6 +164,14 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     return known_failures_only_result(command) if @known_failures.only?(run[:failed_ids])
 
     build_minitest_result(run[:passed], command, detector)
+  end
+
+  # Leaves Minitest with the test classes of these files and no others.
+  def load_test_classes(files)
+    Evilution::Integration::Loading::TestLoadPath.add!(files)
+    paths = files.map { |f| File.expand_path(f, Evilution.project_base_dir) }
+    classes = self.class.test_classes.fetch(paths) { |path| load(path) }
+    ::Minitest::Runnable.runnables.replace(classes)
   end
 
   # Zero dispatched test methods means the run carries no signal — the result

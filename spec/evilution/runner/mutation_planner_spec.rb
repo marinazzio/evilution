@@ -30,6 +30,21 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       expect(plan.equivalent).to eq([])
     end
 
+    it "lists the lines mutations were generated for, per file" do
+      file = "spec/support/fixtures/arithmetic.rb"
+      plan = described_class.new(config, registry: registry).call(subjects_for(file))
+
+      expect(plan.mutated_lines.keys).to eq([file])
+      expect(plan.mutated_lines[file]).to eq(plan.enabled.map(&:line).uniq.sort)
+    end
+
+    it "counts a line whose mutations were disabled by a comment as mutated" do
+      file = "spec/support/fixtures/disable_comments.rb"
+      plan = described_class.new(config, registry: registry).call(subjects_for(file))
+
+      expect(plan.mutated_lines[file] & (9..11).to_a).not_to be_empty
+    end
+
     it "filters out mutations in disable-comment ranges and counts them as skipped" do
       subjects = subjects_for("spec/support/fixtures/disable_comments.rb")
       plan = described_class.new(config, registry: registry).call(subjects)

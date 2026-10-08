@@ -7,7 +7,7 @@ require_relative "../ast/pattern/filter"
 require_relative "../equivalent/detector"
 
 class Evilution::Runner::MutationPlanner
-  Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, keyword_init: true)
+  Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, :mutated_lines, keyword_init: true)
 
   GenerationResult = Data.define(:mutations, :skipped)
   DisabledFilterResult = Data.define(:enabled, :disabled)
@@ -33,12 +33,21 @@ class Evilution::Runner::MutationPlanner
     sig_filter = filter_sig_blocks(disabled_filter.enabled)
     equivalent_filter = filter_equivalent(sig_filter.enabled)
 
-    build_plan(equivalent_filter, disabled_mutations, total_skipped(generation, disabled_filter, sig_filter))
+    plan = build_plan(equivalent_filter, disabled_mutations, total_skipped(generation, disabled_filter, sig_filter))
+    plan.mutated_lines = mutated_lines(deduped)
+    plan
   end
 
   private
 
   attr_reader :config, :registry
+
+  # The lines mutations were generated for, per file. Taken before any filter:
+  # a line whose mutations were all disabled or judged equivalent was still
+  # reached by an operator.
+  def mutated_lines(mutations)
+    mutations.group_by(&:file_path).transform_values { |group| group.map(&:line).uniq.sort }
+  end
 
   def compute_disabled_mutations(disabled_filter)
     return [] unless config.show_disabled?

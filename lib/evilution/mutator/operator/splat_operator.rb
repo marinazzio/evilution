@@ -4,7 +4,7 @@ require_relative "../operator"
 
 class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
   def visit_splat_node(node)
-    mutate_remove_splat(node) if node.expression
+    mutate_remove_splat(node) if node.expression && !pattern_rests.include?(node)
 
     super
   end
@@ -14,20 +14,40 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
     super
   end
 
+  # The rest of a pattern binds what is left over; it is not a splat in a
+  # call or a literal, so these splats are skipped. Dropping `**` from
+  # `{ key:, **opts }` is a syntax error. Dropping `*` from `[a, *rest]`
+  # parses, but it narrows the pattern to a fixed length. That mutant is
+  # deliberately not emitted, and the pattern operators keep a binding rest
+  # (`*rest`, `**opts`) as written. The rest of a multiple assignment
+  # (`a, *b = x`) is still mutated: `a, b = x` parses and changes what `b`
+  # binds.
+  def visit_hash_pattern_node(node)
+    pattern_rests.add(node.rest) if node.rest
+    super
+  end
+
+  def visit_array_pattern_node(node)
+    pattern_rests.add(node.rest) if node.rest
+    super
+  end
+
+  def visit_find_pattern_node(node)
+    pattern_rests.add(node.left)
+    pattern_rests.add(node.right)
+    super
+  end
+
   # KeywordHashNode wraps call-arg kwargs + `**splat`. When an explicit
-  # `k: v` precedes a `**opts` splat in the same call, demoting `**opts` to
-  # bare `opts` puts a positional after a keyword and Ruby rejects it
-  # (`bar(k: v, opts)` is a syntax error). Mark such splats so
-  # `visit_assoc_splat_node` skips them. Splats that come BEFORE any kwarg
-  # (`bar(**opts, k: v)`) are still safe — positional-before-keyword is fine.
+  # `k: v` or another `**splat` precedes a `**opts` splat in the same call,
+  # demoting `**opts` to bare `opts` puts a positional after a keyword
+  # argument and Ruby rejects it (`bar(k: v, opts)` and `bar(**a, opts)` are
+  # syntax errors). Mark such splats so `visit_assoc_splat_node` skips them.
+  # A splat that comes first (`bar(**opts, k: v)`) is still safe —
+  # positional-before-keyword is fine.
   def visit_keyword_hash_node(node)
-    seen_kwarg = false
-    node.elements.each do |el|
-      if el.is_a?(Prism::AssocSplatNode) && seen_kwarg
-        kwarg_preceded_splats.add(el)
-      elsif el.is_a?(Prism::AssocNode)
-        seen_kwarg = true
-      end
+    node.elements.drop(1).each do |el|
+      kwarg_preceded_splats.add(el) if el.is_a?(Prism::AssocSplatNode)
     end
 
     super
@@ -37,6 +57,7 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
     return super if node.value.nil?
     return super if hash_elements.include?(node)
     return super if kwarg_preceded_splats.include?(node)
+    return super if pattern_rests.include?(node)
 
     mutate_remove_double_splat(node)
 
@@ -51,6 +72,10 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
 
   def kwarg_preceded_splats
     @kwarg_preceded_splats ||= Set.new.compare_by_identity
+  end
+
+  def pattern_rests
+    @pattern_rests ||= Set.new.compare_by_identity
   end
 
   def mutate_remove_splat(node)

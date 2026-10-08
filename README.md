@@ -629,7 +629,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `pattern_matching_alternative` | Remove/reorder alternatives | `pat1 \| pat2` -> `pat1` |
 | `pattern_matching_array` | Remove/wildcard array elements | `[a, b]` -> `[a, _]` |
 | `yield_statement` | Remove yield or its arguments | `yield(x)` -> `yield` |
-| `splat_operator` | Remove splat/double-splat | `foo(*args)` -> `foo(args)` |
+| `splat_operator` | Remove splat/double-splat (skips `**` in a hash literal, `**` after a keyword argument or another `**`, and the rest of a pattern) | `foo(*args)` -> `foo(args)` |
 | `defined_check` | Replace `defined?` with `true` | `defined?(x)` -> `true` |
 | `regex_capture` | Swap or nil-ify capture refs | `$1` -> `$2`, `$1` -> `nil` |
 | `loop_flip` | Swap while/until loops | `while cond` -> `until cond` |
@@ -638,7 +638,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `method_body_to_super` | Replace a method body with bare `super` where a super target exists | `def foo; body; end` -> `def foo; super; end` |
 | `typed_default_return` | Replace a single-expression body with the empty value of its inferred type | `def names(u); u.map(&:name); end` -> `def names(u); []; end` |
 | `block_parameter_drop` | Drop a block's single parameter | `users.each { |u| touch(u) }` -> `users.each { touch(u) }` |
-| `optional_parameter_to_required` | Drop an optional positional parameter's default | `def f(a = 1)` -> `def f(a)` |
+| `optional_parameter_to_required` | Drop an optional positional parameter's default; of several, only the ones Ruby lets become required: the first, and the last unless a `*rest` parameter follows | `def f(a = 1)` -> `def f(a)` |
 | `optional_default_injection` | Overwrite an optional parameter with its own default at the top of the body | `def f(a = 1); body; end` -> `def f(a = 1); a = 1; body; end` |
 | `block_destructuring_expansion` | Flatten a destructuring group in a block's parameters | `pairs.each_with_index { |(k, v), i| use(k, v, i) }` -> `pairs.each_with_index { |k, v, i| use(k, v, i) }` |
 | `forwarding_super_to_explicit` | Give a forwarding `super` an empty argument list | `def f(a); super; end` -> `def f(a); super(); end` |

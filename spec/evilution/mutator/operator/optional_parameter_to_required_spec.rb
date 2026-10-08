@@ -65,6 +65,70 @@ RSpec.describe Evilution::Mutator::Operator::OptionalParameterToRequired do
       )
     end
 
+    # Optional parameters have to sit side by side, so only the ends of a run
+    # can lose their default: one in the middle would split it in two.
+    it "mutates only the first and the last of three optional parameters" do
+      muts = mutations_for("three_optionals")
+
+      expect(mutated_signatures(muts, "three_optionals")).to eq(
+        [
+          "  def three_optionals(first, second = 2, third = 3)",
+          "  def three_optionals(first = 1, second = 2, third)"
+        ]
+      )
+    end
+
+    it "mutates only the first and the last of four optional parameters" do
+      muts = mutations_for("four_optionals")
+
+      expect(mutated_signatures(muts, "four_optionals")).to eq(
+        [
+          "  def four_optionals(first, second = 2, third = 3, fourth = 4)",
+          "  def four_optionals(first = 1, second = 2, third = 3, fourth)"
+        ]
+      )
+    end
+
+    it "mutates the last optional parameter when required ones follow it" do
+      muts = mutations_for("optionals_then_required")
+
+      expect(mutated_signatures(muts, "optionals_then_required")).to eq(
+        [
+          "  def optionals_then_required(first, second = 2, third = 3, last)",
+          "  def optionals_then_required(first = 1, second = 2, third, last)"
+        ]
+      )
+    end
+
+    # A required parameter cannot stand between an optional one and the rest
+    # parameter, so there the last optional keeps its default too.
+    it "mutates only the first optional parameter when a rest parameter follows" do
+      muts = mutations_for("two_optionals_with_rest")
+
+      expect(mutated_signatures(muts, "two_optionals_with_rest")).to eq(
+        ["  def two_optionals_with_rest(first, second = 2, *rest)"]
+      )
+    end
+
+    it "mutates only the first optional parameter when a rest and a required parameter follow" do
+      muts = mutations_for("three_optionals_with_rest_and_required")
+
+      expect(mutated_signatures(muts, "three_optionals_with_rest_and_required")).to eq(
+        ["  def three_optionals_with_rest_and_required(first, second = 2, third = 3, *rest, last)"]
+      )
+    end
+
+    it "mutates both ends when only keyword and block parameters follow" do
+      muts = mutations_for("two_optionals_with_keyword_and_block")
+
+      expect(mutated_signatures(muts, "two_optionals_with_keyword_and_block")).to eq(
+        [
+          "  def two_optionals_with_keyword_and_block(first, second = 2, key: nil, &blk)",
+          "  def two_optionals_with_keyword_and_block(first = 1, second, key: nil, &blk)"
+        ]
+      )
+    end
+
     it "keeps a following rest parameter" do
       muts = mutations_for("with_rest")
 
@@ -150,9 +214,9 @@ RSpec.describe Evilution::Mutator::Operator::OptionalParameterToRequired do
     end
 
     it "produces parseable mutations" do
-      muts = mutations_for("two_optionals") + mutations_for("with_rest") +
-             mutations_for("endless_optional") + mutations_for("with_block")
+      muts = subjects_from_fixture.flat_map { |s| described_class.new.call(s) }
 
+      expect(muts).not_to be_empty
       expect(muts.map(&:parse_status).uniq).to eq([:ok])
     end
 

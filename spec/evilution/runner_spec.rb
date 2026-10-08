@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "tmpdir"
 require "evilution/runner"
 
 RSpec.describe Evilution::Runner do
@@ -3176,7 +3177,8 @@ RSpec.describe Evilution::Runner do
         enabled: [mutation],
         equivalent: [equivalent_mutation],
         skipped_count: 0,
-        disabled_mutations: []
+        disabled_mutations: [],
+        mutated_lines: {}
       )
       planner = instance_double(Evilution::Runner::MutationPlanner)
       allow(Evilution::Runner::MutationPlanner).to receive(:new).and_return(planner)
@@ -3186,6 +3188,42 @@ RSpec.describe Evilution::Runner do
 
       expect(result.total).to eq(2)
       expect(result.equivalent).to eq(1)
+    end
+  end
+
+  describe "#call over a range holding class-body code" do
+    it "reports the lines no mutation was generated for, after planning" do
+      Dir.mktmpdir do |dir|
+        file = File.join(dir, "order.rb")
+        File.write(file, <<~RUBY)
+          require "set"
+
+          class Order
+            LIMIT = 10
+            alias_method :sum, :total
+
+            def total
+              1
+            end
+          end
+        RUBY
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
+        allow(isolator).to receive(:call) do |mutation:, **|
+          Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 0.1)
+        end
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => (1..10) }, format: :json, quiet: true,
+          baseline: false, isolation: :fork, skip_config_file: true
+        )
+
+        summary = nil
+        expect { summary = described_class.new(config: config).call }
+          .to output(/#{Regexp.escape(file)}:4 holds code outside every subject/).to_stderr
+
+        expect(summary.results.map { |result| result.mutation.operator_name }).to include("alias_removal")
+        expect(summary.uncovered_code).to eq([{ file: file, lines: ["4"] }])
+      end
     end
   end
 

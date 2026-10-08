@@ -113,6 +113,32 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       splat_mutations = mutations.select { |m| m.operator_name == "splat_operator" }
       expect(splat_mutations).to be_empty
     end
+
+    # A positional argument cannot follow a keyword splat either:
+    # `bar(**a, b)` is a syntax error, so only the first `**` can be demoted.
+    it "mutates only the first double-splat when another double-splat follows it" do
+      mutations = mutations_for("def foo\n  bar(**a, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, **b)\nend\n"])
+    end
+
+    it "mutates only the first of three double-splats" do
+      mutations = mutations_for("def foo\n  bar(**a, **b, **c)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, **b, **c)\nend\n"])
+    end
+
+    it "mutates only the first double-splat when a positional argument comes before both" do
+      mutations = mutations_for("def foo\n  bar(x, **a, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(x, a, **b)\nend\n"])
+    end
+
+    it "does not mutate a double-splat that follows a double-splat and a kwarg" do
+      mutations = mutations_for("def foo\n  bar(**a, k: v, **b)\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo\n  bar(a, k: v, **b)\nend\n"])
+    end
   end
 
   describe "valid Ruby output" do
@@ -125,7 +151,8 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
         "def foo\n  bar(x, **opts)\nend\n",
         "def foo\n  {**opts}\nend\n",
         "def foo\n  {a: 1, **rest}\nend\n",
-        "def foo\n  {key: bar(**opts)}\nend\n"
+        "def foo\n  {key: bar(**opts)}\nend\n",
+        "def foo\n  bar(**a, **b)\nend\n"
       ]
 
       sources.each do |source|
@@ -135,6 +162,86 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
                                    "Invalid Ruby produced for #{mutation}: #{result.errors.map(&:message)}"
         end
       end
+    end
+  end
+
+  # The rest of a pattern is not a splat in
+  # a call or a literal. Dropping `**` from a hash pattern rest is a syntax
+  # error. Dropping `*` from an array/find pattern rest narrows the pattern,
+  # which is not emitted.
+  describe "pattern rests" do
+    it "does not mutate the keyword rest of a hash pattern in rightward assignment" do
+      expect(mutations_for("def foo(x)\n  x => { key:, **opts }\nend\n")).to be_empty
+    end
+
+    it "does not mutate the keyword rest of a hash pattern in a case/in clause" do
+      source = "def foo(x)\n  case x\n  in { key:, **opts } then opts\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate the keyword rest of a hash pattern in a one-line `in` predicate" do
+      expect(mutations_for("def foo(x)\n  x in { key:, **opts }\nend\n")).to be_empty
+    end
+
+    it "does not mutate the keyword rest of a hash pattern without braces" do
+      source = "def foo(x)\n  case x\n  in key:, **opts then opts\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate the rest of an array pattern" do
+      source = "def foo(x)\n  case x\n  in [a, *rest] then rest\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate either rest of a find pattern" do
+      source = "def foo(x)\n  case x\n  in [*pre, 1, *post] then pre\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate rests inside a nested pattern" do
+      source = "def foo(x)\n  case x\n  in { a: [*r1, { b: [*r2] }], **rest } then rest\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate rests inside a constant pattern" do
+      source = "def foo(x)\n  case x\n  in Foo(a, *r) then r\n  in Bar(k:, **o) then o\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not crash and emits no mutation for an anonymous rest" do
+      source = "def foo(x)\n  case x\n  in [a, *] then a\n  in { k:, ** } then k\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "does not mutate a `**nil` rest" do
+      expect(mutations_for("def foo(x)\n  x in { k:, **nil }\nend\n")).to be_empty
+    end
+
+    it "still mutates the rest of a multiple assignment" do
+      mutations = mutations_for("def foo(x)\n  a, *b = x\nend\n")
+
+      expect(mutations.map(&:mutated_source)).to eq(["def foo(x)\n  a, b = x\nend\n"])
+    end
+
+    it "still mutates a splat in a call inside the clause body" do
+      source = "def foo(x)\n  case x\n  in { key:, **opts } then bar(**opts)\n  end\nend\n"
+
+      expect(mutations_for(source).map(&:mutated_source))
+        .to eq(["def foo(x)\n  case x\n  in { key:, **opts } then bar(opts)\n  end\nend\n"])
+    end
+
+    it "still mutates a splat in a call inside a pinned expression" do
+      source = "def foo(x)\n  case x\n  in [*rest, ^(bar(*y))] then rest\n  end\nend\n"
+
+      expect(mutations_for(source).map(&:mutated_source))
+        .to eq(["def foo(x)\n  case x\n  in [*rest, ^(bar(y))] then rest\n  end\nend\n"])
     end
   end
 
@@ -175,16 +282,6 @@ RSpec.describe Evilution::Mutator::Operator::SplatOperator do
       mutations = mutations_for("def foo\n  bar(k: v, **f(*x))\nend\n")
 
       expect(mutations.map(&:mutated_source)).to include("def foo\n  bar(k: v, **f(x))\nend\n")
-    end
-  end
-
-  describe "kwarg-after-splat detection across multiple splats" do
-    it "still mutates a later double-splat that is not preceded by any kwarg" do
-      mutations = mutations_for("def foo\n  bar(**a, **b)\nend\n")
-
-      sources = mutations.map(&:mutated_source)
-      expect(sources).to include("def foo\n  bar(a, **b)\nend\n")
-      expect(sources).to include("def foo\n  bar(**a, b)\nend\n")
     end
   end
 

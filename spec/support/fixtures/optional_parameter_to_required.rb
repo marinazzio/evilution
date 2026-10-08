@@ -14,6 +14,30 @@ class OptionalParameterToRequiredTarget
     [first, second]
   end
 
+  def three_optionals(first = 1, second = 2, third = 3)
+    [first, second, third]
+  end
+
+  def four_optionals(first = 1, second = 2, third = 3, fourth = 4)
+    [first, second, third, fourth]
+  end
+
+  def optionals_then_required(first = 1, second = 2, third = 3, last)
+    [first, second, third, last]
+  end
+
+  def two_optionals_with_rest(first = 1, second = 2, *rest)
+    [first, second, rest]
+  end
+
+  def three_optionals_with_rest_and_required(first = 1, second = 2, third = 3, *rest, last)
+    [first, second, third, rest, last]
+  end
+
+  def two_optionals_with_keyword_and_block(first = 1, second = 2, key: nil, &blk)
+    [first, second, key, blk]
+  end
+
   def with_rest(value = 1, *rest)
     [value, rest]
   end
