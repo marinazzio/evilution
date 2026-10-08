@@ -4,13 +4,15 @@ require_relative "../operator"
 
 class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
   def visit_splat_node(node)
-    mutate_remove_splat(node) if node.expression && !pattern_rests.include?(node)
+    mutate_remove_splat(node) if node.expression && !exempt_splats.include?(node)
 
     super
   end
 
+  # Inside a hash literal `**opts` merges a hash in; a bare `opts` is not an
+  # element (`{ opts }` is a syntax error), so these splats are skipped.
   def visit_hash_node(node)
-    node.elements.each { |el| hash_elements.add(el) }
+    exempt_splats.merge(node.elements.grep(Prism::AssocSplatNode))
     super
   end
 
@@ -23,18 +25,18 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
   # (`a, *b = x`) is still mutated: `a, b = x` parses and changes what `b`
   # binds.
   def visit_hash_pattern_node(node)
-    pattern_rests.add(node.rest) if node.rest
+    exempt_splats.add(node.rest) if node.rest
     super
   end
 
   def visit_array_pattern_node(node)
-    pattern_rests.add(node.rest) if node.rest
+    exempt_splats.add(node.rest) if node.rest
     super
   end
 
   def visit_find_pattern_node(node)
-    pattern_rests.add(node.left)
-    pattern_rests.add(node.right)
+    exempt_splats.add(node.left)
+    exempt_splats.add(node.right)
     super
   end
 
@@ -42,22 +44,17 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
   # `k: v` or another `**splat` precedes a `**opts` splat in the same call,
   # demoting `**opts` to bare `opts` puts a positional after a keyword
   # argument and Ruby rejects it (`bar(k: v, opts)` and `bar(**a, opts)` are
-  # syntax errors). Mark such splats so `visit_assoc_splat_node` skips them.
+  # syntax errors), so such splats are skipped.
   # A splat that comes first (`bar(**opts, k: v)`) is still safe —
   # positional-before-keyword is fine.
   def visit_keyword_hash_node(node)
-    node.elements.drop(1).each do |el|
-      kwarg_preceded_splats.add(el) if el.is_a?(Prism::AssocSplatNode)
-    end
-
+    exempt_splats.merge(node.elements.drop(1).grep(Prism::AssocSplatNode))
     super
   end
 
   def visit_assoc_splat_node(node)
     return super if node.value.nil?
-    return super if hash_elements.include?(node)
-    return super if kwarg_preceded_splats.include?(node)
-    return super if pattern_rests.include?(node)
+    return super if exempt_splats.include?(node)
 
     mutate_remove_double_splat(node)
 
@@ -66,16 +63,11 @@ class Evilution::Mutator::Operator::SplatOperator < Evilution::Mutator::Base
 
   private
 
-  def hash_elements
-    @hash_elements ||= Set.new.compare_by_identity
-  end
-
-  def kwarg_preceded_splats
-    @kwarg_preceded_splats ||= Set.new.compare_by_identity
-  end
-
-  def pattern_rests
-    @pattern_rests ||= Set.new.compare_by_identity
+  # Splats that are left as written: removing the `*` or `**` would not
+  # parse, or would change what a pattern matches. Each visitor that fills
+  # the set says why.
+  def exempt_splats
+    @exempt_splats ||= Set.new.compare_by_identity
   end
 
   def mutate_remove_splat(node)
