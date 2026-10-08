@@ -165,7 +165,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 138 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 139 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra aggressive mutators on top of `default`:
   - `PredicateToNil` replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values.
   - `ExceptionSwallow` appends `rescue nil` to a statement that raises by convention — a bang method, `fetch` without a default, `Integer` / `Float` / `Rational` — to surface tests that never make it fail and check the error comes out (`record.save!` -> `record.save! rescue nil`). It skips Ruby core in-place bangs (`uniq!`, `sort_by!`, …), `exit!`, statements already under a rescue, and `raise`; project bangs that mutate rather than raise will still show up as survivors.
@@ -512,7 +512,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (138 total)
+## Mutation Operators (139 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -528,6 +528,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `integer_literal` | Boundary-value integer mutations, plus one sentinel past the next integer width (int8, uint8, int16, uint16, int32, uint32, int64) above the literal's magnitude | `n` -> `0`, `1`, `n+1`, `n-1`; `42` -> `167` |
 | `float_literal` | Boundary-value float mutations, plus NaN and both infinities (not inside a pattern, where they do not parse) | `f` -> `0.0`, `1.0`, `Float::NAN`, `Float::INFINITY`, `-Float::INFINITY` |
 | `complex_literal` | Replace a complex literal with `0i`, `1i`, its neighbours along the imaginary axis and `nil` (a rational part such as `3ri` gets no neighbours) | `5i` -> `0i`, `1i`, `6i`, `4i`, `nil` |
+| `rational_literal` | Replace a rational literal with `0r`, `1r`, its two neighbours and `nil` (the rational part of a complex literal such as `3ri` is left to `complex_literal`) | `1.5r` -> `0r`, `1r`, `2.5r`, `0.5r`, `nil` |
 | `string_literal` | Empty the string | `"str"` -> `""` |
 | `array_literal` | Empty the array | `[a, b]` -> `[]` |
 | `hash_literal` | Empty the hash | `{k: v}` -> `{}` |
@@ -1062,7 +1063,7 @@ points — see [docs/architecture.md](docs/architecture.md).
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
 2. **Extract** — Methods are identified as mutation subjects, and so are value-object definitions outside any method (`Point = Data.define(:x, :y)`, `class Coord < Struct.new(:lat, :lng)`), which only the operators that apply to them mutate, and ActiveRecord scopes declared with a literal body in a class body (`scope :recent, -> { where(recent: true) }`), named after the class method they define (`Order.recent`) and mutated like a method body — also when declared in a concern's `included do ... end` block, where they are named after the concern (`Publishable.published`); likewise the guards and callbacks written out as lambdas or blocks inside an AASM `event` or `state` declaration (`event :ship, guard: -> { address? }`), named after the method that declaration defines (`Order#ship`, `Order#paid?`), or after the concern when the machine is declared in its `included do ... end` block (`Shippable#ship`); and the conditions and bodies written out in callback and validation declarations of a class body or of a concern's `included do ... end` block (`validate :credit_limit, if: -> { paid? }`, `before_save { ... }`), named the way the declaration reads (`Order.validate(:credit_limit)`, `Order.before_save`, `Publishable.validates(:title)`)
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 138 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 139 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention
