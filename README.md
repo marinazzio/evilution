@@ -637,7 +637,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `method_body_to_super` | Replace a method body with bare `super` where a super target exists | `def foo; body; end` -> `def foo; super; end` |
 | `typed_default_return` | Replace a single-expression body with the empty value of its inferred type | `def names(u); u.map(&:name); end` -> `def names(u); []; end` |
 | `block_parameter_drop` | Drop a block's single parameter | `users.each { |u| touch(u) }` -> `users.each { touch(u) }` |
-| `optional_parameter_to_required` | Drop an optional positional parameter's default | `def f(a = 1)` -> `def f(a)` |
+| `optional_parameter_to_required` | Drop an optional positional parameter's default; of several, the first and the last only, which are the ones Ruby lets become required | `def f(a = 1)` -> `def f(a)` |
 | `optional_default_injection` | Overwrite an optional parameter with its own default at the top of the body | `def f(a = 1); body; end` -> `def f(a = 1); a = 1; body; end` |
 | `block_destructuring_expansion` | Flatten a destructuring group in a block's parameters | `pairs.each_with_index { |(k, v), i| use(k, v, i) }` -> `pairs.each_with_index { |k, v, i| use(k, v, i) }` |
 | `forwarding_super_to_explicit` | Give a forwarding `super` an empty argument list | `def f(a); super; end` -> `def f(a); super(); end` |
