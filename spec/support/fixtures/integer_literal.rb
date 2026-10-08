@@ -11,6 +11,10 @@ class IntegerChecker
     42
   end
 
+  def returns_minus_one
+    -1
+  end
+
   def returns_minus_five
     -5
   end

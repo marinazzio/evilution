@@ -59,14 +59,29 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
       expect(mutated_sources).to include(a_string_matching(/def returns_minus_five\s+-6\s+end/))
     end
 
+    it "replaces -1 with 0, -2 and nil, the 0 once" do
+      muts = mutations_for("returns_minus_one")
+
+      expect(muts.length).to eq(3)
+      mutated_sources = muts.map(&:mutated_source)
+      expect(mutated_sources).to include(
+        a_string_matching(/def returns_minus_one\s+0\s+end/),
+        a_string_matching(/def returns_minus_one\s+-2\s+end/),
+        a_string_matching(/def returns_minus_one\s+nil\s+end/)
+      )
+    end
+
     it "keeps a subtraction written without spaces valid" do
       mutation = mutations_for("subtracts_zero").find { |m| m.mutated_source.include?("count--1") }
 
+      expect(mutation).not_to be_nil
       expect(Prism.parse(mutation.mutated_source).success?).to be(true)
     end
 
     it "keeps an argument written without parentheses an argument" do
       mutation = mutations_for("passes_zero").find { |m| m.mutated_source.include?("record -1") }
+      expect(mutation).not_to be_nil
+
       call = Prism.parse(mutation.mutated_source).value.statements.body.first.body.body.last.body.body.first
 
       expect(call.name).to eq(:record)
