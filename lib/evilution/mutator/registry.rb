@@ -38,6 +38,7 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::IntegerLiteral,
       Evilution::Mutator::Operator::FloatLiteral,
       Evilution::Mutator::Operator::ComplexLiteral,
+      Evilution::Mutator::Operator::RationalLiteral,
       Evilution::Mutator::Operator::StringLiteral,
       Evilution::Mutator::Operator::ArrayLiteral,
       Evilution::Mutator::Operator::HashLiteral,
