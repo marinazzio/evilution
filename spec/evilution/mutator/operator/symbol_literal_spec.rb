@@ -38,6 +38,37 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
       end
     end
 
+    # RoundHalfModeSwap swaps the mode for the other two; a made-up symbol
+    # only raises, and nil rounds like :up.
+    it "leaves the half: mode of round to round_half_mode_swap" do
+      expect(mutations_for("rounds_half_even")).to be_empty
+    end
+
+    it "still mutates other symbols next to a round mode" do
+      muts = mutations_for("rounds_and_names")
+
+      expect(muts.map { |m| m.mutated_source.lines[m.line - 1].strip }).to eq(
+        ["[amount.round(2, half: :even), :__evilution_mutated__]", "[amount.round(2, half: :even), nil]"]
+      )
+    end
+
+    it "mutates a half: value round does not accept" do
+      expect(mutations_for("rounds_unknown_mode").length).to eq(2)
+    end
+
+    it "mutates a half: keyword of another method" do
+      expect(mutations_for("half_keyword_elsewhere").length).to eq(2)
+    end
+
+    it "forgets the modes of an earlier subject" do
+      operator = described_class.new
+      subjects = subjects_from_fixture
+      rounds = subjects.find { |s| s.name.end_with?("#rounds_half_even") }
+      elsewhere = subjects.find { |s| s.name.end_with?("#half_keyword_elsewhere") }
+
+      expect([operator.call(rounds).length, operator.call(elsewhere).length, operator.call(rounds).length]).to eq([0, 2, 0])
+    end
+
     it "does not mutate keyword argument label keys" do
       muts = mutations_for("calls_with_kwarg")
 
