@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "openssl"
+
 RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
   let(:fixture_path) { File.expand_path("../../../support/fixtures/integer_literal.rb", __dir__) }
   let(:source) { File.read(fixture_path) }
@@ -126,6 +128,17 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
       }.each do |literal, sentinel|
         it "replaces #{literal} with #{sentinel}" do
           expect(replacements_of(literal)).to include(sentinel)
+        end
+      end
+
+      # A safe prime is a prime p whose (p - 1) / 2 is prime too.
+      it "keeps every sentinel a safe prime inside its own width zone" do
+        ceilings = [*described_class::WIDTH_SENTINELS.keys.drop(1), 2**64]
+
+        described_class::WIDTH_SENTINELS.each_with_index do |(boundary, sentinel), index|
+          expect(OpenSSL::BN.new(sentinel)).to be_prime
+          expect(OpenSSL::BN.new((sentinel - 1) / 2)).to be_prime
+          expect(sentinel).to be_between(boundary, ceilings[index] - 1)
         end
       end
 
