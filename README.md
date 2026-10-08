@@ -526,7 +526,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `boolean_literal_replacement` | Flip boolean literals | `true` -> `false` |
 | `nil_replacement` | Replace `nil` with `true`, `false`, `0`, `""` | `nil` -> `true` |
 | `integer_literal` | Boundary-value integer mutations, plus one sentinel past the next integer width (int8, uint8, int16, uint16, int32, uint32, int64) above the literal's magnitude | `n` -> `0`, `1`, `n+1`, `n-1`; `42` -> `167` |
-| `float_literal` | Boundary-value float mutations | `f` -> `0.0`, `1.0` |
+| `float_literal` | Boundary-value float mutations, plus NaN and both infinities (not inside a pattern, where they do not parse) | `f` -> `0.0`, `1.0`, `Float::NAN`, `Float::INFINITY`, `-Float::INFINITY` |
 | `string_literal` | Empty the string | `"str"` -> `""` |
 | `array_literal` | Empty the array | `[a, b]` -> `[]` |
 | `hash_literal` | Empty the hash | `{k: v}` -> `{}` |
