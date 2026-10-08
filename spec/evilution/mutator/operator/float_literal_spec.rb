@@ -128,6 +128,15 @@ RSpec.describe Evilution::Mutator::Operator::FloatLiteral do
       end
     end
 
+    # ComplexLiteral replaces the literal as a whole; `Float::NANi` is not a value.
+    it "leaves the float part of a complex literal alone" do
+      Tempfile.create(["float_literal", ".rb"]) do |file|
+        File.write(file.path, "class Sample\n  def value\n    2.5i\n  end\nend\n")
+
+        expect(described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)).to be_empty
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("zero_float")
 

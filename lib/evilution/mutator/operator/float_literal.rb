@@ -39,6 +39,10 @@ class Evilution::Mutator::Operator::FloatLiteral < Evilution::Mutator::Base
     super
   end
 
+  # A complex literal (`5i`) is replaced as a whole by ComplexLiteral. Its
+  # numeric part is not a literal of its own: `nili` is not a value.
+  def visit_imaginary_node(_node); end
+
   private
 
   def pattern_literals
