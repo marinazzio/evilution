@@ -17,13 +17,14 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
   end
 
   describe "#call" do
-    it "replaces 0 with 1 and nil" do
+    it "replaces 0 with 1, -1 and nil" do
       muts = mutations_for("returns_zero")
 
-      expect(muts.length).to eq(2)
+      expect(muts.length).to eq(3)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/def returns_zero\s+1\s+end/),
+        a_string_matching(/def returns_zero\s+-1\s+end/),
         a_string_matching(/def returns_zero\s+nil\s+end/)
       )
     end
@@ -39,16 +40,37 @@ RSpec.describe Evilution::Mutator::Operator::IntegerLiteral do
       )
     end
 
-    it "replaces 42 with 0, 43, and nil" do
+    it "replaces 42 with 0, 43, 41 and nil" do
       muts = mutations_for("returns_forty_two")
 
-      expect(muts.length).to eq(3)
+      expect(muts.length).to eq(4)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/def returns_forty_two\s+0\s+end/),
         a_string_matching(/def returns_forty_two\s+43\s+end/),
+        a_string_matching(/def returns_forty_two\s+41\s+end/),
         a_string_matching(/def returns_forty_two\s+nil\s+end/)
       )
+    end
+
+    it "lowers a negative literal" do
+      mutated_sources = mutations_for("returns_minus_five").map(&:mutated_source)
+
+      expect(mutated_sources).to include(a_string_matching(/def returns_minus_five\s+-6\s+end/))
+    end
+
+    it "keeps a subtraction written without spaces valid" do
+      mutation = mutations_for("subtracts_zero").find { |m| m.mutated_source.include?("count--1") }
+
+      expect(Prism.parse(mutation.mutated_source).success?).to be(true)
+    end
+
+    it "keeps an argument written without parentheses an argument" do
+      mutation = mutations_for("passes_zero").find { |m| m.mutated_source.include?("record -1") }
+      call = Prism.parse(mutation.mutated_source).value.statements.body.first.body.body.last.body.body.first
+
+      expect(call.name).to eq(:record)
+      expect(call.arguments.arguments.map(&:slice)).to eq(["-1"])
     end
 
     it "produces valid Ruby for all mutations" do
