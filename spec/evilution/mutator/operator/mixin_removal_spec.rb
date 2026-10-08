@@ -170,5 +170,56 @@ RSpec.describe Evilution::Mutator::Operator::MixinRemoval do
       expect(mutations.length).to eq(1)
       expect(mutations.first.diff).to include("include Foo")
     end
+
+    def diffs_for(src, method_name)
+      subject = subjects_from_source(src).find { |s| s.name.end_with?("##{method_name}", ".#{method_name}") }
+      described_class.new.call(subject).map(&:diff)
+    end
+
+    it "anchors on a first method written in a block of the body" do
+      src = "module Sized\n  include Comparable\n  included do\n    def size = 1\n  end\nend\n"
+
+      expect(diffs_for(src, "size")).to contain_exactly(a_string_including("- ", "include Comparable"))
+    end
+
+    it "removes a mixin written in a block of the body" do
+      src = "module Sized\n  def size = 1\n  included do\n    include Comparable\n  end\nend\n"
+
+      expect(diffs_for(src, "size")).to contain_exactly(a_string_including("- ", "include Comparable"))
+    end
+
+    it "attributes a mixin in a singleton class to that singleton class's first method" do
+      src = "class C\n  def a = 1\n  class << self\n    include Foo\n    def b = 2\n  end\nend\n"
+
+      expect(diffs_for(src, "a")).to be_empty
+      expect(diffs_for(src, "b")).to contain_exactly(a_string_including("- ", "include Foo"))
+    end
+
+    it "reaches a class whose only methods sit in a singleton class" do
+      src = "class Report\n  include Comparable\n  class << self\n    extend Foo\n    def build = new\n  end\nend\n"
+
+      expect(diffs_for(src, "build")).to contain_exactly(
+        a_string_including("- ", "include Comparable"), a_string_including("- ", "extend Foo")
+      )
+    end
+
+    it "cuts exactly the mixin call out of the source" do
+      src = "class C\n  include Foo\n  def m = 1\nend\n"
+      subject = subjects_from_source(src).first
+
+      expect(described_class.new.call(subject).map(&:mutated_source)).to eq(["class C\n  \n  def m = 1\nend\n"])
+    end
+
+    it "leaves a mixin call inside a method alone" do
+      src = "class C\n  def a\n    extend Foo\n  end\nend\n"
+
+      expect(diffs_for(src, "a")).to be_empty
+    end
+
+    it "leaves a mixin sent to another receiver alone" do
+      src = "class C\n  def a = 1\n  Other.include Foo\nend\n"
+
+      expect(diffs_for(src, "a")).to be_empty
+    end
   end
 end

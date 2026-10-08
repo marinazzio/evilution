@@ -135,5 +135,12 @@ end
       expect(mutated_sources(muts)).to eq(["class Collection\n  def size = 1\n  alias_method :count, :size\n  def each = 2\nend\n"])
       expect(filter.skipped_count).to eq(1)
     end
+
+    it "reaches a class whose only methods sit in a singleton class" do
+      src = "class Report\n  alias_method :x, :y\n  class << self\n    alias make build\n    def build = new\n  end\nend\n"
+
+      expect(mutations_for(src, "build").map { |m| m.diff[/^- .*$/].delete_prefix("- ").strip })
+        .to eq(["alias_method :x, :y", "alias make build"])
+    end
   end
 end

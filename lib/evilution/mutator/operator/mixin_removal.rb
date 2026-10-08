@@ -3,7 +3,15 @@
 require "prism"
 
 require_relative "../operator"
+require_relative "../../ast/class_body"
 
+# Drop a mixin from a class or module body: `include`, `extend` and `prepend`
+# calls are removed.
+#
+# The calls sit in the class body, outside every method, where no subject
+# reaches them. They are attributed to the method anchoring the enclosing
+# body (see Evilution::AST::ClassBody). A mixin call inside a method is left
+# to the generic call operators.
 class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
   MIXIN_METHODS = %i[include extend prepend].freeze
 
@@ -13,22 +21,22 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
     @mutations = []
     @filter = filter
 
-    enclosing = find_target_scope(subject)
-    return @mutations unless enclosing
-
-    find_mixin_calls(enclosing).each { |call_node| emit_mixin_removal(call_node) }
+    mixin_calls_for(subject).each { |call_node| emit_mixin_removal(call_node) }
     @mutations
   end
 
   private
 
-  def find_target_scope(subject)
+  def mixin_calls_for(subject)
     tree = self.class.parsed_tree_for(subject.file_path, @file_source)
-    enclosing = find_enclosing_scope(tree, subject.line_number)
-    return nil unless enclosing
-    return nil unless find_first_method_line(enclosing) == subject.line_number
 
-    enclosing
+    Evilution::AST::ClassBody.anchored_at(tree, subject.line_number).flat_map do |body|
+      body.declarations { |node| mixin_call?(node) }
+    end
+  end
+
+  def mixin_call?(node)
+    node.is_a?(Prism::CallNode) && MIXIN_METHODS.include?(node.name) && node.receiver.nil?
   end
 
   def emit_mixin_removal(call_node)
@@ -38,50 +46,5 @@ class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
       replacement: "",
       node: call_node
     )
-  end
-
-  def find_enclosing_scope(tree, target_line)
-    finder = ScopeFinder.new(target_line)
-    finder.visit(tree)
-    finder.result
-  end
-
-  def find_first_method_line(scope_node)
-    return nil unless scope_node.body
-
-    scope_node.body.body.each do |node|
-      return node.location.start_line if node.is_a?(Prism::DefNode)
-    end
-    nil
-  end
-
-  def find_mixin_calls(scope_node)
-    return [] unless scope_node.body
-
-    scope_node.body.body.select do |node|
-      node.is_a?(Prism::CallNode) &&
-        MIXIN_METHODS.include?(node.name) &&
-        node.receiver.nil?
-    end
-  end
-
-  # Visitor to find the ClassNode or ModuleNode enclosing a given line number.
-  class ScopeFinder < Prism::Visitor
-    attr_reader :result
-
-    def initialize(target_line)
-      @target_line = target_line
-      @result = nil
-    end
-
-    def visit_class_node(node)
-      @result = node if @target_line.between?(node.location.start_line, node.location.end_line)
-      super
-    end
-
-    def visit_module_node(node)
-      @result = node if @target_line.between?(node.location.start_line, node.location.end_line)
-      super
-    end
   end
 end
