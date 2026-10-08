@@ -17,7 +17,7 @@ class Evilution::Mutator::Operator::SuperclassRemoval < Evilution::Mutator::Base
     @mutations = []
     @filter = filter
 
-    subclasses_for(subject).each do |class_node|
+    classes_with_superclass_for(subject).each do |class_node|
       offset, length = superclass_range(class_node)
       add_mutation(offset: offset, length: length, replacement: "", node: class_node)
     end
@@ -27,7 +27,7 @@ class Evilution::Mutator::Operator::SuperclassRemoval < Evilution::Mutator::Base
 
   private
 
-  def subclasses_for(subject)
+  def classes_with_superclass_for(subject)
     tree = self.class.parsed_tree_for(subject.file_path, @file_source)
 
     Evilution::AST::ClassBody.anchored_at(tree, subject.line_number).map(&:node).select do |scope|

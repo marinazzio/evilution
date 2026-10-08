@@ -18,6 +18,15 @@ class Evilution::AST::ClassBody
   # Nodes whose children belong to something else: a method, or another scope.
   OPAQUE = [Prism::DefNode, *SCOPES].freeze
 
+  # The location that closes each kind of conditional or loop.
+  CLOSINGS = {
+    Prism::IfNode => :end_keyword_loc,
+    Prism::UnlessNode => :end_keyword_loc,
+    Prism::ElseNode => :end_keyword_loc,
+    Prism::WhileNode => :closing_loc,
+    Prism::UntilNode => :closing_loc
+  }.freeze
+
   attr_reader :node
 
   # The bodies anchored at the method starting on the given line, outermost
@@ -48,10 +57,15 @@ class Evilution::AST::ClassBody
     singleton_classes.filter_map { |scope| self.class.new(scope).anchor_line }.first
   end
 
-  # The nodes of the body the block selects. Methods and nested scopes are
-  # neither offered nor searched.
+  # The statements of the body the block selects, each one removable: cut
+  # out, it leaves code that still parses. Methods and nested scopes are
+  # neither offered nor searched, and neither is a statement guarded by a
+  # modifier (`include Foo if legacy?`) or an expression used as a value.
   def declarations(&)
-    contents.reject { |child| OPAQUE.include?(child.class) }.select(&)
+    body = @node.body
+    return [] unless body
+
+    statements_in(body, removable: body.is_a?(Prism::StatementsNode)).select(&)
   end
 
   private
@@ -61,6 +75,22 @@ class Evilution::AST::ClassBody
   # (its name, its superclass expression) is not part of the body.
   def contents
     @contents ||= @node.body ? descend(@node.body) : []
+  end
+
+  def statements_in(node, removable:)
+    node.compact_child_nodes.flat_map do |child|
+      next [] if OPAQUE.include?(child.class)
+
+      nested = statements_in(child, removable: child.is_a?(Prism::StatementsNode) && !modifier?(node))
+      removable ? [child, *nested] : nested
+    end
+  end
+
+  # A conditional or loop written without its closing keyword: the modifier
+  # forms and the ternary, whose statements cannot be cut out.
+  def modifier?(node)
+    closing = CLOSINGS[node.class]
+    !closing.nil? && node.public_send(closing).nil?
   end
 
   def descend(node)

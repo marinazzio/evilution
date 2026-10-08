@@ -210,6 +210,13 @@ RSpec.describe Evilution::Mutator::Operator::MixinRemoval do
       expect(described_class.new.call(subject).map(&:mutated_source)).to eq(["class C\n  \n  def m = 1\nend\n"])
     end
 
+    # Removing it would leave `if legacy?` dangling, which does not parse.
+    it "leaves a mixin guarded by a modifier alone" do
+      src = "class C\n  def a = 1\n  include Foo if legacy?\nend\n"
+
+      expect(diffs_for(src, "a")).to be_empty
+    end
+
     it "leaves a mixin call inside a method alone" do
       src = "class C\n  def a\n    extend Foo\n  end\nend\n"
 

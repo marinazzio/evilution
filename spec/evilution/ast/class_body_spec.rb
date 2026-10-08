@@ -142,6 +142,37 @@ RSpec.describe Evilution::AST::ClassBody do
       expect(seen & [Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode]).to eq([])
     end
 
+    # Cutting such a declaration out would leave the modifier dangling.
+    it "leaves out a declaration guarded by a modifier" do
+      source = "class C\n  def a = 1\n  include A if x\n  include B unless x\n  include D while x\n  include E until x\nend\n"
+
+      expect(declared(source, 2)).to eq([[]])
+    end
+
+    it "leaves out the branches of a ternary" do
+      source = "class C\n  def a = 1\n  x ? include(A) : include(B)\nend\n"
+
+      expect(declared(source, 2)).to eq([[]])
+    end
+
+    it "keeps a declaration in a conditional written out in full" do
+      source = "class C\n  def a = 1\n  if x\n    include A\n  else\n    extend B\n  end\nend\n"
+
+      expect(declared(source, 2)).to eq([%i[include extend]])
+    end
+
+    it "leaves out a call used as a value" do
+      source = "class C\n  def a = 1\n  X = include A\n  register(include(B))\n  include(D) rescue nil\nend\n"
+
+      expect(declared(source, 2)).to eq([[:register]])
+    end
+
+    it "searches a body with a rescue clause" do
+      source = "class C\n  def a = 1\n  include A\nrescue LoadError\n  include B\nend\n"
+
+      expect(declared(source, 2)).to eq([%i[include include]])
+    end
+
     it "keeps each scope's declarations apart when a method anchors two" do
       source = "class C\n  include A\n  class << self\n    include B\n    def a = 1\n  end\nend\n"
 

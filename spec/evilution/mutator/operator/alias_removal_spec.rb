@@ -109,6 +109,19 @@ end
       expect(mutations_for("class C\n  def a = 1\n  Other.alias_method :b, :a\nend\n", "a")).to be_empty
     end
 
+    # Removing it would leave `if legacy?` dangling, which does not parse.
+    it "leaves an alias guarded by a modifier alone" do
+      src = "class C\n  def a = 1\n  alias b a if legacy?\n  alias_method :c, :a unless modern?\nend\n"
+
+      expect(mutations_for(src, "a")).to be_empty
+    end
+
+    it "drops an alias in a conditional written out in full" do
+      src = "class C\n  def a = 1\n  if legacy?\n    alias b a\n  end\nend\n"
+
+      expect(mutations_for(src, "a").map(&:parse_status)).to eq([:ok])
+    end
+
     it "leaves global variable aliases alone" do
       expect(mutations_for("class C\n  def a = 1\n  alias $new $old\nend\n", "a")).to be_empty
     end
