@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::HashLiteral < Evilution::Mutator::Base
+  RENAMED_KEY = "__evilution_mutated__"
+
   def visit_hash_node(node)
     if node.elements.any?
       add_mutation(
@@ -20,6 +22,7 @@ class Evilution::Mutator::Operator::HashLiteral < Evilution::Mutator::Base
       )
 
       mutate_delete_pairs(node.elements)
+      mutate_rename_keys(node.elements)
     end
 
     super
@@ -38,5 +41,34 @@ class Evilution::Mutator::Operator::HashLiteral < Evilution::Mutator::Base
     elements.each_with_index do |element, index|
       delete_element(elements, index) if element.is_a?(Prism::AssocNode)
     end
+  end
+
+  # Rename each label key in turn (`a: 1`, `"a b": 1`): a survivor means no
+  # example reads the value by that name. A key written with a rocket
+  # (`:a => 1`, `"a" => 1`) is a literal of its own, and SymbolLiteral and
+  # StringLiteral already replace it.
+  def mutate_rename_keys(elements)
+    elements.each do |element|
+      rename_key(element) if element.is_a?(Prism::AssocNode) && label?(element.key)
+    end
+  end
+
+  def label?(key)
+    key.is_a?(Prism::SymbolNode) && !key.closing.nil? && key.closing.end_with?(":")
+  end
+
+  # A shorthand pair (`{ x: }`) reads its value from the key, so the value is
+  # written out to stay what it was.
+  def rename_key(pair)
+    key = pair.key
+    replacement = "#{RENAMED_KEY}:"
+    replacement += " #{key.unescaped}" if pair.value.is_a?(Prism::ImplicitNode)
+
+    add_mutation(
+      offset: key.location.start_offset,
+      length: key.location.length,
+      replacement: replacement,
+      node: key
+    )
   end
 end
