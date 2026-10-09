@@ -64,10 +64,32 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
   end
 
   def visit_interpolated_x_string_node(node)
+    return if node.heredoc? && @skip_heredoc_literals
+
+    mutate_command_to_nil(node)
     visit_non_string_parts(node)
   end
 
+  def visit_x_string_node(node)
+    mutate_command_to_nil(node)
+    super
+  end
+
   private
+
+  # A command literal (`` `ls` ``, `%x(ls)`) is only ever replaced as a whole,
+  # by `nil`: the command then does not run. Its text is never rewritten, as
+  # a changed command would run for real wherever an example runs it.
+  def mutate_command_to_nil(node)
+    return if node.heredoc?
+
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "nil",
+      node: node
+    )
+  end
 
   def visit_non_string_parts(node)
     node.parts.each do |part|

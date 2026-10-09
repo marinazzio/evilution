@@ -164,6 +164,79 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       end
     end
 
+    describe "command literal" do
+      def mutations_of(body, **options)
+        Tempfile.create(["string_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          described_class.new(**options).call(Evilution::AST::Parser.new.call(file.path).first)
+        end
+      end
+
+      def mutated_lines(body, **options)
+        mutations_of(body, **options).map { |m| m.mutated_source.lines[2].strip }
+      end
+
+      it "replaces a backtick command with nil" do
+        expect(mutated_lines("    `ls -la`\n")).to eq(["nil"])
+      end
+
+      it "replaces a %x command with nil" do
+        expect(mutated_lines("    %x(ls -la)\n")).to eq(["nil"])
+      end
+
+      it "replaces an empty command with nil" do
+        expect(mutated_lines("    ``\n")).to eq(["nil"])
+      end
+
+      it "replaces an interpolated command as a whole" do
+        expect(mutated_lines("    `ls \#{x}`\n")).to eq(["nil"])
+        expect(mutated_lines("    %x{ls \#{x}}\n")).to eq(["nil"])
+      end
+
+      it "replaces the command inside an expression" do
+        expect(mutated_lines("    `ls \#{x}`.lines.size\n")).to eq(["nil.lines.size"])
+      end
+
+      # A changed command would run for real wherever an example runs it.
+      it "never rewrites the text of a command" do
+        expect(mutated_lines("    `ls -la`\n")).not_to include("``", '""')
+        expect(mutated_lines("    `ls \#{x} -la`\n")).to eq(["nil"])
+      end
+
+      it "still mutates a string literal inside the interpolation" do
+        expect(mutated_lines("    `ls \#{x || \"a\"}`\n")).to eq(["nil", "`ls \#{x || \"\"}`", "`ls \#{x || nil}`"])
+      end
+
+      it "does not replace a heredoc command" do
+        expect(mutated_lines("    <<~`CMD`\n      ls -la\n    CMD\n")).to be_empty
+        expect(mutated_lines("    <<~`CMD`\n      ls \#{x}\n    CMD\n")).to be_empty
+      end
+
+      # Same as a heredoc string: its interpolations are walked unless
+      # skip_heredoc_literals says otherwise.
+      it "mutates a string literal inside a heredoc command's interpolation" do
+        body = "    <<~`CMD`\n      ls \#{x || \"a\"}\n    CMD\n"
+
+        expect(mutations_of(body).map { |m| m.mutated_source.lines[3].strip }).to eq(["ls \#{x || \"\"}", "ls \#{x || nil}"])
+      end
+
+      it "skips a heredoc command's interpolation with skip_heredoc_literals: true" do
+        body = "    <<~`CMD`\n      ls \#{x || \"a\"}\n    CMD\n"
+
+        expect(mutations_of(body, skip_heredoc_literals: true)).to be_empty
+        expect(mutated_lines("    `ls \#{x || \"a\"}`\n", skip_heredoc_literals: true).length).to eq(3)
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    `ls -la`\n", "    %x(ls -la)\n", "    `ls \#{x}`.lines.size\n", "    record `ls`, x\n",
+                  "    `ls \#{x || \"a\"}`\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations).not_to be_empty
+        expect(mutations.map(&:parse_status)).to all(eq(:ok))
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_hello")
 
@@ -284,10 +357,14 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       end
 
       it "does not mutate StringNode chunks inside an interpolated x-string `` `echo \#{cmd}` ``" do
+        # The command is either left as written or replaced as a whole.
         muts = mutations_for("returns_interpolated_xstring")
         muts.each do |mutation|
-          expect(mutation.mutated_source).to include("`echo \#{cmd}`"),
-                                             "X-string chunk mutated; diff: #{mutation.diff.inspect}"
+          command_line = mutation.mutated_source[/def returns_interpolated_xstring\n.*\n(.*)\n/, 1]
+
+          expect(command_line).not_to be_nil, "method not found in: #{mutation.mutated_source.inspect}"
+          expect(["`echo \#{cmd}`", "nil"]).to include(command_line.strip),
+                                               "X-string chunk mutated; diff: #{mutation.diff.inspect}"
         end
         expect(muts.map(&:parse_status)).to all(eq(:ok))
       end
@@ -325,7 +402,7 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       it "mutates a string literal nested inside an interpolated x-string's interpolation" do
         muts = mutations_for("returns_xstring_interp_with_string")
 
-        expect(muts.length).to eq(2)
+        expect(muts.length).to eq(3)
         replacements = muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") } }
         expect(replacements).to include(
           a_string_matching(/prefix \|\| ""/),
