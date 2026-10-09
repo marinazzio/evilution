@@ -94,6 +94,64 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
       end
     end
 
+    describe "interpolated string as a whole" do
+      def mutated_lines(body, **options)
+        Tempfile.create(["string_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          mutations = described_class.new(**options).call(Evilution::AST::Parser.new.call(file.path).first)
+          mutations.map { |m| m.mutated_source.lines[2].strip }
+        end
+      end
+
+      it "replaces the whole string with \"\" and nil, before its chunks" do
+        expect(mutated_lines("    \"a \#{x} b\"\n").first(2)).to eq(['""', "nil"])
+      end
+
+      it "still mutates the chunks inside" do
+        lines = mutated_lines("    \"a \#{x}\"\n")
+
+        expect(lines).to eq(['""', "nil", "\"\"\"\#{x}\"", "\"nil\#{x}\""])
+      end
+
+      it "replaces a string that is only an interpolation" do
+        expect(mutated_lines("    \"\#{x}\"\n")).to eq(['""', "nil"])
+      end
+
+      it "replaces a %() and %Q{} string" do
+        expect(mutated_lines("    %(a \#{x})\n").first(2)).to eq(['""', "nil"])
+        expect(mutated_lines("    %Q{a \#{x}}\n").first(2)).to eq(['""', "nil"])
+      end
+
+      it "replaces the string inside an expression" do
+        expect(mutated_lines("    record \"\#{x}\", x\n")).to eq(['record "", x', "record nil, x"])
+        expect(mutated_lines("    \"\#{x}\".size\n")).to eq(['"".size', "nil.size"])
+      end
+
+      it "replaces an interpolated string nested in an interpolation" do
+        expect(mutated_lines("    \"\#{\"\#{x}\"}\"\n")).to eq(['""', "nil", "\"\#{\"\"}\"", "\"\#{nil}\""])
+      end
+
+      # A word of `%W[]` is not a literal of its own: `nil` there is the word "nil".
+      it "does not replace a word of a %W array as a whole" do
+        expect(mutated_lines("    %W[a\#{x} b]\n")).not_to include('%W["" b]', "%W[nil b]")
+      end
+
+      it "leaves an interpolated heredoc alone" do
+        expect(mutated_lines("    <<~TEXT\n      a \#{x}\n    TEXT\n")).to be_empty
+      end
+
+      # Two interpolations side by side are one string, not adjacent literals:
+      # the traversal goes on into them.
+      it "still reaches a literal inside one of several interpolations" do
+        expect(mutated_lines("    \"\#{x || \"a\"}\#{x}\"\n"))
+          .to eq(['""', "nil", "\"\#{x || \"\"}\#{x}\"", "\"\#{x || nil}\#{x}\""])
+      end
+
+      it "replaces an adjacent concatenation once" do
+        expect(mutated_lines("    \"a\" \"b \#{x}\"\n")).to eq(['""', "nil"])
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_hello")
 
@@ -173,29 +231,16 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         )
       end
 
-      it "does not collapse a plain interpolated string `\"hello #{name}\"`" do
-        # Non-regression: a single quoted span containing interpolation
-        # (StringNode chunk + EmbeddedStatementsNode part) must NOT be treated
-        # as adjacent concat — only the inner literal chunk should be mutated,
-        # the surrounding `"..." interpolation `..."` structure preserved.
+      it "keeps the chunks of a plain interpolated string `\"hello #{name}\"` next to its whole replacement" do
+        # A single quoted span containing interpolation (StringNode chunk +
+        # EmbeddedStatementsNode part) is not adjacent concat: it is replaced
+        # as a whole, and the traversal still reaches the inner `hello ` chunk.
         muts = mutations_for("returns_plain_interpolated")
         interp_muts = muts.select { |m| m.diff.include?("\"hello \#{name}\"") }
+        replaced_lines = interp_muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") }.delete_prefix("+").strip }
 
-        # super-traversal mutates the inner `hello ` StringNode chunk into
-        # two replacements (`""` and `nil`). The outer quotes and `#{name}`
-        # interpolation must survive in both.
-        expect(interp_muts.length).to eq(2)
         expect(interp_muts.map(&:parse_status)).to all(eq(:ok))
-        interp_muts.each do |mutation|
-          replaced_line = mutation.diff.lines.find { |l| l.start_with?("+") }
-          expect(replaced_line).to include("\#{name}"),
-                                   "Expected `\#{name}` preserved in mutated line, got: #{replaced_line.inspect}"
-          # Reject whole-expression collapse: the replacement line must NOT be
-          # bare `""` or `nil` (which would indicate the InterpolatedStringNode
-          # itself was substituted, not just its inner chunk).
-          expect(replaced_line.strip).not_to match(/\A\+\s*(""|nil)\z/),
-                                             "Expected only inner chunk mutated, got whole-expression collapse: #{replaced_line.inspect}"
-        end
+        expect(replaced_lines).to eq(['""', "nil", "\"\"\"\#{name}\"", "\"nil\#{name}\""])
       end
 
       it "does not mutate StringNode chunks inside an interpolated symbol `:\"visit_\#{type}\"`" do
@@ -289,25 +334,16 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         )
       end
 
-      it "does not collapse a pure-interpolation string `\"\#{a}\#{b}\"`" do
-        # Non-regression for Copilot review (PR #1221): EmbeddedStatementsNode
-        # parts also carry an `opening_loc` (the `#{` delimiter), so a naive
-        # `parts.all? { |p| p.opening_loc }` predicate would misclassify
-        # `"#{a}#{b}"` (parts = [EmbeddedStatementsNode, EmbeddedStatementsNode])
-        # as adjacent concat and collapse the whole expression. The predicate
-        # must only accept StringNode / InterpolatedStringNode parts.
+      it "replaces a pure-interpolation string `\"\#{a}\#{b}\"` as a whole, once" do
+        # EmbeddedStatementsNode parts also carry an `opening_loc` (the `#{`
+        # delimiter), so a naive `parts.all? { |p| p.opening_loc }` predicate
+        # would misclassify `"#{a}#{b}"` as adjacent concat. Either way the
+        # string is replaced once, by `""` and by `nil`.
         muts = mutations_for("returns_pure_interpolation")
         interp_muts = muts.select { |m| m.diff.include?("\"\#{a}\#{b}\"") }
+        replaced_lines = interp_muts.map { |m| m.diff.lines.find { |l| l.start_with?("+") }.delete_prefix("+").strip }
 
-        # No whole-expression collapse mutation should be emitted for this
-        # node. Mutations targeting the inner literal `a = "1"` / `b = "2"`
-        # are fine and counted elsewhere.
-        whole_expr_collapse = interp_muts.select do |m|
-          replaced_line = m.diff.lines.find { |l| l.start_with?("+") }
-          !replaced_line.nil? && replaced_line.strip.match?(/\A\+\s*(""|nil)\z/)
-        end
-        expect(whole_expr_collapse).to be_empty,
-                                       "Expected no whole-expression collapse; got: #{whole_expr_collapse.map(&:diff).inspect}"
+        expect(replaced_lines).to eq(['""', "nil"])
       end
     end
   end

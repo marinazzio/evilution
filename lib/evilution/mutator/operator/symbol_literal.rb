@@ -38,6 +38,29 @@ class Evilution::Mutator::Operator::SymbolLiteral < Evilution::Mutator::Base
     super
   end
 
+  # An interpolated symbol (`:"visit_#{type}"`) as a whole. A label key
+  # (`"a#{x}": 1`) cannot be replaced by a value, and a word of `%I[]` has no
+  # quotes of its own: `nil` there would be the symbol `:nil`.
+  def visit_interpolated_symbol_node(node)
+    return super if node.opening_loc.nil? || label_form?(node)
+
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: ':""',
+      node: node
+    )
+
+    add_mutation(
+      offset: node.location.start_offset,
+      length: node.location.length,
+      replacement: "nil",
+      node: node
+    )
+
+    super
+  end
+
   private
 
   def round_half_mode?(node)

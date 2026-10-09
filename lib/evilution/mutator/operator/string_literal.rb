@@ -32,6 +32,11 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
       return
     end
 
+    # The composed value as a whole, next to the chunks and interpolations
+    # inside it. A word of `%W[]` has no quotes of its own and is not a
+    # literal: `nil` there would be the word "nil".
+    emit_string_mutations(node) if node.opening_loc
+
     super
   end
 
