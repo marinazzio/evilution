@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../operator"
+require_relative "../../ast/never_nil"
 
 # Replace safe navigation with a plain call: `user&.name` becomes
 # `user.name`, and the same for the `||=`, `&&=` and operator-write forms.
@@ -12,28 +13,6 @@ require_relative "../operator"
 # Receivers that can never be nil — `self` and literals — are skipped, since
 # the mutant is equivalent there.
 class Evilution::Mutator::Operator::SafeNavigationRemoval < Evilution::Mutator::Base
-  NEVER_NIL_RECEIVERS = [
-    Prism::SelfNode,
-    Prism::StringNode,
-    Prism::InterpolatedStringNode,
-    Prism::XStringNode,
-    Prism::InterpolatedXStringNode,
-    Prism::SymbolNode,
-    Prism::InterpolatedSymbolNode,
-    Prism::IntegerNode,
-    Prism::FloatNode,
-    Prism::RationalNode,
-    Prism::ImaginaryNode,
-    Prism::ArrayNode,
-    Prism::HashNode,
-    Prism::RangeNode,
-    Prism::RegularExpressionNode,
-    Prism::InterpolatedRegularExpressionNode,
-    Prism::TrueNode,
-    Prism::FalseNode,
-    Prism::LambdaNode
-  ].freeze
-
   def visit_call_node(node)
     mutate_safe_navigation(node)
     super
@@ -58,7 +37,7 @@ class Evilution::Mutator::Operator::SafeNavigationRemoval < Evilution::Mutator::
 
   def mutate_safe_navigation(node)
     return unless node.safe_navigation?
-    return if NEVER_NIL_RECEIVERS.any? { |type| node.receiver.is_a?(type) }
+    return if Evilution::AST::NeverNil.node?(node.receiver)
 
     operator = node.call_operator_loc
     add_mutation(offset: operator.start_offset, length: operator.length, replacement: ".", node: node)
