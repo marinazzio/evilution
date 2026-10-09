@@ -33,7 +33,6 @@ class Evilution::Mutator::Operator::SafeNavigationRemoval < Evilution::Mutator::
     Prism::FalseNode,
     Prism::LambdaNode
   ].freeze
-  private_constant :NEVER_NIL_RECEIVERS
 
   def visit_call_node(node)
     mutate_safe_navigation(node)
