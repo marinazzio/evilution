@@ -17,10 +17,10 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
   end
 
   describe "#call" do
-    it "replaces { a: 1, b: 2 } with {}, nil and one hash per deleted pair" do
+    it "replaces { a: 1, b: 2 } with {}, nil, one hash per deleted pair and one per renamed key" do
       muts = mutations_for("returns_populated_hash")
 
-      expect(muts.length).to eq(4)
+      expect(muts.length).to eq(6)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/def returns_populated_hash\s+\{\}\s+end/),
@@ -35,12 +35,12 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
     end
 
     it "recurses into hash elements to mutate a nested hash literal" do
-      # `{ a: { b: 1 } }`: the outer hash yields 2 mutations and the nested
-      # `{ b: 1 }` hash yields 2 more — only reached when the visitor recurses
+      # `{ a: { b: 1 } }`: the outer hash yields 3 mutations and the nested
+      # `{ b: 1 }` hash yields 3 more — only reached when the visitor recurses
       # into the hash elements.
       muts = mutations_for("returns_nested_hash")
 
-      expect(muts.length).to eq(4)
+      expect(muts.length).to eq(6)
       expect(muts.any? { |m| m.mutated_source.include?("{ a: {} }") }).to be true
       expect(muts.any? { |m| m.mutated_source.include?("{ a: nil }") }).to be true
     end
@@ -66,11 +66,11 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
       # The body of the method after each mutation, without the two that
       # replace the hash as a whole.
       def deletions(body)
-        mutations_of(body).drop(2).map { |m| m.mutated_source.lines[2..-3].join }
+        mutations_of(body).drop(2).map { |m| m.mutated_source.lines[2..-3].join }.grep_v(/__evilution_mutated__/)
       end
 
       it "deletes each pair in turn, after {} and nil" do
-        bodies = mutations_of("    { a: 1, b: 2, c: 3 }\n").map { |m| m.mutated_source.lines[2].strip }
+        bodies = mutations_of("    { a: 1, b: 2, c: 3 }\n").first(5).map { |m| m.mutated_source.lines[2].strip }
 
         expect(bodies).to eq(["{}", "nil", "{ b: 2, c: 3 }", "{ a: 1, c: 3 }", "{ a: 1, b: 2 }"])
       end
@@ -96,7 +96,7 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
       end
 
       it "reports each deletion on the line of its pair" do
-        mutations = mutations_of("    {\n      a: 1,\n      b: 2,\n    }\n").drop(2)
+        mutations = mutations_of("    {\n      a: 1,\n      b: 2,\n    }\n").drop(2).first(2)
 
         expect(mutations.map(&:line)).to eq([4, 5])
       end
@@ -118,6 +118,61 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
         mutations = bodies.flat_map { |body| mutations_of(body) }
 
         expect(mutations.map { |m| Prism.parse(m.mutated_source).success? }).to all(be(true))
+      end
+    end
+
+    describe "key renaming" do
+      def renames(body)
+        Tempfile.create(["hash_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+          mutations.map { |m| m.mutated_source.lines[2].strip }.grep(/__evilution_mutated__/)
+        end
+      end
+
+      it "renames each label key in turn, after the deletions" do
+        Tempfile.create(["hash_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value\n    { a: 1, b: 2 }\n  end\nend\n")
+          mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+
+          expect(mutations.map { |m| m.mutated_source.lines[2].strip }).to eq(
+            ["{}", "nil", "{ b: 2 }", "{ a: 1 }", "{ __evilution_mutated__: 1, b: 2 }", "{ a: 1, __evilution_mutated__: 2 }"]
+          )
+        end
+      end
+
+      it "renames the key of a single pair" do
+        expect(renames("    { a: 1 }\n")).to eq(["{ __evilution_mutated__: 1 }"])
+      end
+
+      it "renames a quoted label" do
+        expect(renames("    { \"a b\": 1 }\n")).to eq(["{ __evilution_mutated__: 1 }"])
+      end
+
+      it "keeps the value of a shorthand pair" do
+        expect(renames("    { x: }\n")).to eq(["{ __evilution_mutated__: x }"])
+      end
+
+      # SymbolLiteral and StringLiteral already replace these keys.
+      it "leaves a key written with a rocket to the literal operators" do
+        expect(renames("    { :a => 1, :\"a b\" => 1, \"b\" => 2, x => 3, 4 => 5 }\n")).to be_empty
+      end
+
+      it "leaves an interpolated label alone" do
+        expect(renames("    { \"a\#{x}\": 1 }\n")).to be_empty
+      end
+
+      it "leaves the keywords of a call alone" do
+        expect(renames("    record(a: 1)\n")).to be_empty
+      end
+
+      it "reports the rename on the line of its key" do
+        Tempfile.create(["hash_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value\n    {\n      a: 1,\n      b: 2\n    }\n  end\nend\n")
+          mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+
+          expect(mutations.last(2).map(&:line)).to eq([4, 5])
+        end
       end
     end
 

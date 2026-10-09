@@ -116,6 +116,15 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
       tmpfile.unlink if tmpfile
     end
 
+    # `"b": 2` closes with `":`; `:__evilution_mutated__ 2` does not parse.
+    it "does not mutate quoted label keys" do
+      Tempfile.create(["symbol_literal", ".rb"]) do |file|
+        File.write(file.path, "class Sample\n  def value\n    record({ \"a b\": 1 }, \"c d\": 2)\n  end\nend\n")
+
+        expect(described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)).to be_empty
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_foo")
 

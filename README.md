@@ -531,7 +531,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `rational_literal` | Replace a rational literal with `0r`, `1r`, its two neighbours and `nil` (the rational part of a complex literal such as `3ri` is left to `complex_literal`) | `1.5r` -> `0r`, `1r`, `2.5r`, `0.5r`, `nil` |
 | `string_literal` | Empty the string | `"str"` -> `""` |
 | `array_literal` | Empty the array, replace it with `nil`, delete each element in turn (two or more elements; a heredoc element is kept), and replace a single-element array with its element (not a splat, bare keywords, a `%w` / `%i` word or a heredoc) | `[a, b]` -> `[]`, `nil`, `[b]`, `[a]`; `[x]` -> `x` |
-| `hash_literal` | Empty the hash, replace it with `nil`, and delete each key/value pair in turn (two or more elements; a `**splat` and a pair holding a heredoc are kept) | `{a: 1, b: 2}` -> `{}`, `nil`, `{b: 2}`, `{a: 1}` |
+| `hash_literal` | Empty the hash, replace it with `nil`, delete each key/value pair in turn (two or more elements; a `**splat` and a pair holding a heredoc are kept), and rename each label key in turn (a key written with `=>` is left to `symbol_literal` / `string_literal`) | `{a: 1, b: 2}` -> `{}`, `nil`, `{b: 2}`, `{a: 1}`, `{__evilution_mutated__: 1, b: 2}` |
 | `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
 | `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |
 | `conditional_branch` | Remove if/unless/else branch | Deletes branch body |

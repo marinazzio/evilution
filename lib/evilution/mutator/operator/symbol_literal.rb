@@ -44,8 +44,9 @@ class Evilution::Mutator::Operator::SymbolLiteral < Evilution::Mutator::Base
     @round_half_modes.any? { |mode| mode.equal?(node) }
   end
 
+  # `a:` closes with `:`, a quoted label (`"a b":`) with `":`.
   def label_form?(node)
     closing = node.closing_loc
-    !closing.nil? && closing.slice == ":"
+    !closing.nil? && closing.slice.end_with?(":")
   end
 end
