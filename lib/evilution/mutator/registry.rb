@@ -6,7 +6,8 @@ class Evilution::Mutator::Registry
   STRICT_EXTRA_OPERATORS = [
     Evilution::Mutator::Operator::PredicateToNil,
     Evilution::Mutator::Operator::ExceptionSwallow,
-    Evilution::Mutator::Operator::StatementReorder
+    Evilution::Mutator::Operator::StatementReorder,
+    Evilution::Mutator::Operator::SafeNavigationInsertion
   ].freeze
 
   def self.for_profile(profile)
