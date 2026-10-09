@@ -530,7 +530,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `complex_literal` | Replace a complex literal with `0i`, `1i`, its neighbours along the imaginary axis and `nil` (a rational part such as `3ri` gets no neighbours) | `5i` -> `0i`, `1i`, `6i`, `4i`, `nil` |
 | `rational_literal` | Replace a rational literal with `0r`, `1r`, its two neighbours and `nil` (the rational part of a complex literal such as `3ri` is left to `complex_literal`) | `1.5r` -> `0r`, `1r`, `2.5r`, `0.5r`, `nil` |
 | `string_literal` | Empty the string | `"str"` -> `""` |
-| `array_literal` | Empty the array | `[a, b]` -> `[]` |
+| `array_literal` | Empty the array, and delete each element in turn (two or more elements; a heredoc element is kept) | `[a, b]` -> `[]`, `[b]`, `[a]` |
 | `hash_literal` | Empty the hash | `{k: v}` -> `{}` |
 | `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
 | `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |

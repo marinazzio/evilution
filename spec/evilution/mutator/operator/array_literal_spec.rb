@@ -15,7 +15,7 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
     it "replaces [1, 2, 3] with [] and nil" do
       mutations = described_class.new.call(non_empty_subject)
 
-      expect(mutations.length).to eq(2)
+      expect(mutations.length).to eq(5)
       mutated_sources = mutations.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/\[\]/),
@@ -53,6 +53,80 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
           result = Prism.parse(mutation.mutated_source)
           expect(result.errors).to be_empty, "Invalid Ruby: #{mutation.mutated_source}"
         end
+      end
+    end
+
+    describe "element deletion" do
+      def mutations_of(body)
+        Tempfile.create(["array_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+        end
+      end
+
+      # The body of the method after each mutation, without the two that
+      # replace the array as a whole.
+      def deletions(body)
+        mutations_of(body).drop(2).map { |m| m.mutated_source.lines[2..-3].join }
+      end
+
+      it "deletes each element in turn, after [] and nil" do
+        bodies = mutations_of("    [1, 2, 3]\n").map { |m| m.mutated_source.lines[2].strip }
+
+        expect(bodies).to eq(["[]", "nil", "[2, 3]", "[1, 3]", "[1, 2]"])
+      end
+
+      it "does not repeat the emptied array for a single element" do
+        expect(deletions("    [1]\n")).to be_empty
+        expect(deletions("    [a: 1, b: 2]\n")).to be_empty
+      end
+
+      it "deletes the words of a %w and %i array" do
+        expect(deletions("    %w[a b c]\n")).to eq(["    %w[b c]\n", "    %w[a c]\n", "    %w[a b]\n"])
+        expect(deletions("    %i[a b]\n")).to eq(["    %i[b]\n", "    %i[a]\n"])
+      end
+
+      it "deletes a splat and trailing keywords like any element" do
+        expect(deletions("    [*x, 1]\n")).to eq(["    [1]\n", "    [*x]\n"])
+        expect(deletions("    [1, a: 2]\n")).to eq(["    [a: 2]\n", "    [1]\n"])
+      end
+
+      it "keeps the layout and trailing comma of a multi-line array" do
+        body = "    [\n      1,\n      2,\n    ]\n"
+
+        expect(deletions(body)).to eq(["    [\n      2,\n    ]\n", "    [\n      1,\n    ]\n"])
+      end
+
+      it "deletes elements of a nested array on both levels" do
+        lines = mutations_of("    [[1, 2], 3]\n").map { |m| m.mutated_source.lines[2].strip }
+
+        expect(lines).to include("[3]", "[[1, 2]]", "[[2], 3]", "[[1], 3]")
+      end
+
+      # The body of a heredoc sits after the closing bracket, out of reach of
+      # one cut.
+      it "keeps a heredoc element and deletes the others" do
+        expect(deletions("    [<<~ONE, x]\n      text\n    ONE\n")).to eq(["    [<<~ONE]\n      text\n    ONE\n"])
+        expect(deletions("    [x, <<~ONE]\n      text\n    ONE\n")).to eq(["    [<<~ONE]\n      text\n    ONE\n"])
+      end
+
+      it "leaves a bracket-less array alone" do
+        expect(mutations_of("    a, b = 1, 2\n    return a, b\n")).to be_empty
+      end
+
+      it "reports each deletion on the line of its element" do
+        mutations = mutations_of("    [\n      1,\n      2,\n    ]\n").drop(2)
+
+        expect(mutations.map(&:line)).to eq([4, 5])
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    [1, 2, 3]\n", "    %w[a b c]\n", "    [*x, 1, a: 2]\n",
+                  "    [<<~ONE, x, <<~TWO]\n      one\n    ONE\n      two\n    TWO\n",
+                  "    [\n      1, # one\n      2 # two\n    ]\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations.map { |m| Prism.parse(m.mutated_source).success? }).to all(be(true))
       end
     end
 
