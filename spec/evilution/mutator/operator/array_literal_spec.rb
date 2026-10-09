@@ -12,7 +12,7 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
   let(:empty_subject) { subjects.find { |s| s.name.include?("returns_empty_array") } }
 
   describe "#call" do
-    it "replaces [1, 2, 3] with [] and nil" do
+    it "replaces [1, 2, 3] with [], nil and one array per deleted element" do
       mutations = described_class.new.call(non_empty_subject)
 
       expect(mutations.length).to eq(5)
