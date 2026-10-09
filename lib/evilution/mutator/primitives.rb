@@ -3,8 +3,9 @@
 require_relative "../mutator"
 
 # Mutation shapes shared across the operator families: replacing an
-# expression with `nil`, and replacing an expression with the source of one
-# of its children. Both are built on Base#add_mutation, so the
+# expression with `nil`, replacing an expression with the source of one of
+# its children, and deleting one element of a list. All are built on
+# Base#add_mutation, so the
 # equivalent-mutant filter and the heredoc-span guards still apply.
 #
 # Unlike a bare add_mutation call, these skip rather than emit when the
@@ -28,6 +29,20 @@ module Evilution::Mutator::Primitives
     return nil if child.nil?
 
     replace_span(node: node, target: target, replacement: source_of(child))
+  end
+
+  # Delete the element at `index` from a list written in source order (the
+  # elements of an array or hash literal), attributing the mutation to the
+  # element. It goes with the separator after it; the last one goes with the
+  # separator before it, so a trailing comma stays where it was. The list
+  # must hold another element to take the separator from.
+  def delete_element(elements, index)
+    element = elements[index]
+    following = elements[index + 1]
+    offset = following ? element.location.start_offset : elements[index - 1].location.end_offset
+    stop = following ? following.location.start_offset : element.location.end_offset
+
+    add_mutation(offset:, length: stop - offset, replacement: "", node: element, skip_unparseable: true)
   end
 
   def replace_span(node:, target:, replacement:)

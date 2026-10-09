@@ -17,10 +17,10 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
   end
 
   describe "#call" do
-    it "replaces { a: 1, b: 2 } with {} and nil" do
+    it "replaces { a: 1, b: 2 } with {}, nil and one hash per deleted pair" do
       muts = mutations_for("returns_populated_hash")
 
-      expect(muts.length).to eq(2)
+      expect(muts.length).to eq(4)
       mutated_sources = muts.map(&:mutated_source)
       expect(mutated_sources).to include(
         a_string_matching(/def returns_populated_hash\s+\{\}\s+end/),
@@ -52,6 +52,72 @@ RSpec.describe Evilution::Mutator::Operator::HashLiteral do
           expect { Prism.parse(mutation.mutated_source) }.not_to raise_error,
                                                                  "Invalid Ruby produced for #{mutation}"
         end
+      end
+    end
+
+    describe "pair deletion" do
+      def mutations_of(body)
+        Tempfile.create(["hash_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+        end
+      end
+
+      # The body of the method after each mutation, without the two that
+      # replace the hash as a whole.
+      def deletions(body)
+        mutations_of(body).drop(2).map { |m| m.mutated_source.lines[2..-3].join }
+      end
+
+      it "deletes each pair in turn, after {} and nil" do
+        bodies = mutations_of("    { a: 1, b: 2, c: 3 }\n").map { |m| m.mutated_source.lines[2].strip }
+
+        expect(bodies).to eq(["{}", "nil", "{ b: 2, c: 3 }", "{ a: 1, c: 3 }", "{ a: 1, b: 2 }"])
+      end
+
+      it "does not repeat the emptied hash for a single pair" do
+        expect(deletions("    { a: 1 }\n")).to be_empty
+      end
+
+      it "deletes pairs written with a rocket or in shorthand" do
+        expect(deletions("    { \"a\" => 1, x => 2 }\n")).to eq(["    { x => 2 }\n", "    { \"a\" => 1 }\n"])
+        expect(deletions("    { x:, a: 1 }\n")).to eq(["    { a: 1 }\n", "    { x: }\n"])
+      end
+
+      it "deletes a pair next to a double splat, but not the splat" do
+        expect(deletions("    { **x, a: 1 }\n")).to eq(["    { **x }\n"])
+        expect(deletions("    { a: 1, **x, b: 2 }\n")).to eq(["    { **x, b: 2 }\n", "    { a: 1, **x }\n"])
+      end
+
+      it "keeps the layout and trailing comma of a multi-line hash" do
+        body = "    {\n      a: 1,\n      b: 2,\n    }\n"
+
+        expect(deletions(body)).to eq(["    {\n      b: 2,\n    }\n", "    {\n      a: 1,\n    }\n"])
+      end
+
+      it "reports each deletion on the line of its pair" do
+        mutations = mutations_of("    {\n      a: 1,\n      b: 2,\n    }\n").drop(2)
+
+        expect(mutations.map(&:line)).to eq([4, 5])
+      end
+
+      # The body of a heredoc sits after the closing brace, out of reach of
+      # one cut.
+      it "keeps a pair holding a heredoc and deletes the others" do
+        expect(deletions("    { a: <<~ONE, b: x }\n      text\n    ONE\n")).to eq(["    { a: <<~ONE }\n      text\n    ONE\n"])
+      end
+
+      it "leaves the keywords of a call alone" do
+        expect(mutations_of("    record(a: 1, b: 2)\n")).to be_empty
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    { a: 1, b: 2, c: 3 }\n", "    { x:, a: 1, **x }\n",
+                  "    { a: <<~ONE, b: x, c: <<~TWO }\n      one\n    ONE\n      two\n    TWO\n",
+                  "    {\n      a: 1, # one\n      b: 2 # two\n    }\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations.map { |m| Prism.parse(m.mutated_source).success? }).to all(be(true))
       end
     end
 

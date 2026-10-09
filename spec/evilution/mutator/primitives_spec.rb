@@ -18,6 +18,35 @@ RSpec.describe Evilution::Mutator::Primitives do
     end
   end
 
+  describe "#delete_element" do
+    def deleting(code, index)
+      mutations_for(code) do
+        define_method(:visit_array_node) do |node|
+          delete_element(node.elements, index)
+          super(node)
+        end
+      end
+    end
+
+    it "deletes an element with the separator after it" do
+      expect(deleting("[a, b, c]", 0).map(&:mutated_source)).to eq(["[b, c]"])
+      expect(deleting("[a, b, c]", 1).map(&:mutated_source)).to eq(["[a, c]"])
+    end
+
+    it "deletes the last element with the separator before it" do
+      expect(deleting("[a, b, c]", 2).map(&:mutated_source)).to eq(["[a, b]"])
+      expect(deleting("[\n  a,\n  b,\n]", 1).map(&:mutated_source)).to eq(["[\n  a,\n]"])
+    end
+
+    it "attributes the mutation to the element" do
+      expect(deleting("[\n  a,\n  b,\n]", 1).map(&:line)).to eq([3])
+    end
+
+    it "emits nothing when the result does not parse" do
+      expect(deleting("[<<~ONE, b]\n  text\nONE\n", 0)).to be_empty
+    end
+  end
+
   describe "#mutate_to_nil" do
     it "replaces the node's own span with nil" do
       muts = mutations_for("a && b") do
