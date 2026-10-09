@@ -167,7 +167,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::RescueHandlerConcatenation,
       Evilution::Mutator::Operator::RescueElseConcatenation,
       Evilution::Mutator::Operator::ReturnKeywordRemoval,
-      Evilution::Mutator::Operator::MemoizationBreak
+      Evilution::Mutator::Operator::MemoizationBreak,
+      Evilution::Mutator::Operator::ShortCircuitToEager
     ].each { |op| registry.register(op) }
     registry
   end
