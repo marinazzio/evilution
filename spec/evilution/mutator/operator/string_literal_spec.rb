@@ -165,15 +165,15 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
     end
 
     describe "command literal" do
-      def mutations_of(body)
+      def mutations_of(body, **options)
         Tempfile.create(["string_literal", ".rb"]) do |file|
           File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
-          described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+          described_class.new(**options).call(Evilution::AST::Parser.new.call(file.path).first)
         end
       end
 
-      def mutated_lines(body)
-        mutations_of(body).map { |m| m.mutated_source.lines[2].strip }
+      def mutated_lines(body, **options)
+        mutations_of(body, **options).map { |m| m.mutated_source.lines[2].strip }
       end
 
       it "replaces a backtick command with nil" do
@@ -207,9 +207,24 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         expect(mutated_lines("    `ls \#{x || \"a\"}`\n")).to eq(["nil", "`ls \#{x || \"\"}`", "`ls \#{x || nil}`"])
       end
 
-      it "leaves a heredoc command alone" do
+      it "does not replace a heredoc command" do
         expect(mutated_lines("    <<~`CMD`\n      ls -la\n    CMD\n")).to be_empty
         expect(mutated_lines("    <<~`CMD`\n      ls \#{x}\n    CMD\n")).to be_empty
+      end
+
+      # Same as a heredoc string: its interpolations are walked unless
+      # skip_heredoc_literals says otherwise.
+      it "mutates a string literal inside a heredoc command's interpolation" do
+        body = "    <<~`CMD`\n      ls \#{x || \"a\"}\n    CMD\n"
+
+        expect(mutations_of(body).map { |m| m.mutated_source.lines[3].strip }).to eq(["ls \#{x || \"\"}", "ls \#{x || nil}"])
+      end
+
+      it "skips a heredoc command's interpolation with skip_heredoc_literals: true" do
+        body = "    <<~`CMD`\n      ls \#{x || \"a\"}\n    CMD\n"
+
+        expect(mutations_of(body, skip_heredoc_literals: true)).to be_empty
+        expect(mutated_lines("    `ls \#{x || \"a\"}`\n", skip_heredoc_literals: true).length).to eq(3)
       end
 
       it "produces valid Ruby" do
@@ -345,9 +360,11 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
         # The command is either left as written or replaced as a whole.
         muts = mutations_for("returns_interpolated_xstring")
         muts.each do |mutation|
-          command_line = mutation.mutated_source[/def returns_interpolated_xstring\n.*\n(.*)\n/, 1].strip
+          command_line = mutation.mutated_source[/def returns_interpolated_xstring\n.*\n(.*)\n/, 1]
 
-          expect(["`echo \#{cmd}`", "nil"]).to include(command_line), "X-string chunk mutated; diff: #{mutation.diff.inspect}"
+          expect(command_line).not_to be_nil, "method not found in: #{mutation.mutated_source.inspect}"
+          expect(["`echo \#{cmd}`", "nil"]).to include(command_line.strip),
+                                               "X-string chunk mutated; diff: #{mutation.diff.inspect}"
         end
         expect(muts.map(&:parse_status)).to all(eq(:ok))
       end

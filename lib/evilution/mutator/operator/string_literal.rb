@@ -64,6 +64,8 @@ class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
   end
 
   def visit_interpolated_x_string_node(node)
+    return if node.heredoc? && @skip_heredoc_literals
+
     mutate_command_to_nil(node)
     visit_non_string_parts(node)
   end
