@@ -126,12 +126,24 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
     end
 
     describe "interpolated symbol as a whole" do
-      def mutated_lines(body)
+      def mutations_of(body)
         Tempfile.create(["symbol_literal", ".rb"]) do |file|
           File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
-          mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
-          mutations.map { |m| m.mutated_source.lines[2].strip }
+          described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
         end
+      end
+
+      def mutated_lines(body)
+        mutations_of(body).map { |m| m.mutated_source.lines[2].strip }
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    :\"visit_\#{x}\"\n", "    send(:\"visit_\#{x}\", x)\n", "    :\"a\#{x || :b}\"\n",
+                  "    { \"a\#{x}\": :b }\n", "    %I[a\#{x} b]\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations).not_to be_empty
+        expect(mutations.map(&:parse_status)).to all(eq(:ok))
       end
 
       it "replaces the whole symbol with the empty symbol and nil" do

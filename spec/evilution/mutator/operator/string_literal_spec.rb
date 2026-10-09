@@ -95,12 +95,24 @@ RSpec.describe Evilution::Mutator::Operator::StringLiteral do
     end
 
     describe "interpolated string as a whole" do
-      def mutated_lines(body, **options)
+      def mutations_of(body, **options)
         Tempfile.create(["string_literal", ".rb"]) do |file|
           File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
-          mutations = described_class.new(**options).call(Evilution::AST::Parser.new.call(file.path).first)
-          mutations.map { |m| m.mutated_source.lines[2].strip }
+          described_class.new(**options).call(Evilution::AST::Parser.new.call(file.path).first)
         end
+      end
+
+      def mutated_lines(body, **options)
+        mutations_of(body, **options).map { |m| m.mutated_source.lines[2].strip }
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    \"a \#{x} b\"\n", "    %Q{a \#{x}}\n", "    record \"\#{x}\", x\n", "    \"\#{x}\".size\n",
+                  "    \"\#{\"\#{x}\"}\"\n", "    %W[a\#{x} b]\n", "    \"a\" \"b \#{x}\"\n", "    \"\#{x || \"a\"}\#{x}\"\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations).not_to be_empty
+        expect(mutations.map(&:parse_status)).to all(eq(:ok))
       end
 
       it "replaces the whole string with \"\" and nil, before its chunks" do
