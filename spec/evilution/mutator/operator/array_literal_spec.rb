@@ -77,7 +77,7 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
       end
 
       it "does not repeat the emptied array for a single element" do
-        expect(deletions("    [1]\n")).to be_empty
+        expect(deletions("    [*x]\n")).to be_empty
         expect(deletions("    [a: 1, b: 2]\n")).to be_empty
       end
 
@@ -127,6 +127,64 @@ RSpec.describe Evilution::Mutator::Operator::ArrayLiteral do
         mutations = bodies.flat_map { |body| mutations_of(body) }
 
         expect(mutations.map { |m| Prism.parse(m.mutated_source).success? }).to all(be(true))
+      end
+    end
+
+    describe "single-element promotion" do
+      def mutated_lines(body)
+        Tempfile.create(["array_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x, y)\n#{body}  end\nend\n")
+          mutations = described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+          mutations.map { |m| m.mutated_source.lines[2].chomp.strip }
+        end
+      end
+
+      it "replaces the array with its only element, after [] and nil" do
+        expect(mutated_lines("    [x]\n")).to eq(%w[[] nil x])
+      end
+
+      it "drops a trailing comma and inner spacing with the brackets" do
+        expect(mutated_lines("    [ x, ]\n")).to eq(%w[[] nil x])
+      end
+
+      it "keeps an element that is not a primary expression in parentheses" do
+        expect(mutated_lines("    [x + y].size\n")).to eq(["[].size", "nil.size", "(x + y).size"])
+        expect(mutated_lines("    [x ? y : 1]\n")).to eq(["[]", "nil", "(x ? y : 1)"])
+        expect(mutated_lines("    [y = x]\n")).to eq(["[]", "nil", "(y = x)"])
+      end
+
+      it "leaves a primary element bare" do
+        expect(mutated_lines("    [x.name].flatten\n")).to eq(["[].flatten", "nil.flatten", "x.name.flatten"])
+        expect(mutated_lines("    record [1]\n")).to eq(["record []", "record nil", "record 1"])
+      end
+
+      it "promotes on both levels of a nested array" do
+        expect(mutated_lines("    [[x]]\n")).to eq(["[]", "nil", "[x]", "[[]]", "[nil]", "[x]"])
+      end
+
+      it "does not promote a splat" do
+        expect(mutated_lines("    [*x]\n")).to eq(%w[[] nil])
+        expect(mutated_lines("    record [*x]\n")).to eq(["record []", "record nil"])
+      end
+
+      # `[a: 1]` holds a hash; `a: 1` on its own is not an expression.
+      it "does not promote bare keywords" do
+        expect(mutated_lines("    [a: 1]\n")).to eq(%w[[] nil])
+        expect(mutated_lines("    record [a: 1]\n")).to eq(["record []", "record nil"])
+      end
+
+      # The word of a `%w[a]` is not written as an expression.
+      it "does not promote the word of a %w or %i array" do
+        expect(mutated_lines("    %w[a]\n")).to eq(%w[[] nil])
+        expect(mutated_lines("    %i[a]\n")).to eq(%w[[] nil])
+      end
+
+      it "does not promote a heredoc element" do
+        expect(mutated_lines("    [<<~ONE]\n      text\n    ONE\n")).to eq(%w[[] nil])
+      end
+
+      it "leaves an array of two or more elements to element deletion" do
+        expect(mutated_lines("    [x, y]\n")).to eq(["[]", "nil", "[y]", "[x]"])
       end
     end
 
