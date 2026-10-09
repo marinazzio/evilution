@@ -125,6 +125,51 @@ RSpec.describe Evilution::Mutator::Operator::SymbolLiteral do
       end
     end
 
+    describe "interpolated symbol as a whole" do
+      def mutations_of(body)
+        Tempfile.create(["symbol_literal", ".rb"]) do |file|
+          File.write(file.path, "class Sample\n  def value(x)\n#{body}  end\nend\n")
+          described_class.new.call(Evilution::AST::Parser.new.call(file.path).first)
+        end
+      end
+
+      def mutated_lines(body)
+        mutations_of(body).map { |m| m.mutated_source.lines[2].strip }
+      end
+
+      it "produces valid Ruby" do
+        bodies = ["    :\"visit_\#{x}\"\n", "    send(:\"visit_\#{x}\", x)\n", "    :\"a\#{x || :b}\"\n",
+                  "    { \"a\#{x}\": :b }\n", "    %I[a\#{x} b]\n"]
+        mutations = bodies.flat_map { |body| mutations_of(body) }
+
+        expect(mutations).not_to be_empty
+        expect(mutations.map(&:parse_status)).to all(eq(:ok))
+      end
+
+      it "replaces the whole symbol with the empty symbol and nil" do
+        expect(mutated_lines("    :\"visit_\#{x}\"\n")).to eq([':""', "nil"])
+      end
+
+      it "replaces the symbol inside an expression" do
+        expect(mutated_lines("    send(:\"visit_\#{x}\", x)\n")).to eq(['send(:"", x)', "send(nil, x)"])
+      end
+
+      it "still mutates a symbol inside the interpolation" do
+        expect(mutated_lines("    :\"a\#{x || :b}\"\n"))
+          .to eq([':""', "nil", ":\"a\#{x || :__evilution_mutated__}\"", ":\"a\#{x || nil}\""])
+      end
+
+      it "leaves an interpolated label key alone" do
+        expect(mutated_lines("    { \"a\#{x}\": 1 }\n")).to be_empty
+        expect(mutated_lines("    record(\"a\#{x}\": 1)\n")).to be_empty
+      end
+
+      # A word of `%I[]` is not a literal of its own: `nil` there is the symbol :nil.
+      it "does not replace a word of a %I array as a whole" do
+        expect(mutated_lines("    %I[a\#{x} b]\n")).not_to include('%I[:"" b]', "%I[nil b]")
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("returns_foo")
 

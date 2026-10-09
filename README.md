@@ -529,10 +529,10 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `float_literal` | Boundary-value float mutations, plus NaN and both infinities (not inside a pattern, where they do not parse) | `f` -> `0.0`, `1.0`, `Float::NAN`, `Float::INFINITY`, `-Float::INFINITY` |
 | `complex_literal` | Replace a complex literal with `0i`, `1i`, its neighbours along the imaginary axis and `nil` (a rational part such as `3ri` gets no neighbours) | `5i` -> `0i`, `1i`, `6i`, `4i`, `nil` |
 | `rational_literal` | Replace a rational literal with `0r`, `1r`, its two neighbours and `nil` (the rational part of a complex literal such as `3ri` is left to `complex_literal`) | `1.5r` -> `0r`, `1r`, `2.5r`, `0.5r`, `nil` |
-| `string_literal` | Empty the string | `"str"` -> `""` |
+| `string_literal` | Empty the string or replace it with `nil`; an interpolated string is also replaced as a whole | `"str"` -> `""`, `nil`; `"a #{x}"` -> `""`, `nil` |
 | `array_literal` | Empty the array, replace it with `nil`, delete each element in turn (two or more elements; a heredoc element is kept), and replace a single-element array with its element (not a splat, bare keywords, a `%w` / `%i` word or a heredoc) | `[a, b]` -> `[]`, `nil`, `[b]`, `[a]`; `[x]` -> `x` |
 | `hash_literal` | Empty the hash, replace it with `nil`, delete each key/value pair in turn (two or more elements; a `**splat` and a pair holding a heredoc are kept), and rename each label key in turn (a key written with `=>` is left to `symbol_literal` / `string_literal`) | `{a: 1, b: 2}` -> `{}`, `nil`, `{b: 2}`, `{a: 1}`, `{__evilution_mutated__: 1, b: 2}` |
-| `symbol_literal` | Replace with sentinel symbol | `:foo` -> `:__evilution_mutated__` |
+| `symbol_literal` | Replace with sentinel symbol or `nil`; an interpolated symbol is replaced as a whole with the empty symbol or `nil` | `:foo` -> `:__evilution_mutated__`, `nil`; `:"a_#{x}"` -> `:""`, `nil` |
 | `conditional_negation` | Replace condition with `true`/`false` | `if cond` -> `if true` |
 | `conditional_branch` | Remove if/unless/else branch | Deletes branch body |
 | `if_branch_swap` | Replace the if-branch with the else body, drop the else | `if c; x; else; y; end` -> `if c; y; end` |
