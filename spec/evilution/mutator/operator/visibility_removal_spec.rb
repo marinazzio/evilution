@@ -66,6 +66,13 @@ RSpec.describe Evilution::Mutator::Operator::VisibilityRemoval do
         .to eq(["class Sample\n  def first = 1\n  attr_reader :name\nend\n"])
     end
 
+    # `private helper_names` runs helper_names either way; only its result
+    # stops being made private.
+    it "keeps a bare call a declaration takes its names from" do
+      expect(mutated_sources("class Sample\n  def first = 1\n  private helper_names\nend\n"))
+        .to eq(["class Sample\n  def first = 1\n  helper_names\nend\n"])
+    end
+
     it "leaves a declaration that wraps a definition among other arguments alone" do
       expect(mutations_for("class Sample\n  def first = 1\n  private attr_reader(:a), :b\nend\n")).to be_empty
       expect(mutations_for("class Sample\n  def first = 1\n  private :b, attr_reader(:a)\nend\n")).to be_empty

@@ -22,7 +22,8 @@ class Evilution::Mutator::Operator::VisibilityRemoval < Evilution::Mutator::Base
   DECLARATIONS = %i[private protected module_function].freeze
 
   # What a declaration can wrap and has to leave behind: a method definition,
-  # or a call that defines methods (`private attr_reader :name`).
+  # or a call (`private attr_reader :name`, `private helper_names`). The call
+  # runs with or without the declaration, so it stays.
   WRAPPED = [Prism::DefNode, Prism::CallNode].freeze
 
   def call(subject, filter: nil)
