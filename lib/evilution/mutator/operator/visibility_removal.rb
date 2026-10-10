@@ -39,7 +39,7 @@ class Evilution::Mutator::Operator::VisibilityRemoval < Evilution::Mutator::Base
   private
 
   def remove(declaration)
-    replacement = replacement_for(declaration.arguments ? declaration.arguments.arguments : [])
+    replacement = replacement_for(argument_nodes(declaration))
     return if replacement.nil?
 
     add_mutation(

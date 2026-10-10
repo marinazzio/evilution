@@ -29,7 +29,7 @@ class Evilution::Mutator::Operator::ToIToInteger < Evilution::Mutator::Base
   end
 
   def rewrite(node)
-    arguments = node.arguments ? node.arguments.arguments : []
+    arguments = argument_nodes(node)
     return if arguments.length > 1 || arguments.any?(Prism::SplatNode)
 
     parts = [node.receiver, *arguments].map { |part| source_of(part) }

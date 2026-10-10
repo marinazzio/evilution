@@ -60,6 +60,13 @@ module Evilution::Mutator::Primitives
     )
   end
 
+  # The arguments of a call, `super`, `yield` or the like, in source order.
+  # Prism gives nil, not an empty list, where there are none; this gives the
+  # empty list, so a reader can count or iterate without asking first.
+  def argument_nodes(node)
+    node.arguments ? node.arguments.arguments : []
+  end
+
   def source_of(child)
     location = child.location
     byteslice_source(location.start_offset, location.length)

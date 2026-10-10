@@ -39,7 +39,7 @@ class Evilution::Mutator::Operator::ReduceToSum < Evilution::Mutator::Base
   # The arguments besides the `+` operand — at most an initial value — when
   # the call is a `+` reduction; nil otherwise.
   def initial_arguments(node)
-    arguments = node.arguments ? node.arguments.arguments : []
+    arguments = argument_nodes(node)
 
     if plus_block_pass?(node.block)
       arguments unless plus_symbol?(arguments.last)
