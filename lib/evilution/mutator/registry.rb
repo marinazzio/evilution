@@ -173,7 +173,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::FreezeRemoval,
       Evilution::Mutator::Operator::RescueClassWidening,
       Evilution::Mutator::Operator::VisibilityRemoval,
-      Evilution::Mutator::Operator::AttrAccessorSwap
+      Evilution::Mutator::Operator::AttrAccessorSwap,
+      Evilution::Mutator::Operator::SleepToZero
     ].each { |op| registry.register(op) }
     registry
   end
