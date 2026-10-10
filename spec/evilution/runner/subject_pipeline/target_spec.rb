@@ -3,8 +3,10 @@
 require "evilution/runner/subject_pipeline/target"
 
 RSpec.describe Evilution::Runner::SubjectPipeline::Target do
+  let(:subject_class) { Struct.new(:name) }
+
   def subject_named(name)
-    Struct.new(:name).new(name)
+    subject_class.new(name)
   end
 
   def matched(text, *names)

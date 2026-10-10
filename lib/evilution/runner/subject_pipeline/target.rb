@@ -19,7 +19,9 @@ class Evilution::Runner::SubjectPipeline::Target
     return NONE if text.nil?
 
     prefix, kind = PREFIXES.find { |candidate, _| text.start_with?(candidate) }
-    new(kind: kind || :method, text: text, value: text.delete_prefix(prefix.to_s))
+    return new(kind: :method, text: text, value: text) if prefix.nil?
+
+    new(kind: kind, text: text, value: text.delete_prefix(prefix))
   end
 
   # The part after the prefix: the glob, the base class name, or the method
