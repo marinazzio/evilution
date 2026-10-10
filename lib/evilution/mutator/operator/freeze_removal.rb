@@ -36,18 +36,18 @@ class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
     @mutations = []
     @filter = filter
 
-    constant_writes_for(subject).each { |write| freezes_in(write).each { |freeze| remove(freeze) } }
+    constant_writes_for(subject).each { |write| freezes_in(write).each { |freeze_call| remove(freeze_call) } }
     @mutations
   end
 
   private
 
-  def remove(freeze)
+  def remove(freeze_call)
     add_mutation(
-      offset: freeze.location.start_offset,
-      length: freeze.location.length,
-      replacement: freeze.receiver.slice,
-      node: freeze
+      offset: freeze_call.location.start_offset,
+      length: freeze_call.location.length,
+      replacement: freeze_call.receiver.slice,
+      node: freeze_call
     )
   end
 
