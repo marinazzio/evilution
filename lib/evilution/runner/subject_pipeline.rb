@@ -7,16 +7,19 @@ require_relative "../diagnostic"
 require_relative "../git/changed_files"
 
 class Evilution::Runner::SubjectPipeline
+  autoload :Target, File.expand_path("subject_pipeline/target", __dir__)
+
   def initialize(config, parser:)
     @config = config
     @parser = parser
+    @target = Target.parse(config.target)
   end
 
   def call
     subjects = parse_subjects
     @subjects_by_file = subjects.group_by(&:file_path)
-    subjects = filter_by_descendants(subjects) if descendants_target?
-    subjects = filter_by_target(subjects) if method_target?
+    subjects = filter_by_descendants(subjects) if target.descendants?
+    subjects = filter_by_target(subjects) if target.method?
     subjects = filter_by_line_ranges(subjects) if config.line_ranges?
     subjects
   end
@@ -49,7 +52,7 @@ class Evilution::Runner::SubjectPipeline
 
   private
 
-  attr_reader :config, :parser
+  attr_reader :config, :parser, :target
 
   def parse_subjects
     target_files.flat_map { |file| parser.call(file) }
@@ -75,20 +78,8 @@ class Evilution::Runner::SubjectPipeline
     )
   end
 
-  def source_glob_target?
-    config.target? && config.target.start_with?("source:")
-  end
-
-  def descendants_target?
-    config.target? && config.target.start_with?("descendants:")
-  end
-
-  def method_target?
-    config.target? && !source_glob_target? && !descendants_target?
-  end
-
   def resolve_source_glob
-    pattern = config.target.delete_prefix("source:")
+    pattern = target.value
     files = Dir.glob(pattern)
     raise Evilution::Error, "no files found matching '#{pattern}'" if files.empty?
 
@@ -96,10 +87,9 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def filter_by_descendants(subjects)
-    base_name = config.target.delete_prefix("descendants:")
     inheritance = Evilution::AST::InheritanceScanner.call(target_files)
-    class_names = resolve_descendant_set(base_name, inheritance)
-    raise Evilution::Error, "no classes found matching '#{config.target}'" if class_names.empty?
+    class_names = resolve_descendant_set(target.value, inheritance)
+    raise Evilution::Error, "no classes found matching '#{target}'" if class_names.empty?
 
     subjects.select { |s| class_names.include?(s.name.split(/[#.]/).first) }
   end
@@ -125,14 +115,14 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def filter_by_target(subjects)
-    matched = subjects.select(&target_matcher)
+    matched = subjects.select { |subject| target.selects?(subject) }
     raise Evilution::Error, build_no_match_error if matched.empty?
 
     matched
   end
 
   def resolve_target_files
-    return resolve_source_glob if source_glob_target?
+    return resolve_source_glob if target.source_glob?
     return config.target_files unless config.target_files.empty?
 
     @used_git_fallback = true
@@ -140,36 +130,11 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def build_no_match_error
-    base = "no subject matched '#{config.target}'"
+    base = "no subject matched '#{target}'"
     return base unless @used_git_fallback
 
     "#{base}; scanned git-changed files only. Pass file paths or " \
       "--target source:<glob> to scan the full codebase."
-  end
-
-  def target_matcher
-    target = config.target
-    return wildcard_matcher(target.chomp("*")) if target.end_with?("*")
-    return prefix_matcher(target) if target.end_with?("#", ".")
-    return exact_matcher(target) if target.include?("#") || target.include?(".")
-
-    class_matcher(target)
-  end
-
-  def wildcard_matcher(prefix)
-    ->(s) { s.name.split(/[#.]/).first.start_with?(prefix) }
-  end
-
-  def prefix_matcher(prefix)
-    ->(s) { s.name.start_with?(prefix) }
-  end
-
-  def exact_matcher(target)
-    ->(s) { s.name == target }
-  end
-
-  def class_matcher(target)
-    ->(s) { s.name == target || s.name.start_with?("#{target}#") || s.name.start_with?("#{target}.") }
   end
 
   def filter_by_line_ranges(subjects)
