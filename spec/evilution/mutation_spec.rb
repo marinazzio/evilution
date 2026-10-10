@@ -101,6 +101,29 @@ RSpec.describe Evilution::Mutation do
     end
   end
 
+  it "reads slices as nil when built without a slice" do
+    m = described_class.new(
+      subject: subject_double, operator_name: "comparison_replacement",
+      sources: described_class::Sources.new(original: "a", mutated: "b"),
+      location: described_class::Location.new(file_path: "lib/user.rb", line: 9, column: 7)
+    )
+
+    expect(m.original_slice).to be_nil
+    expect(m.mutated_slice).to be_nil
+    expect(m.unified_diff).to be_nil
+  end
+
+  it "still has no unified diff after a round trip to a worker" do
+    stub_const("MutationSpecSubject", Struct.new(:name))
+    m = described_class.new(
+      subject: MutationSpecSubject.new("User#adult?"), operator_name: "comparison_replacement",
+      sources: described_class::Sources.new(original: "a", mutated: "b"),
+      location: described_class::Location.new(file_path: "lib/user.rb", line: 9, column: 7)
+    )
+
+    expect(Marshal.load(Marshal.dump(m)).unified_diff).to be_nil
+  end
+
   describe "#unified_diff" do
     it "returns a git-style unified diff with file header and hunk header" do
       result = mutation.unified_diff

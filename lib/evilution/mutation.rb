@@ -8,6 +8,13 @@ class Evilution::Mutation
   Slice = Data.define(:original, :mutated)
   Location = Data.define(:file_path, :line, :column)
 
+  # What a mutation holds once its sources are released (see strip_sources!),
+  # and when it was built without a slice. Their fields read as nil, so the
+  # readers below need no nil check of their own.
+  STRIPPED_SOURCES = Sources.new(original: nil, mutated: nil)
+  NO_SLICE = Slice.new(original: nil, mutated: nil)
+  private_constant :STRIPPED_SOURCES, :NO_SLICE
+
   # restore_source: the source that puts back what applying this mutation
   # changed and re-evaluating another mutation of the file would not -- a
   # scope declaration (see Mutator::Base#build_restore_source). nil when
@@ -20,7 +27,7 @@ class Evilution::Mutation
     @operator_name = operator_name
     @sources = sources
     @location = location
-    @slice = slice
+    @slice = slice || NO_SLICE
     @parse_status = parse_status
     @eval_source = eval_source
     @restore_source = restore_source
@@ -28,11 +35,11 @@ class Evilution::Mutation
   end
 
   def original_source
-    @sources&.original
+    @sources.original
   end
 
   def mutated_source
-    @sources&.mutated
+    @sources.mutated
   end
 
   # Source to feed to the load-time evaluator. Defaults to mutated_source
@@ -46,11 +53,11 @@ class Evilution::Mutation
   end
 
   def original_slice
-    @slice&.original
+    @slice.original
   end
 
   def mutated_slice
-    @slice&.mutated
+    @slice.mutated
   end
 
   def file_path
@@ -81,7 +88,7 @@ class Evilution::Mutation
 
   def strip_sources!
     diff # ensure diff is cached before clearing sources
-    @sources = nil
+    @sources = STRIPPED_SOURCES
   end
 
   def to_s
@@ -105,7 +112,7 @@ class Evilution::Mutation
   end
 
   def compute_unified_diff
-    return nil if @slice.nil?
+    return nil if @slice == NO_SLICE
 
     original_lines = @slice.original.lines
     mutated_lines = @slice.mutated.lines
