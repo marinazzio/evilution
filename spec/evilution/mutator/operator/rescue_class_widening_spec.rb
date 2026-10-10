@@ -34,6 +34,18 @@ RSpec.describe Evilution::Mutator::Operator::RescueClassWidening do
       expect(rescue_lines("    a.call\n  rescue KeyError, StandardError\n    1\n")).to eq([["rescue Exception"]])
     end
 
+    # For these `StandardError` would catch something else, not more.
+    it "widens a core class outside StandardError to Exception only" do
+      %w[NoMemoryError ScriptError LoadError NotImplementedError SyntaxError SecurityError SignalException Interrupt
+         SystemExit SystemStackError].each do |name|
+        expect(rescue_lines("    a.call\n  rescue #{name}\n    1\n")).to eq([["rescue Exception"]]), name
+      end
+    end
+
+    it "widens a list naming such a class to Exception only" do
+      expect(rescue_lines("    a.call\n  rescue KeyError, ::Interrupt => e\n    e\n")).to eq([["rescue Exception => e"]])
+    end
+
     # A bare rescue is `rescue StandardError`.
     it "widens a bare rescue to Exception" do
       expect(rescue_lines("    a.call\n  rescue\n    1\n")).to eq([["rescue Exception"]])
@@ -44,6 +56,7 @@ RSpec.describe Evilution::Mutator::Operator::RescueClassWidening do
       expect(mutations_of("    a.call\n  rescue Exception\n    1\n")).to be_empty
       expect(mutations_of("    a.call\n  rescue ::Exception => e\n    e\n")).to be_empty
       expect(mutations_of("    a.call\n  rescue KeyError, Exception\n    1\n")).to be_empty
+      expect(mutations_of("    a.call\n  rescue Interrupt, Exception\n    1\n")).to be_empty
     end
 
     it "widens each clause in turn" do

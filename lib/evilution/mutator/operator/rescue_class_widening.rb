@@ -9,11 +9,20 @@ require_relative "../operator"
 # the handler, so nothing shows the clause needs to be as narrow as it is.
 #
 # A bare `rescue` is `rescue StandardError`, so the two are never offered as
-# mutants of each other; both go to `Exception` only. A clause that already
-# names `Exception` cannot be widened. A rescue modifier (`x rescue y`) takes
-# no class and is left alone.
+# mutants of each other; both go to `Exception` only. So does a clause naming
+# a core class outside `StandardError` (`Interrupt`, `LoadError`), which
+# `StandardError` would not widen but replace. A class of the program's own
+# is taken to be a `StandardError`. A clause that already names `Exception`
+# cannot be widened. A rescue modifier (`x rescue y`) takes no class and is
+# left alone.
 class Evilution::Mutator::Operator::RescueClassWidening < Evilution::Mutator::Base
   WIDER = %w[StandardError Exception].freeze
+
+  # The core classes that descend from Exception but not from StandardError.
+  OUTSIDE_STANDARD_ERROR = %w[
+    NoMemoryError ScriptError LoadError NotImplementedError SyntaxError SecurityError SignalException Interrupt
+    SystemExit SystemStackError
+  ].freeze
 
   def visit_rescue_node(node)
     wider_than(node.exceptions).each { |name| widen(node, name) }
@@ -25,10 +34,10 @@ class Evilution::Mutator::Operator::RescueClassWidening < Evilution::Mutator::Ba
   # The classes of WIDER above everything the clause lists.
   def wider_than(exceptions)
     listed = exceptions.map { |exception| exception.slice.delete_prefix("::") }
-    listed = [WIDER.first] if listed.empty?
-    widest = WIDER.rindex { |name| listed.include?(name) }
+    return [] if listed.include?(WIDER.last)
+    return [WIDER.last] if listed.empty? || listed.include?(WIDER.first) || listed.intersect?(OUTSIDE_STANDARD_ERROR)
 
-    widest ? WIDER.drop(widest + 1) : WIDER
+    WIDER
   end
 
   def widen(node, name)
