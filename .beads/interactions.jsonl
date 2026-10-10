@@ -607,3 +607,4 @@
 {"id":"int-aeb0703e","kind":"field_change","created_at":"2026-10-09T15:13:18.21752595Z","actor":"Denis Kiselev","issue_id":"EV-44o7.11","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Merged in PR #1798"}}
 {"id":"int-332bf695","kind":"field_change","created_at":"2026-10-09T15:32:32.76074471Z","actor":"Denis Kiselev","issue_id":"EV-2mcz.1","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Merged"}}
 {"id":"int-8335751c","kind":"field_change","created_at":"2026-10-09T16:48:20.829398546Z","actor":"Denis Kiselev","issue_id":"EV-2mcz.2","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Merged"}}
+{"id":"int-077fb2db","kind":"field_change","created_at":"2026-10-09T17:25:15.331671484Z","actor":"Denis Kiselev","issue_id":"EV-2mcz.3","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Merged in PR #1801"}}
