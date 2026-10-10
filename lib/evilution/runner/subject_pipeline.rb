@@ -76,11 +76,11 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def source_glob_target?
-    config.target&.start_with?("source:")
+    config.target? && config.target.start_with?("source:")
   end
 
   def descendants_target?
-    config.target&.start_with?("descendants:")
+    config.target? && config.target.start_with?("descendants:")
   end
 
   def method_target?
