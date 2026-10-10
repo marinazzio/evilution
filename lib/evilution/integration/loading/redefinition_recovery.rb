@@ -24,6 +24,7 @@ class Evilution::Integration::Loading::RedefinitionRecovery
 
   def initialize(constant_names: Evilution::AST::ConstantNames.new)
     @constant_names = constant_names
+    @warned_messages = Set.new
   end
 
   def call(source, &block)
@@ -73,10 +74,8 @@ class Evilution::Integration::Loading::RedefinitionRecovery
   end
 
   def warn_once_for(error)
-    return if @warned_messages&.include?(error.message)
+    return unless @warned_messages.add?(error.message)
 
-    @warned_messages ||= []
-    @warned_messages << error.message
     $stderr.write(
       "[evilution] swallowed idempotency violation on re-eval: " \
       "#{error.class}: #{error.message}. " \
