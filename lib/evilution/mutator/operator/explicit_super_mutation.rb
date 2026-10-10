@@ -5,8 +5,8 @@ require_relative "../operator"
 class Evilution::Mutator::Operator::ExplicitSuperMutation < Evilution::Mutator::Base
   def visit_super_node(node)
     replace_with_zsuper(node)
-    args = node.arguments&.arguments
-    mutate_arguments(node, args) if args && !args.empty?
+    args = argument_nodes(node)
+    mutate_arguments(node, args) unless args.empty?
 
     super
   end

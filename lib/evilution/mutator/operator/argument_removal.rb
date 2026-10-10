@@ -12,7 +12,7 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   ].freeze
 
   def visit_call_node(node)
-    args = node.arguments&.arguments
+    args = argument_nodes(node)
     args.each_index { |i| emit_argument_removal(node, args, i) } if mutable?(node, args)
 
     super
@@ -31,7 +31,7 @@ class Evilution::Mutator::Operator::ArgumentRemoval < Evilution::Mutator::Base
   end
 
   def mutable?(node, args)
-    args && args.length >= 2 && positional_only?(args) && node.name != :[]= && !member_list?(node)
+    args.length >= 2 && positional_only?(args) && node.name != :[]= && !member_list?(node)
   end
 
   # DataStructMember owns the member list of `Data.define` / `Struct.new` and

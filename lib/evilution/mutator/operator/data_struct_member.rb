@@ -38,7 +38,7 @@ class Evilution::Mutator::Operator::DataStructMember < Evilution::Mutator::Base
   private
 
   def mutate_members(node)
-    arguments = node.arguments ? node.arguments.arguments : []
+    arguments = argument_nodes(node)
     members = member_indexes(arguments)
     # A lone member has no neighbour to swap with, and dropping it would leave
     # `Struct.new()`, which raises on Rubies that require at least one member.

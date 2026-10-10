@@ -18,6 +18,43 @@ RSpec.describe Evilution::Mutator::Primitives do
     end
   end
 
+  describe "#argument_nodes" do
+    # Records what the helper returns for each call visited, outermost first.
+    def argument_sources(code)
+      seen = []
+      mutations_for(code) do
+        define_method(:visit_call_node) do |node|
+          seen << argument_nodes(node).map(&:slice)
+          super(node)
+        end
+        define_method(:visit_super_node) do |node|
+          seen << argument_nodes(node).map(&:slice)
+          super(node)
+        end
+      end
+      seen
+    end
+
+    it "returns the arguments of a call in source order" do
+      expect(argument_sources("record(a, 1, k: 2)")).to eq([["a", "1", "k: 2"], []])
+    end
+
+    it "returns an empty list for a call without arguments" do
+      expect(argument_sources("record")).to eq([[]])
+      expect(argument_sources("record()")).to eq([[]])
+    end
+
+    it "does not count a block or a block argument" do
+      expect(argument_sources("record(1, &blk)")).to eq([["1"], []])
+      expect(argument_sources("record { 1 }")).to eq([[]])
+    end
+
+    it "reads the arguments of super the same way" do
+      expect(argument_sources("def m = super(1, 2)").first).to eq(%w[1 2])
+      expect(argument_sources("def m = super()").first).to eq([])
+    end
+  end
+
   describe "#delete_element" do
     def deleting(code, index)
       mutations_for(code) do

@@ -11,7 +11,7 @@ class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator
   ].freeze
 
   def visit_call_node(node)
-    args = node.arguments&.arguments
+    args = argument_nodes(node)
     args.each_index { |i| emit_nil_substitution(node, args, i) } if mutable?(node, args)
 
     super
@@ -30,7 +30,7 @@ class Evilution::Mutator::Operator::ArgumentNilSubstitution < Evilution::Mutator
   end
 
   def mutable?(node, args)
-    args && args.length >= 1 && positional_only?(args) && node.name != :[]=
+    positional_only?(args) && node.name != :[]=
   end
 
   def positional_only?(args)
