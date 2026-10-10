@@ -58,10 +58,10 @@ class Evilution::Integration::Loading::ConcernStateCleaner
       next unless IVAR_DEFINED.bind_call(mod, ivar)
 
       block = IVAR_GET.bind_call(mod, ivar)
-      block_file = block.source_location&.first
-      next unless block_file
+      location = block.source_location
+      next if location.nil?
 
-      expanded = File.expand_path(block_file)
+      expanded = File.expand_path(location.first)
       REMOVE_IVAR.bind_call(mod, ivar) if source_matches?(expanded, absolute, subpath)
     end
   end
