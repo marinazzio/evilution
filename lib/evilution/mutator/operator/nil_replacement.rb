@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::NilReplacement < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   REPLACEMENTS = %w[true false 0 ""].freeze
 
   def visit_nil_node(node)

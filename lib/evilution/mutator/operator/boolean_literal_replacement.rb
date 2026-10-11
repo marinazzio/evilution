@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::BooleanLiteralReplacement < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_true_node(node)
     add_mutation(
       offset: node.location.start_offset,

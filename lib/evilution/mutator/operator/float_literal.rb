@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::FloatLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   # NaN fails every comparison and equality; the infinities break arithmetic
   # on bounds. None of them can be reached from `0.0`, `1.0` or `nil`.
   SPECIAL_VALUES = ["Float::NAN", "Float::INFINITY", "-Float::INFINITY"].freeze

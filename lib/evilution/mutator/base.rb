@@ -4,6 +4,7 @@ require "prism"
 
 require_relative "../mutator"
 require_relative "primitives"
+require_relative "constant_value_subjects"
 require_relative "../integration/loading/body_call_neutralizer"
 require_relative "../ast/heredoc_span"
 

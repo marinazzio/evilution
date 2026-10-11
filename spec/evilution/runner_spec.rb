@@ -3199,7 +3199,7 @@ RSpec.describe Evilution::Runner do
           require "set"
 
           class Order
-            LIMIT = 10
+            has_many :items
             alias_method :sum, :total
 
             def total

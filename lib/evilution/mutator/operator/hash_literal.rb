@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::HashLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   RENAMED_KEY = "__evilution_mutated__"
 
   def visit_hash_node(node)

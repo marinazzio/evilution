@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::ArrayLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_array_node(node)
     if node.opening_loc && node.elements.any?
       add_mutation(

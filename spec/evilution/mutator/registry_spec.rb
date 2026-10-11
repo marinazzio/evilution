@@ -8,7 +8,7 @@ RSpec.describe Evilution::Mutator::Registry do
       default_registry = described_class.default
 
       expect(default_registry).to be_a(described_class)
-      expect(default_registry.operator_count).to eq(152)
+      expect(default_registry.operator_count).to eq(153)
     end
 
     it "includes all expected operator classes" do
@@ -167,7 +167,8 @@ RSpec.describe Evilution::Mutator::Registry do
         Evilution::Mutator::Operator::IndexRangeToDrop,
         Evilution::Mutator::Operator::IndexWriteToValue,
         Evilution::Mutator::Operator::ConstantReadToNil,
-        Evilution::Mutator::Operator::ConstantNamespaceStrip
+        Evilution::Mutator::Operator::ConstantNamespaceStrip,
+        Evilution::Mutator::Operator::ConstantWriteToNil
       ]
 
       expect(operators).to match_array(expected_operators)
@@ -384,9 +385,39 @@ RSpec.describe Evilution::Mutator::Registry do
         expect(registry.accepts?(subject_of(:method))).to be(false)
       end
 
-      it "leaves constant-write subjects to no built-in operator yet" do
-        expect(described_class.default.accepts?(subject_of(:constant_write))).to be(false)
-        expect(described_class.for_profile(:strict).accepts?(subject_of(:constant_write))).to be(false)
+      it "mutates constant-write subjects with the nil operator and the literal operators" do
+        operators = described_class.for_profile(:strict).operators.select { |op| op.subject_kinds.include?(:constant_write) }
+
+        expect(operators).to contain_exactly(
+          Evilution::Mutator::Operator::ConstantWriteToNil,
+          Evilution::Mutator::Operator::BooleanLiteralReplacement,
+          Evilution::Mutator::Operator::NilReplacement,
+          Evilution::Mutator::Operator::IntegerLiteral,
+          Evilution::Mutator::Operator::FloatLiteral,
+          Evilution::Mutator::Operator::ComplexLiteral,
+          Evilution::Mutator::Operator::RationalLiteral,
+          Evilution::Mutator::Operator::StringLiteral,
+          Evilution::Mutator::Operator::SymbolLiteral,
+          Evilution::Mutator::Operator::ArrayLiteral,
+          Evilution::Mutator::Operator::HashLiteral,
+          Evilution::Mutator::Operator::RangeReplacement
+        )
+      end
+
+      it "keeps the literal operators on the subjects every operator mutates" do
+        expect(Evilution::Mutator::Operator::IntegerLiteral.subject_kinds)
+          .to eq(%i[method scope aasm callback constant_write])
+      end
+
+      it "generates value mutations for a constant assignment" do
+        source_path = File.expand_path("../../support/fixtures/constant_write_to_nil.rb", __dir__)
+        limit = Evilution::AST::Parser.new.call(source_path).find { |s| s.name.end_with?("::LIMIT") }
+
+        mutations = described_class.default.mutations_for(limit)
+
+        expect(mutations.map { |m| [m.operator_name, m.mutated_slice.strip] }).to include(
+          ["integer_literal", "LIMIT = 0"], ["constant_write_to_nil", "LIMIT = nil"]
+        )
       end
 
       it "accepts only method subjects in every built-in operator but DataStructMember" do

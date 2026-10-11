@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::RangeReplacement < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_range_node(node)
     replacement = node.operator == ".." ? "..." : ".."
 
