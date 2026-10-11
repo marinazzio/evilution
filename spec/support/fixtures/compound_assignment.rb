@@ -153,4 +153,33 @@ class CompoundAssignment
   def nested_gvar_or_write(t)
     $gvar_or ||= (t -= 1) # rubocop:disable Style/GlobalVars
   end
+
+  def attribute_add_assign(counter)
+    counter.total += 1
+  end
+
+  def attribute_subtract_assign(account, amount)
+    account.balance -= amount
+    account
+  end
+
+  def self_attribute_shift_assign
+    self.flags <<= 1
+  end
+
+  def safe_attribute_multiply_assign(order)
+    order&.quantity *= 2
+  end
+
+  def chained_attribute_add_assign(order)
+    order.totals.net += 5
+  end
+
+  def nested_attribute_op_write(counter, t)
+    counter.total += (t -= 1)
+  end
+
+  def attribute_plain_write(counter)
+    counter.total = 1
+  end
 end

@@ -37,6 +37,13 @@ class Evilution::Mutator::Operator::CompoundAssignment < Evilution::Mutator::Bas
     super
   end
 
+  # `obj.count += 1`: the target is read through `count` and written
+  # through `count=`.
+  def visit_call_operator_write_node(node)
+    mutate_operator_write(node)
+    super
+  end
+
   def visit_local_variable_and_write_node(node)
     mutate_logical_write(node, "||=")
     super

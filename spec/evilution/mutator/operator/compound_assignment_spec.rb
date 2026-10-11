@@ -240,6 +240,52 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       end
     end
 
+    describe "operator writes on an attribute" do
+      def mutated_lines(muts)
+        muts.map { |m| m.mutated_slice.strip }
+      end
+
+      it "swaps the operator and nils the whole write" do
+        expect(mutated_lines(mutations_for("attribute_add_assign")))
+          .to contain_exactly("counter.total -= 1", "counter.total *= 1", "nil")
+      end
+
+      it "mutates a write that is one of several statements" do
+        expect(mutated_lines(mutations_for("attribute_subtract_assign")))
+          .to contain_exactly("account.balance += amount", "nil")
+      end
+
+      it "mutates a write on self" do
+        expect(mutated_lines(mutations_for("self_attribute_shift_assign")))
+          .to contain_exactly("self.flags >>= 1", "nil")
+      end
+
+      it "keeps the safe navigation of the write" do
+        expect(mutated_lines(mutations_for("safe_attribute_multiply_assign")))
+          .to contain_exactly("order&.quantity /= 2", "nil")
+      end
+
+      it "keeps the whole receiver chain" do
+        expect(mutated_lines(mutations_for("chained_attribute_add_assign")))
+          .to contain_exactly("order.totals.net -= 5", "order.totals.net *= 5", "nil")
+      end
+
+      it "descends past the write into a nested assignment" do
+        # outer += : 2 swaps + 1 removal = 3, inner -= : 1 swap + 1 removal = 2
+        expect(mutations_for("nested_attribute_op_write").length).to eq(5)
+      end
+
+      it "reports the mutation on the line of the write" do
+        line = source.lines.index { |text| text.include?("account.balance -= amount") } + 1
+
+        expect(mutations_for("attribute_subtract_assign").map(&:line).uniq).to eq([line])
+      end
+
+      it "leaves a plain attribute write alone" do
+        expect(mutations_for("attribute_plain_write")).to be_empty
+      end
+    end
+
     describe "recursion into nested compound assignments" do
       # Each nested fixture wraps an inner `t -= 1` (a local-variable
       # operator-write yielding 2 mutations) inside an outer compound
