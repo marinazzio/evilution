@@ -602,6 +602,12 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects_in("::LIMIT = 10\n").map(&:name)).to eq(["LIMIT"])
     end
 
+    it "names a root constant path written inside a scope without that scope" do
+      subjects = subjects_in("module App\n  class Config\n    ::LIMIT = 10\n    ::Shared::MAX = 9\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["LIMIT", "Shared::MAX"])
+    end
+
     it "names a dynamic constant path by its own constant" do
       subjects = subjects_in("class Config\n  self::LIMIT = 10\nend\n")
 

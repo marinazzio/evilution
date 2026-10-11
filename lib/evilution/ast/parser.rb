@@ -103,7 +103,7 @@ module Evilution::AST
       name = path_name(node.target)
       return within_definition(node.value, name) { super } if ValueObjectDefinition.match?(node.value)
 
-      add_subject(node, scoped_name(name), :constant_write)
+      add_subject(node, rooted?(node.target) ? name : scoped_name(name), :constant_write)
       super
     end
 
@@ -118,6 +118,12 @@ module Evilution::AST
 
     def scoped_name(name)
       [*@context, name].join("::")
+    end
+
+    # `::LIMIT` and `::Shared::LIMIT` name a constant from the top level,
+    # whatever scope they are written in.
+    def rooted?(path)
+      path.slice.start_with?("::")
     end
 
     def constant_expression?(node)
