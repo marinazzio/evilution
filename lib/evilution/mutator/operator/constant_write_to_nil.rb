@@ -12,7 +12,8 @@ require_relative "../operator"
 # It works on constant-write subjects, each being one assignment, and does
 # not look inside the value: a constant assigned there (in the block of a
 # `Class.new`) is a subject of its own. A constant already assigned `nil`
-# has nothing to lose.
+# has nothing to lose. An operator write (`LIMIT += 1`) is left to
+# compound_assignment, which replaces the whole of it with `nil`.
 #
 # Code that read the constant while the file first loaded keeps the old
 # value (see Subject), so only what reads it when called sees the mutant.
