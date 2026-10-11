@@ -177,7 +177,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::SleepToZero,
       Evilution::Mutator::Operator::IndexReceiverToSelf,
       Evilution::Mutator::Operator::IndexToKeyPredicate,
-      Evilution::Mutator::Operator::IndexRangeToDrop
+      Evilution::Mutator::Operator::IndexRangeToDrop,
+      Evilution::Mutator::Operator::IndexWriteToValue
     ].each { |op| registry.register(op) }
     registry
   end
