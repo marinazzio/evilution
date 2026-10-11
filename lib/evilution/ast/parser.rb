@@ -49,38 +49,40 @@ module Evilution::AST
     end
 
     def visit_module_node(node)
-      @context.push(constant_name(node.constant_path))
-      IncludedBlock.in_body(node.body).each do |block|
-        add_scope_subjects(block.body)
-        add_aasm_subjects(block.body)
-        add_callback_subjects(block.body)
+      within_context(constant_name(node.constant_path), rooted: rooted?(node.constant_path)) do
+        IncludedBlock.in_body(node.body).each do |block|
+          add_scope_subjects(block.body)
+          add_aasm_subjects(block.body)
+          add_callback_subjects(block.body)
+        end
+        within_scope(singleton: false) { super }
       end
-      within_scope(singleton: false) { super }
-      @context.pop
     end
 
     # A class whose superclass is a value-object definition
     # (`class Coord < Data.define(:lat, :lng)`) makes a constant subject of
     # that definition, named after the class.
     def visit_class_node(node)
-      @context.push(constant_name(node.constant_path))
-      superclass = node.superclass
-      add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
-      add_scope_subjects(node.body)
-      add_aasm_subjects(node.body)
-      add_callback_subjects(node.body)
-      within_scope(singleton: false) { super }
-      @context.pop
+      within_context(constant_name(node.constant_path), rooted: rooted?(node.constant_path)) do
+        superclass = node.superclass
+        add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
+        add_scope_subjects(node.body)
+        add_aasm_subjects(node.body)
+        add_callback_subjects(node.body)
+        within_scope(singleton: false) { super }
+      end
     end
 
     # A `def` inside `class << self` defines a method on the enclosing
     # class's singleton, like `def self.name`; inside `class << Store` it
     # defines one on Store.
     def visit_singleton_class_node(node)
-      constant = constant_expression?(node.expression)
-      @context.push(constant_name(node.expression)) if constant
-      within_scope(singleton: true) { super }
-      @context.pop if constant
+      expression = node.expression
+      return within_scope(singleton: true) { super } unless constant_expression?(expression)
+
+      within_context(constant_name(expression), rooted: rooted?(expression)) do
+        within_scope(singleton: true) { super }
+      end
     end
 
     def visit_def_node(node)
@@ -101,9 +103,10 @@ module Evilution::AST
 
     def visit_constant_path_write_node(node)
       name = path_name(node.target)
-      return within_definition(node.value, name) { super } if ValueObjectDefinition.match?(node.value)
+      rooted = rooted?(node.target)
+      return within_definition(node.value, name, rooted: rooted) { super } if ValueObjectDefinition.match?(node.value)
 
-      add_subject(node, rooted?(node.target) ? name : scoped_name(name), :constant_write)
+      add_subject(node, rooted ? name : scoped_name(name), :constant_write)
       super
     end
 
@@ -146,11 +149,21 @@ module Evilution::AST
     # A value-object definition assigned to a constant is a subject of its
     # own, and a scope for what its block defines: `def area` in
     # `Size = Struct.new(:w, :h) do ... end` is `Size#area`.
-    def within_definition(definition, name)
-      @context.push(name)
-      add_subject(definition, @context.join("::"), :constant)
+    def within_definition(definition, name, rooted: false)
+      within_context(name, rooted: rooted) do
+        add_subject(definition, @context.join("::"), :constant)
+        yield
+      end
+    end
+
+    # Names what the block finds under `name`: within the scope being
+    # visited, or from the top level when the name was written rooted.
+    def within_context(name, rooted:)
+      enclosing = @context
+      @context = rooted ? [name] : [*enclosing, name]
       yield
-      @context.pop
+    ensure
+      @context = enclosing
     end
 
     # `scope :recent, -> { ... }` defines the class method `recent`. The
@@ -215,7 +228,7 @@ module Evilution::AST
     # either; like `path_name`, they are named by their own constant.
     def constant_name(node)
       if node.respond_to?(:full_name)
-        node.full_name
+        node.full_name.delete_prefix("::")
       else
         node.name.to_s
       end

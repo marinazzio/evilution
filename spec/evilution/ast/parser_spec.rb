@@ -724,6 +724,36 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects_in("::Point = Data.define(:x, :y)\n").map(&:name)).to eq(["Point"])
     end
 
+    it "names a root constant path definition written inside a scope without that scope" do
+      source = "module Outer\n  class Inner\n    ::Point = Data.define(:x, :y) do\n      def origin? = x.zero?\n    end\n  end\nend\n"
+
+      expect(subjects_in(source).map { |s| [s.name, s.kind] }).to eq([["Point", :constant], ["Point#origin?", :method]])
+    end
+
+    it "names a root class or module written inside a scope without that scope" do
+      source = "module Outer\n  class ::Foo\n    def a = 1\n  end\n\n  module ::Geo::Bar\n    def b = 2\n  end\n\n  def c = 3\nend\n"
+
+      expect(subjects_in(source).map(&:name)).to eq(["Foo#a", "Geo::Bar#b", "Outer#c"])
+    end
+
+    it "names methods of class << ::Constant after that constant alone" do
+      source = "module Outer\n  class << ::Store\n    def open = 1\n  end\n\n  def c = 3\nend\n"
+
+      expect(subjects_in(source).map(&:name)).to eq(["Store.open", "Outer#c"])
+    end
+
+    it "names a nested root constant path definition by its path alone" do
+      source = "module Outer\n  ::Geo::Point = Struct.new(:x, :y) do\n    def origin? = x.zero?\n  end\nend\n"
+
+      expect(subjects_in(source).map(&:name)).to eq(["Geo::Point", "Geo::Point#origin?"])
+    end
+
+    it "returns to the enclosing scope after a root constant path definition" do
+      source = "module Outer\n  ::Point = Data.define(:x, :y) do\n    def origin? = x.zero?\n  end\n\n  def helper = 1\n  LIMIT = 2\nend\n"
+
+      expect(subjects_in(source).map(&:name)).to eq(["Point", "Point#origin?", "Outer#helper", "Outer::LIMIT"])
+    end
+
     it "scopes the block of a constant path definition under its path" do
       subjects = subjects_in("Geo::Size = Struct.new(:w, :h) do\n  def area = w * h\nend\n")
 
