@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::IntegerLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   # One value past each integer width, keyed by the boundary it crosses:
   # int8, uint8, int16, uint16, int32, uint32, int64. A literal is replaced
   # with the sentinel of the first boundary above its magnitude, so a

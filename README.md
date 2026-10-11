@@ -165,7 +165,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 Two profiles ship out of the box:
 
-- **`default`** — the 152 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
+- **`default`** — the 153 stable operators registered in `Mutator::Registry.default`. Suitable for everyday CI runs; balances coverage signal against survivor noise.
 - **`strict`** — adds extra aggressive mutators on top of `default`:
   - `PredicateToNil` replaces every `x.predicate?` call with `nil` to surface tests that only assert truthiness rather than exact return values.
   - `ExceptionSwallow` appends `rescue nil` to a statement that raises by convention — a bang method, `fetch` without a default, `Integer` / `Float` / `Rational` — to surface tests that never make it fail and check the error comes out (`record.save!` -> `record.save! rescue nil`). It skips Ruby core in-place bangs (`uniq!`, `sort_by!`, …), `exit!`, statements already under a rescue, and `raise`; project bangs that mutate rather than raise will still show up as survivors.
@@ -513,7 +513,7 @@ Subjects needing attention (2 subjects in 1 file):
 
 A subject is listed when something survived, or when nothing reached it at all — zero verdicts, every mutation unresolved or neutral. Fully-killed subjects are not listed, so the section stays actionable. JSON output carries every subject under `subjects`, whether or not it needs attention, so a CI step can assert on `reached` or on a per-subject `score`.
 
-## Mutation Operators (152 total)
+## Mutation Operators (153 total)
 
 Each operator name is stable and appears in JSON output under `survived[].operator`.
 
@@ -553,6 +553,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `call_to_nil` | Replace a method call with `nil` (skips void statements, receivers of another call, and attribute or index writes) | `user.name` -> `nil` |
 | `constant_read_to_nil` | Replace a constant reference with `nil`, a path as a whole (skips call receivers, void statements and `rescue` exception classes) | `MAX` -> `nil`, `Config::MAX` -> `nil` |
 | `constant_namespace_strip` | Strip the namespace off a constant path, at each level of a longer one (skips top-level `::A` paths and operator-write targets such as `A::B ||= x`) | `A::B` -> `B`, `A::B::C` -> `C` and `B::C` |
+| `constant_write_to_nil` | Assign `nil` to a constant instead of its value. A constant assignment outside a method is its own subject, named after the constant, and the literal operators mutate its value too; code that read the constant while the file loaded keeps the old value (skips a constant already `nil`; `Data.define` / `Struct.new` assignments are left to `data_struct_member`) | `LIMIT = 10` -> `LIMIT = nil` |
 | `safe_navigation_removal` | Replace `&.` with a plain call (skips `self` and literal receivers) | `user&.name` -> `user.name` |
 | `attribute_write_to_read` | Replace an attribute or index write with the matching read (skips writes `statement_deletion` already removes) | `a.foo = b` -> `a.foo`, `a[i] = b` -> `a[i]` |
 | `argument_propagation` | Replace a call with its only positional argument (skips operator methods, attribute writes and void statements) | `normalize(value)` -> `value` |
@@ -868,10 +869,10 @@ Methods whose body overlaps the requested range are included. Mix targeted and w
 evilution run lib/foo.rb:15-30 lib/bar.rb --format json
 ```
 
-A range is matched against subjects, and not every line belongs to one. Methods are subjects, and so are scopes, AASM guards and callbacks, callback and validation declarations, and `Data.define` / `Struct.new` definitions (see step 2 under [Internals](#internals-for-context-not-for-direct-use)). Other class-body code — a constant list, a serializer attribute, a DSL call evilution does not know — is not. When the range holds such code, the run says so on stderr and in `summary.uncovered_code`:
+A range is matched against subjects, and not every line belongs to one. Methods are subjects, and so are scopes, AASM guards and callbacks, callback and validation declarations, `Data.define` / `Struct.new` definitions and constant assignments (see step 2 under [Internals](#internals-for-context-not-for-direct-use)). Other class-body code — a serializer attribute, a DSL call evilution does not know — is not. When the range holds such code, the run says so on stderr and in `summary.uncovered_code`:
 
 ```
-[evilution] app/models/order.rb:12-14 holds code outside every subject (class-body code such as DSL calls and constants is not mutated); no mutations target those lines.
+[evilution] app/models/order.rb:12-14 holds code outside every subject (class-body code such as DSL calls is not mutated); no mutations target those lines.
 ```
 
 Read `0 mutations` next to that message as "not measured", not as "nothing to test".
@@ -908,7 +909,7 @@ A score describes only the mutations that got a verdict. Five fields say what it
 |---|---|---|
 | `summary.unresolved_target_files` | A file you named resolved to no spec and was never tested; the run fails on this alone | Write a spec, pass `--spec`, or map it in `spec_mappings` — do not trust the score until this is empty |
 | `subjects[].reached == false` | Mutations were generated for that method but none got a verdict | The method is untested even where its file scores well; start here rather than with `survived[]` |
-| `summary.uncovered_code` | Lines you targeted hold code outside every subject — class-body code such as constant lists or DSL calls evilution does not treat as a subject — so no mutation was generated for them; the same is printed to stderr | A run that reports `0 mutations` for those lines has not shown they are tested. Target the methods that code calls, or cover it with ordinary tests |
+| `summary.uncovered_code` | Lines you targeted hold code outside every subject — class-body code such as DSL calls evilution does not treat as a subject — so no mutation was generated for them; the same is printed to stderr | A run that reports `0 mutations` for those lines has not shown they are tested. Target the methods that code calls, or cover it with ordinary tests |
 | `neutral[].neutral_reason.kind == "baseline_failure"` | The mutation's tests failed only on examples that were already failing before any mutation ran; `detail` names the red spec file | Read `summary.baseline_failures` for why it was red, and fix that first — these mutations have no verdict until it is green |
 | `neutral[].neutral_reason.kind == "infra_error"` | The test process crashed on infrastructure (DB lock, timeout); `detail` names the class | Not a coverage gap. Give parallel workers their own database, or run `-j 1` |
 
@@ -1075,9 +1076,9 @@ For the full contributor architecture — module map, data flow, and extension
 points — see [docs/architecture.md](docs/architecture.md).
 
 1. **Parse** — Prism parses Ruby files into ASTs with exact byte offsets
-2. **Extract** — Methods are identified as mutation subjects, and so are value-object definitions outside any method (`Point = Data.define(:x, :y)`, `class Coord < Struct.new(:lat, :lng)`), which only the operators that apply to them mutate, and ActiveRecord scopes declared with a literal body in a class body (`scope :recent, -> { where(recent: true) }`), named after the class method they define (`Order.recent`) and mutated like a method body — also when declared in a concern's `included do ... end` block, where they are named after the concern (`Publishable.published`); likewise the guards and callbacks written out as lambdas or blocks inside an AASM `event` or `state` declaration (`event :ship, guard: -> { address? }`), named after the method that declaration defines (`Order#ship`, `Order#paid?`), or after the concern when the machine is declared in its `included do ... end` block (`Shippable#ship`); and the conditions and bodies written out in callback and validation declarations of a class body or of a concern's `included do ... end` block (`validate :credit_limit, if: -> { paid? }`, `before_save { ... }`), named the way the declaration reads (`Order.validate(:credit_limit)`, `Order.before_save`, `Publishable.validates(:title)`)
+2. **Extract** — Methods are identified as mutation subjects, and so are value-object definitions outside any method (`Point = Data.define(:x, :y)`, `class Coord < Struct.new(:lat, :lng)`), which only the operators that apply to them mutate, every other constant assignment outside a method (`LIMIT = 10`), named after the constant (`Config::LIMIT`) and mutated by `constant_write_to_nil` and the literal operators, and ActiveRecord scopes declared with a literal body in a class body (`scope :recent, -> { where(recent: true) }`), named after the class method they define (`Order.recent`) and mutated like a method body — also when declared in a concern's `included do ... end` block, where they are named after the concern (`Publishable.published`); likewise the guards and callbacks written out as lambdas or blocks inside an AASM `event` or `state` declaration (`event :ship, guard: -> { address? }`), named after the method that declaration defines (`Order#ship`, `Order#paid?`), or after the concern when the machine is declared in its `included do ... end` block (`Shippable#ship`); and the conditions and bodies written out in callback and validation declarations of a class body or of a concern's `included do ... end` block (`validate :credit_limit, if: -> { paid? }`, `before_save { ... }`), named the way the declaration reads (`Order.validate(:credit_limit)`, `Order.before_save`, `Publishable.validates(:title)`)
 3. **Filter** — Disable comments, Sorbet `sig` blocks, and AST ignore patterns exclude mutations before execution
-4. **Mutate** — 152 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
+4. **Mutate** — 153 operators produce text replacements at precise byte offsets (source-level surgery, no AST unparsing); heredoc literal text is skipped by default. Identical byte-mutations from different operators are deduplicated by `(file_path, mutated_source)` so the count is not inflated by overlap
 5. **Isolate** — Mutations are applied to temporary file copies (never modifying originals); load-path redirection ensures `require` resolves the mutated copy. Default isolation is in-process for plain Ruby projects (no gemspec) and fork for Rails projects and packaged gems (auto-detected); `--isolation fork` forces forked child processes. Both sequential and parallel (`--jobs N`) modes respect the configured isolation strategy
 6. **Test** — The configured test framework (RSpec, Minitest, or Test::Unit) executes against the mutated source
 7. **Collect** — Source strings and AST nodes are released after use to minimize memory retention

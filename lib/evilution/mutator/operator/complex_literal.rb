@@ -8,6 +8,8 @@ require_relative "../operator"
 # The literal is replaced as a whole: IntegerLiteral and FloatLiteral leave
 # its numeric part alone.
 class Evilution::Mutator::Operator::ComplexLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_imaginary_node(node)
     replacements_for(node.numeric).each { |part| add_mutation_with_replacement(node, "#{part}i") }
     add_mutation_with_replacement(node, "nil")

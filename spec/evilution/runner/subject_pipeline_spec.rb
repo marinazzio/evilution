@@ -46,9 +46,10 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         config = Evilution::Config.new(
           target_files: [file], quiet: true, baseline: false, skip_config_file: true
         )
-        pipeline = described_class.new(config, parser: parser)
+        registry = Evilution::Mutator::Registry.new.register(Class.new(Evilution::Mutator::Base))
+        pipeline = described_class.new(config, parser: parser, registry: registry)
 
-        expect(pipeline.call.map { |s| [s.name, s.kind] }).to eq([["Foo::Point", :constant], ["Foo#bar", :method]])
+        expect(pipeline.call.map { |s| [s.name, s.kind] }).to eq([["Foo#bar", :method]])
       end
     end
 
@@ -80,13 +81,29 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
-    it "treats a file holding only unmutated constants as having no subjects" do
+    it "keeps the constant assignments of a file as subjects under the default operators" do
       Dir.mktmpdir do |dir|
         file = write(dir, "lib/limits.rb", "module Limits\n  MAX = 10\nend\n")
         config = Evilution::Config.new(
           target_files: [file], quiet: true, baseline: false, skip_config_file: true
         )
         pipeline = described_class.new(config, parser: parser)
+
+        expect(pipeline.call.map { |s| [s.name, s.kind] }).to eq([["Limits::MAX", :constant_write]])
+        pipeline.report_uncovered_code
+
+        expect(pipeline.uncovered_code).to eq([])
+      end
+    end
+
+    it "treats a file holding only constants no operator mutates as having no subjects" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/limits.rb", "module Limits\n  MAX = 10\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], quiet: true, baseline: false, skip_config_file: true
+        )
+        registry = Evilution::Mutator::Registry.new.register(Class.new(Evilution::Mutator::Base))
+        pipeline = described_class.new(config, parser: parser, registry: registry)
 
         expect(pipeline.call).to be_empty
         pipeline.report_uncovered_code
@@ -497,7 +514,7 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
           expect(pipeline.call).to be_empty
           expect { pipeline.report_uncovered_code }
             .to output("[evilution] #{file}:2-4 holds code outside every subject (class-body code such as " \
-                       "DSL calls and constants is not mutated); no mutations target those lines.\n").to_stderr
+                       "DSL calls is not mutated); no mutations target those lines.\n").to_stderr
           expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2-4"] }])
         end
       end
@@ -550,7 +567,7 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         Dir.mktmpdir do |dir|
           file = write(dir, "app/models/order.rb", <<~RUBY)
             class Order
-              LIMIT = 10
+              has_many :items
               alias_method :sum, :total
 
               def total
@@ -593,11 +610,11 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       Dir.mktmpdir do |dir|
         file = write(dir, "app/models/scopes.rb", <<~RUBY)
           module Scopes
-            LIMIT = 10
+            has_many :items
 
             private
 
-            ORDER = :asc
+            belongs_to :account
           end
         RUBY
         config = Evilution::Config.new(target_files: [file], quiet: true, baseline: false, skip_config_file: true)

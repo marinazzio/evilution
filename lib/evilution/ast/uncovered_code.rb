@@ -6,7 +6,7 @@ require_relative "included_block"
 
 # The lines of a file that hold code no subject covers: statements written in
 # a class, module or `class << self` body, or at the top level, outside every
-# method -- `scope` lambdas, callback macros, constant lists -- or in a
+# method -- callback macros, DSL calls, operator writes on a constant -- or in a
 # concern's `included` block, which is a class body written elsewhere. Mutations are
 # generated per subject, so a run aimed at these lines generates none of its
 # own, and saying so is the only way a reader can tell "nothing to mutate"

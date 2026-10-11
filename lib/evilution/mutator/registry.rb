@@ -180,7 +180,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::IndexRangeToDrop,
       Evilution::Mutator::Operator::IndexWriteToValue,
       Evilution::Mutator::Operator::ConstantReadToNil,
-      Evilution::Mutator::Operator::ConstantNamespaceStrip
+      Evilution::Mutator::Operator::ConstantNamespaceStrip,
+      Evilution::Mutator::Operator::ConstantWriteToNil
     ].each { |op| registry.register(op) }
     registry
   end

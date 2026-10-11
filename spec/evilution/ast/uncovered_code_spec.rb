@@ -5,13 +5,15 @@ require "evilution/ast/parser"
 require "evilution/ast/uncovered_code"
 
 RSpec.describe Evilution::AST::UncoveredCode do
-  # The subjects a run hands over: those some operator mutates.
-  def uncovered(source, lines: nil, mutated_lines: [])
+  # The subjects of a run whose operators leave constant assignments alone,
+  # unless `constants:` asks for those too: a constant then stands in for any
+  # class-body statement that is no subject.
+  def uncovered(source, lines: nil, mutated_lines: [], constants: false)
     tmpfile = Tempfile.new(["uncovered", ".rb"])
     tmpfile.write(source)
     tmpfile.close
-    registry = Evilution::Mutator::Registry.default
-    subjects = Evilution::AST::Parser.new.call(tmpfile.path).select { |subject| registry.accepts?(subject) }
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    subjects = subjects.reject { |subject| subject.kind == :constant_write } unless constants
 
     described_class.call(tmpfile.path, subjects, lines: lines, mutated_lines: mutated_lines)
   ensure
@@ -36,6 +38,10 @@ RSpec.describe Evilution::AST::UncoveredCode do
 
   it "returns the lines of class-body code outside every method" do
     expect(uncovered(model)).to eq([2..2, 4..6])
+  end
+
+  it "leaves out a constant assignment that is a subject" do
+    expect(uncovered(model, constants: true)).to eq([4..6])
   end
 
   it "keeps only the lines inside the given range" do

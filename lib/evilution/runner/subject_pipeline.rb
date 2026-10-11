@@ -34,7 +34,7 @@ class Evilution::Runner::SubjectPipeline
   # generated for, per file -- known only once #call's subjects are planned.
   #
   # A line range is checked as given; a whole file only when it has no
-  # subjects at all -- every class with an `include` or a constant would
+  # subjects at all -- every class with an `include` or a DSL call would
   # otherwise warn.
   def report_uncovered_code(mutated_lines = {})
     by_file = @subjects_by_file || {}
@@ -78,7 +78,7 @@ class Evilution::Runner::SubjectPipeline
   def warn_uncovered(entry)
     Evilution::Diagnostic.warn(
       "[evilution] #{entry[:file]}:#{entry[:lines].join(", ")} holds code outside every subject " \
-      "(class-body code such as DSL calls and constants is not mutated); no mutations target those lines."
+      "(class-body code such as DSL calls is not mutated); no mutations target those lines."
     )
   end
 

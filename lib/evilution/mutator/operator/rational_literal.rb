@@ -5,6 +5,8 @@ require_relative "../operator"
 # Replace a rational literal (`5r`, `1.5r`) with `0r`, `1r`, its two
 # neighbours (`value + 1r`, `value - 1r`) and `nil`.
 class Evilution::Mutator::Operator::RationalLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_rational_node(node)
     replacements_for(node.value).each { |value| add_mutation_with_replacement(node, literal_for(value)) }
     add_mutation_with_replacement(node, "nil")

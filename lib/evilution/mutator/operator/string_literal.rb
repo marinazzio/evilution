@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::StringLiteral < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def initialize(skip_heredoc_literals: false, **rest)
     super(**rest)
     @skip_heredoc_literals = skip_heredoc_literals

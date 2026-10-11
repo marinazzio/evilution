@@ -15,9 +15,13 @@ require "tmpdir"
 # one pins the block's other declaration to a single run: a mutation that
 # reached neither class would survive on the tested branch, and re-running
 # the whole block on a loaded class would fail every mutation.
+#
+# The concern's constant is a subject too. Only the untested branch reads it,
+# so its mutations say nothing about the scope and are set aside.
 RSpec.describe "Concern scope subjects", :aggregate_failures do
   let(:project) { File.expand_path("../../support/fixtures/concern_project", __dir__) }
   let(:root) { File.expand_path("../../..", __dir__) }
+  let(:constant_line) { 9 }
   let(:condition_line) { 14 }
   let(:untested_branch_line) { 15 }
   let(:tested_branch_line) { 17 }
@@ -61,7 +65,8 @@ RSpec.describe "Concern scope subjects", :aggregate_failures do
       let(:report) { run_evilution(isolation) }
 
       it "mutates the scope as a subject named after the concern" do
-        expect(report.fetch("subjects").map { |subject| subject.fetch("name") }).to eq(["Publishable.visible"])
+        expect(report.fetch("subjects").map { |subject| subject.fetch("name") })
+          .to contain_exactly("Publishable.visible", "Publishable::HIDDEN")
         expect(report.dig("summary", "errors")).to eq(0)
         expect(report.dig("summary", "neutral")).to eq(0)
       end
@@ -76,7 +81,9 @@ RSpec.describe "Concern scope subjects", :aggregate_failures do
       # behave like the original; nothing else on that line may get through.
       it "lets only equivalent mutations of the tested branch survive" do
         expect(operators_on(report, "survived", tested_branch_line) - equivalent_operators).to eq([])
-        expect(lines_of(report, "survived") - [tested_branch_line, untested_branch_line, condition_line]).to eq([])
+        scope_survivors = lines_of(report, "survived") - [constant_line]
+
+        expect(scope_survivors - [tested_branch_line, untested_branch_line, condition_line]).to eq([])
       end
     end
   end

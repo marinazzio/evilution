@@ -51,7 +51,7 @@ Everything lives under `lib/evilution/`.
 | `Config`, `Config::*` | Merge `.evilution.yml` + CLI flags + env, validate, freeze. | `config.rb`, `config/sources.rb`, `config/validators/*` |
 | `Runner`, `Runner::*` | Orchestrate the whole run. Each stage is its own collaborator. | `runner.rb`, `runner/*` |
 | `AST`, `Subject` | Prism parse, find method subjects, source surgery, pattern matching, heredoc spans. | `ast/parser.rb`, `ast/source_surgeon.rb`, `subject.rb` |
-| `Mutator`, `Mutator::Operator::*` | 152 operators (default profile) that emit byte-edits; registry + profiles. | `mutator/base.rb`, `mutator/registry.rb`, `mutator/operator/*` |
+| `Mutator`, `Mutator::Operator::*` | 153 operators (default profile) that emit byte-edits; registry + profiles. | `mutator/base.rb`, `mutator/registry.rb`, `mutator/operator/*` |
 | `Mutation` | An immutable mutation record (original/mutated sources, slice, location, parse status). | `mutation.rb` |
 | `SpecResolver`, `SpecSelector` | Map a source file to its covering spec files (layout heuristics + explicit mappings). | `spec_resolver.rb`, `spec_selector.rb` |
 | `Isolation::{Fork,InProcess}`, `ProcessSupervisor` | Run one mutation's tests in isolation; process-group lifecycle, sandboxing, TERM/KILL ladder. | `isolation/fork.rb`, `process_supervisor.rb` |
@@ -231,11 +231,11 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      `%i[method constant]`; a constant subject's node is the definition's
      `CallNode`.
    - Every other assignment to a constant outside a method (`LIMIT = 10`) is a
-     `:constant_write` subject, whose node is the whole assignment. No built-in
-     operator lists that kind yet, and `SubjectPipeline` drops subjects of a
-     kind no registered operator accepts (`Registry#accepts?`), so until one
-     does they stay out of subject listings and the lines still count as
-     uncovered code. Re-evaluating the mutated file assigns the constant again
+     `:constant_write` subject, whose node is the whole assignment.
+     `ConstantWriteToNil` mutates only those; the literal operators extend
+     `Mutator::ConstantValueSubjects` to take them alongside the default
+     kinds. `SubjectPipeline` drops subjects of a kind no registered operator
+     accepts (`Registry#accepts?`). Re-evaluating the mutated file assigns the constant again
      and the next mutation's source puts it back; what read the constant while
      the file first loaded (a class-body call, a constant in another file
      computed from it) keeps the old value.
