@@ -647,8 +647,40 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects.map { |s| [s.name, s.kind] }).to eq([["Shape::Size", :constant], ["Shape::Geo::Point", :constant]])
     end
 
-    it "makes no subject of an operator write or a multiple assignment" do
-      expect(subjects_in("class Config\n  LIMIT ||= 10\n  COUNT += 1\n  MIN, MAX = 1, 9\nend\n")).to be_empty
+    it "makes a constant-write subject of an operator write, named like the constant's assignment" do
+      subjects = subjects_in("class Config\n  LIMIT = 10\n  LIMIT += 1\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind, s.line_number] }).to eq(
+        [["Config::LIMIT", :constant_write, 2], ["Config::LIMIT", :constant_write, 3]]
+      )
+      expect(subjects.last.source).to eq("LIMIT += 1")
+      expect(subjects.last.node).to be_a(Prism::ConstantOperatorWriteNode)
+    end
+
+    it "makes a constant-write subject of an operator write on a constant path" do
+      subjects = subjects_in("module App\n  Config::LIMIT -= 1\n  ::TOTAL *= 2\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq(
+        [["App::Config::LIMIT", :constant_write], ["TOTAL", :constant_write]]
+      )
+      expect(subjects.first.source).to eq("Config::LIMIT -= 1")
+      expect(subjects.first.node).to be_a(Prism::ConstantPathOperatorWriteNode)
+    end
+
+    it "still finds methods in the value of an operator write" do
+      subjects = subjects_in("HANDLERS += [Class.new do\n  def handle = 1\nend]\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["HANDLERS", :constant_write], ["#handle", :method]])
+    end
+
+    it "still finds methods in the value of an operator write on a constant path" do
+      subjects = subjects_in("App::HANDLERS += [Class.new do\n  def handle = 1\nend]\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["App::HANDLERS", :constant_write], ["#handle", :method]])
+    end
+
+    it "makes no subject of a logical write or a multiple assignment" do
+      expect(subjects_in("class Config\n  LIMIT ||= 10\n  LIMIT &&= 5\n  MIN, MAX = 1, 9\nend\n")).to be_empty
     end
   end
 

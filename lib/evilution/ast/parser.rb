@@ -107,6 +107,19 @@ module Evilution::AST
       super
     end
 
+    # `LIMIT += 1` assigns the constant again and is a subject like the
+    # assignment it follows, under the same name.
+    def visit_constant_operator_write_node(node)
+      add_subject(node, scoped_name(node.name), :constant_write)
+      super
+    end
+
+    def visit_constant_path_operator_write_node(node)
+      name = path_name(node.target)
+      add_subject(node, rooted?(node.target) ? name : scoped_name(name), :constant_write)
+      super
+    end
+
     private
 
     def within_scope(singleton:)

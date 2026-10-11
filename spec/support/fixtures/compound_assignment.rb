@@ -219,4 +219,13 @@ class CompoundAssignment
   def index_plain_write(counts, key)
     counts[key] = 1
   end
+
+  CONST_TOTAL = 1
+  CONST_TOTAL += 2
+  CONST_FLAGS = 4
+  CONST_FLAGS |= (CONST_TOTAL -= 1)
+  CONST_HANDLER = ->(count) { count += 1 }
 end
+
+CompoundAssignment::CONST_TOTAL -= 3
+CompoundAssignment::CONST_FLAGS ^= (CompoundAssignment::CONST_TOTAL <<= 1)

@@ -341,6 +341,64 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       end
     end
 
+    describe "operator writes on a constant" do
+      def constant_subjects(name)
+        subjects_from_fixture.select { |s| s.kind == :constant_write && s.name == "CompoundAssignment::#{name}" }
+      end
+
+      def mutated_lines(muts)
+        muts.map { |m| m.mutated_slice.strip }
+      end
+
+      it "runs on constant-write subjects as well as the default kinds" do
+        expect(described_class.subject_kinds).to eq(%i[method scope aasm callback constant_write])
+      end
+
+      it "swaps the operator and nils the whole write" do
+        _assignment, bump, = constant_subjects("CONST_TOTAL")
+
+        expect(mutated_lines(described_class.new.call(bump)))
+          .to contain_exactly("CONST_TOTAL -= 2", "CONST_TOTAL *= 2", "nil")
+      end
+
+      it "leaves the constant's plain assignment alone" do
+        assignment, = constant_subjects("CONST_TOTAL")
+
+        expect(described_class.new.call(assignment)).to be_empty
+      end
+
+      it "mutates an operator write on a constant path" do
+        path_write = constant_subjects("CONST_TOTAL").find { |s| s.source == "CompoundAssignment::CONST_TOTAL -= 3" }
+
+        expect(mutated_lines(described_class.new.call(path_write)))
+          .to contain_exactly("CompoundAssignment::CONST_TOTAL += 3", "nil")
+      end
+
+      it "descends past a constant path write into a nested assignment" do
+        path_write = constant_subjects("CONST_FLAGS").last
+
+        # outer ^= : 1 swap + 1 removal = 2, inner <<= : 1 swap + 1 removal = 2
+        expect(described_class.new.call(path_write).length).to eq(4)
+      end
+
+      it "descends past the write into a nested assignment" do
+        flags = constant_subjects("CONST_FLAGS").find { |s| s.source == "CONST_FLAGS |= (CONST_TOTAL -= 1)" }
+
+        expect(mutated_lines(described_class.new.call(flags))).to contain_exactly(
+          "CONST_FLAGS &= (CONST_TOTAL -= 1)", "nil", "CONST_FLAGS |= (CONST_TOTAL += 1)", "CONST_FLAGS |= (nil)"
+        )
+      end
+
+      it "mutates a compound assignment in a lambda assigned to a constant" do
+        handler, = constant_subjects("CONST_HANDLER")
+
+        expect(mutated_lines(described_class.new.call(handler))).to contain_exactly(
+          "CONST_HANDLER = ->(count) { count -= 1 }", "CONST_HANDLER = ->(count) { count *= 1 }",
+          "CONST_HANDLER = ->(count) { nil }"
+        )
+      end
+    end
+
     describe "recursion into nested compound assignments" do
       # Each nested fixture wraps an inner `t -= 1` (a local-variable
       # operator-write yielding 2 mutations) inside an outer compound

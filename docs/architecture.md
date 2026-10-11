@@ -232,9 +232,10 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      `CallNode`.
    - Every other assignment to a constant outside a method (`LIMIT = 10`) is a
      `:constant_write` subject, whose node is the whole assignment.
-     `ConstantWriteToNil` mutates only those; the literal operators extend
-     `Mutator::ConstantValueSubjects` to take them alongside the default
-     kinds. `SubjectPipeline` drops subjects of a kind no registered operator
+     An operator write (`LIMIT += 1`) is one too, under the same name.
+     `ConstantWriteToNil` mutates only those; the literal operators and
+     `CompoundAssignment` extend `Mutator::ConstantValueSubjects` to take them
+     alongside the default kinds. `SubjectPipeline` drops subjects of a kind no registered operator
      accepts (`Registry#accepts?`). Re-evaluating the mutated file assigns the constant again
      and the next mutation's source puts it back; what read the constant while
      the file first loaded (a class-body call, a constant in another file

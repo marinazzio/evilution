@@ -636,3 +636,4 @@
 {"id":"int-31b475dc","kind":"field_change","created_at":"2026-10-11T06:40:41.935593905Z","actor":"Denis Kiselev","issue_id":"EV-8v7d.5","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Dropped: same signal as constant_write_to_nil, see notes"}}
 {"id":"int-68909b2c","kind":"field_change","created_at":"2026-10-11T07:21:23.395993815Z","actor":"Denis Kiselev","issue_id":"EV-8v7d.6","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-16097dd9","kind":"field_change","created_at":"2026-10-11T07:34:24.726032091Z","actor":"Denis Kiselev","issue_id":"EV-8v7d.7","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-0be9025f","kind":"field_change","created_at":"2026-10-11T09:03:21.790906842Z","actor":"Denis Kiselev","issue_id":"EV-8v7d.8","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}

@@ -386,7 +386,7 @@ RSpec.describe Evilution::Mutator::Registry do
         expect(registry.accepts?(subject_of(:method))).to be(false)
       end
 
-      it "mutates constant-write subjects with the nil operator and the literal operators" do
+      it "mutates constant-write subjects with the nil operator, the literal operators and compound assignment" do
         operators = described_class.for_profile(:strict).operators.select { |op| op.subject_kinds.include?(:constant_write) }
 
         expect(operators).to contain_exactly(
@@ -401,7 +401,8 @@ RSpec.describe Evilution::Mutator::Registry do
           Evilution::Mutator::Operator::SymbolLiteral,
           Evilution::Mutator::Operator::ArrayLiteral,
           Evilution::Mutator::Operator::HashLiteral,
-          Evilution::Mutator::Operator::RangeReplacement
+          Evilution::Mutator::Operator::RangeReplacement,
+          Evilution::Mutator::Operator::CompoundAssignment
         )
       end
 

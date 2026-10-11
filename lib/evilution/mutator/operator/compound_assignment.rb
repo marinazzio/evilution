@@ -3,6 +3,8 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::CompoundAssignment < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   REPLACEMENTS = {
     :+ => %i[- *],
     :- => [:+],
@@ -46,6 +48,18 @@ class Evilution::Mutator::Operator::CompoundAssignment < Evilution::Mutator::Bas
 
   # `counts[key] += 1`: read through `[]` and written through `[]=`.
   def visit_index_operator_write_node(node)
+    mutate_operator_write(node)
+    super
+  end
+
+  # `TOTAL += 1` is written outside any method and is a constant-write
+  # subject of its own, like the assignment `TOTAL = 1` before it.
+  def visit_constant_operator_write_node(node)
+    mutate_operator_write(node)
+    super
+  end
+
+  def visit_constant_path_operator_write_node(node)
     mutate_operator_write(node)
     super
   end
