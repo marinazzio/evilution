@@ -286,6 +286,52 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       end
     end
 
+    describe "logical writes on an attribute" do
+      def mutated_lines(muts)
+        muts.map { |m| m.mutated_slice.strip }
+      end
+
+      it "swaps ||= for &&= and nils the whole write" do
+        expect(mutated_lines(mutations_for("attribute_or_assign")))
+          .to contain_exactly('user.name &&= "unknown"', "nil")
+      end
+
+      it "swaps &&= for ||= and nils the whole write" do
+        expect(mutated_lines(mutations_for("attribute_and_assign")))
+          .to contain_exactly("user.name ||= user.name.strip", "nil")
+      end
+
+      it "mutates a write on self" do
+        expect(mutated_lines(mutations_for("self_attribute_or_assign")))
+          .to contain_exactly("self.cache &&= {}", "nil")
+      end
+
+      it "keeps the safe navigation of the write" do
+        expect(mutated_lines(mutations_for("safe_attribute_and_assign")))
+          .to contain_exactly('order&.note ||= "seen"', "nil")
+      end
+
+      it "keeps the whole receiver chain" do
+        expect(mutated_lines(mutations_for("chained_attribute_or_assign")))
+          .to contain_exactly("order.customer.locale &&= :en", "nil")
+      end
+
+      it "descends past an or-write into a nested assignment" do
+        # outer ||= : 1 swap + 1 removal = 2, inner -= : 1 swap + 1 removal = 2
+        expect(mutations_for("nested_attribute_or_write").length).to eq(4)
+      end
+
+      it "descends past an and-write into a nested assignment" do
+        expect(mutations_for("nested_attribute_and_write").length).to eq(4)
+      end
+
+      it "reports the mutation on the line of the write" do
+        line = source.lines.index { |text| text.include?("user.name &&= user.name.strip") } + 1
+
+        expect(mutations_for("attribute_and_assign").map(&:line).uniq).to eq([line])
+      end
+    end
+
     describe "operator writes on an index" do
       def mutated_lines(muts)
         muts.map { |m| m.mutated_slice.strip }

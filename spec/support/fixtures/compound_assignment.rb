@@ -220,6 +220,35 @@ class CompoundAssignment
     counts[key] = 1
   end
 
+  def attribute_or_assign(user)
+    user.name ||= "unknown"
+  end
+
+  def attribute_and_assign(user)
+    user.name &&= user.name.strip
+    user
+  end
+
+  def self_attribute_or_assign
+    self.cache ||= {}
+  end
+
+  def safe_attribute_and_assign(order)
+    order&.note &&= "seen"
+  end
+
+  def chained_attribute_or_assign(order)
+    order.customer.locale ||= :en
+  end
+
+  def nested_attribute_or_write(user, t)
+    user.rank ||= (t -= 1)
+  end
+
+  def nested_attribute_and_write(user, t)
+    user.rank &&= (t -= 1)
+  end
+
   CONST_TOTAL = 1
   CONST_TOTAL += 2
   CONST_FLAGS = 4
