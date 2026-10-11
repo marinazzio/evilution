@@ -76,6 +76,34 @@ RSpec.describe Evilution::Mutator::Operator::CallToNil do
       expect(mutated_lines(muts)).to contain_exactly("nil", "items.map { |i| nil }")
     end
 
+    it "skips the receiver of an attribute operator write but not its value" do
+      expect(mutated_lines(mutations_for("operator_write_receiver"))).to eq(["user.account.total += nil"])
+    end
+
+    it "skips the receiver of an attribute or-write but not its value" do
+      expect(mutated_lines(mutations_for("or_write_receiver"))).to eq(["user.profile.name ||= nil"])
+    end
+
+    it "skips the receiver of an attribute and-write but not its value" do
+      expect(mutated_lines(mutations_for("and_write_receiver"))).to eq(["user.profile.name &&= nil"])
+    end
+
+    it "skips the receiver of an index operator write but not its value" do
+      expect(mutated_lines(mutations_for("index_operator_write_receiver"))).to eq(["counts[key] += nil"])
+    end
+
+    it "skips the receiver of an index or-write but not its value" do
+      expect(mutated_lines(mutations_for("index_or_write_receiver"))).to eq(["cache[key] ||= nil"])
+    end
+
+    it "skips the receiver of an index and-write but not its value" do
+      expect(mutated_lines(mutations_for("index_and_write_receiver"))).to eq(["cache[key] &&= nil"])
+    end
+
+    it "skips the receivers of attribute and index targets of a multiple assignment but not its index" do
+      expect(mutated_lines(mutations_for("multiple_assignment_receivers"))).to eq(["account.owner, store[nil] = pair"])
+    end
+
     it "skips a call in void statement position, which statement_deletion covers" do
       expect(mutated_lines(mutations_for("void_statement"))).to be_empty
     end

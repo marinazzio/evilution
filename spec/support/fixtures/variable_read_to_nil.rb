@@ -130,4 +130,38 @@ class VariableReadToNilTarget
   def no_variables
     compute(1)
   end
+
+  def operator_write_receiver(counter, step)
+    counter.total += step
+  end
+
+  def or_write_receiver(user, name)
+    user.name ||= name
+  end
+
+  def and_write_receiver(user, name)
+    user.name &&= name
+  end
+
+  def index_operator_write_receiver(counts, key, step)
+    counts[key] += step
+  end
+
+  def index_or_write_receiver(cache, key, value)
+    cache[key] ||= value
+  end
+
+  def index_and_write_receiver(cache, key, value)
+    cache[key] &&= value
+  end
+
+  def multiple_assignment_receivers(account, store, key, pair)
+    account.owner, store[key] = pair
+    account
+  end
+
+  def attribute_target_receiver_expression(registry, name, pair)
+    registry[name].owner, other = pair
+    other.to_s
+  end
 end

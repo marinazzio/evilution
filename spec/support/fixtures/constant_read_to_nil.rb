@@ -83,4 +83,33 @@ class ConstantReadToNilTarget
   def no_constants(value)
     value + 1
   end
+
+  def operator_write_receiver
+    Counter.total += STEP
+  end
+
+  def or_write_receiver
+    Settings.name ||= DEFAULT_NAME
+  end
+
+  def and_write_receiver
+    Settings.name &&= DEFAULT_NAME
+  end
+
+  def index_operator_write_receiver
+    COUNTS[KEY] += STEP
+  end
+
+  def index_or_write_receiver
+    App::CACHE[KEY] ||= DEFAULT_NAME
+  end
+
+  def index_and_write_receiver
+    App::CACHE[KEY] &&= DEFAULT_NAME
+  end
+
+  def multiple_assignment_receivers(pair)
+    Settings.owner, STORE[KEY] = pair
+    pair
+  end
 end

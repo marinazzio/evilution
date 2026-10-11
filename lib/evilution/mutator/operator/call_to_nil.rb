@@ -13,9 +13,13 @@ require_relative "../operator"
 # (every statement of a body except the last) has no value to replace;
 # deleting it is statement_deletion's job. A call used as the receiver of
 # another call turns into `nil.foo`, a NoMethodError any test that reaches it
-# kills; the outer call is nil-ified instead. An attribute or index write
-# (`a.b = c`, `a[i] = c`) is a side effect, not a value.
+# kills; the outer call is nil-ified instead. The receiver of a write
+# (`user.account.total += 1`, `cache[key] ||= value`) is skipped likewise. An
+# attribute or index write (`a.b = c`, `a[i] = c`) is a side effect, not a
+# value.
 class Evilution::Mutator::Operator::CallToNil < Evilution::Mutator::Base
+  include Evilution::Mutator::ReceiverPositions
+
   def call(subject, **)
     @skipped_calls = Set.new
     super
@@ -27,8 +31,13 @@ class Evilution::Mutator::Operator::CallToNil < Evilution::Mutator::Base
   end
 
   def visit_call_node(node)
-    @skipped_calls.add(node.receiver)
     mutate_to_nil(node) unless @skipped_calls.include?(node) || node.attribute_write?
     super
+  end
+
+  private
+
+  def receiver_found(node)
+    @skipped_calls.add(node)
   end
 end

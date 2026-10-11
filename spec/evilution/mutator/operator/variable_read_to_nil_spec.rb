@@ -87,6 +87,43 @@ RSpec.describe Evilution::Mutator::Operator::VariableReadToNil do
       expect(mutations_for("chained_receiver")).to be_empty
     end
 
+    it "skips the receiver of an attribute operator write but not its value" do
+      expect(mutated_lines(mutations_for("operator_write_receiver"))).to eq(["counter.total += nil"])
+    end
+
+    it "skips the receiver of an attribute or-write but not its value" do
+      expect(mutated_lines(mutations_for("or_write_receiver"))).to eq(["user.name ||= nil"])
+    end
+
+    it "skips the receiver of an attribute and-write but not its value" do
+      expect(mutated_lines(mutations_for("and_write_receiver"))).to eq(["user.name &&= nil"])
+    end
+
+    it "skips the receiver of an index operator write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_operator_write_receiver")))
+        .to contain_exactly("counts[nil] += step", "counts[key] += nil")
+    end
+
+    it "skips the receiver of an index or-write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_or_write_receiver")))
+        .to contain_exactly("cache[nil] ||= value", "cache[key] ||= nil")
+    end
+
+    it "skips the receiver of an index and-write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_and_write_receiver")))
+        .to contain_exactly("cache[nil] &&= value", "cache[key] &&= nil")
+    end
+
+    it "skips the receivers of attribute and index targets of a multiple assignment" do
+      expect(mutated_lines(mutations_for("multiple_assignment_receivers")))
+        .to contain_exactly("account.owner, store[nil] = pair", "account.owner, store[key] = nil", "nil")
+    end
+
+    it "still mutates reads inside the receiver of an attribute target" do
+      expect(mutated_lines(mutations_for("attribute_target_receiver_expression")))
+        .to contain_exactly("registry[nil].owner, other = pair", "registry[name].owner, other = nil")
+    end
+
     it "skips a read in void statement position, which statement_deletion covers" do
       expect(mutations_for("void_statement")).to be_empty
     end

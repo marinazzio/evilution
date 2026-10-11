@@ -85,6 +85,37 @@ RSpec.describe Evilution::Mutator::Operator::ConstantReadToNil do
       expect(mutations_for("chained_call_receiver")).to be_empty
     end
 
+    it "skips the receiver of an attribute operator write but not its value" do
+      expect(mutated_lines(mutations_for("operator_write_receiver"))).to eq(["Counter.total += nil"])
+    end
+
+    it "skips the receiver of an attribute or-write but not its value" do
+      expect(mutated_lines(mutations_for("or_write_receiver"))).to eq(["Settings.name ||= nil"])
+    end
+
+    it "skips the receiver of an attribute and-write but not its value" do
+      expect(mutated_lines(mutations_for("and_write_receiver"))).to eq(["Settings.name &&= nil"])
+    end
+
+    it "skips the receiver of an index operator write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_operator_write_receiver")))
+        .to contain_exactly("COUNTS[nil] += STEP", "COUNTS[KEY] += nil")
+    end
+
+    it "skips a constant path receiver of an index or-write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_or_write_receiver")))
+        .to contain_exactly("App::CACHE[nil] ||= DEFAULT_NAME", "App::CACHE[KEY] ||= nil")
+    end
+
+    it "skips a constant path receiver of an index and-write but not its index and value" do
+      expect(mutated_lines(mutations_for("index_and_write_receiver")))
+        .to contain_exactly("App::CACHE[nil] &&= DEFAULT_NAME", "App::CACHE[KEY] &&= nil")
+    end
+
+    it "skips the receivers of attribute and index targets of a multiple assignment" do
+      expect(mutated_lines(mutations_for("multiple_assignment_receivers"))).to eq(["Settings.owner, STORE[nil] = pair"])
+    end
+
     it "skips a constant in void statement position, which statement_deletion covers" do
       expect(mutations_for("void_statement")).to be_empty
     end

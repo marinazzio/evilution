@@ -9,7 +9,8 @@ require_relative "../operator"
 # tests would pass whatever it held.
 #
 # Four positions are skipped as noise. A constant used as the receiver of a
-# call turns into `nil.new`, a NoMethodError any test that reaches it kills.
+# call turns into `nil.new`, a NoMethodError any test that reaches it kills;
+# so does the receiver of a write (`Counter.total += 1`, `CACHE[key] ||= v`).
 # The namespace of a path would leave `nil::MAX`, a TypeError; the path is
 # nil-ified instead. A constant in void statement position (every statement
 # of a body except the last) has no value to replace; deleting it is
@@ -17,6 +18,8 @@ require_relative "../operator"
 # belong to the rescue operators — `rescue nil` only fails once something is
 # raised, and then with a TypeError of its own.
 class Evilution::Mutator::Operator::ConstantReadToNil < Evilution::Mutator::Base
+  include Evilution::Mutator::ReceiverPositions
+
   def call(subject, **)
     @skipped_nodes = Set.new
     super
@@ -24,11 +27,6 @@ class Evilution::Mutator::Operator::ConstantReadToNil < Evilution::Mutator::Base
 
   def visit_statements_node(node)
     @skipped_nodes.merge(node.body[...-1])
-    super
-  end
-
-  def visit_call_node(node)
-    @skipped_nodes.add(node.receiver)
     super
   end
 
@@ -49,6 +47,10 @@ class Evilution::Mutator::Operator::ConstantReadToNil < Evilution::Mutator::Base
   end
 
   private
+
+  def receiver_found(node)
+    @skipped_nodes.add(node)
+  end
 
   def nilify(node)
     mutate_to_nil(node) unless @skipped_nodes.include?(node)

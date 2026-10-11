@@ -14,7 +14,8 @@ require_relative "../operator"
 # Positions where `nil` says nothing new are skipped:
 #
 # - the receiver of a call, which turns into `nil.name` — a NoMethodError
-#   any test that reaches it kills;
+#   any test that reaches it kills — and likewise the receiver of a write
+#   (`counter.total += 1`, `cache[key] ||= value`);
 # - a void statement (every statement of a body except the last), which
 #   statement_deletion deletes;
 # - the condition of an `if`, `unless`, `while` or `until`, where `nil` is
@@ -25,6 +26,8 @@ require_relative "../operator"
 # - a double-splatted read, `**nil` raising before Ruby 3.4;
 # - the value a shorthand hash (`name:`) leaves unwritten.
 class Evilution::Mutator::Operator::VariableReadToNil < Evilution::Mutator::Base
+  include Evilution::Mutator::ReceiverPositions
+
   def call(subject, **)
     @skipped_nodes = Set.new
     super
@@ -32,11 +35,6 @@ class Evilution::Mutator::Operator::VariableReadToNil < Evilution::Mutator::Base
 
   def visit_statements_node(node)
     @skipped_nodes.merge(node.body[...-1])
-    super
-  end
-
-  def visit_call_node(node)
-    @skipped_nodes.add(node.receiver)
     super
   end
 
@@ -104,6 +102,10 @@ class Evilution::Mutator::Operator::VariableReadToNil < Evilution::Mutator::Base
   end
 
   private
+
+  def receiver_found(node)
+    @skipped_nodes.add(node)
+  end
 
   def nilify(node)
     mutate_to_nil(node) unless @skipped_nodes.include?(node)
