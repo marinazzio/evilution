@@ -182,7 +182,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::ConstantReadToNil,
       Evilution::Mutator::Operator::ConstantNamespaceStrip,
       Evilution::Mutator::Operator::ConstantWriteToNil,
-      Evilution::Mutator::Operator::VariableReadToNil
+      Evilution::Mutator::Operator::VariableReadToNil,
+      Evilution::Mutator::Operator::OperatorWriteReceiverPromotion
     ].each { |op| registry.register(op) }
     registry
   end
