@@ -387,6 +387,56 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       end
     end
 
+    describe "logical writes on an index" do
+      def mutated_lines(muts)
+        muts.map { |m| m.mutated_slice.strip }
+      end
+
+      it "swaps ||= for &&= and nils the whole write" do
+        expect(mutated_lines(mutations_for("index_or_assign")))
+          .to contain_exactly("cache[key] &&= compute(key)", "nil")
+      end
+
+      it "swaps &&= for ||= and nils the whole write" do
+        expect(mutated_lines(mutations_for("index_and_assign")))
+          .to contain_exactly("settings[key] ||= settings[key].to_s", "nil")
+      end
+
+      it "mutates a write on self" do
+        expect(mutated_lines(mutations_for("self_index_or_assign")))
+          .to contain_exactly("self[:options] &&= {}", "nil")
+      end
+
+      it "keeps the whole receiver chain" do
+        expect(mutated_lines(mutations_for("chained_index_or_assign")))
+          .to contain_exactly("report.totals[key] &&= 0", "nil")
+      end
+
+      it "keeps every index of a write with several" do
+        expect(mutated_lines(mutations_for("multiple_index_and_assign")))
+          .to contain_exactly("matrix[row, column] ||= 1", "nil")
+      end
+
+      it "descends past an or-write into an assignment nested in its value" do
+        # outer ||= : 1 swap + 1 removal = 2, inner -= : 1 swap + 1 removal = 2
+        expect(mutations_for("nested_index_or_write").length).to eq(4)
+      end
+
+      it "descends past an and-write into an assignment nested in its value" do
+        expect(mutations_for("nested_index_and_write").length).to eq(4)
+      end
+
+      it "descends past the write into an assignment nested in its index" do
+        expect(mutations_for("nested_index_key_or_write").length).to eq(4)
+      end
+
+      it "reports the mutation on the line of the write" do
+        line = source.lines.index { |text| text.include?("settings[key] &&= settings[key].to_s") } + 1
+
+        expect(mutations_for("index_and_assign").map(&:line).uniq).to eq([line])
+      end
+    end
+
     describe "operator writes on a constant" do
       def constant_subjects(name)
         subjects_from_fixture.select { |s| s.kind == :constant_write && s.name == "CompoundAssignment::#{name}" }

@@ -249,6 +249,39 @@ class CompoundAssignment
     user.rank &&= (t -= 1)
   end
 
+  def index_or_assign(cache, key)
+    cache[key] ||= compute(key)
+  end
+
+  def index_and_assign(settings, key)
+    settings[key] &&= settings[key].to_s
+    settings
+  end
+
+  def self_index_or_assign
+    self[:options] ||= {}
+  end
+
+  def chained_index_or_assign(report, key)
+    report.totals[key] ||= 0
+  end
+
+  def multiple_index_and_assign(matrix, row, column)
+    matrix[row, column] &&= 1
+  end
+
+  def nested_index_or_write(cache, key, t)
+    cache[key] ||= (t -= 1)
+  end
+
+  def nested_index_and_write(cache, key, t)
+    cache[key] &&= (t -= 1)
+  end
+
+  def nested_index_key_or_write(cache, t)
+    cache[t -= 1] ||= 1
+  end
+
   CONST_TOTAL = 1
   CONST_TOTAL += 2
   CONST_FLAGS = 4
