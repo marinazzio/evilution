@@ -89,16 +89,22 @@ module Evilution::AST
       super
     end
 
+    # An assignment to a constant cannot be written inside a method, so it is
+    # a subject of its own: the whole assignment, named after the constant. A
+    # value-object definition keeps its narrower constant subject instead.
     def visit_constant_write_node(node)
-      return super unless ValueObjectDefinition.match?(node.value)
+      return within_definition(node.value, node.name.to_s) { super } if ValueObjectDefinition.match?(node.value)
 
-      within_definition(node.value, node.name.to_s) { super }
+      add_subject(node, scoped_name(node.name), :constant_write)
+      super
     end
 
     def visit_constant_path_write_node(node)
-      return super unless ValueObjectDefinition.match?(node.value)
+      name = path_name(node.target)
+      return within_definition(node.value, name) { super } if ValueObjectDefinition.match?(node.value)
 
-      within_definition(node.value, path_name(node.target)) { super }
+      add_subject(node, scoped_name(name), :constant_write)
+      super
     end
 
     private
@@ -108,6 +114,10 @@ module Evilution::AST
       yield
     ensure
       @singleton.pop
+    end
+
+    def scoped_name(name)
+      [*@context, name].join("::")
     end
 
     def constant_expression?(node)

@@ -5,11 +5,13 @@ require "evilution/ast/parser"
 require "evilution/ast/uncovered_code"
 
 RSpec.describe Evilution::AST::UncoveredCode do
+  # The subjects a run hands over: those some operator mutates.
   def uncovered(source, lines: nil, mutated_lines: [])
     tmpfile = Tempfile.new(["uncovered", ".rb"])
     tmpfile.write(source)
     tmpfile.close
-    subjects = Evilution::AST::Parser.new.call(tmpfile.path)
+    registry = Evilution::Mutator::Registry.default
+    subjects = Evilution::AST::Parser.new.call(tmpfile.path).select { |subject| registry.accepts?(subject) }
 
     described_class.call(tmpfile.path, subjects, lines: lines, mutated_lines: mutated_lines)
   ensure

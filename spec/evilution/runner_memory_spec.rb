@@ -44,7 +44,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
     allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
     allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-    registry = instance_double(Evilution::Mutator::Registry)
+    registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
     allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
     allow(registry).to receive(:mutations_for)
       .with(subject_obj, filter: anything, operator_options: anything)

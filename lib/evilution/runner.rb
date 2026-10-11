@@ -71,7 +71,7 @@ class Evilution::Runner
   attr_reader :parser, :registry, :cache, :on_result, :hooks
 
   def subject_pipeline
-    @subject_pipeline ||= Evilution::Runner::SubjectPipeline.new(config, parser: parser)
+    @subject_pipeline ||= Evilution::Runner::SubjectPipeline.new(config, parser: parser, registry: registry)
   end
 
   def mutation_planner

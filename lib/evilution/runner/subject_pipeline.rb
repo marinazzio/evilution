@@ -9,9 +9,10 @@ require_relative "../git/changed_files"
 class Evilution::Runner::SubjectPipeline
   autoload :Target, File.expand_path("subject_pipeline/target", __dir__)
 
-  def initialize(config, parser:)
+  def initialize(config, parser:, registry: Evilution::Mutator::Registry.for_profile(config.profile))
     @config = config
     @parser = parser
+    @registry = registry
     @target = Target.parse(config.target)
   end
 
@@ -52,10 +53,13 @@ class Evilution::Runner::SubjectPipeline
 
   private
 
-  attr_reader :config, :parser, :target
+  attr_reader :config, :parser, :registry, :target
 
+  # The parser finds every subject there is; those of a kind no operator of
+  # this run mutates are left out, so that they neither count as covering
+  # their lines nor show up with nothing generated for them.
   def parse_subjects
-    target_files.flat_map { |file| parser.call(file) }
+    target_files.flat_map { |file| parser.call(file) }.select { |subject| registry.accepts?(subject) }
   end
 
   def uncovered_entry(file, file_subjects, mutated_lines)

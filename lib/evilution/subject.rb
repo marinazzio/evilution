@@ -5,6 +5,14 @@
 # constant outside any method, such as `Point = Data.define(:x, :y)`. A :scope
 # or :aasm subject is the body of a callable handed to a class-body
 # declaration.
+#
+# A :constant_write subject is any other assignment to a constant, the whole
+# of it: `LIMIT = 10`. Applying a mutation re-evaluates the file, which
+# assigns the constant again, and re-evaluating it for the next mutation puts
+# the original back. What read the constant while the file first loaded is
+# not run again -- a class-body call (`validates length: { maximum: LIMIT }`)
+# or a constant computed from it in another file keeps the old value -- so
+# only code that reads the constant when called sees the mutant.
 class Evilution::Subject
   attr_reader :name, :file_path, :line_number, :source, :node, :kind
 
