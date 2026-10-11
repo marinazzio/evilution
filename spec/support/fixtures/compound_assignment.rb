@@ -182,4 +182,41 @@ class CompoundAssignment
   def attribute_plain_write(counter)
     counter.total = 1
   end
+
+  def index_add_assign(counts, key)
+    counts[key] += 1
+  end
+
+  def index_subtract_assign(stock, sku, amount)
+    stock[sku] -= amount
+    stock
+  end
+
+  def self_index_or_bits_assign(bit)
+    self[:flags] |= bit
+  end
+
+  def safe_index_multiply_assign(totals, key)
+    totals&.[](key) || (totals[key] *= 2)
+  end
+
+  def chained_index_add_assign(report, key)
+    report.totals[key] += 5
+  end
+
+  def multiple_index_add_assign(matrix, row, column)
+    matrix[row, column] += 1
+  end
+
+  def nested_index_op_write(counts, key, t)
+    counts[key] += (t -= 1)
+  end
+
+  def nested_index_key_op_write(counts, t)
+    counts[t -= 1] += 1
+  end
+
+  def index_plain_write(counts, key)
+    counts[key] = 1
+  end
 end

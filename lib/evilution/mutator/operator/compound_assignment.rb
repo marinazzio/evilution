@@ -44,6 +44,12 @@ class Evilution::Mutator::Operator::CompoundAssignment < Evilution::Mutator::Bas
     super
   end
 
+  # `counts[key] += 1`: read through `[]` and written through `[]=`.
+  def visit_index_operator_write_node(node)
+    mutate_operator_write(node)
+    super
+  end
+
   def visit_local_variable_and_write_node(node)
     mutate_logical_write(node, "||=")
     super

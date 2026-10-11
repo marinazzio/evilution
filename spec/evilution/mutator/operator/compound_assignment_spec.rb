@@ -286,6 +286,61 @@ RSpec.describe Evilution::Mutator::Operator::CompoundAssignment do
       end
     end
 
+    describe "operator writes on an index" do
+      def mutated_lines(muts)
+        muts.map { |m| m.mutated_slice.strip }
+      end
+
+      it "swaps the operator and nils the whole write" do
+        expect(mutated_lines(mutations_for("index_add_assign")))
+          .to contain_exactly("counts[key] -= 1", "counts[key] *= 1", "nil")
+      end
+
+      it "mutates a write that is one of several statements" do
+        expect(mutated_lines(mutations_for("index_subtract_assign")))
+          .to contain_exactly("stock[sku] += amount", "nil")
+      end
+
+      it "mutates a write on self" do
+        expect(mutated_lines(mutations_for("self_index_or_bits_assign")))
+          .to contain_exactly("self[:flags] &= bit", "nil")
+      end
+
+      it "mutates a write inside a larger expression" do
+        expect(mutated_lines(mutations_for("safe_index_multiply_assign")))
+          .to contain_exactly("totals&.[](key) || (totals[key] /= 2)", "totals&.[](key) || (nil)")
+      end
+
+      it "keeps the whole receiver chain" do
+        expect(mutated_lines(mutations_for("chained_index_add_assign")))
+          .to contain_exactly("report.totals[key] -= 5", "report.totals[key] *= 5", "nil")
+      end
+
+      it "keeps every index of a write with several" do
+        expect(mutated_lines(mutations_for("multiple_index_add_assign")))
+          .to contain_exactly("matrix[row, column] -= 1", "matrix[row, column] *= 1", "nil")
+      end
+
+      it "descends past the write into an assignment nested in its value" do
+        # outer += : 2 swaps + 1 removal = 3, inner -= : 1 swap + 1 removal = 2
+        expect(mutations_for("nested_index_op_write").length).to eq(5)
+      end
+
+      it "descends past the write into an assignment nested in its index" do
+        expect(mutations_for("nested_index_key_op_write").length).to eq(5)
+      end
+
+      it "reports the mutation on the line of the write" do
+        line = source.lines.index { |text| text.include?("stock[sku] -= amount") } + 1
+
+        expect(mutations_for("index_subtract_assign").map(&:line).uniq).to eq([line])
+      end
+
+      it "leaves a plain index write alone" do
+        expect(mutations_for("index_plain_write")).to be_empty
+      end
+    end
+
     describe "recursion into nested compound assignments" do
       # Each nested fixture wraps an inner `t -= 1` (a local-variable
       # operator-write yielding 2 mutations) inside an outer compound

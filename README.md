@@ -612,7 +612,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `regex_simplification` | Simplify regex quantifiers, anchors, ranges | `/\d+/` -> `/\d/`, `/[a-z]/` -> `/[az]/` |
 | `receiver_replacement` | Drop explicit `self` receiver | `self.foo` -> `foo` |
 | `send_mutation` | Swap semantically related methods | `detect` -> `find`, `map` -> `flat_map`, `round` -> `floor` / `ceil` |
-| `compound_assignment` | Swap compound assignment operators, or replace the whole assignment with `nil`; on variables and, for operator writes, on attributes (`obj.count += 1`) | `+=` -> `-=`, `&&=` -> `\|\|=` |
+| `compound_assignment` | Swap compound assignment operators, or replace the whole assignment with `nil`; on variables and, for operator writes, on attributes (`obj.count += 1`) and indexes (`counts[key] += 1`) | `+=` -> `-=`, `&&=` -> `\|\|=` |
 | `memoization_break` | Recompute a memoized instance variable on every call (instance variables only; a local, `@@x`, `$x` or `@cache[key] \|\|=` is left alone) | `@x \|\|= expr` -> `@x = expr` |
 | `local_variable_assignment` | Replace variable assignment with `nil` | `x = expr` -> `x = nil` |
 | `instance_variable_write` | Replace ivar assignment with `nil` | `@x = expr` -> `@x = nil` |
