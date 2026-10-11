@@ -637,7 +637,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `index_to_dig` | Replace `[]` chains with `.dig()` | `h[a][b]` -> `h.dig(a, b)` |
 | `index_receiver_to_self` | Send an index read to `self` instead of its receiver (skips index writes and reads already on `self`) | `h[k]` -> `self[k]` |
 | `index_to_key_predicate` | Replace an index read with a `key?` check (skips integer and range indexes, reads with several arguments, void statements and index writes) | `h[k]` -> `h.key?(k)` |
-| `index_range_to_drop` | Replace a to-the-end range index with `drop` (also the endless `a[n..]`; skips a literal start of zero or below, ranges stopping short of the last element, void statements and index writes) | `a[n..-1]` -> `a.drop(n)` |
+| `index_range_to_drop` | Replace a to-the-end range index with `drop` (also the endless `a[n..]` and `a[n...]`; skips a literal start of zero or below, ranges stopping short of the last element, void statements and index writes) | `a[n..-1]` -> `a.drop(n)` |
 | `index_assignment_removal` | Remove `[]=` assignments | `h[k] = v` -> removed |
 | `pattern_matching_guard` | Remove/negate pattern guards | `in x if cond` -> `in x` |
 | `pattern_matching_alternative` | Remove/reorder alternatives | `pat1 \| pat2` -> `pat1` |

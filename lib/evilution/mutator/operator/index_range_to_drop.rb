@@ -3,7 +3,8 @@
 require_relative "../operator"
 
 # Take the tail of a list with `drop` instead of a range index:
-# `list[n..-1]` and the endless `list[n..]` become `list.drop(n)`.
+# `list[n..-1]` and the endless `list[n..]` / `list[n...]` become
+# `list.drop(n)`.
 #
 # The two differ only past the end: a start beyond the last element gives
 # `nil` from the index and an empty array from `drop`. A survivor means no
