@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "prism"
 require_relative "../loading"
+require_relative "../../ast/syntax_check"
 
 class Evilution::Integration::Loading::SyntaxValidator
   ERROR_MESSAGE = "mutated source has syntax errors"
 
   def call(source)
-    return nil if Prism.parse(source).success?
+    return nil if Evilution::AST::SyntaxCheck.valid?(source)
 
     {
       passed: false,

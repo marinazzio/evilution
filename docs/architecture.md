@@ -138,7 +138,10 @@ class that owns it.
    `subject_kinds` include the subject's kind (`:method`, `:scope`, `:aasm` and `:callback` by default) and
    runs `operator.call(subject, filter:)`; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
-   builds an immutable `Evilution::Mutation`. The planner then **deduplicates**
+   builds an immutable `Evilution::Mutation`. Whether the mutated source parses
+   is `AST::SyntaxCheck`'s call: Prism first and, on an interpreter that
+   compiles with parse.y (Ruby 3.3, or `--parser=parse.y`), parse.y as well,
+   since the two disagree on a few constructs. The planner then **deduplicates**
    (by `file_path` + mutated source), and filters **disabled** (`DisableComment`),
    **Sorbet `sig`** (`AST::SorbetSigDetector`), and **equivalent**
    (`Equivalent::Detector`) mutations. Equivalent ones become `:equivalent`
