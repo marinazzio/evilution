@@ -178,7 +178,8 @@ class Evilution::Mutator::Registry
       Evilution::Mutator::Operator::IndexReceiverToSelf,
       Evilution::Mutator::Operator::IndexToKeyPredicate,
       Evilution::Mutator::Operator::IndexRangeToDrop,
-      Evilution::Mutator::Operator::IndexWriteToValue
+      Evilution::Mutator::Operator::IndexWriteToValue,
+      Evilution::Mutator::Operator::ConstantNamespaceStrip
     ].each { |op| registry.register(op) }
     registry
   end
