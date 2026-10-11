@@ -61,6 +61,86 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     expect(EkaxClobberWidget.value).to eq(2)
   end
 
+  describe "#call with a mutation of a constant-write subject" do
+    let(:limits_path) { File.join(lib_dir, "limits.rb") }
+    let(:limits_source) do
+      <<~RUBY
+        module Ev8v7dLimits
+          LIMIT = 10
+
+          def self.limit
+            LIMIT
+          end
+
+          def self.step
+            1
+          end
+        end
+      RUBY
+    end
+
+    let(:value_to_nil) do
+      Class.new(Evilution::Mutator::Base) do
+        def self.subject_kinds = %i[constant_write]
+
+        def visit_constant_write_node(node)
+          mutate_to_nil(node, target: node.value)
+        end
+      end
+    end
+
+    let(:subjects) { Evilution::AST::Parser.new.call(limits_path) }
+    let(:constant_mutation) { value_to_nil.new.call(subjects.find { |s| s.kind == :constant_write }).first }
+    let(:method_mutation) do
+      step = subjects.find { |s| s.name == "Ev8v7dLimits.step" }
+      Evilution::Mutator::Operator::IntegerLiteral.new.call(step).first
+    end
+
+    before do
+      File.write(limits_path, limits_source)
+      load limits_path
+    end
+
+    after do
+      Object.send(:remove_const, :Ev8v7dLimits) if Object.const_defined?(:Ev8v7dLimits)
+      $LOADED_FEATURES.delete(File.realpath(limits_path)) if File.exist?(limits_path)
+    end
+
+    def verbosely
+      previous = $VERBOSE
+      $VERBOSE = true
+      yield
+    ensure
+      $VERBOSE = previous
+    end
+
+    it "assigns the constant its mutated value, seen by code reading it when called" do
+      expect(applier.call(constant_mutation)).to be_nil
+
+      expect(constant_mutation.mutated_slice.strip).to eq("LIMIT = nil")
+      expect(Ev8v7dLimits.limit).to be_nil
+    end
+
+    it "puts the original value back when the next mutation of the file is applied" do
+      applier.call(constant_mutation)
+      applier.call(method_mutation)
+
+      expect(Ev8v7dLimits.limit).to eq(10)
+      expect(Ev8v7dLimits.step).not_to eq(1)
+    end
+
+    it "keeps the reassignment warnings of the mechanism to itself" do
+      reapply = lambda do
+        verbosely do
+          applier.call(constant_mutation)
+          applier.call(method_mutation)
+        end
+      end
+
+      expect(&reapply).not_to output(/already initialized constant|previous definition of/).to_stderr
+    end
+  end
+
   describe "#call with injected collaborators" do
     let(:validator) { instance_double("validator", call: nil) }
     let(:pinner) { instance_double("pinner", call: []) }

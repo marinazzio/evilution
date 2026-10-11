@@ -366,6 +366,29 @@ RSpec.describe Evilution::Mutator::Registry do
         expect(registry.mutations_for(subject_of(:constant)).length).to eq(1)
       end
 
+      it "accepts a subject of a kind some registered operator mutates" do
+        registry.register(nil_out(nil))
+        registry.register(nil_out(%i[constant]))
+
+        expect(registry.accepts?(subject_of(:method))).to be(true)
+        expect(registry.accepts?(subject_of(:constant))).to be(true)
+      end
+
+      it "does not accept a subject of a kind no registered operator mutates" do
+        registry.register(nil_out(nil))
+
+        expect(registry.accepts?(subject_of(:constant))).to be(false)
+      end
+
+      it "accepts no subject when empty" do
+        expect(registry.accepts?(subject_of(:method))).to be(false)
+      end
+
+      it "leaves constant-write subjects to no built-in operator yet" do
+        expect(described_class.default.accepts?(subject_of(:constant_write))).to be(false)
+        expect(described_class.for_profile(:strict).accepts?(subject_of(:constant_write))).to be(false)
+      end
+
       it "accepts only method subjects in every built-in operator but DataStructMember" do
         constant_operators = described_class.default.operators.select { |op| op.subject_kinds.include?(:constant) }
 

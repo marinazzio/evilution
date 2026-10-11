@@ -203,6 +203,13 @@ class Evilution::Mutator::Registry
     end
   end
 
+  # Whether any registered operator mutates subjects of this one's kind. A
+  # subject none does would only ever be listed with no mutations to its
+  # name.
+  def accepts?(subject)
+    @operators.any? { |operator_class| operator_class.subject_kinds.include?(subject.kind) }
+  end
+
   def operator_count
     @operators.length
   end

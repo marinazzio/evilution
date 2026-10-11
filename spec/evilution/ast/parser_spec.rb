@@ -550,6 +550,108 @@ RSpec.describe Evilution::AST::Parser do
     end
   end
 
+  context "with constant assignments outside any method" do
+    def subjects_in(source)
+      tmpfile = Tempfile.new(["constant_writes", ".rb"])
+      tmpfile.write(source)
+      tmpfile.close
+      parser.call(tmpfile.path)
+    ensure
+      tmpfile&.unlink
+    end
+
+    it "makes a constant-write subject of a top-level assignment" do
+      subjects = subjects_in("LIMIT = 10\n")
+
+      expect(subjects.length).to eq(1)
+      limit = subjects.first
+      expect(limit.name).to eq("LIMIT")
+      expect(limit.kind).to eq(:constant_write)
+      expect(limit.line_number).to eq(1)
+      expect(limit.source).to eq("LIMIT = 10")
+      expect(limit.node).to be_a(Prism::ConstantWriteNode)
+    end
+
+    it "qualifies the name with the enclosing scope" do
+      subjects = subjects_in("module App\n  class Config\n    LIMIT = 10\n  end\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.line_number] }).to eq([["App::Config::LIMIT", 3]])
+    end
+
+    it "names a constant in a singleton class after the enclosing class" do
+      subjects = subjects_in("class Config\n  class << self\n    LIMIT = 10\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Config::LIMIT"])
+    end
+
+    it "makes a constant-write subject of a constant path assignment, named by its path" do
+      subjects = subjects_in("module App; end\nApp::LIMIT = 10\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["App::LIMIT", :constant_write]])
+      expect(subjects.first.source).to eq("App::LIMIT = 10")
+      expect(subjects.first.node).to be_a(Prism::ConstantPathWriteNode)
+    end
+
+    it "qualifies a constant path assignment with the enclosing scope" do
+      subjects = subjects_in("module App\n  Config::LIMIT = 10\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["App::Config::LIMIT"])
+    end
+
+    it "names a root constant path without the leading ::" do
+      expect(subjects_in("::LIMIT = 10\n").map(&:name)).to eq(["LIMIT"])
+    end
+
+    it "names a root constant path written inside a scope without that scope" do
+      subjects = subjects_in("module App\n  class Config\n    ::LIMIT = 10\n    ::Shared::MAX = 9\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["LIMIT", "Shared::MAX"])
+    end
+
+    it "names a dynamic constant path by its own constant" do
+      subjects = subjects_in("class Config\n  self::LIMIT = 10\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Config::LIMIT"])
+    end
+
+    it "spans a value written over several lines" do
+      subjects = subjects_in("class Config\n  DEFAULTS = {\n    size: 1\n  }.freeze\nend\n")
+
+      expect(subjects.first.line_number).to eq(2)
+      expect(subjects.first.source).to eq("DEFAULTS = {\n    size: 1\n  }.freeze")
+    end
+
+    it "makes one subject per assignment, in source order" do
+      subjects = subjects_in("class Config\n  MIN = 1\n  MAX = 9\n\n  def range = MIN..MAX\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq(
+        [["Config::MIN", :constant_write], ["Config::MAX", :constant_write], ["Config#range", :method]]
+      )
+    end
+
+    it "still finds methods in the value of the assignment, without scoping them under the constant" do
+      subjects = subjects_in("Handler = Class.new do\n  def handle = 1\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["Handler", :constant_write], ["#handle", :method]])
+    end
+
+    it "finds an assignment in a block of the class body" do
+      subjects = subjects_in("class Config\n  included do\n    LIMIT = 10\n  end\nend\n")
+
+      expect(subjects.map(&:name)).to eq(["Config::LIMIT"])
+    end
+
+    it "leaves a value-object definition to its constant subject alone" do
+      subjects = subjects_in("class Shape\n  Size = Struct.new(:w, :h)\n  Geo::Point = Data.define(:x, :y)\nend\n")
+
+      expect(subjects.map { |s| [s.name, s.kind] }).to eq([["Shape::Size", :constant], ["Shape::Geo::Point", :constant]])
+    end
+
+    it "makes no subject of an operator write or a multiple assignment" do
+      expect(subjects_in("class Config\n  LIMIT ||= 10\n  COUNT += 1\n  MIN, MAX = 1, 9\nend\n")).to be_empty
+    end
+  end
+
   context "with value-object definitions outside any method" do
     def subjects_in(source)
       tmpfile = Tempfile.new(["value_objects", ".rb"])
@@ -598,8 +700,9 @@ RSpec.describe Evilution::AST::Parser do
 
     it "still finds methods in the value of other constants" do
       source = "Handler = Class.new do\n  def handle = 1\nend\nGeo::Tool = Class.new do\n  def use = 2\nend\nGeo::LIMIT = 5\n"
+      methods = subjects_in(source).select { |s| s.kind == :method }
 
-      expect(subjects_in(source).map { |s| [s.name, s.kind] }).to eq([["#handle", :method], ["#use", :method]])
+      expect(methods.map(&:name)).to eq(["#handle", "#use"])
     end
 
     it "makes a constant subject of a superclass definition, named after the class" do
@@ -626,11 +729,11 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects_in("class Foo\n  def bar = 1\nend\n").map(&:kind)).to eq([:method])
     end
 
-    it "ignores other constants and definitions not assigned to a constant" do
+    it "makes no constant subject of other constants and of definitions not assigned to a constant" do
       source = "class Shape\n  LIMIT = 5\n  Other = Foo.new(:a, :b)\n  Struct.new(:a, :b).new(1, 2)\n  " \
                "Wrapped = Struct.new(:a, :b).freeze\n  class Sub < Base; end\nend\n"
 
-      expect(subjects_in(source)).to be_empty
+      expect(subjects_in(source).map(&:kind).uniq).to eq([:constant_write])
     end
 
     it "ignores a definition inside a method, which the method's subject covers" do

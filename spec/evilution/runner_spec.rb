@@ -61,7 +61,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -267,7 +267,7 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_in_range, subject_outside_range])
       allow(parser).to receive(:call).with("lib/other.rb").and_return([subject_other_file])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -335,7 +335,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([matching_subject, non_matching_subject])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -406,7 +406,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([foo_subject, bar_subject, other_subject])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -525,7 +525,7 @@ RSpec.describe Evilution::Runner do
       allow(File).to receive(:read).with("lib/other.rb").and_return("class Other\n  def work; end\nend\n")
       allow(File).to receive(:read).with("lib/example.rb").and_return("class Example\n  def foo; end\nend\n")
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -593,7 +593,7 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).with("lib/models/user.rb").and_return([user_subject])
       allow(parser).to receive(:call).with("lib/models/account.rb").and_return([account_subject])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -705,7 +705,7 @@ RSpec.describe Evilution::Runner do
         "lib/models/account.rb" => account_mutation
       }
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:for_profile).and_return(registry)
       allow(registry).to receive(:mutations_for) do |subject_arg|
         [@mutations_by_file.fetch(subject_arg.file_path)]
@@ -792,7 +792,7 @@ RSpec.describe Evilution::Runner do
         [bar_subject, bar_baz_subject, bar_nested_subject, bar_class_method, unrelated_subject]
       )
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -864,7 +864,7 @@ RSpec.describe Evilution::Runner do
         [instance_method, class_method, other_subject]
       )
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -918,7 +918,7 @@ RSpec.describe Evilution::Runner do
         [instance_method, class_method, other_class_method]
       )
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -989,7 +989,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1049,7 +1049,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1106,7 +1106,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1208,7 +1208,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation, mutation2, mutation3])
 
@@ -1289,7 +1289,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).and_return([])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
     end
 
@@ -1318,7 +1318,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -1354,7 +1354,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1433,7 +1433,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1557,7 +1557,7 @@ RSpec.describe Evilution::Runner do
         allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
         allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-        registry = instance_double(Evilution::Mutator::Registry)
+        registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
         allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
         allow(registry).to receive(:mutations_for).and_return([mutation])
 
@@ -1760,7 +1760,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -1861,7 +1861,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
                                                                    operator_options: anything).and_return([mutation, mutation2])
@@ -2016,7 +2016,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
     end
@@ -2162,7 +2162,7 @@ RSpec.describe Evilution::Runner do
     it "generates mutations lazily per-subject during execution" do
       generation_order = []
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for) do |subject, **|
         generation_order << subject.name
@@ -2190,7 +2190,7 @@ RSpec.describe Evilution::Runner do
     it "runs baseline before generating any mutations" do
       call_sequence = []
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for) do |_subject, **|
         call_sequence << :mutations_for
@@ -2251,7 +2251,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -2357,7 +2357,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -2507,7 +2507,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything)
                                                 .and_return([disabled_mutation, enabled_mutation])
@@ -2623,7 +2623,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything)
                                                 .and_return([sig_mutation, normal_mutation])
@@ -2676,7 +2676,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 
@@ -2711,7 +2711,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
     end
@@ -2768,7 +2768,7 @@ RSpec.describe Evilution::Runner do
         unified_diff: nil
       )
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
                                                                    operator_options: anything).and_return([mutation, mutation2])
@@ -3061,7 +3061,7 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
       allow(parser).to receive(:call).with("lib/example.rb").and_return([subject_obj])
 
-      registry = instance_double(Evilution::Mutator::Registry)
+      registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
 

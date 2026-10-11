@@ -40,6 +40,61 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
       end
     end
 
+    it "drops subjects of a kind no operator mutates" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", "class Foo\n  LIMIT = 10\n  Point = Data.define(:x, :y)\n\n  def bar = LIMIT\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+
+        expect(pipeline.call.map { |s| [s.name, s.kind] }).to eq([["Foo::Point", :constant], ["Foo#bar", :method]])
+      end
+    end
+
+    it "keeps subjects of a kind an operator of the given registry mutates" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", "class Foo\n  LIMIT = 10\n\n  def bar = LIMIT\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], quiet: true, baseline: false, skip_config_file: true
+        )
+        operator = Class.new(Evilution::Mutator::Base) { def self.subject_kinds = %i[constant_write] }
+        registry = Evilution::Mutator::Registry.new.register(operator)
+        pipeline = described_class.new(config, parser: parser, registry: registry)
+
+        expect(pipeline.call.map { |s| [s.name, s.kind] }).to eq([["Foo::LIMIT", :constant_write]])
+      end
+    end
+
+    it "takes its operators from the configured profile when given no registry" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", "class Foo\n  def bar = 1\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], quiet: true, baseline: false, skip_config_file: true, profile: :strict
+        )
+        allow(Evilution::Mutator::Registry).to receive(:for_profile).and_call_original
+
+        described_class.new(config, parser: parser).call
+
+        expect(Evilution::Mutator::Registry).to have_received(:for_profile).with(:strict)
+      end
+    end
+
+    it "treats a file holding only unmutated constants as having no subjects" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/limits.rb", "module Limits\n  MAX = 10\nend\n")
+        config = Evilution::Config.new(
+          target_files: [file], quiet: true, baseline: false, skip_config_file: true
+        )
+        pipeline = described_class.new(config, parser: parser)
+
+        expect(pipeline.call).to be_empty
+        pipeline.report_uncovered_code
+
+        expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2"] }])
+      end
+    end
+
     it "exposes the resolved target_files for reuse" do
       Dir.mktmpdir do |dir|
         file = write(dir, "lib/foo.rb", "class Foo; def bar; end; end\n")

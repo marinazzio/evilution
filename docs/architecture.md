@@ -230,6 +230,15 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      definitions outside a method overrides `self.subject_kinds` to return
      `%i[method constant]`; a constant subject's node is the definition's
      `CallNode`.
+   - Every other assignment to a constant outside a method (`LIMIT = 10`) is a
+     `:constant_write` subject, whose node is the whole assignment. No built-in
+     operator lists that kind yet, and `SubjectPipeline` drops subjects of a
+     kind no registered operator accepts (`Registry#accepts?`), so until one
+     does they stay out of subject listings and the lines still count as
+     uncovered code. Re-evaluating the mutated file assigns the constant again
+     and the next mutation's source puts it back; what read the constant while
+     the file first loaded (a class-body call, a constant in another file
+     computed from it) keeps the old value.
    - A scope subject's mutation only takes effect if the mutated file re-runs
      its `scope` call, which `BodyCallNeutralizer` would otherwise blank: the
      eval source keeps that one call (`keep_offset`). Its `restore_source` is
