@@ -51,7 +51,7 @@ RSpec.describe Evilution::Mutator::Operator::ConstantNamespaceStrip do
       expect(mutated_lines(mutations_for("dynamic_namespace"))).to eq(["LIMIT"])
     end
 
-    it "strips the namespace off an anchored path but keeps the anchor of its head" do
+    it "strips an anchored namespace whole, anchor included" do
       expect(mutated_lines(mutations_for("anchored_namespace"))).to eq(["LIMIT"])
     end
 
@@ -67,8 +67,20 @@ RSpec.describe Evilution::Mutator::Operator::ConstantNamespaceStrip do
       expect(mutations_for("namespaced_call")).to be_empty
     end
 
-    it "strips the namespace off the target of a constant path operator write" do
-      expect(mutated_lines(mutations_for("path_or_write"))).to eq(["LIMIT ||= value"])
+    it "skips the target of a constant path or-write, a dynamic constant assignment once bare" do
+      expect(mutations_for("path_or_write")).to be_empty
+    end
+
+    it "still strips a path in the value of a constant path or-write" do
+      expect(mutated_lines(mutations_for("path_write_value"))).to eq(["Config::LIMIT ||= LIMIT"])
+    end
+
+    it "strips the value but not the target of a constant path and-write" do
+      expect(mutated_lines(mutations_for("path_and_write"))).to eq(["Config::LIMIT &&= LIMIT"])
+    end
+
+    it "strips the value but not the target of a constant path operator write" do
+      expect(mutated_lines(mutations_for("path_operator_write"))).to eq(["Config::LIMIT += STEP"])
     end
 
     it "reports the mutation on the line of the constant path" do

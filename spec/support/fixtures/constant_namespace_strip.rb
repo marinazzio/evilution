@@ -49,4 +49,16 @@ class ConstantNamespaceStripTarget
   def path_or_write(value)
     Config::LIMIT ||= value
   end
+
+  def path_and_write
+    Config::LIMIT &&= Defaults::LIMIT
+  end
+
+  def path_operator_write
+    Config::LIMIT += Defaults::STEP
+  end
+
+  def path_write_value
+    Config::LIMIT ||= Defaults::LIMIT
+  end
 end

@@ -552,7 +552,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `argument_nil_substitution` | Replace arguments with `nil` | `foo(a, b)` -> `foo(nil, b)` |
 | `call_to_nil` | Replace a method call with `nil` (skips void statements, receivers of another call, and attribute or index writes) | `user.name` -> `nil` |
 | `constant_read_to_nil` | Replace a constant reference with `nil`, a path as a whole (skips call receivers, void statements and `rescue` exception classes) | `MAX` -> `nil`, `Config::MAX` -> `nil` |
-| `constant_namespace_strip` | Strip the namespace off a constant path, at each level of a longer one (skips top-level `::A` paths) | `A::B` -> `B`, `A::B::C` -> `C` and `B::C` |
+| `constant_namespace_strip` | Strip the namespace off a constant path, at each level of a longer one (skips top-level `::A` paths and operator-write targets such as `A::B ||= x`) | `A::B` -> `B`, `A::B::C` -> `C` and `B::C` |
 | `safe_navigation_removal` | Replace `&.` with a plain call (skips `self` and literal receivers) | `user&.name` -> `user.name` |
 | `attribute_write_to_read` | Replace an attribute or index write with the matching read (skips writes `statement_deletion` already removes) | `a.foo = b` -> `a.foo`, `a[i] = b` -> `a[i]` |
 | `argument_propagation` | Replace a call with its only positional argument (skips operator methods, attribute writes and void statements) | `normalize(value)` -> `value` |

@@ -13,16 +13,42 @@ require_relative "../operator"
 # expression (`self.class::LIMIT`) is stripped too — there the survivor says
 # no test overrides the constant in a subclass.
 #
-# The target of an operator write is stripped as well: `Config::LIMIT ||= x`
-# becomes `LIMIT ||= x`, defining the constant where the code stands. A
-# top-level path (`::LIMIT`) has no namespace to strip.
+# A top-level path (`::LIMIT`) has no namespace to strip. The target of an
+# operator write (`Config::LIMIT ||= x`) is left alone: bare, `LIMIT ||= x`
+# is a dynamic constant assignment inside a method. Prism lets it through,
+# so the parse check would not catch it, but the parse.y parser rejects it
+# with a SyntaxError.
 class Evilution::Mutator::Operator::ConstantNamespaceStrip < Evilution::Mutator::Base
+  def call(subject, **)
+    @write_targets = Set.new
+    super
+  end
+
+  def visit_constant_path_or_write_node(node)
+    @write_targets.add(node.target)
+    super
+  end
+
+  def visit_constant_path_and_write_node(node)
+    @write_targets.add(node.target)
+    super
+  end
+
+  def visit_constant_path_operator_write_node(node)
+    @write_targets.add(node.target)
+    super
+  end
+
   def visit_constant_path_node(node)
-    replace_span(node: node, target: node, replacement: name_source(node)) if node.parent
+    replace_span(node: node, target: node, replacement: name_source(node)) if strippable?(node)
     super
   end
 
   private
+
+  def strippable?(node)
+    node.parent && !@write_targets.include?(node)
+  end
 
   def name_source(node)
     location = node.name_loc
