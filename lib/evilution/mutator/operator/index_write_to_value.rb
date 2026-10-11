@@ -11,6 +11,11 @@ require_relative "../operator"
 # apart from deleting the statement or turning it into `nil`, both of which
 # also change the result.
 #
+# The result is kept for the assignment syntax only. The method-call
+# spelling is mutated as well, but there it may change: `cache.[]=(key,
+# value)` returns whatever `[]=` returns, and `cache&.[]=(key, value)` is
+# `nil`, with `value` never evaluated, when the receiver is `nil`.
+#
 # A write in void statement position is skipped: with its value discarded,
 # the mutant is statement_deletion's. Operator writes (`a[b] ||= c`) and
 # index targets of a multiple assignment are not calls and are left alone.

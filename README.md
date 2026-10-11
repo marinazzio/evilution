@@ -638,7 +638,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `index_receiver_to_self` | Send an index read to `self` instead of its receiver (skips index writes and reads already on `self`) | `h[k]` -> `self[k]` |
 | `index_to_key_predicate` | Replace an index read with a `key?` check (skips integer and range indexes, reads with several arguments, void statements and index writes) | `h[k]` -> `h.key?(k)` |
 | `index_range_to_drop` | Replace a to-the-end range index with `drop` (also the endless `a[n..]` and `a[n...]`; skips a literal start of zero or below, ranges stopping short of the last element, void statements and index writes) | `a[n..-1]` -> `a.drop(n)` |
-| `index_write_to_value` | Replace an index write with the value it assigns, keeping the result and dropping the store (skips void statements, operator writes and multiple-assignment targets) | `h[k] = v` -> `v` |
+| `index_write_to_value` | Replace an index write with the value it assigns, dropping the store; the assignment syntax still evaluates to the same value, the `a.[]=(k, v)` / `a&.[]=(k, v)` spellings may not (skips void statements, operator writes and multiple-assignment targets) | `h[k] = v` -> `v` |
 | `index_assignment_removal` | Remove `[]=` assignments | `h[k] = v` -> removed |
 | `pattern_matching_guard` | Remove/negate pattern guards | `in x if cond` -> `in x` |
 | `pattern_matching_alternative` | Remove/reorder alternatives | `pat1 \| pat2` -> `pat1` |
