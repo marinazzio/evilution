@@ -124,13 +124,14 @@ class Evilution::Mutator::Base < Prism::Visitor
     @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, **redeclaration(offset))
   end
 
-  # Re-evaluating any mutation of a file redefines all its methods, which is
-  # how an in-process run puts a mutated method back. Class-body calls are
-  # neutralized in that source, so a mutated scope or aasm callable would stay
-  # installed; the original file with just that declaration kept replaces it
-  # again.
+  # The original file, evaluated after a mutation's tests to put back what
+  # the mutation changed. Without it an in-process run would leave the last
+  # mutation of a file applied while the files after it are mutated, failing
+  # their tests for them. Its class-body calls are neutralized like the eval
+  # source's; a scope, aasm or callback subject keeps its own declaration, so
+  # the mutated callable is declared over again as written.
   def build_restore_source(offset)
-    return nil unless redeclared_subject?
+    return self.class.original_restore_source(@subject.file_path, @file_source, @body_call_neutralizer) unless redeclared_subject?
 
     @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, **redeclaration(offset))
   end
@@ -215,7 +216,22 @@ class Evilution::Mutator::Base < Prism::Visitor
     tree
   end
 
+  @restore_cache = {}
+
+  # The restore source of a subject with no declaration of its own to keep is
+  # the same for every mutation of the file: neutralized once and shared.
+  def self.original_restore_source(file_path, file_source, neutralizer)
+    cache = Evilution::Mutator::Base.instance_variable_get(:@restore_cache)
+    entry = cache[file_path]
+    return entry[:source] if entry && entry[:source_hash] == file_source.hash
+
+    source = neutralizer.call(file_source, file_path: file_path).freeze
+    cache[file_path] = { source_hash: file_source.hash, source: source }
+    source
+  end
+
   def self.clear_parse_cache!
     Evilution::Mutator::Base.instance_variable_set(:@parse_cache, {})
+    Evilution::Mutator::Base.instance_variable_set(:@restore_cache, {})
   end
 end

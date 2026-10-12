@@ -46,7 +46,7 @@ class Evilution::Integration::Loading::MutationApplier
     failure_result(e, "#{e.class}: #{e.message}")
   end
 
-  # Evaluates the mutation's restore_source, if it has one. Runs after the
+  # Evaluates the mutation's restore_source: the original file. Runs after the
   # tests: a failure here must not change the mutation's result, so it is
   # reported and swallowed. Concern state is cleared first, as it is before
   # applying: a concern ignores an `included` block handed to it twice from

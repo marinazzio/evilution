@@ -15,10 +15,10 @@ class Evilution::Mutation
   NO_SLICE = Slice.new(original: nil, mutated: nil)
   private_constant :STRIPPED_SOURCES, :NO_SLICE
 
-  # restore_source: the source that puts back what applying this mutation
-  # changed and re-evaluating another mutation of the file would not -- a
-  # scope declaration (see Mutator::Base#build_restore_source). nil when
-  # nothing needs restoring.
+  # restore_source: the original file, evaluated after the mutation's tests
+  # to put back what applying it changed (see
+  # Mutator::Base#build_restore_source). nil when a mutation was built
+  # without one.
   attr_reader :subject, :operator_name, :parse_status, :location, :restore_source
 
   def initialize(subject:, operator_name:, sources:, location:,

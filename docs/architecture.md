@@ -241,15 +241,20 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      with the literal operators extends `Mutator::ConstantValueSubjects` to
      take constant-write subjects alongside the default kinds. `SubjectPipeline` drops subjects of a kind no registered operator
      accepts (`Registry#accepts?`). Re-evaluating the mutated file assigns the constant again
-     and the next mutation's source puts it back; what read the constant while
+     and the restore source puts it back; what read the constant while
      the file first loaded (a class-body call, a constant in another file
      computed from it) keeps the old value.
    - A scope subject's mutation only takes effect if the mutated file re-runs
      its `scope` call, which `BodyCallNeutralizer` would otherwise blank: the
      eval source keeps that one call (`keep_offset`). Its `restore_source` is
-     the original file with the same call kept; `Integration::Base#call`
-     evaluates it after the tests, since in-process runs restore methods only
-     by re-evaluating the next mutation's source, where scopes are blanked.
+     the original file with the same call kept.
+   - Every mutation carries a `restore_source`, which `Integration::Base#call`
+     evaluates after the tests: the original file, class-body calls
+     neutralized. An in-process run would otherwise leave the last mutation
+     of a file applied while the next file is mutated, and that file's tests
+     would fail on its behalf. For a subject with no declaration to keep it
+     is one string per file, built once and shared
+     (`Mutator::Base.original_restore_source`).
    - A scope in a concern's `included` block has two audiences. The kept
      `included` call registers the mutated block for classes that include the
      concern later (`ConcernStateCleaner` clears the old one first, on apply

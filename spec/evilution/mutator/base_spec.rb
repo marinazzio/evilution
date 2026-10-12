@@ -384,8 +384,40 @@ RSpec.describe Evilution::Mutator::Base do
           .to eq("class Order\n  ()\n  scope :open, -> { where(open: nil) }\nend\n")
       end
 
-      it "gives a method subject's mutation nothing to restore" do
-        expect(mutation_for(:method).restore_source).to be_nil
+      it "gives a method subject's mutation the original file to restore, class-body calls neutralized" do
+        expect(mutation_for(:method).restore_source).to eq("class Order\n  ()\n  ()\nend\n")
+      end
+
+      it "shares one restore source between the mutations of a file" do
+        expect(mutation_for(:method).restore_source).to equal(mutation_for(:method).restore_source)
+      end
+
+      it "freezes the shared restore source" do
+        expect(mutation_for(:method).restore_source).to be_frozen
+      end
+
+      it "leaves a method subject's restore source whole for a file the parent never loaded" do
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set.new
+        described_class.clear_parse_cache!
+
+        expect(mutation_for(:method).restore_source).to eq(source)
+      end
+
+      it "builds the restore source anew when the file has changed" do
+        mutation_for(:method)
+        changed = source.sub("scope :paid, -> { where(paid: true) }", "scope :sent, -> { where(sent: true) }")
+        File.write(tmpfile.path, changed)
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set.new
+
+        expect(mutation_for(:method).restore_source).to eq(changed)
+      end
+
+      it "neutralizes the file again once the caches are cleared" do
+        first = mutation_for(:method).restore_source
+        described_class.clear_parse_cache!
+
+        expect(mutation_for(:method).restore_source).to eq(first)
+        expect(mutation_for(:method).restore_source).not_to equal(first)
       end
 
       it "leaves both sources whole for a file the parent never loaded" do

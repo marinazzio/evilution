@@ -8,8 +8,8 @@
 #
 # A :constant_write subject is any other assignment to a constant, the whole
 # of it: `LIMIT = 10`. Applying a mutation re-evaluates the file, which
-# assigns the constant again, and re-evaluating it for the next mutation puts
-# the original back. What read the constant while the file first loaded is
+# assigns the constant again, and evaluating the original after the tests
+# puts it back. What read the constant while the file first loaded is
 # not run again -- a class-body call (`validates length: { maximum: LIMIT }`)
 # or a constant computed from it in another file keeps the old value -- so
 # only code that reads the constant when called sees the mutant.
