@@ -128,6 +128,13 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   end
 
   class Walker < Prism::Visitor
+    CONSTANT_WRITES = [
+      Prism::ConstantWriteNode, Prism::ConstantPathWriteNode,
+      Prism::ConstantOperatorWriteNode, Prism::ConstantPathOperatorWriteNode,
+      Prism::ConstantOrWriteNode, Prism::ConstantPathOrWriteNode,
+      Prism::ConstantAndWriteNode, Prism::ConstantPathAndWriteNode
+    ].freeze
+
     def initialize(source, allowlist, edits, keep_offset, keep_lines)
       super()
       @source = source
@@ -231,11 +238,13 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     # A method defined in the block is guarded like a call, unless it holds
     # the offset: defined again on a class that includes the concern already,
     # it would replace what that class has since defined under the same name.
+    # So is a constant assigned there, which would lose what it has gathered
+    # since. A local variable is assigned again: the rest of the block reads it.
     def guard_others(block)
       block.body.body.each do |statement|
         case statement
         when Prism::CallNode then guard_call(statement)
-        when Prism::DefNode then guard(statement) unless holds_offset?(statement)
+        when Prism::DefNode, *CONSTANT_WRITES then guard(statement) unless holds_offset?(statement)
         end
       end
     end

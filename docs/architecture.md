@@ -272,8 +272,9 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      constant assigned there, is handled the same way: the parser marks every
      subject written in such a block (`Subject#concern_hook?`), and
      `Mutator::Base` keeps the block for it as it does for a scope. The other
-     methods of the block are guarded like its calls, so only the mutated one
-     is defined again. For a `prepended` block the eval source ends it with
+     methods of the block and the constants it assigns are guarded like its
+     calls, so only the mutated one is defined again and no constant loses
+     what it has gathered. For a `prepended` block the eval source ends it with
      `ConcernRedeclaration.call(self, :prepended)`, which runs it on the
      classes that prepend the concern (it comes before them in their
      ancestors) rather than on those that include it. A method the class has

@@ -280,6 +280,52 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(result).to include("#{skipping} or def a = 1;def b = 2\n")
     end
 
+    describe "with constants assigned in the block" do
+      let(:with_constants) do
+        <<~RUBY
+          module Tracked
+            included do
+              CACHE = {}
+              Shared::LIMIT = 5
+              COUNT += 1
+              Shared::TOTAL ||= 0
+              step = 2
+              def self.level = 1
+            end
+          end
+        RUBY
+      end
+
+      # Assigned again on a class that includes the concern already, a
+      # constant would lose what it has gathered since.
+      it "guards them like the block's other statements, and leaves a local variable alone" do
+        expect(neutralizer.call(with_constants, keep_offset: with_constants.index("level = 1"))).to eq(<<~RUBY)
+          module Tracked
+            included do
+              #{skipping} or CACHE = {}
+              #{skipping} or Shared::LIMIT = 5
+              #{skipping} or COUNT += 1
+              #{skipping} or Shared::TOTAL ||= 0
+              step = 2
+              def self.level = 1
+            end; #{redeclare})
+          end
+        RUBY
+      end
+
+      it "leaves the one holding the offset to be assigned again" do
+        result = neutralizer.call(with_constants, keep_offset: with_constants.index("5\n"))
+
+        expect(result).to include("\n    Shared::LIMIT = 5\n", "#{skipping} or CACHE = {}", "#{skipping} or def self.level")
+      end
+
+      it "leaves code that still parses" do
+        result = neutralizer.call(with_constants, keep_offset: with_constants.index("level = 1"))
+
+        expect(Prism.parse(result)).to be_success
+      end
+    end
+
     it "leaves code that still parses, every line where it was" do
       result = neutralizer.call(src, keep_offset: src.index("1\n"))
 
