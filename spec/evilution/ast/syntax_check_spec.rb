@@ -90,6 +90,21 @@ RSpec.describe Evilution::AST::SyntaxCheck do
         $VERBOSE = previous
       end
 
+      it "trusts Prism on a Ruby that has no parse.y to ask" do
+        hide_const("RubyVM::AbstractSyntaxTree")
+
+        expect(described_class.valid?(prism_only_source, prism_interpreter: false)).to be(true)
+      end
+
+      it "does not reach for parse.y where there is none" do
+        hide_const("RubyVM::AbstractSyntaxTree")
+        allow(described_class).to receive(:without_warnings).and_call_original
+
+        described_class.valid?(valid_source, prism_interpreter: false)
+
+        expect(described_class).not_to have_received(:without_warnings)
+      end
+
       it "trusts Prism when parse.y fails for a reason other than syntax" do
         allow(RubyVM::AbstractSyntaxTree).to receive(:parse).and_raise(ArgumentError, "invalid byte sequence")
 

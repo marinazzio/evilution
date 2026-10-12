@@ -28,9 +28,12 @@ module Evilution::AST::SyntaxCheck
   end
 
   # RubyVM::AbstractSyntaxTree is built on parse.y whatever the interpreter
-  # compiles with. A failure that is not about syntax says nothing against
-  # the source, and Prism's answer stands.
+  # compiles with. It is CRuby's own: another implementation has no parse.y
+  # to ask, and there Prism's answer stands, as it does after a failure that
+  # is not about syntax.
   def self.parse_y_accepts?(source)
+    return true unless defined?(RubyVM::AbstractSyntaxTree)
+
     without_warnings { RubyVM::AbstractSyntaxTree.parse(source) }
     true
   rescue SyntaxError
