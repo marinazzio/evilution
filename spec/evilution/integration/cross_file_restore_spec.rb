@@ -14,27 +14,25 @@ require "tmpdir"
 # calls it, so its mutations survive unless the examples fail for a reason of
 # their own, such as a limit left mutated by the file before.
 RSpec.describe "Restoring a file after its mutations", :aggregate_failures do
-  let(:project) { File.expand_path("../../support/fixtures/cross_file_project", __dir__) }
-  let(:root) { File.expand_path("../../..", __dir__) }
+  project = File.expand_path("../../support/fixtures/cross_file_project", __dir__)
+  root = File.expand_path("../../..", __dir__)
 
   # The fixture's specs are kept under another name so this suite does not
   # load them as its own.
-  def copy_project(dir)
+  copy_project = lambda do |dir|
     FileUtils.cp_r(File.join(project, "."), dir)
     %w[limits checker].each do |name|
       FileUtils.mv(File.join(dir, "spec/#{name}_spec.rb.fixture"), File.join(dir, "spec/#{name}_spec.rb"))
     end
   end
 
-  def command(isolation, files)
-    [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run", *files,
-     "--preload", "spec/spec_helper.rb", "--isolation", isolation, "--format", "json"]
-  end
-
-  def run_evilution(isolation, files)
+  run_evilution = lambda do |isolation|
     Dir.mktmpdir("cross_file_restore") do |dir|
-      copy_project(dir)
-      out, err, status = Open3.capture3(*command(isolation, files), chdir: dir)
+      copy_project.call(dir)
+      command = [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run",
+                 "lib/limits.rb", "lib/checker.rb", "--preload", "spec/spec_helper.rb",
+                 "--isolation", isolation, "--format", "json"]
+      out, err, status = Open3.capture3(*command, chdir: dir)
       raise "evilution failed (#{status.exitstatus}): #{err}" if out.strip.empty?
 
       report = JSON.parse(out)
@@ -44,13 +42,19 @@ RSpec.describe "Restoring a file after its mutations", :aggregate_failures do
     end
   end
 
+  # One run per isolation, shared by the examples: each is a whole evilution
+  # run in a process of its own.
+  before(:context) do
+    @reports = %w[fork in_process].to_h { |isolation| [isolation, run_evilution.call(isolation)] }
+  end
+
   def subject_of(report, name)
     report.fetch("subjects").find { |subject| subject.fetch("name") == name }
   end
 
   %w[fork in_process].each do |isolation|
     context "under #{isolation} isolation" do
-      let(:report) { run_evilution(isolation, %w[lib/limits.rb lib/checker.rb]) }
+      let(:report) { @reports.fetch(isolation) }
 
       it "runs without errors" do
         expect(report.dig("summary", "errors")).to eq(0)
@@ -76,9 +80,7 @@ RSpec.describe "Restoring a file after its mutations", :aggregate_failures do
   end
 
   it "scores the second file the same under both isolations" do
-    scores = %w[fork in_process].map do |isolation|
-      subject_of(run_evilution(isolation, %w[lib/limits.rb lib/checker.rb]), "Checker.within?").slice("killed", "survived")
-    end
+    scores = @reports.values.map { |report| subject_of(report, "Checker.within?").slice("killed", "survived") }
 
     expect(scores.first).to eq(scores.last)
   end
