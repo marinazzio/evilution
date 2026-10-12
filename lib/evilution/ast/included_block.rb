@@ -11,11 +11,22 @@ require_relative "../ast"
 module Evilution::AST::IncludedBlock
   # The block node, or nil when node is not an `included` block call.
   def self.of(node)
-    return nil unless node.is_a?(Prism::CallNode) && node.name == :included
+    hook_block(node, :included)
+  end
+
+  # The block node of a `prepended do ... end`, the same hook for the classes
+  # that prepend the module; nil when node is not one.
+  def self.prepended(node)
+    hook_block(node, :prepended)
+  end
+
+  def self.hook_block(node, name)
+    return nil unless node.is_a?(Prism::CallNode) && node.name == name
     return nil unless node.receiver.nil? && node.arguments.nil?
 
     node.block if node.block.is_a?(Prism::BlockNode)
   end
+  private_class_method :hook_block
 
   # The included blocks among a module body's direct statements.
   def self.in_body(body)

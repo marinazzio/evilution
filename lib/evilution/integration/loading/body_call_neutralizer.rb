@@ -80,7 +80,8 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # it, while re-running the whole machine would register its
   # `after_all_transitions`-style callbacks a second time.
   # A concern's `included` block is never blanked, whether or not it holds
-  # the offset: classes that include the concern later run all of it.
+  # the offset: classes that include the concern later run all of it. Neither
+  # is its `prepended` block, for the classes that prepend it later.
   # When it does hold the offset, every other call in
   # it is guarded and the block is followed by a ConcernRedeclaration call,
   # which re-declares the spared statement alone on the classes that include
@@ -177,9 +178,11 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     # on. Blanked, it would leave the concern without one -- ConcernStateCleaner
     # has just dropped the block it had -- and a class including the concern
     # during the run would get none of its declarations. Left as written, it
-    # registers the same block again.
+    # registers the same block again. `prepended do ... end` is the same hook
+    # for the classes that prepend the concern.
     def registration_only?(stmt)
-      !Evilution::AST::IncludedBlock.of(stmt).nil?
+      block = Evilution::AST::IncludedBlock.of(stmt) || Evilution::AST::IncludedBlock.prepended(stmt)
+      !block.nil?
     end
 
     def scan_kept(stmt)

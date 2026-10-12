@@ -153,6 +153,43 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     end
   end
 
+  describe "#call on a concern with a prepended block" do
+    let(:src) do
+      <<~RUBY
+        module Auditable
+          extend ActiveSupport::Concern
+          register :auditable
+
+          prepended do
+            scope :audited, -> { where(audited: true) }
+          end
+
+          def audit! = true
+        end
+      RUBY
+    end
+
+    it "leaves the block as written, for classes that prepend the concern later, and blanks the calls beside it" do
+      expect(neutralizer.call(src)).to eq(src.sub("register :auditable", "()"))
+    end
+
+    it "leaves the block as written when the offset is elsewhere" do
+      expect(neutralizer.call(src, keep_offset: src.index("register"))).to eq(src)
+    end
+
+    it "leaves the block as written when the offset is inside it" do
+      result = neutralizer.call(src, keep_offset: src.index("audited: true"))
+
+      expect(result).to eq(src.sub("register :auditable", "()"))
+    end
+
+    it "still blanks a call that only looks like a prepended block" do
+      plain = "class Order\n  prepended(base) do\n    scope :a, -> { nil }\n  end\nend\n"
+
+      expect(neutralizer.call(plain)).to eq("class Order\n  ()\n\n\nend\n")
+    end
+  end
+
   describe "#call with keep_offset inside a concern's included block" do
     let(:skipping) { "::Evilution::Integration::Loading::ConcernRedeclaration.skipping?" }
     let(:redeclare) { "::Evilution::Integration::Loading::ConcernRedeclaration.call(self)" }

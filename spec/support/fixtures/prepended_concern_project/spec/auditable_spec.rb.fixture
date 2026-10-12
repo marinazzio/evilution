@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe Auditable do
+  it "audits a class loaded before the run" do
+    expect(Ledger.audits).to eq([:changes])
+  end
+
+  it "audits a class that prepends the concern later" do
+    require "journal"
+
+    expect(Journal.audits).to eq([:changes])
+  end
+end

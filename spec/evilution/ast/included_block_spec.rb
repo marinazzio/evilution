@@ -31,6 +31,25 @@ RSpec.describe Evilution::AST::IncludedBlock do
     end
   end
 
+  describe ".prepended" do
+    it "returns the block of a `prepended do ... end` call" do
+      block = described_class.prepended(statement("prepended do\n  scope :a, -> { 1 }\nend"))
+
+      expect(block).to be_a(Prism::BlockNode)
+    end
+
+    it "returns the block of a brace form" do
+      expect(described_class.prepended(statement("prepended { scope :a, -> { 1 } }"))).to be_a(Prism::BlockNode)
+    end
+
+    it "returns nil for anything else" do
+      ["prepended", "prepended(base)", "prepended(base) { 1 }", "self.prepended { 1 }", "Concern.prepended { 1 }",
+       "prepended(&blk)", "included do\nend", "def self.prepended(base); end", "x = 1"].each do |code|
+        expect(described_class.prepended(statement(code))).to be_nil
+      end
+    end
+  end
+
   describe ".in_body" do
     it "finds the included blocks among a module body's direct statements" do
       body = module_body("module P\n  extend ActiveSupport::Concern\n  included do\n    a\n  end\n  def x; end\nend")
