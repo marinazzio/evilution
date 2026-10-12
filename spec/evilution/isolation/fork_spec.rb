@@ -463,6 +463,31 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to include("cannot load such file")
     end
 
+    it "classifies a mutant that crashed the load of its file as killed" do
+      test_command = lambda do |_m|
+        {
+          passed: false,
+          load_crashed: true,
+          error: "load failed: NoMethodError: undefined method 'map' for nil",
+          error_class: "NoMethodError",
+          error_backtrace: ["foo.rb:1"]
+        }
+      end
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_killed
+      expect(result.error_message).to eq("load failed: NoMethodError: undefined method 'map' for nil")
+      expect(result.error_class).to eq("NoMethodError")
+      expect(result.error_backtrace).to eq(["foo.rb:1"])
+    end
+
+    it "classifies a load failure that was not traced to the mutant as an error" do
+      test_command = ->(_m) { { passed: false, error: "NoMethodError: nope", error_class: "NoMethodError" } }
+
+      expect(isolator.call(mutation:, test_command:, timeout: 5)).to be_error
+    end
+
     it "classifies test_crashed results as killed (mutant process_abort parity)" do
       test_command = lambda do |_m|
         {

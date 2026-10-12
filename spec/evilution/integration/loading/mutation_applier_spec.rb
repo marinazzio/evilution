@@ -303,6 +303,123 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       expect(result[:error_backtrace]).to be_an(Array)
     end
 
+    describe "a mutant that raises while its file loads" do
+      let(:restorable_mutation) do
+        double(
+          "Mutation",
+          file_path: "/tmp/evilution_applier_nonexistent.rb",
+          original_source: "class Foo; end\n",
+          mutated_source: "class Bar; end\n",
+          eval_source: "MUTATED\n",
+          restore_source: "ORIGINAL\n"
+        )
+      end
+
+      # Raises the given error for each source named in `failures`.
+      def evaluator_failing_on(failures, evaluated = [])
+        failing = Object.new
+        failing.define_singleton_method(:call) do |source, _fp|
+          evaluated << source
+          raise failures.fetch(source) if failures.key?(source)
+        end
+        failing
+      end
+
+      def applier_with(failing)
+        described_class.new(
+          syntax_validator: validator, constant_pinner: pinner,
+          concern_state_cleaner: cleaner, source_evaluator: failing,
+          redefinition_recovery: recovery
+        )
+      end
+
+      it "marks the failure as a crash of the load when the original still loads" do
+        failing = evaluator_failing_on("MUTATED\n" => NoMethodError.new("undefined method 'map' for nil"))
+
+        result = applier_with(failing).call(restorable_mutation)
+
+        expect(result).to include(passed: false, load_crashed: true, error_class: "NoMethodError")
+        expect(result[:error]).to eq("load failed: NoMethodError: undefined method 'map' for nil")
+      end
+
+      it "marks a LoadError the same way" do
+        failing = evaluator_failing_on("MUTATED\n" => LoadError.new("cannot load such file -- nope"))
+
+        result = applier_with(failing).call(restorable_mutation)
+
+        expect(result).to include(load_crashed: true, error_class: "LoadError")
+      end
+
+      it "evaluates the original after the mutated source to find out" do
+        evaluated = []
+        failing = evaluator_failing_on({ "MUTATED\n" => ArgumentError.new("nope") }, evaluated)
+
+        applier_with(failing).call(restorable_mutation)
+
+        expect(evaluated).to eq(%W[MUTATED\n ORIGINAL\n])
+      end
+
+      it "clears concern state before evaluating the original" do
+        failing = evaluator_failing_on("MUTATED\n" => ArgumentError.new("nope"))
+
+        applier_with(failing).call(restorable_mutation)
+
+        expect(cleaner).to have_received(:call).with("/tmp/evilution_applier_nonexistent.rb").twice
+      end
+
+      it "leaves the failure an error when the original fails to load as well" do
+        failing = evaluator_failing_on("MUTATED\n" => ArgumentError.new("nope"),
+                                       "ORIGINAL\n" => ArgumentError.new("nope either"))
+
+        result = applier_with(failing).call(restorable_mutation)
+
+        expect(result).not_to have_key(:load_crashed)
+        expect(result[:error]).to eq("ArgumentError: nope")
+      end
+
+      it "leaves the failure an error when the original no longer parses" do
+        failing = evaluator_failing_on("MUTATED\n" => ArgumentError.new("nope"),
+                                       "ORIGINAL\n" => SyntaxError.new("unexpected end"))
+
+        result = applier_with(failing).call(restorable_mutation)
+
+        expect(result).not_to have_key(:load_crashed)
+      end
+
+      it "leaves the failure an error when there is no original to compare with" do
+        failing = evaluator_failing_on("MUTATED\n" => ArgumentError.new("nope"))
+        unrestorable = double("Mutation", file_path: "/tmp/evilution_applier_nonexistent.rb",
+                                          original_source: "class Foo; end\n", mutated_source: "MUTATED\n",
+                                          restore_source: nil)
+
+        result = applier_with(failing).call(unrestorable)
+
+        expect(result).not_to have_key(:load_crashed)
+        expect(result[:error]).to eq("ArgumentError: nope")
+      end
+
+      it "leaves a syntax error raised by the load an error, without evaluating the original" do
+        evaluated = []
+        failing = evaluator_failing_on({ "MUTATED\n" => SyntaxError.new("unexpected token") }, evaluated)
+
+        result = applier_with(failing).call(restorable_mutation)
+
+        expect(result).not_to have_key(:load_crashed)
+        expect(result[:error]).to eq("syntax error in mutated source: unexpected token")
+        expect(evaluated).to eq(["MUTATED\n"])
+      end
+
+      it "leaves a source the validator rejects an error, without evaluating anything" do
+        evaluated = []
+        allow(validator).to receive(:call).and_return({ passed: false, error: "bad", error_class: "SyntaxError" })
+
+        result = applier_with(evaluator_failing_on({}, evaluated)).call(restorable_mutation)
+
+        expect(result).not_to have_key(:load_crashed)
+        expect(evaluated).to be_empty
+      end
+    end
+
     # Regression for EV-vlbh / GH #1191: mark_feature_loaded anchors relative
     # file_path expansion at PROJECT_ROOT only when in_isolated_worker? is set
     # (EV-wqxu / GH #1278 sandbox). The flag's two branches resolve to

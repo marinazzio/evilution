@@ -433,10 +433,10 @@ Compatibility policy for the `1.x` gem line:
 
 | Status       | Meaning                                                               | Counted in score? |
 |--------------|-----------------------------------------------------------------------|-------------------|
-| `killed`     | A test failed when the mutation was applied — test suite caught it    | numerator + denominator |
+| `killed`     | A test failed when the mutation was applied — test suite caught it. Also a mutation that made its own file raise while loading, before any test ran, when the original file still loads (`error_message` starts with `load failed:`) | numerator + denominator |
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
 | `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
-| `error`      | Mutation caused an unexpected error (syntax error, boot failure, etc.) | excluded from denominator |
+| `error`      | Mutation caused an unexpected error (syntax error, boot failure, a load failure the original file shares, etc.) | excluded from denominator |
 | `neutral`    | No verdict: the tests failed only on examples that were already failing in the baseline, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
@@ -930,7 +930,7 @@ For each entry in `survived[]`:
 
 ### 7. Diagnosing errored mutations
 
-Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
+Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. A mutation that makes its own file raise while loading is not among them when the original file still loads right after it: the mutation is what broke the load, so it is reported `killed` with an `error_message` that starts with `load failed:`. A load failure stays an error when the original fails to load as well, since that says nothing about the mutation. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
 
 ### Unresolved mutations — behaviour-named spec layouts
 

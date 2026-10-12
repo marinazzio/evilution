@@ -168,6 +168,10 @@ class that owns it.
    guard / unresolved); the final symbol is chosen by
    `Isolation::Fork#classify_status`: `:timeout` → `:killed` (crash) →
    `:unresolved` → `:error` → `:survived` (tests passed) → default `:killed`.
+   A crash is a test that raised, or a mutated source that raised while it was
+   loaded and whose original still loads (`MutationApplier` marks it
+   `load_crashed` after evaluating the original); a load failure the original
+   shares stays an `:error`.
    A `NeutralizationPipeline` can reclassify results into `:neutral` — either
    because the tests failed on nothing but examples that were already failing
    at baseline (`Neutralizer::BaselineFailed`) or because the test process

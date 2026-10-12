@@ -20,6 +20,14 @@ require_relative "../../diagnostic"
 # RedefinitionRecovery stays as a safety net for cases the neutralizer's
 # allowlist heuristic misses. Returns nil on success or a failure-shaped
 # hash on any error.
+#
+# A mutated source that raises while it is evaluated never reaches the tests.
+# When the original still evaluates right after it, the mutation is what broke
+# the load, and the failure is marked `load_crashed`: the mutant is detected,
+# as one that crashes a test is. When the original fails too, or there is none
+# to compare with, the failure says nothing about the mutant and stays an
+# error. A syntax error is never the mutant's doing in that sense: it means
+# the mutation was not valid Ruby to begin with.
 class Evilution::Integration::Loading::MutationApplier
   def initialize(syntax_validator: Evilution::Integration::Loading::SyntaxValidator.new,
                  constant_pinner: Evilution::Integration::Loading::ConstantPinner.new,
@@ -43,7 +51,7 @@ class Evilution::Integration::Loading::MutationApplier
   rescue SyntaxError => e
     failure_result(e, "syntax error in mutated source: #{e.message}")
   rescue ScriptError, StandardError => e
-    failure_result(e, "#{e.class}: #{e.message}")
+    load_failure_result(mutation, e)
   end
 
   # Evaluates the mutation's restore_source: the original file. Runs after the
@@ -52,16 +60,35 @@ class Evilution::Integration::Loading::MutationApplier
   # applying: a concern ignores an `included` block handed to it twice from
   # the same place, and would keep the mutated one.
   def restore(mutation)
-    source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
-    return unless source
-
-    @concern_state_cleaner.call(mutation.file_path)
-    @source_evaluator.call(source, mutation.file_path)
+    evaluate_original(mutation)
   rescue ScriptError, StandardError => e
     Evilution::Diagnostic.warn("[evilution] could not restore #{mutation.file_path}: #{e.class}: #{e.message}")
   end
 
   private
+
+  # Whether there was an original to evaluate.
+  def evaluate_original(mutation)
+    source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
+    return false unless source
+
+    @concern_state_cleaner.call(mutation.file_path)
+    @source_evaluator.call(source, mutation.file_path)
+    true
+  end
+
+  def original_loads?(mutation)
+    evaluate_original(mutation)
+  rescue ScriptError, StandardError
+    false
+  end
+
+  def load_failure_result(mutation, error)
+    message = "#{error.class}: #{error.message}"
+    return failure_result(error, message) unless original_loads?(mutation)
+
+    failure_result(error, "load failed: #{message}").merge(load_crashed: true)
+  end
 
   def resolve_eval_target(mutation)
     return mutation.eval_source if mutation.respond_to?(:eval_source)
