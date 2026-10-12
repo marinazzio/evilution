@@ -49,7 +49,11 @@ RSpec.describe "Restoring a file after its mutations", :aggregate_failures do
   end
 
   def subject_of(report, name)
-    report.fetch("subjects").find { |subject| subject.fetch("name") == name }
+    subjects = report.fetch("subjects")
+    found = subjects.find { |subject| subject.fetch("name") == name }
+    return found if found
+
+    raise "no subject #{name.inspect} in the report, which has #{subjects.map { |subject| subject.fetch("name") }.inspect}"
   end
 
   %w[fork in_process].each do |isolation|
