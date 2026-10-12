@@ -30,9 +30,17 @@ module Evilution::AST::IncludedBlock
 
   # The included blocks among a module body's direct statements.
   def self.in_body(body)
-    statements = body.is_a?(Prism::BeginNode) ? body.statements : body
-    return [] unless statements.is_a?(Prism::StatementsNode)
-
-    statements.body.filter_map { |node| of(node) }
+    direct_statements(body).filter_map { |node| of(node) }
   end
+
+  # The included and prepended blocks among a module body's direct statements.
+  def self.hooks_in_body(body)
+    direct_statements(body).filter_map { |node| of(node) || prepended(node) }
+  end
+
+  def self.direct_statements(body)
+    statements = body.is_a?(Prism::BeginNode) ? body.statements : body
+    statements.is_a?(Prism::StatementsNode) ? statements.body : []
+  end
+  private_class_method :direct_statements
 end

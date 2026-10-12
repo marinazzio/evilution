@@ -42,6 +42,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   REDECLARATION = "::Evilution::Integration::Loading::ConcernRedeclaration"
   GUARD = "#{REDECLARATION}.skipping? or ".freeze
   REDECLARE = "; #{REDECLARATION}.call(self)".freeze
+  REDECLARE_PREPENDED = "; #{REDECLARATION}.call(self, :prepended)".freeze
   CALLBACKS = "::Evilution::Integration::Loading::CallbackRedeclaration"
 
   class << self
@@ -205,14 +206,19 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
 
     # A kept `included` block stays whole. Its other calls are guarded rather
     # than blanked, and what follows it re-declares the spared one on the
-    # classes that include the concern already.
+    # classes that include the concern already. A kept `prepended` block is
+    # treated the same, for the classes that prepend it.
     def scan_included(stmt)
-      block = Evilution::AST::IncludedBlock.of(stmt)
+      redeclare_hook(stmt, Evilution::AST::IncludedBlock.of(stmt), REDECLARE)
+      redeclare_hook(stmt, Evilution::AST::IncludedBlock.prepended(stmt), REDECLARE_PREPENDED)
+    end
+
+    def redeclare_hook(stmt, block, redeclare)
       return unless block && block.body.is_a?(Prism::StatementsNode)
 
       guard_others(block)
       end_offset = stmt.location.end_offset
-      @edits << [end_offset, end_offset, REDECLARE]
+      @edits << [end_offset, end_offset, redeclare]
     end
 
     # Guards every call of a block but the one holding the offset. When that
@@ -222,17 +228,33 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     # When it is a callback declaration, it is wrapped as it would be in a
     # class body: the block runs as the including class, so that is whose
     # chains CallbackRedeclaration rebuilds.
+    # A method defined in the block is guarded like a call, unless it holds
+    # the offset: defined again on a class that includes the concern already,
+    # it would replace what that class has since defined under the same name.
     def guard_others(block)
-      block.body.body.grep(Prism::CallNode).each do |call|
-        if kept?(edit_for(call))
-          machine = Evilution::AST::AasmDeclaration.machine_block(call)
-          guard_others(machine) if machine && machine.body.is_a?(Prism::StatementsNode)
-          wrap_callbacks(call)
-        else
-          start_offset = call.location.start_offset
-          @edits << [start_offset, start_offset, GUARD]
+      block.body.body.each do |statement|
+        case statement
+        when Prism::CallNode then guard_call(statement)
+        when Prism::DefNode then guard(statement) unless holds_offset?(statement)
         end
       end
+    end
+
+    def guard_call(call)
+      return guard(call) unless kept?(edit_for(call))
+
+      machine = Evilution::AST::AasmDeclaration.machine_block(call)
+      guard_others(machine) if machine && machine.body.is_a?(Prism::StatementsNode)
+      wrap_callbacks(call)
+    end
+
+    def guard(statement)
+      start_offset = statement.location.start_offset
+      @edits << [start_offset, start_offset, GUARD]
+    end
+
+    def holds_offset?(node)
+      kept?([node.location.start_offset, node.location.end_offset])
     end
 
     def neutralizable?(stmt)

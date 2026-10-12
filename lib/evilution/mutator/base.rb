@@ -141,8 +141,10 @@ class Evilution::Mutator::Base < Prism::Visitor
   REDECLARED_KINDS = %i[scope aasm callback].freeze
   private_constant :REDECLARED_KINDS
 
+  # So is anything written in a concern's hook block, a method included: the
+  # block has to run again on the classes that took the concern already.
   def redeclared_subject?
-    REDECLARED_KINDS.include?(@subject.kind)
+    REDECLARED_KINDS.include?(@subject.kind) || @subject.concern_hook?
   end
 
   # What the neutralizer needs to keep a redeclared subject's declaration:

@@ -67,4 +67,28 @@ RSpec.describe Evilution::AST::IncludedBlock do
       expect(described_class.in_body(module_body("module P\nend"))).to eq([])
     end
   end
+
+  describe ".hooks_in_body" do
+    it "finds the included and prepended blocks among a module body's direct statements, in source order" do
+      body = module_body("module P\n  prepended do\n    a\n  end\n  x = 1\n  included do\n    b\n  end\nend")
+
+      expect(described_class.hooks_in_body(body).map(&:slice)).to eq(["do\n    a\n  end", "do\n    b\n  end"])
+    end
+
+    it "finds them in a body with a rescue" do
+      body = module_body("module P\n  included do\n    a\n  end\nrescue StandardError\n  nil\nend")
+
+      expect(described_class.hooks_in_body(body).map(&:slice)).to eq(["do\n    a\n  end"])
+    end
+
+    it "ignores a block nested in another statement" do
+      body = module_body("module P\n  if rails?\n    prepended do\n      a\n    end\n  end\nend")
+
+      expect(described_class.hooks_in_body(body)).to eq([])
+    end
+
+    it "returns nothing for an empty body" do
+      expect(described_class.hooks_in_body(module_body("module P\nend"))).to eq([])
+    end
+  end
 end

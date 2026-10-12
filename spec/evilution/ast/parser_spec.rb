@@ -641,6 +641,74 @@ RSpec.describe Evilution::AST::Parser do
       expect(subjects.map(&:name)).to eq(["Config::LIMIT"])
     end
 
+    describe "what is written in a concern's hook block" do
+      let(:concern) do
+        <<~RUBY
+          module Tracked
+            extend ActiveSupport::Concern
+            LIMIT = 1
+
+            included do
+              STEP = 2
+              def self.level = 1
+              def label = "tracked"
+            end
+
+            prepended do
+              def self.stamp = 2
+            end
+
+            def outside = 3
+
+            class Inner
+              def nested = 4
+            end
+          end
+
+          class Plain
+            included do
+              def odd = 5
+            end
+          end
+        RUBY
+      end
+
+      it "is marked as written there, and nothing else is" do
+        marks = subjects_in(concern).to_h { |subject| [subject.name, subject.concern_hook?] }
+
+        expect(marks).to eq(
+          "Tracked::LIMIT" => false, "Tracked::STEP" => true, "Tracked.level" => true, "Tracked#label" => true,
+          "Tracked.stamp" => true, "Tracked#outside" => false, "Tracked::Inner#nested" => false, "Plain#odd" => false
+        )
+      end
+
+      it "still marks it after a nested module with hook blocks of its own" do
+        nested = <<~RUBY
+          module Outer
+            module Inner
+              included do
+                def a = 1
+              end
+            end
+
+            included do
+              def b = 2
+            end
+          end
+        RUBY
+
+        expect(subjects_in(nested).to_h { |subject| [subject.name, subject.concern_hook?] })
+          .to eq("Outer::Inner#a" => true, "Outer#b" => true)
+      end
+
+      it "marks a scope declared in the block too" do
+        subjects = subjects_in("module P\n  included do\n    scope :recent, -> { where(recent: true) }\n  end\nend\n")
+
+        expect(subjects.map { |subject| [subject.name, subject.kind, subject.concern_hook?] })
+          .to eq([["P.recent", :scope, true]])
+      end
+    end
+
     it "leaves a value-object definition to its constant subject alone" do
       subjects = subjects_in("class Shape\n  Size = Struct.new(:w, :h)\n  Geo::Point = Data.define(:x, :y)\nend\n")
 

@@ -46,16 +46,15 @@ module Evilution::AST
       @subjects = []
       @context = []
       @singleton = [false]
+      @hooks = []
     end
 
     def visit_module_node(node)
       within_context(constant_name(node.constant_path), rooted: rooted?(node.constant_path)) do
-        IncludedBlock.in_body(node.body).each do |block|
-          add_scope_subjects(block.body)
-          add_aasm_subjects(block.body)
-          add_callback_subjects(block.body)
+        within_hooks(IncludedBlock.hooks_in_body(node.body)) do
+          IncludedBlock.in_body(node.body).each { |block| add_declaration_subjects(block.body) }
+          within_scope(singleton: false) { super }
         end
-        within_scope(singleton: false) { super }
       end
     end
 
@@ -66,9 +65,7 @@ module Evilution::AST
       within_context(constant_name(node.constant_path), rooted: rooted?(node.constant_path)) do
         superclass = node.superclass
         add_subject(superclass, @context.join("::"), :constant) if ValueObjectDefinition.match?(superclass)
-        add_scope_subjects(node.body)
-        add_aasm_subjects(node.body)
-        add_callback_subjects(node.body)
+        add_declaration_subjects(node.body)
         within_scope(singleton: false) { super }
       end
     end
@@ -132,6 +129,20 @@ module Evilution::AST
       @singleton.pop
     end
 
+    # What the block finds inside one of these hook blocks of a concern is
+    # marked as written there.
+    def within_hooks(blocks)
+      enclosing = @hooks
+      @hooks = blocks.map { |block| block.location.start_offset...block.location.end_offset }
+      yield
+    ensure
+      @hooks = enclosing
+    end
+
+    def in_hook?(location)
+      @hooks.any? { |range| range.cover?(location.start_offset) }
+    end
+
     def scoped_name(name)
       [*@context, name].join("::")
     end
@@ -164,6 +175,14 @@ module Evilution::AST
       yield
     ensure
       @context = enclosing
+    end
+
+    # The callables handed to the declarations of a class body, or of a
+    # concern's `included` block.
+    def add_declaration_subjects(body)
+      add_scope_subjects(body)
+      add_aasm_subjects(body)
+      add_callback_subjects(body)
     end
 
     # `scope :recent, -> { ... }` defines the class method `recent`. The
@@ -212,7 +231,8 @@ module Evilution::AST
         line_number: loc.start_line,
         source: source,
         node: node,
-        kind: kind
+        kind: kind,
+        concern_hook: in_hook?(loc)
       )
     end
 

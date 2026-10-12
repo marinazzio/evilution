@@ -66,4 +66,15 @@ RSpec.describe Evilution::Subject do
       expect(subj.source).to include("@age >= 18")
     end
   end
+
+  it "is not written in a concern's hook block by default" do
+    expect(subj.concern_hook?).to be(false)
+  end
+
+  it "says so when it is written in one" do
+    hooked = described_class.new(name: "Tracked.level", file_path: "lib/tracked.rb", line_number: 3,
+                                 source: "def self.level = 1", node: node, concern_hook: true)
+
+    expect(hooked.concern_hook?).to be(true)
+  end
 end

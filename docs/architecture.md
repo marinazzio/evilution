@@ -268,6 +268,18 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      follows the block with `ConcernRedeclaration.call(self)`, which runs the
      block on each of them with the guard up, so only the scope is declared
      again. Both additions go on existing lines; no line number moves.
+   - A method defined in a concern's `included` or `prepended` block, or a
+     constant assigned there, is handled the same way: the parser marks every
+     subject written in such a block (`Subject#concern_hook?`), and
+     `Mutator::Base` keeps the block for it as it does for a scope. The other
+     methods of the block are guarded like its calls, so only the mutated one
+     is defined again. For a `prepended` block the eval source ends it with
+     `ConcernRedeclaration.call(self, :prepended)`, which runs it on the
+     classes that prepend the concern (it comes before them in their
+     ancestors) rather than on those that include it. A method the class has
+     defined itself over one of the block's is put back afterwards
+     (`Integration::Loading::OwnMethods`, which tells the two apart by the
+     file they were written in).
    - A callback subject's declaration is kept too, wrapped in
      `CallbackRedeclaration.call(self, __FILE__, lines) { ... }`. Callbacks do
      not replace on re-declaration: a symbol callback moves to the end of its

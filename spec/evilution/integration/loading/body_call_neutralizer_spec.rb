@@ -177,16 +177,114 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(neutralizer.call(src, keep_offset: src.index("register"))).to eq(src)
     end
 
-    it "leaves the block as written when the offset is inside it" do
+    it "re-declares on the classes that prepend the concern when the offset is inside the block" do
       result = neutralizer.call(src, keep_offset: src.index("audited: true"))
 
-      expect(result).to eq(src.sub("register :auditable", "()"))
+      expect(result).to eq(
+        src.sub("register :auditable", "()")
+           .sub("  end\n\n  def", "  end; ::Evilution::Integration::Loading::ConcernRedeclaration.call(self, :prepended)\n\n  def")
+      )
     end
 
     it "still blanks a call that only looks like a prepended block" do
       plain = "class Order\n  prepended(base) do\n    scope :a, -> { nil }\n  end\nend\n"
 
       expect(neutralizer.call(plain)).to eq("class Order\n  ()\n\n\nend\n")
+    end
+  end
+
+  describe "#call with keep_offset inside a method defined in a concern's hook block" do
+    let(:skipping) { "::Evilution::Integration::Loading::ConcernRedeclaration.skipping?" }
+    let(:redeclare) { "::Evilution::Integration::Loading::ConcernRedeclaration.call(self" }
+    let(:src) do
+      <<~RUBY
+        module Tracked
+          extend ActiveSupport::Concern
+
+          included do
+            track :tracked
+            limit = 3
+            def self.level
+              1
+            end
+            def label = "tracked"
+            private def secret = limit
+          end
+
+          prepended do
+            track :stamped
+            def self.stamp = 2
+          end
+        end
+      RUBY
+    end
+
+    it "runs that method again on the classes that include the concern, and guards the rest of the block" do
+      expect(neutralizer.call(src, keep_offset: src.index("1\n"))).to eq(<<~RUBY)
+        module Tracked
+          extend ActiveSupport::Concern
+
+          included do
+            #{skipping} or track :tracked
+            limit = 3
+            def self.level
+              1
+            end
+            #{skipping} or def label = "tracked"
+            #{skipping} or private def secret = limit
+          end; #{redeclare})
+
+          prepended do
+            track :stamped
+            def self.stamp = 2
+          end
+        end
+      RUBY
+    end
+
+    it "does the same in a prepended block, for the classes that prepend the concern" do
+      expect(neutralizer.call(src, keep_offset: src.index("2\n"))).to eq(<<~RUBY)
+        module Tracked
+          extend ActiveSupport::Concern
+
+          included do
+            track :tracked
+            limit = 3
+            def self.level
+              1
+            end
+            def label = "tracked"
+            private def secret = limit
+          end
+
+          prepended do
+            #{skipping} or track :stamped
+            def self.stamp = 2
+          end; #{redeclare}, :prepended)
+        end
+      RUBY
+    end
+
+    it "keeps a method defined through a call that holds the offset" do
+      result = neutralizer.call(src, keep_offset: src.index("limit\n"))
+
+      expect(result).to include("\n    private def secret = limit\n")
+      expect(result).to include("#{skipping} or def self.level", "#{skipping} or def label")
+    end
+
+    it "guards a method ending where the offset is, and keeps the one starting there" do
+      adjacent = "module P\n  included do\n    def a = 1;def b = 2\n  end\nend\n"
+
+      result = neutralizer.call(adjacent, keep_offset: adjacent.index("def b"))
+
+      expect(result).to include("#{skipping} or def a = 1;def b = 2\n")
+    end
+
+    it "leaves code that still parses, every line where it was" do
+      result = neutralizer.call(src, keep_offset: src.index("1\n"))
+
+      expect(Prism.parse(result)).to be_success
+      expect(result.lines.length).to eq(src.lines.length)
     end
   end
 

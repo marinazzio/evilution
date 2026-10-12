@@ -1,0 +1,15 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "A class that takes the concerns during the run" do
+  it "has the methods their hook blocks define" do
+    require "journal"
+
+    expect(Journal.level).to eq(1)
+    expect(Journal.new.label).to eq("tracked")
+    expect(Journal.stamp).to eq(2)
+    expect(Journal.new.kind).to eq("tracked")
+    expect(Journal.tracked).to eq(%i[tracked stamped])
+  end
+end

@@ -13,16 +13,25 @@
 # not run again -- a class-body call (`validates length: { maximum: LIMIT }`)
 # or a constant computed from it in another file keeps the old value -- so
 # only code that reads the constant when called sees the mutant.
+#
+# A subject written in a concern's `included` or `prepended` block is marked
+# `concern_hook`: the block runs in each class that takes the concern, so a
+# mutation of it has to be run again on the classes that took it already.
 class Evilution::Subject
   attr_reader :name, :file_path, :line_number, :source, :node, :kind
 
-  def initialize(name:, file_path:, line_number:, source:, node:, kind: :method)
+  def initialize(name:, file_path:, line_number:, source:, node:, kind: :method, concern_hook: false)
     @name = name
     @file_path = file_path
     @line_number = line_number
     @source = source
     @node = node
     @kind = kind
+    @concern_hook = concern_hook
+  end
+
+  def concern_hook?
+    @concern_hook
   end
 
   def release_node!

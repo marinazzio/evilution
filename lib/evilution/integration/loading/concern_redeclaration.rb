@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "../loading"
+require_relative "own_methods"
 
 # Re-declares one statement of a concern's `included` block on the classes
-# that already include the concern.
+# that already include the concern, or of its `prepended` block on those that
+# prepend it.
 #
 # A mutation inside `included do ... scope :published, -> { } ... end` has two
 # audiences. Classes that include the concern later run the whole block, so
@@ -14,10 +16,14 @@ require_relative "../loading"
 # So the source evilution evaluates guards every other call of the block with
 # `skipping?` and ends the block with `call(self)`: the block is run once more
 # on each existing includer with the guard up, and only the mutated
-# declaration takes effect there. See BodyCallNeutralizer.
+# declaration takes effect there. What the block holds besides calls -- a
+# method definition, an assignment -- runs again as well, which is how a
+# mutated method of the block reaches those classes. A method the class has
+# defined itself over one of the block's is kept (OwnMethods). See
+# BodyCallNeutralizer.
 module Evilution::Integration::Loading::ConcernRedeclaration
   KEY = :evilution_concern_redeclaration
-  INCLUDED_BLOCK = :@_included_block
+  BLOCKS = { included: :@_included_block, prepended: :@_prepended_block }.freeze
 
   # Called through UnboundMethods: ObjectSpace hands over every class in the
   # VM, and one that defines `include?` or `superclass` of its own for its
@@ -25,37 +31,50 @@ module Evilution::Integration::Loading::ConcernRedeclaration
   INCLUDES = Module.instance_method(:include?)
   SUPERCLASS = Class.instance_method(:superclass)
   SINGLETON = Module.instance_method(:singleton_class?)
-  private_constant :KEY, :INCLUDED_BLOCK, :INCLUDES, :SUPERCLASS, :SINGLETON
+  ANCESTORS = Module.instance_method(:ancestors)
+  private_constant :KEY, :BLOCKS, :INCLUDES, :SUPERCLASS, :SINGLETON, :ANCESTORS
 
   def self.skipping?
     Thread.current[KEY] == true
   end
 
-  def self.call(concern)
-    return unless concern.instance_variable_defined?(INCLUDED_BLOCK)
+  # `hook` names the block: `:included` or `:prepended`.
+  def self.call(concern, hook = :included)
+    ivar = BLOCKS.fetch(hook)
+    return unless concern.instance_variable_defined?(ivar)
 
-    block = concern.instance_variable_get(INCLUDED_BLOCK)
-    includers(concern).each { |klass| redeclare(klass, block) }
+    block = concern.instance_variable_get(ivar)
+    takers(concern, prepended: hook == :prepended).each { |klass| redeclare(klass, block) }
   end
 
-  # The classes that include the concern themselves; a subclass inherits what
-  # its parent declares.
-  def self.includers(concern)
+  # The classes that took the concern themselves, by including it or by
+  # prepending it; a subclass inherits what its parent declares.
+  def self.takers(concern, prepended:)
     ObjectSpace.each_object(Class).select do |klass|
       next false if SINGLETON.bind_call(klass) || !INCLUDES.bind_call(klass, concern)
 
       parent = SUPERCLASS.bind_call(klass)
-      parent.nil? || !INCLUDES.bind_call(parent, concern)
+      inherited = !parent.nil? && INCLUDES.bind_call(parent, concern)
+      !inherited && prepended?(klass, concern) == prepended
     end
+  end
+
+  # A prepended module comes before the class in its ancestors, an included
+  # one after it.
+  def self.prepended?(klass, concern)
+    ancestors = ANCESTORS.bind_call(klass)
+    ancestors.index(concern) < ancestors.index(klass)
   end
 
   def self.redeclare(klass, block)
     previous = Thread.current[KEY]
     Thread.current[KEY] = true
-    klass.class_eval(&block)
+    Evilution::Integration::Loading::OwnMethods.keeping(klass, block.source_location.first) do
+      klass.class_eval(&block)
+    end
   ensure
     Thread.current[KEY] = previous
   end
 
-  private_class_method :includers, :redeclare
+  private_class_method :takers, :prepended?, :redeclare
 end

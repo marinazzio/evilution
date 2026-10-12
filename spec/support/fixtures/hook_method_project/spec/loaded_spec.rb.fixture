@@ -1,0 +1,19 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "A class that took the concerns before the run" do
+  it "has the methods their hook blocks define" do
+    expect(Ledger.level).to eq(1)
+    expect(Ledger.new.label).to eq("tracked")
+    expect(Ledger.stamp).to eq(2)
+  end
+
+  it "keeps what it defined over a method of the block" do
+    expect(Ledger.new.kind).to eq("ledger")
+  end
+
+  it "ran the rest of each block once" do
+    expect(Ledger.tracked).to eq(%i[tracked stamped])
+  end
+end

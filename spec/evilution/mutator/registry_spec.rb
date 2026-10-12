@@ -279,7 +279,7 @@ RSpec.describe Evilution::Mutator::Registry do
                            name: "User#initialize",
                            file_path: fixture_path,
                            node: first_def,
-                           kind: :method)
+                           kind: :method, concern_hook?: false)
 
       mutations = registry.mutations_for(subject_obj)
 
@@ -313,7 +313,7 @@ RSpec.describe Evilution::Mutator::Registry do
       code = "log()"
       tree = Prism.parse(code).value
       node = tree.statements.body.first
-      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method)
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method, concern_hook?: false)
 
       filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
       mutations = registry.mutations_for(subject_obj, filter: filter)
