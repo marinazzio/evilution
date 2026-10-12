@@ -2,8 +2,9 @@
 
 require_relative "../mutator"
 
-# Visits every node that sends a message to a receiver and hands that
-# receiver to #receiver_found, before the receiver itself is visited.
+# Visits every node that sends a message to a receiver, or defines
+# something on one, and hands that receiver to #receiver_found before the
+# receiver itself is visited.
 #
 # A plain call is one such node, but not the only one. An operator or
 # logical write on an attribute or an index (`a.b += c`, `a[b] ||= c`) and
@@ -12,8 +13,14 @@ require_relative "../mutator"
 # "the receiver of a call" specially — replacing it with `nil` only earns a
 # NoMethodError — has to mean all of them.
 #
+# A definition has a receiver too: the object a singleton method is defined
+# on (`def self.build`, `def helper.extra`) and the one a singleton class is
+# opened on (`class << self`). Replacing it does not change the method that
+# is already there — `def nil.build` defines another one, on `nil` — so the
+# mutant could never be killed.
+#
 # The includer defines #receiver_found(node). `node` is nil where the
-# message has no explicit receiver.
+# message or the definition has no explicit receiver.
 module Evilution::Mutator::ReceiverPositions
   def visit_call_node(node)
     receiver_found(node.receiver)
@@ -57,6 +64,16 @@ module Evilution::Mutator::ReceiverPositions
 
   def visit_index_target_node(node)
     receiver_found(node.receiver)
+    super
+  end
+
+  def visit_def_node(node)
+    receiver_found(node.receiver)
+    super
+  end
+
+  def visit_singleton_class_node(node)
+    receiver_found(node.expression)
     super
   end
 end

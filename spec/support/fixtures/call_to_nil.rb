@@ -77,4 +77,16 @@ class CallToNilTarget
     account.owner, store[slot] = pair
     pair
   end
+
+  def singleton_on_call
+    def helper.extra = compute
+    finish
+  end
+
+  def singleton_class_of_call
+    class << registry
+      attr_reader :entries
+    end
+    finish
+  end
 end

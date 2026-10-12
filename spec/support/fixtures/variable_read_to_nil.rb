@@ -164,4 +164,20 @@ class VariableReadToNilTarget
     registry[name].owner, other = pair
     other.to_s
   end
+
+  def self.singleton_on_self(value)
+    value
+  end
+
+  def singleton_on_local(target, value)
+    def target.extra(input) = input
+    value
+  end
+
+  def singleton_class_of_self(value)
+    class << self
+      @settings = $defaults
+    end
+    value
+  end
 end

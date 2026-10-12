@@ -18,6 +18,11 @@ RSpec.describe Evilution::Mutator::Operator::ConstantReadToNil do
     described_class.new.call(subject)
   end
 
+  def singleton_mutations_for(method_name)
+    subject = subjects_from_fixture.find { |s| s.name.end_with?(".#{method_name}") }
+    described_class.new.call(subject)
+  end
+
   def mutated_lines(muts)
     muts.map { |m| m.mutated_slice.strip }
   end
@@ -114,6 +119,14 @@ RSpec.describe Evilution::Mutator::Operator::ConstantReadToNil do
 
     it "skips the receivers of attribute and index targets of a multiple assignment" do
       expect(mutated_lines(mutations_for("multiple_assignment_receivers"))).to eq(["Settings.owner, STORE[nil] = pair"])
+    end
+
+    it "skips the constant a singleton method is defined on but not the method's body" do
+      expect(mutated_lines(singleton_mutations_for("singleton_on_constant"))).to eq(["nil"])
+    end
+
+    it "skips the constant a singleton class is opened on" do
+      expect(mutated_lines(mutations_for("singleton_class_of_constant"))).to eq(["nil"])
     end
 
     it "skips a constant in void statement position, which statement_deletion covers" do

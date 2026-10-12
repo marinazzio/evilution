@@ -112,4 +112,15 @@ class ConstantReadToNilTarget
     Settings.owner, STORE[KEY] = pair
     pair
   end
+
+  def ConstantReadToNilTarget.singleton_on_constant
+    LIMIT
+  end
+
+  def singleton_class_of_constant
+    class << Registry
+      attr_reader :entries
+    end
+    LIMIT
+  end
 end

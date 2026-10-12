@@ -18,6 +18,11 @@ RSpec.describe Evilution::Mutator::Operator::VariableReadToNil do
     described_class.new.call(subject)
   end
 
+  def singleton_mutations_for(method_name)
+    subject = subjects_from_fixture.find { |s| s.name.end_with?(".#{method_name}") }
+    described_class.new.call(subject)
+  end
+
   def mutated_lines(muts)
     muts.map { |m| m.mutated_slice.strip }
   end
@@ -122,6 +127,18 @@ RSpec.describe Evilution::Mutator::Operator::VariableReadToNil do
     it "still mutates reads inside the receiver of an attribute target" do
       expect(mutated_lines(mutations_for("attribute_target_receiver_expression")))
         .to contain_exactly("registry[nil].owner, other = pair", "registry[name].owner, other = nil")
+    end
+
+    it "skips the self a singleton method is defined on but not the method's body" do
+      expect(mutated_lines(singleton_mutations_for("singleton_on_self"))).to eq(["nil"])
+    end
+
+    it "skips the local a singleton method is defined on" do
+      expect(mutated_lines(mutations_for("singleton_on_local"))).to contain_exactly("def target.extra(input) = nil", "nil")
+    end
+
+    it "skips the self a singleton class is opened on but not the reads in its body" do
+      expect(mutated_lines(mutations_for("singleton_class_of_self"))).to contain_exactly("@settings = nil", "nil")
     end
 
     it "skips a read in void statement position, which statement_deletion covers" do

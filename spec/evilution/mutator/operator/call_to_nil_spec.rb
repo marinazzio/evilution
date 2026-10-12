@@ -104,6 +104,17 @@ RSpec.describe Evilution::Mutator::Operator::CallToNil do
       expect(mutated_lines(mutations_for("multiple_assignment_receivers"))).to eq(["account.owner, store[nil] = pair"])
     end
 
+    it "skips the call a singleton method is defined on but not the method's body" do
+      expect(mutated_lines(mutations_for("singleton_on_call"))).to contain_exactly("def helper.extra = nil", "nil")
+    end
+
+    it "skips the call a singleton class is opened on but not the calls in its body" do
+      muts = mutations_for("singleton_class_of_call")
+
+      expect(mutated_lines(muts)).to eq(%w[nil nil])
+      expect(muts.map(&:mutated_source)).to all(include("class << registry"))
+    end
+
     it "skips a call in void statement position, which statement_deletion covers" do
       expect(mutated_lines(mutations_for("void_statement"))).to be_empty
     end
