@@ -199,11 +199,26 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(Prism.parse(result)).to be_success
     end
 
-    it "neutralizes the whole block when the offset is elsewhere" do
+    it "leaves the block as written when the offset is elsewhere, for classes that include the concern later" do
       result = neutralizer.call(src, keep_offset: src.index("register"))
 
-      expect(result).not_to include("included")
-      expect(result).to include("register :publishable")
+      expect(result).to eq(src)
+    end
+
+    it "leaves the block as written when nothing is kept, and blanks the calls beside it" do
+      expect(neutralizer.call(src)).to eq(src.sub("register :publishable", "()"))
+    end
+
+    it "neither guards the calls of a block it merely leaves nor re-declares it" do
+      result = neutralizer.call(src)
+
+      expect(result).not_to include("ConcernRedeclaration")
+    end
+
+    it "still blanks a call that only looks like an included block" do
+      plain = "class Order\n  included(base) do\n    scope :a, -> { nil }\n  end\nend\n"
+
+      expect(neutralizer.call(plain)).to eq("class Order\n  ()\n\n\nend\n")
     end
 
     it "treats a kept call that only looks like an included block as any other" do

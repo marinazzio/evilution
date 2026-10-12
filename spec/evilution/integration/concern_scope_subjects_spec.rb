@@ -17,7 +17,9 @@ require "tmpdir"
 # the whole block on a loaded class would fail every mutation.
 #
 # The concern's constant is a subject too. Only the untested branch reads it,
-# so its mutations say nothing about the scope and are set aside.
+# so its mutations survive, whichever class the examples go through: a
+# mutation outside the scope leaves the `included` block as written, for the
+# class that includes the concern during the run.
 RSpec.describe "Concern scope subjects", :aggregate_failures do
   let(:project) { File.expand_path("../../support/fixtures/concern_project", __dir__) }
   let(:root) { File.expand_path("../../..", __dir__) }
@@ -69,6 +71,13 @@ RSpec.describe "Concern scope subjects", :aggregate_failures do
           .to contain_exactly("Publishable.visible", "Publishable::HIDDEN")
         expect(report.dig("summary", "errors")).to eq(0)
         expect(report.dig("summary", "neutral")).to eq(0)
+      end
+
+      it "leaves the mutations of the constant only the untested branch reads alive" do
+        constant = report.fetch("subjects").find { |subject| subject.fetch("name") == "Publishable::HIDDEN" }
+
+        expect(constant.fetch("total")).to be_positive
+        expect(constant.fetch("killed")).to eq(0)
       end
 
       it "kills the mutations of the tested branch and none of the untested one" do

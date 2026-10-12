@@ -79,8 +79,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # the offset is spared inside its block: re-running one declaration replaces
   # it, while re-running the whole machine would register its
   # `after_all_transitions`-style callbacks a second time.
-  # When it is a concern's `included` block, the block is kept whole, since
-  # classes that include the concern later run all of it; every other call in
+  # A concern's `included` block is never blanked, whether or not it holds
+  # the offset: classes that include the concern later run all of it.
+  # When it does hold the offset, every other call in
   # it is guarded and the block is followed by a ConcernRedeclaration call,
   # which re-declares the spared statement alone on the classes that include
   # the concern already. Both are added on existing lines, so no line moves.
@@ -165,10 +166,20 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
         edit = edit_for(stmt)
         if kept?(edit)
           scan_kept(stmt)
-        else
+        elsif !registration_only?(stmt)
           @edits << edit
         end
       end
+    end
+
+    # A concern's `included do ... end` runs nothing where it is written: it
+    # hands the block over for the classes that include the concern from then
+    # on. Blanked, it would leave the concern without one -- ConcernStateCleaner
+    # has just dropped the block it had -- and a class including the concern
+    # during the run would get none of its declarations. Left as written, it
+    # registers the same block again.
+    def registration_only?(stmt)
+      !Evilution::AST::IncludedBlock.of(stmt).nil?
     end
 
     def scan_kept(stmt)
