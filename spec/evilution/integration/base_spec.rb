@@ -242,6 +242,25 @@ RSpec.describe Evilution::Integration::Base do
 
         integration.call(mutation)
       end
+
+      # The applier evaluated the original to tell that the mutant broke the
+      # load, so the file is already as it was.
+      it "does not restore the original again after a load the mutant crashed" do
+        allow(applier).to receive(:call).with(mutation)
+                                        .and_return({ passed: false, error: "load failed: injected", load_crashed: true })
+        expect(applier).not_to receive(:restore)
+
+        integration.call(mutation)
+      end
+
+      it "restores the original when a hook raises before the mutation is applied" do
+        failing_hooks = instance_double(Evilution::Hooks::Registry)
+        allow(failing_hooks).to receive(:fire).and_raise(ArgumentError, "hook")
+        expect(applier).to receive(:restore).with(mutation)
+
+        expect { concrete_class.new(hooks: failing_hooks, mutation_applier: applier).call(mutation) }
+          .to raise_error(ArgumentError, "hook")
+      end
     end
   end
 

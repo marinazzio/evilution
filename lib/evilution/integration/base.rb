@@ -26,10 +26,18 @@ class Evilution::Integration::Base
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
     run_tests(mutation)
   ensure
-    @mutation_applier.restore(mutation)
+    @mutation_applier.restore(mutation) unless restored_by_applier?(load_error)
   end
 
   private
+
+  # The applier evaluates the original to tell that a mutant broke the load of
+  # its file; after that the file is as it was, and need not be restored again.
+  def restored_by_applier?(load_error)
+    return false if load_error.nil?
+
+    load_error[:load_crashed] == true
+  end
 
   def ensure_framework_loaded
     raise NotImplementedError, "#{self.class}#ensure_framework_loaded must be implemented"

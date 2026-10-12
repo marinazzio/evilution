@@ -52,7 +52,8 @@ RSpec.describe "A mutant that makes its file fail to load", :aggregate_failures 
         nil_receiver = load_kills.find { |entry| entry.fetch("diff").include?("nil.map") }
 
         expect(nil_receiver).not_to be_nil
-        expect(nil_receiver.fetch("error_message")).to eq("load failed: NoMethodError: undefined method 'map' for nil")
+        # Ruby quotes the method name with a backtick before 3.4.
+        expect(nil_receiver.fetch("error_message")).to match(/\Aload failed: NoMethodError: undefined method [`']map' for nil/)
         expect(nil_receiver.fetch("error_class")).to eq("NoMethodError")
       end
 
