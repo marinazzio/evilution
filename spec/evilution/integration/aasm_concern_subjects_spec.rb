@@ -17,28 +17,21 @@ require "tmpdir"
 # it would fail mutations of the untested branch or spare those of the tested
 # one.
 RSpec.describe "AASM guard subjects in a concern", :aggregate_failures do
-  let(:project) { File.expand_path("../../support/fixtures/aasm_concern_project", __dir__) }
-  let(:root) { File.expand_path("../../..", __dir__) }
+  project = File.expand_path("../../support/fixtures/aasm_concern_project", __dir__)
+  root = File.expand_path("../../..", __dir__)
   let(:condition_line) { 20 }
   let(:untested_branch_line) { 21 }
   let(:tested_branch_line) { 23 }
 
-  # The fixture's spec is kept under another name so this suite does not load
-  # it as one of its own.
-  def copy_project(dir)
-    FileUtils.cp_r(File.join(project, "."), dir)
-    FileUtils.mv(File.join(dir, "spec/shippable_spec.rb.fixture"), File.join(dir, "spec/shippable_spec.rb"))
-  end
-
-  def command(isolation)
-    [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run", "lib/shippable.rb",
-     "--preload", "spec/spec_helper.rb", "--isolation", isolation, "--format", "json"]
-  end
-
-  def run_evilution(isolation)
+  run_evilution = lambda do |isolation|
     Dir.mktmpdir("aasm_concern_subjects") do |dir|
-      copy_project(dir)
-      out, err, status = Open3.capture3(*command(isolation), chdir: dir)
+      FileUtils.cp_r(File.join(project, "."), dir)
+      # The fixture's spec is kept under another name so this suite does not
+      # load it as one of its own.
+      FileUtils.mv(File.join(dir, "spec/shippable_spec.rb.fixture"), File.join(dir, "spec/shippable_spec.rb"))
+      command = [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run", "lib/shippable.rb",
+                 "--preload", "spec/spec_helper.rb", "--isolation", isolation, "--format", "json"]
+      out, err, status = Open3.capture3(*command, chdir: dir)
       raise "evilution failed (#{status.exitstatus}): #{err}" if out.strip.empty?
 
       report = JSON.parse(out)
@@ -48,13 +41,18 @@ RSpec.describe "AASM guard subjects in a concern", :aggregate_failures do
     end
   end
 
+  # One evilution run per isolation, made when an example first asks for it
+  # and shared by the others: each is a whole run in a process of its own, and
+  # no example changes the report it reads.
+  reports = Hash.new { |runs, isolation| runs[isolation] = run_evilution.call(isolation) }
+
   def lines_of(report, bucket)
     report.fetch(bucket).map { |entry| entry.fetch("line") }
   end
 
   %w[fork in_process].each do |isolation|
     context "under #{isolation} isolation" do
-      let(:report) { run_evilution(isolation) }
+      let(:report) { reports[isolation] }
 
       it "mutates the guard as a subject named after the concern" do
         expect(report.fetch("subjects").map { |subject| subject.fetch("name") }).to eq(["Shippable#ship"])

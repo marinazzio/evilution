@@ -8,8 +8,8 @@ require "tmpdir"
 # Runs evilution for real, in a process of its own, against a spec file that
 # is red in the baseline.
 RSpec.describe "A red baseline", :aggregate_failures do
-  let(:project) { File.expand_path("../../support/fixtures/red_baseline_project", __dir__) }
-  let(:root) { File.expand_path("../../..", __dir__) }
+  project = File.expand_path("../../support/fixtures/red_baseline_project", __dir__)
+  root = File.expand_path("../../..", __dir__)
 
   # Where each framework keeps the fixture's tests, and how evilution is told
   # to run them.
@@ -21,23 +21,16 @@ RSpec.describe "A red baseline", :aggregate_failures do
                       isolations: %w[fork in_process] }
   }
 
-  # The fixture's tests are kept under other names so this suite does not
-  # load them as its own.
-  def copy_project(dir, framework, variant)
-    FileUtils.cp_r(File.join(project, "."), dir)
-    file = File.join(dir, framework.fetch(:file))
-    FileUtils.mv("#{file}.#{format(framework.fetch(:variant), variant)}", file)
-  end
-
-  def command(framework, isolation)
-    [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run", "lib/calc.rb",
-     "--isolation", isolation, "--format", "json", *framework.fetch(:flags)]
-  end
-
-  def run_evilution(framework, variant, isolation)
+  run_evilution = lambda do |framework, variant, isolation|
     Dir.mktmpdir("red_baseline") do |dir|
-      copy_project(dir, framework, variant)
-      out, err, status = Open3.capture3(*command(framework, isolation), chdir: dir)
+      FileUtils.cp_r(File.join(project, "."), dir)
+      # The fixture's tests are kept under other names so this suite does not
+      # load them as its own.
+      file = File.join(dir, framework.fetch(:file))
+      FileUtils.mv("#{file}.#{format(framework.fetch(:variant), variant)}", file)
+      command = [RbConfig.ruby, "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run", "lib/calc.rb",
+                 "--isolation", isolation, "--format", "json", *framework.fetch(:flags)]
+      out, err, status = Open3.capture3(*command, chdir: dir)
       raise "evilution failed (#{status.exitstatus}): #{err}" if out.strip.empty?
 
       report = JSON.parse(out)
@@ -46,6 +39,11 @@ RSpec.describe "A red baseline", :aggregate_failures do
       report
     end
   end
+
+  # One evilution run per framework, variant and isolation, made when an
+  # example first asks for it and shared by the others: each is a whole run in
+  # a process of its own, and no example changes the report it reads.
+  reports = Hash.new { |runs, key| runs[key] = run_evilution.call(frameworks.fetch(key.first), *key.drop(1)) }
 
   def subjects_of(report, bucket)
     methods = { (4..6) => "double", (8..10) => "triple", (12..14) => "half" }
@@ -59,7 +57,7 @@ RSpec.describe "A red baseline", :aggregate_failures do
           # An example that fails whatever the code does fails in every mutation
           # run. That is a kill only where a passing example fails too.
           context "with an example that fails every time" do
-            let(:report) { run_evilution(framework, "red", isolation) }
+            let(:report) { reports[[name, "red", isolation]] }
 
             it "counts a kill only where something that was passing fails" do
               expect(subjects_of(report, "killed")).to eq(["double"])
@@ -79,7 +77,7 @@ RSpec.describe "A red baseline", :aggregate_failures do
           # A failure the mutation runs do not reproduce says nothing about them:
           # their tests passed, and what survives is a real gap.
           context "with an example that failed in the baseline only" do
-            let(:report) { run_evilution(framework, "flaky", isolation) }
+            let(:report) { reports[[name, "flaky", isolation]] }
 
             it "reports survivors as survivors and kills as kills" do
               expect(subjects_of(report, "survived")).to eq(["half"])
