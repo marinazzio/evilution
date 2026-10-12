@@ -114,20 +114,23 @@ class that owns it.
    `scope :name, -> { }` / `lambda { }` / `proc { }` written directly in a class
    body (kind `:scope`, named `Class.name` after the class method it defines;
    it spans the declaration and its node is the body; a scope declared in a
-   concern's `included do ... end` is named after the concern), plus one per literal
+   concern's `included do ... end` or `prepended do ... end` is named after the
+   concern), plus one per literal
    callable inside an `event` or `state` of a class-body `aasm do ... end` --
    keyword values (`guard: -> { }`, also inside arrays), those of the event's
    `transitions`, and callback blocks (`before { }`) -- kind `:aasm`, named
    `Class#event` / `Class#state?` after the method the declaration defines, so
    one event may contribute several subjects of the same name (a machine in a
-   concern's `included do ... end` is found too, and named after the concern);
+   concern's `included do ... end` or `prepended do ... end` is found too, and
+   named after the concern);
    and one per
    literal callable of a class-body callback or validation declaration
    (`validate`, `validates`, `validates_*`, `before_*`, `after_*`, `around_*`)
    -- an `if:` / `unless:` condition, or the callback itself as a block or
    lambda -- kind `:callback`, named as the declaration reads
    (`Order.validate(:credit_limit)`, `Order.before_save`; one in a concern's
-   `included do ... end` is named after the concern). Optional
+   `included do ... end` or `prepended do ... end` is named after the concern).
+   Optional
    descendant/target/line-range filters follow.
 3. **Baseline** — `Runner::BaselineRunner#call` builds the integration from
    `Runner::INTEGRATIONS` (`rspec`/`minitest`/`test_unit`) and records spec files

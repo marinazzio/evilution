@@ -7,10 +7,10 @@ require_relative "included_block"
 # The lines of a file that hold code no subject covers: statements written in
 # a class, module or `class << self` body, or at the top level, outside every
 # method -- callback macros, DSL calls, logical writes on a constant -- or in a
-# concern's `included` block, which is a class body written elsewhere. Mutations are
-# generated per subject, so a run aimed at these lines generates none of its
-# own, and saying so is the only way a reader can tell "nothing to mutate"
-# from "nothing reached".
+# concern's `included` or `prepended` block, which is a class body written
+# elsewhere. Mutations are generated per subject, so a run aimed at these
+# lines generates none of its own, and saying so is the only way a reader can
+# tell "nothing to mutate" from "nothing reached".
 #
 # Visibility keywords without arguments (`private`) carry no behaviour of
 # their own and are left out, as are `require` and `require_relative`: loading
@@ -55,8 +55,8 @@ module Evilution::AST::UncoveredCode
   def self.expand(node)
     return statements(node.body) if SCOPE_NODES.any? { |type| node.is_a?(type) }
 
-    included = Evilution::AST::IncludedBlock.of(node)
-    return statements(included.body) if included
+    hook = Evilution::AST::IncludedBlock.of(node) || Evilution::AST::IncludedBlock.prepended(node)
+    return statements(hook.body) if hook
     return [] if bare_visibility?(node) || load_call?(node)
 
     [node]

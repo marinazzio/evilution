@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "A class that prepends the concern during the run" do
+  before { require "invoice" }
+
+  def record(**attributes)
+    Invoice.new(total: 500, paid: false, rush: false, **attributes)
+  end
+
+  it "shows a visitor only what is published" do
+    expect(Invoice.visible(false).map { |row| row[:title] }).to eq(["live"])
+  end
+
+  it "runs its step once" do
+    expect(record.tap(&:valid?).steps).to eq([:queued])
+  end
+
+  it "checks the credit limit of a paid record only" do
+    expect(record(paid: true).tap(&:valid?).errors[:total]).to eq(["over the limit"])
+    expect(record.tap(&:valid?).errors[:total]).to eq([])
+  end
+
+  it "ships only to an address" do
+    expect(record(address: "1 Main St").may_ship?).to be(true)
+    expect(record.may_ship?).to be(false)
+  end
+
+  it "ran the rest of the block once" do
+    expect(Invoice.tracked).to eq([:audited])
+    expect(Invoice.aasm.states.map(&:name)).to eq(%i[paid shipped])
+    expect(Invoice.aasm.events.map(&:name)).to eq([:ship])
+  end
+end

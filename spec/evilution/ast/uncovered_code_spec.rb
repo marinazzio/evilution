@@ -198,6 +198,19 @@ RSpec.describe Evilution::AST::UncoveredCode do
     expect(uncovered(source)).to eq([3..3])
   end
 
+  it "reports the statements of a concern's prepended block, not the block around them" do
+    source = <<~RUBY
+      module Auditable
+        prepended do
+          validates :title, presence: true
+          scope :audited, -> { where(audited: true) }
+        end
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([3..3])
+  end
+
   it "treats callback declarations with a literal condition or body as covered by their subject" do
     source = <<~RUBY
       class Order

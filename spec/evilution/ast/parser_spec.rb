@@ -500,7 +500,9 @@ RSpec.describe Evilution::AST::Parser do
           scope :published, -> { where(published: true) }
 
           prepended do
-            scope :drafts, -> { where(published: false) }
+            if legacy?
+              scope :drafts, -> { where(published: false) }
+            end
           end
 
           included do
@@ -699,6 +701,32 @@ RSpec.describe Evilution::AST::Parser do
 
         expect(subjects_in(nested).to_h { |subject| [subject.name, subject.concern_hook?] })
           .to eq("Outer::Inner#a" => true, "Outer#b" => true)
+      end
+
+      it "finds the declarations of a prepended block, named after the concern and marked" do
+        prepended = <<~RUBY
+          module Audited
+            prepended do
+              scope :recent, -> { where(recent: true) }
+              validate :limit, if: -> { paid? }
+              aasm do
+                event :ship, guard: -> { address? } do
+                  transitions from: :paid, to: :shipped
+                end
+              end
+            end
+          end
+        RUBY
+
+        expect(subjects_in(prepended).map { |subject| [subject.name, subject.kind, subject.concern_hook?] }).to eq(
+          [["Audited.recent", :scope, true], ["Audited#ship", :aasm, true], ["Audited.validate(:limit)", :callback, true]]
+        )
+      end
+
+      it "finds none in a prepended block of a class, which is no concern" do
+        subjects = subjects_in("class Plain\n  prepended do\n    scope :recent, -> { where(recent: true) }\n  end\nend\n")
+
+        expect(subjects).to eq([])
       end
 
       it "marks a scope declared in the block too" do

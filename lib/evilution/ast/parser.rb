@@ -51,8 +51,9 @@ module Evilution::AST
 
     def visit_module_node(node)
       within_context(constant_name(node.constant_path), rooted: rooted?(node.constant_path)) do
-        within_hooks(IncludedBlock.hooks_in_body(node.body)) do
-          IncludedBlock.in_body(node.body).each { |block| add_declaration_subjects(block.body) }
+        hooks = IncludedBlock.hooks_in_body(node.body)
+        within_hooks(hooks) do
+          hooks.each { |block| add_declaration_subjects(block.body) }
           within_scope(singleton: false) { super }
         end
       end
@@ -178,7 +179,7 @@ module Evilution::AST
     end
 
     # The callables handed to the declarations of a class body, or of a
-    # concern's `included` block.
+    # concern's `included` or `prepended` block.
     def add_declaration_subjects(body)
       add_scope_subjects(body)
       add_aasm_subjects(body)
@@ -187,8 +188,8 @@ module Evilution::AST
 
     # `scope :recent, -> { ... }` defines the class method `recent`. The
     # subject spans the whole declaration and mutates its body.
-    # Written in a concern's `included` block it defines that method on every
-    # class including the concern, and is named after the concern.
+    # Written in a concern's `included` or `prepended` block it defines that
+    # method on every class taking the concern, and is named after the concern.
     def add_scope_subjects(body)
       ScopeDeclaration.in_body(body).each do |declaration|
         name = "#{@context.join("::")}.#{ScopeDeclaration.scope_name(declaration)}"

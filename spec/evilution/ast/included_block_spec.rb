@@ -50,24 +50,6 @@ RSpec.describe Evilution::AST::IncludedBlock do
     end
   end
 
-  describe ".in_body" do
-    it "finds the included blocks among a module body's direct statements" do
-      body = module_body("module P\n  extend ActiveSupport::Concern\n  included do\n    a\n  end\n  def x; end\nend")
-
-      expect(described_class.in_body(body).map(&:slice)).to eq(["do\n    a\n  end"])
-    end
-
-    it "ignores an included block nested in another statement" do
-      body = module_body("module P\n  if rails?\n    included do\n      a\n    end\n  end\nend")
-
-      expect(described_class.in_body(body)).to eq([])
-    end
-
-    it "returns nothing for an empty body" do
-      expect(described_class.in_body(module_body("module P\nend"))).to eq([])
-    end
-  end
-
   describe ".hooks_in_body" do
     it "finds the included and prepended blocks among a module body's direct statements, in source order" do
       body = module_body("module P\n  prepended do\n    a\n  end\n  x = 1\n  included do\n    b\n  end\nend")

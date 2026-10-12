@@ -28,11 +28,6 @@ module Evilution::AST::IncludedBlock
   end
   private_class_method :hook_block
 
-  # The included blocks among a module body's direct statements.
-  def self.in_body(body)
-    direct_statements(body).filter_map { |node| of(node) }
-  end
-
   # The included and prepended blocks among a module body's direct statements.
   def self.hooks_in_body(body)
     direct_statements(body).filter_map { |node| of(node) || prepended(node) }
