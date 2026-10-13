@@ -171,6 +171,23 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       expect(queue.worker_stats.first.wall_time).to eq(0.0)
     end
 
+    # Collecting the timings has a grace period of its own. A read that began
+    # inside it must not run past it on a frame that never completes.
+    it "reads a final timing frame within what is left of the grace period" do
+      queue = described_class.new(size: 1)
+      original = Evilution::Parallel::WorkQueue::Channel.method(:read)
+      allowed = []
+      allow(Evilution::Parallel::WorkQueue::Channel).to receive(:read) do |io, **options|
+        allowed << options[:frame_timeout]
+        original.call(io, **options)
+      end
+
+      queue.map([1]) { |n| n }
+
+      expect(allowed.first).to eq(Evilution::Parallel::WorkQueue::Channel::FRAME_TIMEOUT)
+      expect(allowed.last).to be_between(0, described_class::TIMING_GRACE_PERIOD)
+    end
+
     it "reaps every worker process so no zombies remain after map" do
       queue = described_class.new(size: 2)
       queue.map([1, 2, 3, 4]) { |n| n }

@@ -91,8 +91,8 @@ class Evilution::Parallel::WorkQueue::Worker
     @in_flight_indices << index
   end
 
-  def read_result
-    Evilution::Parallel::WorkQueue::Channel.read(@res_read)
+  def read_result(frame_timeout: Evilution::Parallel::WorkQueue::Channel::FRAME_TIMEOUT)
+    Evilution::Parallel::WorkQueue::Channel.read(@res_read, frame_timeout: frame_timeout)
   end
 
   def shutdown
@@ -138,11 +138,14 @@ class Evilution::Parallel::WorkQueue::Worker
 
   private
 
+  # The grace period covers the read as well as the wait for it: a stats frame
+  # that begins inside it and never completes must not outlast it.
   def drain_stats
     zero = Timing.new(busy: 0.0, wall: 0.0)
+    deadline = monotonic_now + Evilution::Parallel::WorkQueue::TIMING_GRACE_PERIOD
     return zero unless @res_read.wait_readable(Evilution::Parallel::WorkQueue::TIMING_GRACE_PERIOD)
 
-    message = read_result
+    message = read_result(frame_timeout: [deadline - monotonic_now, 0].max)
     return zero unless message.is_a?(Array)
 
     tag, busy, wall = message
@@ -151,5 +154,9 @@ class Evilution::Parallel::WorkQueue::Worker
     Timing.new(busy: busy, wall: wall)
   rescue Evilution::Parallel::WorkQueue::Channel::BadFrame
     zero
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 end

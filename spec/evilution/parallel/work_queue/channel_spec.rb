@@ -206,6 +206,28 @@ RSpec.describe Evilution::Parallel::WorkQueue::Channel do
         w.close
       end
 
+      # One allowance for the frame, not one for its header and another for
+      # its payload: the reader is the one process that could notice a hang.
+      it "allows the time once for header and payload together" do
+        r, w = IO.pipe
+        [r, w].each(&:binmode)
+        header = [1_000].pack("N")
+        writer = Thread.new do
+          w.write(header[0, 2])
+          sleep 0.3
+          w.write(header[2, 2])
+        end
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        expect { Timeout.timeout(5) { described_class.read(r, frame_timeout: 0.4) } }
+          .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, "frame cut short: 0 of 1000 bytes arrived within 0.4s")
+
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be_between(0.4, 0.6)
+      ensure
+        writer.join
+        w.close
+      end
+
       it "allows ten seconds unless told otherwise" do
         expect(described_class::FRAME_TIMEOUT).to eq(10)
       end
