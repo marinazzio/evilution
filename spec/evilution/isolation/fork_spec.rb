@@ -47,6 +47,15 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.mutation).to eq(mutation)
     end
 
+    it "declares the child a process that ends with its mutation" do
+      test_command = ->(_m) { { passed: Evilution.single_mutation_process? } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_survived
+      expect(Evilution.single_mutation_process?).to be(false)
+    end
+
     it "returns survived when test command passes" do
       test_command = ->(_m) { { passed: true } }
 

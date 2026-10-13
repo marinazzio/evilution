@@ -39,6 +39,48 @@ RSpec.describe Evilution::Integration::Loading::SourceEvaluator do
       expect(result).to eq(project_dir)
     end
 
+    # In-process isolation evaluates a file once per mutation. A file that
+    # extends something with `Module.new` would otherwise pile its modules up,
+    # and the mutation under test would run its predecessors' code on `super`.
+    describe "a file that installs an anonymous module" do
+      after do
+        Evilution::Integration::Loading::SupersededModules.registry.delete(file_path)
+        Object.send(:remove_const, :EvilutionSupersededHost) if defined?(EvilutionSupersededHost)
+      end
+
+      def source(version)
+        <<~RUBY
+          EvilutionSupersededHost = Object.new unless defined?(EvilutionSupersededHost)
+          EvilutionSupersededHost.extend(Module.new do
+            def seen
+              [:#{version}] + (defined?(super) ? super : [])
+            end
+          end)
+        RUBY
+      end
+
+      it "leaves only the latest evaluation's module in effect" do
+        evaluator.call(source(:first), file_path)
+        evaluator.call(source(:second), file_path)
+
+        expect(EvilutionSupersededHost.seen).to eq([:second])
+      end
+
+      it "tracks through the collaborator it was given" do
+        tracker = Evilution::Integration::Loading::SupersededModules.new(registry: {})
+        expect(tracker).to receive(:track).with(file_path).and_call_original
+
+        described_class.new(superseded_modules: tracker).call("1 + 1", file_path)
+      end
+
+      it "tracks under the absolute path the source is evaluated as" do
+        tracker = Evilution::Integration::Loading::SupersededModules.new(registry: {})
+        expect(tracker).to receive(:track).with(File.expand_path("target.rb")).and_call_original
+
+        described_class.new(superseded_modules: tracker).call("1 + 1", "target.rb")
+      end
+    end
+
     it "raises when the source itself is invalid Ruby rather than silently skipping eval" do
       expect { evaluator.call("def broken(", file_path) }.to raise_error(SyntaxError)
     end

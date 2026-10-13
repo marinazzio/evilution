@@ -36,6 +36,26 @@ RSpec.describe Evilution do
     end
   end
 
+  describe ".single_mutation_process?" do
+    around do |example|
+      previous = Evilution.instance_variable_get(:@single_mutation_process)
+      Evilution.instance_variable_set(:@single_mutation_process, nil)
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@single_mutation_process, previous)
+    end
+
+    it "is false until the process is declared one" do
+      expect(Evilution.single_mutation_process?).to be(false)
+    end
+
+    it "is true once it is" do
+      Evilution.single_mutation_process!
+
+      expect(Evilution.single_mutation_process?).to be(true)
+    end
+  end
+
   describe ".while_running_tests" do
     around do |example|
       previous = Evilution.instance_variable_get(:@running_tests)

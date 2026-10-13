@@ -113,6 +113,34 @@ there is. In both cases no report is written and the verdicts collected so
 far are lost. Re-run with `--isolation fork`, where the same mutant costs one
 child process.
 
+## State a file leaves behind when it is evaluated again
+
+`in_process` evaluates a source file once for every mutation of it, and once
+more to put the original back. A fork child evaluates it once and ends. A file
+whose evaluation adds to something, instead of replacing it, therefore behaves
+differently under the two.
+
+One such case is handled. A file that installs a module it never names,
+
+```ruby
+handler = Module.new { def const_missing(name) = ... }
+Object.extend(handler)
+```
+
+leaves one more module on its host every time it is evaluated, and Ruby has no
+way to take one off. Left alone, the mutation under test would reach the code
+of every earlier mutation through `super`, fail on a predecessor's bug, and be
+reported killed. Evilution remembers the anonymous modules a file's evaluation
+creates and removes their methods when the file is evaluated next, so that
+method lookup passes through them. Only modules are emptied, not anonymous
+classes, and only the methods written in that file.
+
+Other things a file can add to at load time are not undone: an `at_exit`
+hook, a `Signal.trap`, a `TracePoint`, a callback pushed into a registry of
+some library. If the file you are mutating does one of those at the top
+level, compare an `in_process` run with a `--isolation fork` run before
+trusting its kills.
+
 ## Parent-process preload
 
 Fork isolation's one downside is that every child pays the cost of loading

@@ -2,6 +2,7 @@
 
 require_relative "../loading"
 require_relative "reeval_warning_filter"
+require_relative "superseded_modules"
 
 # Evaluate source with __FILE__ set to the absolute original path so that
 # `require_relative` and `__dir__` resolve against the real source tree, where
@@ -13,13 +14,19 @@ require_relative "reeval_warning_filter"
 # between this eval path and a plain `require` of the same file is that we
 # substitute the mutated bytes — the privilege level is identical.
 class Evilution::Integration::Loading::SourceEvaluator
+  def initialize(superseded_modules: Evilution::Integration::Loading::SupersededModules.new)
+    @superseded_modules = superseded_modules
+  end
+
   def call(source, file_path)
     # When the isolator has chdir'd into a per-mutation sandbox (EV-wqxu /
     # GH #1278), anchor the eval __FILE__ against PROJECT_ROOT so siblings
     # `require_relative` can find each other from the real source tree.
     absolute = File.expand_path(file_path, Evilution.project_base_dir)
-    Evilution::Integration::Loading::ReevalWarningFilter.suppress do
-      eval(source, TOPLEVEL_BINDING, absolute, 1)
+    @superseded_modules.track(absolute) do
+      Evilution::Integration::Loading::ReevalWarningFilter.suppress do
+        eval(source, TOPLEVEL_BINDING, absolute, 1)
+      end
     end
   end
 end

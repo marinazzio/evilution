@@ -83,6 +83,7 @@ class Evilution::Isolation::Fork
       # paths to Evilution::PROJECT_ROOT instead of the sandbox CWD.
       Dir.chdir(sandbox_dir)
       Evilution.in_isolated_worker!
+      Evilution.single_mutation_process!
       read_io.close
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks

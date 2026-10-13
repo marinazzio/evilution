@@ -284,6 +284,17 @@ module Evilution
     running_tests? || @tests_left_by.equal?(error)
   end
 
+  # Set by fork isolation in the child it forks for one mutation. Such a
+  # process applies its mutation, runs the tests and ends, so work that only
+  # serves a later mutation in the same process can be left out of it.
+  def self.single_mutation_process!
+    @single_mutation_process = true
+  end
+
+  def self.single_mutation_process?
+    @single_mutation_process == true
+  end
+
   # Base directory for resolving project-relative paths. An isolated worker
   # has chdir'd into a per-mutation sandbox (EV-wqxu / GH #1278), so callers
   # in that context must anchor against PROJECT_ROOT rather than Dir.pwd —
