@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "stringio"
 require "evilution/isolation/in_process"
 
 RSpec.describe Evilution::Isolation::InProcess do
@@ -108,6 +109,53 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(result).to be_error
       expect(result).not_to be_timeout
       expect(result.error_message).to eq("upstream took too long")
+    end
+
+    # Fork isolation reports a child that died on such an exception; here the
+    # exception would otherwise leave the isolator and end the whole run.
+    describe "an exception outside StandardError" do
+      it "is killed when it left the test run" do
+        test_command = lambda do |_m|
+          Evilution.while_running_tests { raise SystemStackError, "stack level too deep" }
+        end
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_killed
+        expect(result.error_class).to eq("SystemStackError")
+        expect(result.error_message).to eq("test run ended by SystemStackError: stack level too deep")
+      end
+
+      it "is an error when it was raised before the tests ran" do
+        test_command = ->(_m) { raise SystemStackError, "stack level too deep" }
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_class).to eq("SystemStackError")
+        expect(result.error_message).to eq("SystemStackError: stack level too deep")
+      end
+
+      it "captures the backtrace" do
+        test_command = ->(_m) { raise Exception, "bare" } # rubocop:disable Lint/RaiseException
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result.error_class).to eq("Exception")
+        expect(result.error_backtrace.length).to be_between(1, 5)
+      end
+
+      it "lets a request to exit through" do
+        test_command = ->(_m) { exit(3) }
+
+        expect { isolator.call(mutation:, test_command:, timeout: 5) }.to raise_error(SystemExit)
+      end
+
+      it "lets a signal through" do
+        test_command = ->(_m) { raise Interrupt }
+
+        expect { isolator.call(mutation:, test_command:, timeout: 5) }.to raise_error(Interrupt)
+      end
     end
 
     it "returns error when test command raises" do
@@ -484,6 +532,118 @@ RSpec.describe Evilution::Isolation::InProcess do
     ensure
       leak = File.join(parent_cwd, probe_name) if parent_cwd && probe_name
       File.delete(leak) if leak && File.exist?(leak)
+    end
+  end
+
+  # A mutation can take the Ruby process down in a way no `rescue` sees. The
+  # run is lost then, and the last thing it can do is say which mutation it was
+  # and that fork isolation would have contained it.
+  describe ".report_death" do
+    let(:stream) { StringIO.new }
+    let(:named_mutation) { double("Mutation", to_s: "constant_namespace_strip: lib/example.rb:202") }
+    let(:error) { SystemStackError.new("stack level too deep") }
+
+    after { described_class.unwatch }
+
+    it "names the mutation the process was testing" do
+      described_class.watch(named_mutation)
+
+      described_class.report_death(error, stream:)
+
+      expect(stream.string).to eq(
+        "[evilution] the run died while testing a mutation under in-process isolation: " \
+        "constant_namespace_strip: lib/example.rb:202 (SystemStackError: stack level too deep). " \
+        "In-process isolation cannot contain a mutation that takes the Ruby process down; " \
+        "re-run with --isolation fork.\n"
+      )
+    end
+
+    it "writes to the error stream as it was before the mutation was tested" do
+      saved = $stderr
+      $stderr = stream
+      described_class.watch(named_mutation)
+      $stderr = described_class.null_err
+
+      described_class.report_death(error)
+
+      expect(stream.string).to include("constant_namespace_strip: lib/example.rb:202")
+    ensure
+      $stderr = saved
+    end
+
+    it "says nothing when no mutation was being tested" do
+      described_class.report_death(error, stream:)
+
+      expect(stream.string).to eq("")
+    end
+
+    it "says nothing once the mutation is done" do
+      described_class.watch(named_mutation)
+      described_class.unwatch
+
+      described_class.report_death(error, stream:)
+
+      expect(stream.string).to eq("")
+    end
+
+    it "says nothing when the process is not dying on an exception" do
+      described_class.watch(named_mutation)
+
+      described_class.report_death(nil, stream:)
+
+      expect(stream.string).to eq("")
+    end
+
+    it "says nothing when the process was asked to exit" do
+      described_class.watch(named_mutation)
+
+      described_class.report_death(SystemExit.new(1), stream:)
+
+      expect(stream.string).to eq("")
+    end
+
+    it "says nothing in a process forked while the mutation was tested" do
+      described_class.watch(named_mutation)
+      read_io, write_io = IO.pipe
+
+      pid = fork do
+        read_io.close
+        described_class.report_death(error, stream: write_io)
+        write_io.close
+        exit!(0)
+      end
+      write_io.close
+      Process.wait(pid)
+
+      expect(read_io.read).to eq("")
+    end
+  end
+
+  describe "watching the mutation under test" do
+    after { described_class.unwatch }
+
+    it "watches the mutation while the test command runs" do
+      seen = nil
+      test_command = lambda do |_m|
+        seen = described_class.watched
+        { passed: true }
+      end
+
+      isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(seen).to eq(mutation)
+    end
+
+    it "stops watching when the test command returns" do
+      isolator.call(mutation:, test_command: ->(_m) { { passed: true } }, timeout: 5)
+
+      expect(described_class.watched).to be_nil
+    end
+
+    it "stops watching when the test command raises" do
+      isolator.call(mutation:, test_command: ->(_m) { raise "boom" }, timeout: 5)
+
+      expect(described_class.watched).to be_nil
     end
   end
 end

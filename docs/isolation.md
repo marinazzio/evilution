@@ -77,6 +77,42 @@ inside its own process; use `--isolation fork` for it. The same goes for a
 mutant that crashes the Ruby VM: under `fork` that costs one child, under
 `in_process` the whole run.
 
+## What `in_process` cannot contain
+
+A mutant runs in the same Ruby process as evilution, so whatever takes that
+process down takes the run with it.
+
+An exception outside `StandardError` that leaves the test run is contained:
+a `SystemStackError` from a mutant that recurses without end is the usual
+one. It is reported for that mutation and the run goes on. The mutation is
+`killed` when the exception left the tests after the mutated source loaded,
+as a crashing test would be, and an `error` when it was raised earlier.
+
+One kind of stack overflow is not contained. When the recursion goes through
+`const_missing` — a mutant of a `const_missing` that is installed on `Object`
+does that — Ruby may run neither `rescue` nor `ensure`, or abort outright
+with a `[BUG]` report. Which one depends on the stack limit of the process
+(`ulimit -s`): under the usual 8 MB the machine stack gives out first and the
+process is lost, under a much larger limit the overflow unwinds like any
+other. The other recursions tried (plain method calls, blocks, `send`,
+`method_missing`, `to_s`, a Hash default proc) unwind normally under the
+usual limit, on Ruby 3.4 and 4.0.
+
+When the process ends this way without aborting, a line on stderr names the
+mutation:
+
+```
+[evilution] the run died while testing a mutation under in-process isolation:
+constant_namespace_strip: lib/foo.rb:202 (SystemStackError: stack level too deep).
+In-process isolation cannot contain a mutation that takes the Ruby process down;
+re-run with --isolation fork.
+```
+
+After a `[BUG]` abort there is no such line; Ruby's own crash report is all
+there is. In both cases no report is written and the verdicts collected so
+far are lost. Re-run with `--isolation fork`, where the same mutant costs one
+child process.
+
 ## Parent-process preload
 
 Fork isolation's one downside is that every child pays the cost of loading

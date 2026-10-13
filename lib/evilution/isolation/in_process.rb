@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "English"
 require "fileutils"
 require "timeout"
 require "tmpdir"
@@ -30,9 +31,51 @@ class Evilution::Isolation::InProcess
 
   class << self
     attr_reader :null_out, :null_err
+
+    # The mutation this process is testing, remembered so that a process dying
+    # in the middle of it can say which one it was. Ruby runs no `ensure` on
+    # some deaths (a stack overflow through `const_missing`, under the usual
+    # stack limit), so the mutation is still on record when the at_exit hook
+    # asks. The process is recorded with it: a process the tests fork inherits
+    # both the record and the hook, and its death is not this run's.
+    #
+    # The error stream is recorded as well, as it is before the mutation is
+    # tested: `$stderr` is the null stream while it is, and on such a death
+    # nothing puts it back.
+    def watch(mutation)
+      @watched = [Process.pid, mutation, $stderr]
+      return if @death_hook_installed
+
+      @death_hook_installed = true
+      at_exit { report_death($ERROR_INFO) }
+    end
+
+    def unwatch
+      @watched = nil
+    end
+
+    def watched
+      pid, mutation, = @watched
+      mutation if pid == Process.pid
+    end
+
+    def report_death(error, stream: nil)
+      mutation = watched
+      return if mutation.nil? || error.nil?
+      return if error.is_a?(SystemExit) || error.is_a?(SignalException)
+
+      stream ||= @watched.last
+      stream.puts(
+        "[evilution] the run died while testing a mutation under in-process isolation: " \
+        "#{mutation} (#{error.class}: #{error.message}). " \
+        "In-process isolation cannot contain a mutation that takes the Ruby process down; " \
+        "re-run with --isolation fork."
+      )
+    end
   end
 
   def call(mutation:, test_command:, timeout:)
+    self.class.watch(mutation)
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     rss_before = Evilution::Memory.rss_kb
     sandbox_dir = Dir.mktmpdir("evilution-run")
@@ -43,6 +86,7 @@ class Evilution::Isolation::InProcess
 
     build_mutation_result(mutation, result, duration, rss_before, rss_after, delta)
   ensure
+    self.class.unwatch
     FileUtils.rm_rf(sandbox_dir) if sandbox_dir
   end
 
@@ -68,12 +112,31 @@ class Evilution::Isolation::InProcess
   rescue Expired
     { timeout: true }
   rescue ScriptError, StandardError => e
+    failure_result(e, e.message)
+  rescue SignalException, SystemExit
+    raise
+  rescue Exception => e # rubocop:disable Lint/RescueException -- turned into this mutation's result
+    crash_result(e)
+  end
+
+  # An exception outside StandardError that no test framework held back: a
+  # stack overflow that unwound, most likely. Left alone it would end the run.
+  # Leaving the test run that way, after the mutated source loaded, is what a
+  # test that crashes does, and counts the same.
+  def crash_result(error)
+    message = "#{error.class}: #{error.message}"
+    return failure_result(error, message) unless Evilution.died_running_tests?(error)
+
+    failure_result(error, "test run ended by #{message}").merge(test_crashed: true)
+  end
+
+  def failure_result(error, message)
     {
       timeout: false,
       passed: false,
-      error: e.message,
-      error_class: e.class.name,
-      error_backtrace: Array(e.backtrace).first(5)
+      error: message,
+      error_class: error.class.name,
+      error_backtrace: Array(error.backtrace).first(5)
     }
   end
 
