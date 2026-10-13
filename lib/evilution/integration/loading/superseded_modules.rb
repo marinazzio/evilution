@@ -59,10 +59,17 @@ class Evilution::Integration::Loading::SupersededModules
     known = anonymous_modules
     yield
   ensure
-    @registry[file_path] = anonymous_modules.reject { |mod| known.key?(mod) }.keys if known
+    remember(file_path, known) if known
   end
 
   private
+
+  # Nothing is kept for a file whose evaluation created none, which is most
+  # files: an entry is only worth carrying when there is a module to empty.
+  def remember(file_path, known)
+    created = anonymous_modules.reject { |mod| known.key?(mod) }.keys
+    @registry[file_path] = created unless created.empty?
+  end
 
   def retire(file_path)
     Array(@registry.delete(file_path)).each { |mod| empty(mod, file_path) }

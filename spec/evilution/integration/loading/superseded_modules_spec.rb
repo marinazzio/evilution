@@ -171,6 +171,32 @@ RSpec.describe Evilution::Integration::Loading::SupersededModules do
       expect(host).not_to respond_to(:seen)
     end
 
+    # Most files create no anonymous module. One entry per file ever evaluated
+    # would only be something to carry through the run.
+    describe "what it keeps on record" do
+      let(:registry) { {} }
+      let(:superseded) { described_class.new(registry: registry) }
+
+      it "keeps nothing for an evaluation that created no anonymous module" do
+        evaluate("nil")
+
+        expect(registry).to eq({})
+      end
+
+      it "keeps the file's entry while there is a module to empty" do
+        install(:first)
+
+        expect(registry.keys).to eq([file_path])
+      end
+
+      it "drops the file's entry once the next evaluation created none" do
+        install(:first)
+        evaluate("nil")
+
+        expect(registry).to eq({})
+      end
+    end
+
     it "does not empty a module twice" do
       install(:first)
       install(:second)
