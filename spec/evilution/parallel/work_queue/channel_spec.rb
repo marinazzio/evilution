@@ -189,40 +189,52 @@ RSpec.describe Evilution::Parallel::WorkQueue::Channel do
 
       # The time allowed is for the whole of a read, not for each pause in
       # it: bytes that keep trickling in must not keep the reader for ever.
+      #
+      # The writer keeps sending for two seconds, far longer than the read is
+      # allowed. A reader that counted from the last byte would outlast it and
+      # report every byte sent; a slow machine only makes fewer of them arrive.
       it "counts the time from the start of the read, not from the last byte" do
         r, w = IO.pipe
         [r, w].each(&:binmode)
+        w.write([1_000].pack("N"))
         writer = Thread.new do
-          3.times do
+          20.times do
             w.write("a")
-            sleep 0.2
+            sleep 0.1
           end
         end
 
         expect { Timeout.timeout(5) { described_class.read(r, frame_timeout: 0.3) } }
-          .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, /\Aframe cut short: \d of 4 bytes arrived within 0.3s\z/)
+          .to(raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame) do |error|
+            expect(error.message[/\d+(?= of 1000 bytes)/].to_i).to be < 20
+          end)
       ensure
+        writer.kill
         writer.join
         w.close
       end
 
       # One allowance for the frame, not one for its header and another for
       # its payload: the reader is the one process that could notice a hang.
+      #
+      # The header is complete 0.7s in. With one allowance the read ends at
+      # 1.2s, with a second one for the payload at 1.9s. The limit of 1.7s
+      # leaves a slow machine half a second, and so does the writer's pause.
       it "allows the time once for header and payload together" do
         r, w = IO.pipe
         [r, w].each(&:binmode)
         header = [1_000].pack("N")
+        w.write(header[0, 2])
         writer = Thread.new do
-          w.write(header[0, 2])
-          sleep 0.3
+          sleep 0.7
           w.write(header[2, 2])
         end
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-        expect { Timeout.timeout(5) { described_class.read(r, frame_timeout: 0.4) } }
-          .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, "frame cut short: 0 of 1000 bytes arrived within 0.4s")
+        expect { Timeout.timeout(5) { described_class.read(r, frame_timeout: 1.2) } }
+          .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, "frame cut short: 0 of 1000 bytes arrived within 1.2s")
 
-        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be_between(0.4, 0.6)
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be_between(1.2, 1.7)
       ensure
         writer.join
         w.close
