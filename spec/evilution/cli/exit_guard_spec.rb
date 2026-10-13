@@ -5,12 +5,13 @@ require "English"
 require "evilution/cli/exit_guard"
 
 RSpec.describe Evilution::CLI::ExitGuard do
-  subject(:guard) { described_class.new(register: register, exiter: exiter) }
+  subject(:guard) { described_class.new(register: register, exiter: exiter, died: died) }
 
   let(:hooks) { [] }
   let(:register) { ->(&hook) { hooks << hook } }
   let(:exits) { [] }
   let(:exiter) { ->(status) { exits << status } }
+  let(:died) { -> { false } }
 
   def run_hooks
     hooks.each(&:call)
@@ -89,6 +90,78 @@ RSpec.describe Evilution::CLI::ExitGuard do
     end
   end
 
+  # A run under in-process isolation that a mutation took down measured
+  # nothing. Ruby would end it with 1, which reads as a score below the
+  # minimum; it is a tool error, and the notice on stderr says what to change.
+  describe "a run that died under in-process isolation" do
+    let(:died) { -> { true } }
+
+    it "exits with the status of a tool error" do
+      guard.install
+
+      run_hooks
+
+      expect(exits).to eq([2])
+    end
+
+    it "keeps a status that was recorded" do
+      guard.install
+      guard.status = 0
+
+      run_hooks
+
+      expect(exits).to eq([0])
+    end
+
+    it "stays out of the way in a forked child" do
+      pids = [100, 200]
+      guard = described_class.new(register: register, exiter: exiter, died: died, pid_source: -> { pids.shift })
+      guard.install
+
+      run_hooks
+
+      expect(exits).to be_empty
+    end
+
+    it "flushes the streams before exiting" do
+      stream = double("stream")
+      allow(stream).to receive(:flush)
+      guard = described_class.new(register: register, exiter: exiter, died: died, streams: -> { [stream] })
+      guard.install
+
+      run_hooks
+
+      expect(stream).to have_received(:flush)
+    end
+
+    # Unless told otherwise the guard asks in-process isolation itself.
+    describe "as in-process isolation reports it" do
+      subject(:guard) { described_class.new(register: register, exiter: exiter) }
+
+      let(:in_process) { Evilution::Isolation::InProcess }
+
+      after { in_process.unwatch }
+
+      it "exits with the status of a tool error once a death was reported" do
+        in_process.watch(double("Mutation", to_s: "constant_namespace_strip: lib/example.rb:202"))
+        in_process.report_death(SystemStackError.new("stack level too deep"), stream: StringIO.new)
+        guard.install
+
+        run_hooks
+
+        expect(exits).to eq([2])
+      end
+
+      it "stays out of the way when none was" do
+        guard.install
+
+        run_hooks
+
+        expect(exits).to be_empty
+      end
+    end
+  end
+
   # exit! does not flush, so whatever is still buffered would be lost.
   describe "flushing" do
     it "flushes the streams before exiting" do
@@ -157,6 +230,52 @@ RSpec.describe Evilution::CLI::ExitGuard do
       status, = run_guarded(status: 1, competing_hook: "")
 
       expect(status).to eq(1)
+    end
+
+    def run_dying(error:, competing_hook: "")
+      script = <<~RUBY
+        $LOAD_PATH.replace(#{$LOAD_PATH.map(&:to_s).inspect})
+        require "evilution"
+        Evilution::CLI::ExitGuard.new.install
+        #{competing_hook}
+        mutation = Object.new
+        def mutation.to_s = "constant_namespace_strip: lib/example.rb:202"
+        Evilution::Isolation::InProcess.watch(mutation)
+        raise #{error}
+      RUBY
+      output = IO.popen([RbConfig.ruby, "-e", script], err: %i[child out], &:read)
+      [$CHILD_STATUS, output]
+    end
+
+    describe "when the process dies in the middle of a mutation under in-process isolation" do
+      it "ends with the status of a tool error and says which mutation it was" do
+        status, output = run_dying(error: 'Exception, "escaped everything"')
+
+        expect(status.exitstatus).to eq(2)
+        expect(output).to include(
+          "[evilution] the run died while testing a mutation under in-process isolation: " \
+          "constant_namespace_strip: lib/example.rb:202 (Exception: escaped everything)."
+        )
+      end
+
+      it "keeps that status against a hook that exits with its own" do
+        status, = run_dying(error: 'Exception, "escaped everything"', competing_hook: "at_exit { exit 7 }")
+
+        expect(status.exitstatus).to eq(2)
+      end
+
+      it "lets the hooks installed after it run" do
+        _status, output = run_dying(error: 'Exception, "escaped everything"', competing_hook: "at_exit { puts 'coverage report' }")
+
+        expect(output).to include("coverage report")
+      end
+
+      it "leaves an interrupted run the status Ruby gives it" do
+        status, output = run_dying(error: "Interrupt")
+
+        expect(status.termsig).to eq(Signal.list["INT"])
+        expect(output).not_to include("[evilution] the run died")
+      end
     end
 
     # exit! does not flush, so the competing hook's output has to be pushed out

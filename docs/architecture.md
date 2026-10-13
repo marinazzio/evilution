@@ -201,7 +201,9 @@ class that owns it.
    the score. `Commands::Run` maps `summary.success?(min_score:)` to exit code
    `0`/`1` (`2` on error), and `CLI::ExitGuard` — installed by the executable before
    anything can preload the project — has the final word on the process status, so a
-   preloaded spec helper's at-exit hook cannot replace it.
+   preloaded spec helper's at-exit hook cannot replace it. The guard also ends a run
+   that a mutation took down under in-process isolation with `2`, where Ruby would
+   end it with `1`.
 
 ## How to add a new mutator
 

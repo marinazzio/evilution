@@ -28,6 +28,7 @@ class Evilution::Isolation::InProcess
 
   @null_out = File.open(File::NULL, "w")
   @null_err = File.open(File::NULL, "w")
+  @died = false
 
   class << self
     attr_reader :null_out, :null_err
@@ -52,6 +53,7 @@ class Evilution::Isolation::InProcess
 
     def unwatch
       @watched = nil
+      @died = false
     end
 
     def watched
@@ -71,6 +73,15 @@ class Evilution::Isolation::InProcess
         "In-process isolation cannot contain a mutation that takes the Ruby process down; " \
         "re-run with --isolation fork."
       )
+      @died = true
+    end
+
+    # Whether this process is ending on a death that was reported. Such a run
+    # measured nothing, which whoever decides the process status has to know:
+    # the hook that reports the death runs before the project's own, and an
+    # exit from there would skip them.
+    def died?
+      @died
     end
   end
 

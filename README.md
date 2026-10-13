@@ -183,7 +183,7 @@ Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.e
 |------|-----------------------------------------------|---------------------------------------|
 | 0    | Mutation score meets or exceeds `--min-score` | Success. No action needed.            |
 | 1    | Mutation score below `--min-score`, or a target file resolved to no spec | Parse output, fix surviving mutants.  |
-| 2    | Tool error (bad config, parse failure, etc.)  | Check stderr, fix invocation.         |
+| 2    | Tool error (bad config, parse failure, a run under `--isolation in_process` that a mutation took down, etc.) | Check stderr, fix invocation.         |
 
 `min_score` defaults to `0.0`, so **no score gate is armed unless you set one**. The `Result:` line says so rather than implying a threshold nobody configured:
 

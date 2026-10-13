@@ -108,10 +108,19 @@ In-process isolation cannot contain a mutation that takes the Ruby process down;
 re-run with --isolation fork.
 ```
 
-After a `[BUG]` abort there is no such line; Ruby's own crash report is all
-there is. In both cases no report is written and the verdicts collected so
-far are lost. Re-run with `--isolation fork`, where the same mutant costs one
-child process.
+The process then ends with status 2, the status of a tool error: nothing was
+measured, and the line says what to change in the invocation. Ruby's own
+status for an uncaught exception is 1, which would read as a score below
+`--min-score`. The hooks the project registered with `at_exit` still run
+first. Ruby's backtrace of the exception is not printed; the line carries its
+class and message. A run that is interrupted (Ctrl-C) keeps the status Ruby
+gives it.
+
+After a `[BUG]` abort there is no such line and no such status: Ruby's own
+crash report is all there is, and the process ends as an abort does (134 from
+a shell), since no `at_exit` hook runs. In both cases no report is written
+and the verdicts collected so far are lost. Re-run with `--isolation fork`,
+where the same mutant costs one child process.
 
 ## State a file leaves behind when it is evaluated again
 
