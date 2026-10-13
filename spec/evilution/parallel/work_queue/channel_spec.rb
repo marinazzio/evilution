@@ -206,7 +206,8 @@ RSpec.describe Evilution::Parallel::WorkQueue::Channel do
 
         expect { Timeout.timeout(5) { described_class.read(r, frame_timeout: 0.3) } }
           .to(raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame) do |error|
-            expect(error.message[/\d+(?= of 1000 bytes)/].to_i).to be < 20
+            expect(error.message).to match(/\Aframe cut short: \d+ of 1000 bytes arrived within 0.3s\z/)
+            expect(error.message[/\d+/].to_i).to be < 20
           end)
       ensure
         writer.kill
