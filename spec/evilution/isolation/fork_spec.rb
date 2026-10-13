@@ -408,9 +408,11 @@ RSpec.describe Evilution::Isolation::Fork do
       end
     end
 
-    # Ruby runs neither `rescue` nor `ensure` when the machine stack overflows
-    # through `const_missing`: the child goes straight to its `at_exit` hooks.
-    # A mutant can cause exactly that, so the child reports from there.
+    # When the machine stack overflows through `const_missing`, Ruby runs
+    # neither `rescue` nor `ensure`: the child goes straight to its `at_exit`
+    # hooks. With a larger stack limit the VM's own stack gives out first and
+    # the same overflow unwinds the usual way, so both ends are covered here.
+    # A mutant can cause either, and the child reports from `at_exit`.
     describe "a child that dies on an exception nothing could rescue" do
       let(:recursive_const_missing) do
         lambda do
@@ -428,6 +430,22 @@ RSpec.describe Evilution::Isolation::Fork do
         expect(result).to be_killed
         expect(result.error_class).to eq("SystemStackError")
         expect(result.error_message).to eq("child died while running the tests: SystemStackError: stack level too deep")
+      end
+
+      # Where the exception unwinds the usual way, `ensure` has closed the test
+      # run by the time the child reports. The stack overflow above does that
+      # under a large stack limit; any exception outside StandardError does it
+      # everywhere.
+      it "is killed when the exception unwound out of the test run" do
+        test_command = lambda do |_m|
+          Evilution.while_running_tests { raise Exception, "escaped the tests" } # rubocop:disable Lint/RaiseException
+        end
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_killed
+        expect(result.error_class).to eq("Exception")
+        expect(result.error_message).to eq("child died while running the tests: Exception: escaped the tests")
       end
 
       it "is an error when it dies before the tests run" do

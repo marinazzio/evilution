@@ -39,9 +39,11 @@ RSpec.describe Evilution do
   describe ".while_running_tests" do
     around do |example|
       previous = Evilution.instance_variable_get(:@running_tests)
+      previous_error = Evilution.instance_variable_get(:@tests_left_by)
       example.run
     ensure
       Evilution.instance_variable_set(:@running_tests, previous)
+      Evilution.instance_variable_set(:@tests_left_by, previous_error)
     end
 
     it "reports no test run outside the block" do
@@ -62,6 +64,35 @@ RSpec.describe Evilution do
       Evilution.while_running_tests { nil }
 
       expect(Evilution.running_tests?).to be(false)
+    end
+
+    it "knows the exception that left the block" do
+      error = RuntimeError.new("boom")
+
+      expect { Evilution.while_running_tests { raise error } }.to raise_error(error)
+
+      expect(Evilution.died_running_tests?(error)).to be(true)
+    end
+
+    it "does not take another exception for the one that left the block" do
+      expect { Evilution.while_running_tests { raise "boom" } }.to raise_error("boom")
+
+      expect(Evilution.died_running_tests?(RuntimeError.new("boom"))).to be(false)
+    end
+
+    it "forgets the exception once a later block has returned" do
+      error = RuntimeError.new("boom")
+      expect { Evilution.while_running_tests { raise error } }.to raise_error(error)
+
+      Evilution.while_running_tests { nil }
+
+      expect(Evilution.died_running_tests?(error)).to be(false)
+    end
+
+    it "takes any exception for the tests' while the block is still open" do
+      inside = Evilution.while_running_tests { Evilution.died_running_tests?(RuntimeError.new("other")) }
+
+      expect(inside).to be(true)
     end
 
     it "reports no test run once the block has raised" do

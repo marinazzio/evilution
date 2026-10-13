@@ -100,8 +100,8 @@ class Evilution::Isolation::Fork
   end
 
   # Some exceptions reach no `rescue` in the child. `execute_in_child` leaves
-  # everything that is not a ScriptError or StandardError alone, and Ruby runs
-  # neither `rescue` nor `ensure` when the machine stack overflows through
+  # everything that is not a ScriptError or StandardError alone, and Ruby may
+  # run neither `rescue` nor `ensure` when the stack overflows through
   # `const_missing`, which a mutation of a process-wide `const_missing` does.
   # Without a result the parent sees only an exit status.
   #
@@ -118,7 +118,7 @@ class Evilution::Isolation::Fork
   # that crashes does, and counts the same. Dying before that says nothing
   # about the tests.
   def death_result(error)
-    testing = Evilution.running_tests?
+    testing = Evilution.died_running_tests?(error)
     phase = testing ? "while running the tests" : "before the tests ran"
     result = {
       passed: false,
