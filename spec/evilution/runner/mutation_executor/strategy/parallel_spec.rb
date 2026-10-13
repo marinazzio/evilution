@@ -101,6 +101,32 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     expect(result.duration).to eq(60.0)
   end
 
+  it "translates an UNREADABLE pool sentinel into an :error result that says so" do
+    m1 = mutation("m1")
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map).and_return([Evilution::Parallel::WorkQueue::UNREADABLE])
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: double(:isolator),
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier,
+      pool_factory: -> { pool },
+      config: cfg
+    )
+
+    execution = strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    result = execution.results.first
+    expect(result.status).to eq(:error)
+    expect(result.error_message).to eq("worker's result could not be read; the worker was replaced")
+    expect(result.error_class).to eq("Evilution::Error")
+    expect(backend).not_to have_received(:store)
+  end
+
   it "translates a DIED pool sentinel into an :error result" do
     m1 = mutation("m1")
     backend = instance_double("Cache", fetch: nil)

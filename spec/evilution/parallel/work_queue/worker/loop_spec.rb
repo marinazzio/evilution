@@ -41,6 +41,50 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect(stats_msg[2]).to be >= 0.0
     end
 
+    # A command that does not decode leaves the worker with a stream it cannot
+    # follow. It ends, and the parent, seeing the pipe close, replaces it.
+    describe "a command frame that cannot be read" do
+      def results_written
+        res_write.close
+        results = []
+        while (msg = Evilution::Parallel::WorkQueue::Channel.read(res_read))
+          results << msg
+        end
+        results
+      end
+
+      it "ends the worker without raising" do
+        cmd_write.write("#{[7].pack("N")}garbage")
+        cmd_write.close
+
+        expect { described_class.run(cmd_read, res_write) { |x| x } }.not_to raise_error
+        expect(described_class).to have_received(:exit!)
+      end
+
+      it "runs no item after it" do
+        ran = []
+        Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, 5])
+        cmd_write.write("#{[7].pack("N")}garbage")
+        Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [1, 6])
+        cmd_write.close
+
+        described_class.run(cmd_read, res_write) { |x| ran << x }
+
+        expect(ran).to eq([5])
+      end
+
+      it "writes no stats frame, which the parent would take for a result" do
+        cmd_write.write("#{[7].pack("N")}garbage")
+        cmd_write.close
+        allow(res_write).to receive(:close)
+
+        described_class.run(cmd_read, res_write) { |x| x }
+        allow(res_write).to receive(:close).and_call_original
+
+        expect(results_written).to eq([])
+      end
+    end
+
     it "reports wall time as an elapsed delta, not an absolute monotonic clock value" do
       Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, 5])
       Evilution::Parallel::WorkQueue::Channel.write(cmd_write, Evilution::Parallel::WorkQueue::SHUTDOWN)

@@ -16,6 +16,7 @@ class Evilution::Parallel::WorkQueue
   Unfinished = Data.define(:reason)
   TIMED_OUT = Unfinished.new(reason: :timeout)
   DIED = Unfinished.new(reason: :died)
+  UNREADABLE = Unfinished.new(reason: :unreadable)
 
   def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
     Validators::PositiveInt.call!(:size, size)
@@ -98,15 +99,19 @@ class Evilution::Parallel::WorkQueue
     Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
+  # The timings are a courtesy: a frame that cannot be read here costs the
+  # figures and nothing else.
   def apply_final_timing(worker, io)
     message = Evilution::Parallel::WorkQueue::Channel.read(io)
-    return if message.nil?
+    return unless message.is_a?(Array)
 
     tag, busy_time, wall_time = message
     return unless tag == STATS
 
     worker.busy_time = busy_time
     worker.wall_time = wall_time
+  rescue Evilution::Parallel::WorkQueue::Channel::BadFrame
+    nil
   end
 end
 

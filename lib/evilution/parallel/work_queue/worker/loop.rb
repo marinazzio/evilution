@@ -23,6 +23,11 @@ module Evilution::Parallel::WorkQueue::Worker::Loop
     Evilution::Parallel::WorkQueue::Channel.write(
       res_io, [Evilution::Parallel::WorkQueue::STATS, busy, wall]
     )
+  rescue Evilution::Parallel::WorkQueue::Channel::BadFrame
+    # A command that does not decode leaves a stream this worker cannot follow.
+    # It ends without the stats frame, which the parent, still waiting for a
+    # result, would take for one; the closed pipe tells the parent to replace it.
+    nil
   ensure
     cmd_io.close unless cmd_io.closed?
     res_io.close unless res_io.closed?

@@ -74,8 +74,9 @@ class Evilution::Parallel::WorkQueue::Dispatcher
   end
 
   def handle(worker, io_to_worker, result_ios)
-    message = worker.read_result
+    message = Reply.from(worker)
     return handle_dead(worker, io_to_worker, result_ios) if message.nil?
+    return handle_unreadable(worker, io_to_worker, result_ios) if message.equal?(Reply::UNREADABLE)
 
     record(message, worker)
     return false if recycle_and_dispatch(worker, io_to_worker, result_ios)
@@ -94,6 +95,17 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     worker.items_completed += 1
     worker.in_flight_indices.delete(index)
     @deadlines.refresh(worker)
+  end
+
+  # After a frame that is not the worker's, nothing read from its pipe later
+  # can be trusted: the stream is out of step. The worker is given up the way
+  # a dead one is, after being killed, since it may well be alive. Only the
+  # items it held lose their result.
+  def handle_unreadable(worker, io_to_worker, result_ios)
+    worker.kill
+    mark_unfinished(worker, Evilution::Parallel::WorkQueue::UNREADABLE)
+    retire_or_replace(worker, io_to_worker, result_ios)
+    false
   end
 
   # A worker that exited without replying loses only its in-flight item(s)
@@ -183,3 +195,4 @@ class Evilution::Parallel::WorkQueue::Dispatcher
 end
 
 require_relative "dispatcher/deadline_tracker"
+require_relative "dispatcher/reply"

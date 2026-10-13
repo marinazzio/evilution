@@ -143,11 +143,13 @@ class Evilution::Parallel::WorkQueue::Worker
     return zero unless @res_read.wait_readable(Evilution::Parallel::WorkQueue::TIMING_GRACE_PERIOD)
 
     message = read_result
-    return zero if message.nil?
+    return zero unless message.is_a?(Array)
 
     tag, busy, wall = message
     return zero unless tag == Evilution::Parallel::WorkQueue::STATS
 
     Timing.new(busy: busy, wall: wall)
+  rescue Evilution::Parallel::WorkQueue::Channel::BadFrame
+    zero
   end
 end

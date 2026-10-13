@@ -13,6 +13,15 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     error_class: "Evilution::Error"
   }.freeze
 
+  # Compact result for an item whose worker sent a frame that was not its own:
+  # the worker was given up, and what it had to say about the item with it.
+  UNREADABLE_COMPACT = {
+    status: :error,
+    duration: 0.0,
+    error_message: "worker's result could not be read; the worker was replaced",
+    error_class: "Evilution::Error"
+  }.freeze
+
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil)
     @cache = cache
     @isolator = isolator
@@ -113,6 +122,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     case result.reason
     when :timeout then timeout_compact
     when :died then DIED_COMPACT
+    when :unreadable then UNREADABLE_COMPACT
     end
   end
 

@@ -14,6 +14,10 @@ module Evilution::Parallel::WorkQueue::Channel::Frame
   # parent itself forked, transferred over a private pipe inside our process
   # tree. No external/untrusted input ever reaches this code. See
   # .rubocop.yml (Security/MarshalLoad) for the full rationale.
+  #
+  # Trusted is not the same as well-formed: a process the worker forked holds
+  # the pipe too. A frame of the announced length that does not load is a
+  # BadFrame; one shorter than announced is the end of the stream, nil.
   def decode(header, payload)
     return nil if header.nil? || header.bytesize < 4
 
@@ -21,5 +25,7 @@ module Evilution::Parallel::WorkQueue::Channel::Frame
     return nil if payload.nil? || payload.bytesize < length
 
     Marshal.load(payload)
+  rescue TypeError, ArgumentError => e
+    raise Evilution::Parallel::WorkQueue::Channel::BadFrame, "#{e.class}: #{e.message.gsub(/\s+/, " ")}"
   end
 end

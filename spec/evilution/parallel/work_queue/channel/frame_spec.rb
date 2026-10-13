@@ -37,6 +37,41 @@ RSpec.describe Evilution::Parallel::WorkQueue::Channel::Frame do
       expect(described_class.decode(bytes[0, 4], truncated)).to be_nil
     end
 
+    # A frame is not always what the peer wrote: the pipe is inherited by the
+    # processes a worker forks. One that does not decode is told apart from the
+    # end of the stream, which is nil.
+    it "raises BadFrame for a payload that is not a marshal dump" do
+      payload = "garbage"
+
+      expect { described_class.decode([payload.bytesize].pack("N"), payload) }
+        .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, /TypeError: incompatible marshal file format/)
+    end
+
+    it "raises BadFrame for a dump that is cut short inside the announced length" do
+      payload = Marshal.dump([:idx, :ok, "result"])[0, 5]
+
+      expect { described_class.decode([payload.bytesize].pack("N"), payload) }
+        .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, "ArgumentError: marshal data too short")
+    end
+
+    it "keeps the message of an unreadable frame on one line" do
+      expect { described_class.decode([7].pack("N"), "garbage") }
+        .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame) { |error| expect(error.message).not_to match(/[\n\t]/) }
+    end
+
+    it "returns nil for a header one byte short" do
+      expect(described_class.decode("abc", "payload")).to be_nil
+    end
+
+    it "returns nil for no payload at all" do
+      expect(described_class.decode([3].pack("N"), nil)).to be_nil
+    end
+
+    it "puts a single space where the message of the failure had a line break" do
+      expect { described_class.decode([7].pack("N"), "garbage") }
+        .to raise_error(Evilution::Parallel::WorkQueue::Channel::BadFrame, /\(can't be read\) format version/)
+    end
+
     it "decodes a valid frame" do
       bytes = described_class.encode([:idx, :ok, 42])
       expect(described_class.decode(bytes[0, 4], bytes[4..])).to eq([:idx, :ok, 42])

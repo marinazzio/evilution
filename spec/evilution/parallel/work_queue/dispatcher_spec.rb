@@ -188,6 +188,100 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
     end
   end
 
+  # The result pipe is inherited by the processes a worker forks, so a frame
+  # on it is not always the worker's. After one that is not, the stream is out
+  # of step: the worker is given up the way a dead one is, and only the items
+  # it held lose their result.
+  describe "#run when a worker's result cannot be trusted" do
+    def spawn_echo(index = 0)
+      Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: index, hooks: nil) { |x| x }
+    end
+
+    def process_gone?(pid)
+      Process.kill(0, pid)
+      false
+    rescue Errno::ESRCH
+      true
+    end
+
+    def run_with(worker, items: [1], factory: ->(_) { raise "no recycle" })
+      dispatcher = described_class.new(
+        workers: [worker], items: items, prefetch: 1,
+        item_timeout: 5, worker_max_items: nil, recycle_factory: factory
+      )
+      [dispatcher, Timeout.timeout(10) { dispatcher.run }]
+    end
+
+    it "marks the in-flight item UNREADABLE when the frame does not decode" do
+      worker = spawn_echo
+      allow(worker).to receive(:read_result)
+        .and_raise(Evilution::Parallel::WorkQueue::Channel::BadFrame, "TypeError: incompatible marshal file format")
+
+      dispatcher, run_result = run_with(worker)
+
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::UNREADABLE])
+      expect(dispatcher.first_error).to be_nil
+      expect(run_result.retired.length).to eq(1)
+    end
+
+    it "kills the worker, whose stream is out of step" do
+      worker = spawn_echo
+      allow(worker).to receive(:read_result).and_raise(Evilution::Parallel::WorkQueue::Channel::BadFrame, "garbled")
+
+      run_with(worker)
+
+      expect(process_gone?(worker.pid)).to be(true)
+    end
+
+    it "replaces the worker and finishes the remaining items" do
+      worker = spawn_echo
+      allow(worker).to receive(:read_result).and_raise(Evilution::Parallel::WorkQueue::Channel::BadFrame, "garbled")
+      replacement = nil
+      factory = ->(old) { replacement = spawn_echo(old.worker_index) }
+
+      _, run_result = run_with(worker, items: [1, 2], factory: factory)
+
+      expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::UNREADABLE, 2])
+    ensure
+      if replacement
+        replacement.shutdown
+        replacement.close_pipes
+        replacement.reap
+      end
+    end
+
+    {
+      "is not a message at all" => true,
+      "is the wrong length" => [0, :ok],
+      "names an item the worker does not hold" => [99, :ok, 1],
+      "has a status that is not one" => [0, :maybe, 1],
+      "reports an error that is not an exception" => [0, :error, "boom"]
+    }.each do |what, message|
+      it "treats a frame that decodes but #{what} the same way" do
+        worker = spawn_echo
+        allow(worker).to receive(:read_result).and_return(message)
+
+        dispatcher, run_result = run_with(worker)
+
+        expect(run_result.results).to eq([Evilution::Parallel::WorkQueue::UNREADABLE])
+        expect(dispatcher.first_error).to be_nil
+        expect(process_gone?(worker.pid)).to be(true)
+      end
+    end
+
+    it "still takes a worker's error for what it is" do
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { |_| raise ArgumentError, "from the block" }
+
+      dispatcher, = run_with(worker)
+
+      expect(dispatcher.first_error).to be_a(ArgumentError)
+    ensure
+      worker.shutdown
+      worker.close_pipes
+      worker.reap
+    end
+  end
+
   describe "#run when a worker process dies without replying" do
     it "marks the in-flight item DIED, recycles, and finishes without first_error" do
       worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { exit!(0) }

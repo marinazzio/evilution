@@ -270,6 +270,15 @@ single in-flight mutation is recorded as `:timeout` / `:error`, and the run
 continues with the remaining work. A single pathological mutation costs you one
 result, not the entire run.
 
+The same holds for a worker whose reply cannot be trusted. The pipes between
+the parent and a worker are inherited by every process the worker forks, so
+code under test that writes to a descriptor it did not open can put bytes on
+them. A frame that does not decode, that decodes to something other than a
+result of an item the worker holds, or that stops short of the length it
+announced (ten seconds are allowed for the rest) ends that worker: it is
+killed and replaced, and the mutation it held is recorded as an `:error` with
+the message `worker's result could not be read; the worker was replaced`.
+
 Each worker is also its own process-group leader, so killing a worker reaps the
 mutation subprocess and any grandchildren it spawned rather than orphaning them,
 and a terminal interrupt (Ctrl-C) is forwarded to every worker group — an
