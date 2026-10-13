@@ -321,6 +321,95 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to eq("child exited 3 without writing a result")
     end
 
+    # The write end of the result pipe is inherited by every process the child
+    # forks, so what arrives is not always what the child wrote. One unreadable
+    # result is one mutation without a verdict; it must not end the run.
+    describe "a result that cannot be read" do
+      let(:test_command) { ->(_m) { { passed: true } } }
+
+      it "is an error when the bytes are not a marshal dump" do
+        allow(isolator).to receive(:read_payload).and_return("garbage")
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_message)
+          .to start_with("child exited 0; its result was unreadable (TypeError: incompatible marshal file format")
+      end
+
+      it "is an error when the dump is cut short" do
+        allow(isolator).to receive(:read_payload).and_return(Marshal.dump({ passed: true })[0, 5])
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_message)
+          .to eq("child exited 0; its result was unreadable (ArgumentError: marshal data too short)")
+      end
+
+      it "is an error when the dump is not a Hash" do
+        allow(isolator).to receive(:read_payload).and_return(Marshal.dump(true))
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_message)
+          .to eq("child exited 0; its result was unreadable (expected a Hash, got TrueClass)")
+      end
+
+      it "keeps the exit status of the child" do
+        allow(isolator).to receive(:read_payload).and_return("garbage")
+
+        result = isolator.call(mutation:, test_command: ->(_m) { { passed: false } }, timeout: 5)
+
+        expect(result.error_message).to start_with("child exited 1; its result was unreadable")
+      end
+
+      it "names the signal when the child died on one" do
+        allow(isolator).to receive(:read_payload).and_return(nil, "garbage")
+        test_command = lambda { |_m|
+          Process.kill("KILL", Process.pid)
+          sleep 5
+        }
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_message).to start_with("child died on SIGKILL; its result was unreadable")
+      end
+
+      it "keeps the message on one line" do
+        allow(isolator).to receive(:read_payload).and_return("garbage")
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result.error_message).not_to match(/[\n\t]/)
+      end
+
+      it "says so when the child had to be terminated after writing it" do
+        decoded = isolator.send(:decode_payload, Marshal.dump(true), nil, terminated: true)
+
+        expect(decoded).to eq(
+          timeout: false, passed: false,
+          error: "child was terminated after the reap deadline; its result was unreadable (expected a Hash, got TrueClass)"
+        )
+      end
+
+      it "does without the child's status when there is none" do
+        decoded = isolator.send(:decode_payload, Marshal.dump(true), nil)
+
+        expect(decoded[:error]).to eq("child's result was unreadable (expected a Hash, got TrueClass)")
+      end
+
+      it "is not a timeout" do
+        allow(isolator).to receive(:read_payload).and_return("garbage")
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).not_to be_timeout
+      end
+    end
+
     it "names the signal when the child dies on one without writing a result" do
       test_command = lambda { |_m|
         Process.kill("KILL", Process.pid)
