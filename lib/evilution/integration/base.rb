@@ -24,7 +24,7 @@ class Evilution::Integration::Base
     return load_error if load_error
 
     fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
-    run_tests(mutation)
+    Evilution.while_running_tests { run_tests(mutation) }
   ensure
     @mutation_applier.restore(mutation) unless restored_by_applier?(load_error)
   end

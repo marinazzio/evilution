@@ -253,6 +253,23 @@ module Evilution
     @in_isolated_worker = previous
   end
 
+  # Marks the stretch in which the tests run against a mutation whose source has
+  # already loaded. A fork child that dies in it reports the death as the
+  # mutation's doing; one that dies earlier cannot say so. Ruby skips `ensure`
+  # for the death this exists for, which leaves the mark set in the dying
+  # process, where it is read.
+  def self.while_running_tests
+    previous = @running_tests
+    @running_tests = true
+    yield
+  ensure
+    @running_tests = previous
+  end
+
+  def self.running_tests?
+    @running_tests == true
+  end
+
   # Base directory for resolving project-relative paths. An isolated worker
   # has chdir'd into a per-mutation sandbox (EV-wqxu / GH #1278), so callers
   # in that context must anchor against PROJECT_ROOT rather than Dir.pwd —

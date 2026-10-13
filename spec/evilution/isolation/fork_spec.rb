@@ -408,6 +408,100 @@ RSpec.describe Evilution::Isolation::Fork do
       end
     end
 
+    # Ruby runs neither `rescue` nor `ensure` when the machine stack overflows
+    # through `const_missing`: the child goes straight to its `at_exit` hooks.
+    # A mutant can cause exactly that, so the child reports from there.
+    describe "a child that dies on an exception nothing could rescue" do
+      let(:recursive_const_missing) do
+        lambda do
+          Object.extend(Module.new { def const_missing(_name) = EvilutionForkSpecMissing::Inner })
+          EvilutionForkSpecUndefined
+        end
+      end
+
+      it "is killed when it dies while the tests run" do
+        overflow = recursive_const_missing
+        test_command = ->(_m) { Evilution.while_running_tests { overflow.call } }
+
+        result = isolator.call(mutation:, test_command:, timeout: 10)
+
+        expect(result).to be_killed
+        expect(result.error_class).to eq("SystemStackError")
+        expect(result.error_message).to eq("child died while running the tests: SystemStackError: stack level too deep")
+      end
+
+      it "is an error when it dies before the tests run" do
+        overflow = recursive_const_missing
+        test_command = ->(_m) { overflow.call }
+
+        result = isolator.call(mutation:, test_command:, timeout: 10)
+
+        expect(result).to be_error
+        expect(result.error_class).to eq("SystemStackError")
+        expect(result.error_message).to eq("child died before the tests ran: SystemStackError: stack level too deep")
+      end
+
+      it "reports an exception that is not a StandardError" do
+        test_command = ->(_m) { raise Exception, "not a standard error" } # rubocop:disable Lint/RaiseException
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_class).to eq("Exception")
+        expect(result.error_message).to eq("child died before the tests ran: Exception: not a standard error")
+      end
+
+      it "leaves a child that called exit to its exit status" do
+        test_command = ->(_m) { exit(3) }
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_error
+        expect(result.error_message).to eq("child exited 3 without writing a result")
+      end
+
+      # at_exit hooks are inherited across fork, and so is the result pipe. A
+      # process the tests fork must not report its own death as the child's.
+      it "ignores the death of a process the test command forked" do
+        test_command = lambda do |_m|
+          pid = fork { raise Exception, "grandchild" } # rubocop:disable Lint/RaiseException
+          Process.wait(pid)
+          { passed: true }
+        end
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_survived
+      end
+
+      it "writes nothing after a result was written" do
+        test_command = ->(_m) { { passed: true } }
+
+        result = isolator.call(mutation:, test_command:, timeout: 5)
+
+        expect(result).to be_survived
+      end
+    end
+
+    # Evilution mutates its own sources too. A mutant of this file is evaluated
+    # inside the very child that then reports the mutant's result, so the child
+    # must not report through a method the evaluation can replace.
+    it "writes the result with the code the child started with" do
+      test_command = lambda do |_m|
+        described_class.class_eval do
+          def write_result(write_io, _result)
+            write_io.write("garbage")
+            write_io.close
+          end
+        end
+        { passed: true }
+      end
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_survived
+    end
+
     it "returns error when test command raises" do
       test_command = ->(_m) { raise "boom" }
 

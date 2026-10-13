@@ -179,6 +179,24 @@ RSpec.describe Evilution::Integration::Base do
       expect(result).to eq({ passed: false, test_command: "test" })
     end
 
+    # A child that dies while the tests run tells its parent so; the flag is how
+    # it knows the mutated source had loaded by then.
+    it "marks the test run while run_tests is executing" do
+      seen = []
+      marking_class = Class.new(concrete_class) do
+        define_method(:ensure_framework_loaded) { seen << [:loading, Evilution.running_tests?] }
+        define_method(:run_tests) do |_mutation|
+          seen << [:testing, Evilution.running_tests?]
+          { passed: true }
+        end
+      end
+
+      marking_class.new.call(mutation)
+
+      expect(seen).to eq([[:loading, false], [:testing, true]])
+      expect(Evilution.running_tests?).to be(false)
+    end
+
     context "with hooks" do
       let(:hooks) do
         Evilution::Hooks::Registry.new.tap do |h|

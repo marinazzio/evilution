@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "English"
 require "fileutils"
 require "tmpdir"
 require_relative "../memory"
@@ -55,8 +56,23 @@ class Evilution::Isolation::Fork
   # group and the TERM/KILL ladder sweeps the whole subtree on timeout (EV-2sh8
   # / GH #1330). The block keeps the marshal-pipe protocol: write a
   # length-prefixed payload, then exit with the pass/fail code.
+  #
+  # The at_exit hook covers a child that never gets that far. The normal path
+  # ends in `exit!`, which skips it, so it runs only when the child is dying.
+  #
+  # Both reports go through method objects taken before the test command runs.
+  # When the mutation under test is one of this file, the child evaluates the
+  # mutated source and the methods here are replaced; a method object keeps the
+  # definition the child started with, so the result is not written by the
+  # mutant it describes.
   def spawn_child(read_io, write_io, sandbox_dir, mutation, test_command)
     @supervisor.spawn(sandbox_dir: sandbox_dir) do
+      write = method(:write_result)
+      report_death = method(:report_death)
+      child_pid = Process.pid
+      # A process the tests fork inherits this hook and the pipe with it; its
+      # death is not the child's to report.
+      at_exit { report_death.call(write_io, $ERROR_INFO, write) if Process.pid == child_pid }
       ENV["TMPDIR"] = sandbox_dir
       # Path-relativizing mutations (e.g. File.join(dir, name) -> name) would
       # otherwise write into the parent's CWD (typically the repo root) and
@@ -71,12 +87,47 @@ class Evilution::Isolation::Fork
       suppress_child_output
       @hooks.fire(:worker_process_start, mutation:) if @hooks
       result = execute_in_child(mutation, test_command)
-      payload = Marshal.dump(result)
-      write_io.write([payload.bytesize].pack("N"))
-      write_io.write(payload)
-      write_io.close
+      write.call(write_io, result)
       exit!(result[:passed] ? 0 : 1)
     end
+  end
+
+  def write_result(write_io, result)
+    payload = Marshal.dump(result)
+    write_io.write([payload.bytesize].pack("N"))
+    write_io.write(payload)
+    write_io.close
+  end
+
+  # Some exceptions reach no `rescue` in the child. `execute_in_child` leaves
+  # everything that is not a ScriptError or StandardError alone, and Ruby runs
+  # neither `rescue` nor `ensure` when the machine stack overflows through
+  # `const_missing`, which a mutation of a process-wide `const_missing` does.
+  # Without a result the parent sees only an exit status.
+  #
+  # A child that exits on purpose or on a signal keeps its status as the
+  # report: the first is its own decision, the second is usually the parent's.
+  def report_death(write_io, error, write)
+    return if error.nil? || write_io.closed?
+    return if error.is_a?(SystemExit) || error.is_a?(SignalException)
+
+    write.call(write_io, death_result(error))
+  end
+
+  # Dying while the tests run, after the mutated source loaded, is what a test
+  # that crashes does, and counts the same. Dying before that says nothing
+  # about the tests.
+  def death_result(error)
+    testing = Evilution.running_tests?
+    phase = testing ? "while running the tests" : "before the tests ran"
+    result = {
+      passed: false,
+      error: "child died #{phase}: #{error.class}: #{error.message}",
+      error_class: error.class.name,
+      error_backtrace: Array(error.backtrace).first(5)
+    }
+    result[:test_crashed] = true if testing
+    result
   end
 
   # The parent owns read_io/write_io (write_io is closed right after spawn so

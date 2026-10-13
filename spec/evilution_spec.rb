@@ -35,4 +35,39 @@ RSpec.describe Evilution do
       end
     end
   end
+
+  describe ".while_running_tests" do
+    around do |example|
+      previous = Evilution.instance_variable_get(:@running_tests)
+      example.run
+    ensure
+      Evilution.instance_variable_set(:@running_tests, previous)
+    end
+
+    it "reports no test run outside the block" do
+      expect(Evilution.running_tests?).to be(false)
+    end
+
+    it "reports a test run inside the block" do
+      inside = Evilution.while_running_tests { Evilution.running_tests? }
+
+      expect(inside).to be(true)
+    end
+
+    it "returns the value of the block" do
+      expect(Evilution.while_running_tests { :verdict }).to eq(:verdict)
+    end
+
+    it "reports no test run once the block has returned" do
+      Evilution.while_running_tests { nil }
+
+      expect(Evilution.running_tests?).to be(false)
+    end
+
+    it "reports no test run once the block has raised" do
+      expect { Evilution.while_running_tests { raise "boom" } }.to raise_error("boom")
+
+      expect(Evilution.running_tests?).to be(false)
+    end
+  end
 end
