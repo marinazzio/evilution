@@ -13,9 +13,12 @@ For deeper dives on two subsystems that have their own docs, see
 
 Evilution parses each target file with [Prism](https://github.com/ruby/prism)
 into an AST with exact byte offsets. Every method becomes a *subject*, and so
-does every value-object definition outside a method (`Point = Data.define(:x)`)
-and every scope declared with a literal body (`scope :recent, -> { ... }`),
-and every guard or callback written out inside an AASM `event` or `state`. Each
+does every value-object definition outside a method (`Point = Data.define(:x)`),
+every other constant assignment outside a method (`LIMIT = 10`), every scope
+declared with a literal body (`scope :recent, -> { ... }`), every guard or
+callback written out inside an AASM `event` or `state`, and the conditions and
+bodies of callback and validation declarations — in a class body or in a
+concern's `included` / `prepended` block. Each
 mutation *operator* walks a subject's AST and emits *mutations* — byte-range
 edits applied by source-level surgery (no AST unparsing). For every mutation,
 evilution copies the file, applies the edit, runs the covering specs in an

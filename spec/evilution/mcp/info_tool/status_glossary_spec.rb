@@ -53,6 +53,22 @@ RSpec.describe Evilution::MCP::InfoTool::StatusGlossary do
     end
   end
 
+  # An agent meets these words at the start of `error_message` and has only
+  # the glossary to tell it what the verdict means.
+  describe "the error_message prefixes it explains" do
+    def meaning_of(status)
+      described_class.entries.find { |entry| entry["status"] == status }["meaning"]
+    end
+
+    it "explains the kills that carry an error message" do
+      expect(meaning_of("killed")).to include("load failed:", "child died", "test run ended by")
+    end
+
+    it "explains the errors that are no verdict on the mutation" do
+      expect(meaning_of("error")).to include("child died", "was unreadable", "could not be read", "without writing a result")
+    end
+  end
+
   describe "ENTRIES constant" do
     it "is frozen" do
       expect(described_class::ENTRIES).to be_frozen

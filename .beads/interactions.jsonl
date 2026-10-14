@@ -658,3 +658,4 @@
 {"id":"int-4ebb6cc6","kind":"field_change","created_at":"2026-10-13T10:22:13.338137009Z","actor":"Denis Kiselev","issue_id":"EV-70w5","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-e24299f1","kind":"field_change","created_at":"2026-10-13T17:20:30.564416401Z","actor":"Denis Kiselev","issue_id":"EV-x38e","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
 {"id":"int-2efcd224","kind":"field_change","created_at":"2026-10-14T01:56:27.118884805Z","actor":"Denis Kiselev","issue_id":"EV-9zfe","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Closed"}}
+{"id":"int-5a397b18","kind":"field_change","created_at":"2026-10-14T06:28:38.598622816Z","actor":"Denis Kiselev","issue_id":"EV-23dn","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"README update merged in PR #1867 (GH #1864)"}}

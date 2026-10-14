@@ -2,6 +2,56 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.5.0] - 2026-10-14
+
+The `default` profile grows from 136 to 155 operators, `strict` gains one more, and several existing operators emit more mutants than before: literals, collections, constants, indexes, variable reads and compound writes are all probed more closely. Constant assignments outside a method are subjects now, as class-body code was in 1.4.0. Mutation scores will move: every new mutant is one your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
+
+The other half of the release is about trusting a verdict. Several mutants were counted as kills they had not earned, or survived whatever the tests did; several ways a test process can die now give a verdict instead of an error or a lost run. See "Fixed". Most of these came from the stability runs on real-world repositories before this release.
+
+### Added
+
+- **Constant assignments are subjects** — `LIMIT = 10`, `Config::LIMIT = 10` and `TOTAL += 1` outside any method are subjects of their own, named after the constant (`Config::LIMIT`); a value-object definition (`Data.define` / `Struct.new`) stays the subject it was. The literal operators mutate the assigned value, `constant_write_to_nil` the assignment, `compound_assignment` an operator write. Code that read the constant while the file loaded keeps the old value (PRs #1822, #1823, #1827; GH #1820, #1509, #1515)
+- **A concern's `prepended do ... end` block is treated like `included do ... end`** — scopes, AASM guards and callbacks, and callback and validation declarations written in it are subjects, named after the concern (PR #1851, GH #1846)
+- **Nineteen operators in the `default` profile**:
+  - **Literals** — `complex_literal` (`5i` -> `0i`, `1i`, `6i`, `4i`, `nil`) and `rational_literal` (`1.5r` -> `0r`, `1r`, `2.5r`, `0.5r`, `nil`) (PRs #1791, #1792; GH #1499, #1500)
+  - **Constants** (epic GH #1424) — `constant_read_to_nil` (`Config::MAX` -> `nil`), `constant_namespace_strip` (`A::B::C` -> `C`, `B::C`), `constant_write_to_nil` (`LIMIT = 10` -> `LIMIT = nil`) (PRs #1818, #1819, #1823; GH #1507, #1508, #1509)
+  - **Variable reads** — `variable_read_to_nil`: a read of a local, instance, class or global variable, or `self`, becomes `nil` (`build(name: @name)` -> `build(name: nil)`). It skips call receivers, `if` / `unless` / `while` / `until` conditions and the left operand of `&&` / `||` (PR #1824, GH #1512)
+  - **Indexes** (epic GH #1422) — `index_receiver_to_self` (`h[k]` -> `self[k]`), `index_to_key_predicate` (`h[k]` -> `h.key?(k)`), `index_range_to_drop` (`a[n..-1]` -> `a.drop(n)`), `index_write_to_value` (`h[k] = v` -> `v`) (PRs #1814–#1817; GH #1490, #1491, #1492, #1495)
+  - **`operator_write_receiver_promotion`** — `@account.balance += x` -> `@account += x` (PR #1830, GH #1518)
+  - **Ruby idioms** (epic GH #1427) — `memoization_break` (`@x ||= expr` -> `@x = expr`), `short_circuit_to_eager` (`a && b` -> `a & b`), `freeze_removal` (`LIST = %w[a b].freeze` -> `LIST = %w[a b]`), `rescue_class_widening` (`rescue KeyError` -> `rescue StandardError`, `rescue Exception`), `visibility_removal` (drops `private` / `protected` / `module_function`), `attr_accessor_swap` (`attr_reader :name` -> `attr_accessor :name`, or removed), `sleep_to_zero` (`sleep delay` -> `sleep 0`) (PRs #1799, #1800, #1802–#1806; GH #1532, #1533, #1535, #1538–#1541)
+  - **`round_half_mode_swap`** — `amount.round(2, half: :even)` -> `half: :up`, `half: :down`: a survivor means no example rounds a value that sits on a tie. `symbol_literal` leaves these modes alone (PR #1785, GH #1711)
+- **`safe_navigation_insertion` in the `strict` profile** — `user.name` -> `user&.name`, to surface calls no test reaches with a nil receiver. It touches nearly every call with a receiver, hence `strict` (PR #1801, GH #1534)
+- **More mutants from existing operators**:
+  - **`integer_literal`** — `n - 1` beside `n + 1` (and `-1` for `0`), plus one sentinel past the next integer width above the literal (`42` -> `167`, int8 to int64) to surface missing overflow checks (PRs #1788, #1789; GH #1496, #1497)
+  - **`float_literal`** — `Float::NAN`, `Float::INFINITY` and `-Float::INFINITY` (PR #1790, GH #1498)
+  - **`array_literal`** — deletes each element in turn, and replaces a single-element array with its element (`[x]` -> `x`) (PRs #1793, #1794; GH #1501, #1502)
+  - **`hash_literal`** — deletes each pair in turn, and renames each label key in turn (PRs #1795, #1796; GH #1503, #1504)
+  - **`string_literal` / `symbol_literal`** — an interpolated string or symbol is replaced as a whole (`"a #{x}"` -> `""`, `nil`); a backtick or `%x` command is replaced with `nil` (PRs #1797, #1798; GH #1505, #1506)
+  - **`compound_assignment`** — operator and logical writes on attributes (`obj.count += 1`, `obj.name ||= x`), on indexes (`counts[key] += 1`, `cache[key] ||= x`) and operator writes on constants, where only plain variables were mutated before (PRs #1825–#1829; GH #1513–#1517)
+
+### Changed
+
+- **A mutant that makes its own file fail to load is `killed`** — `OPERATORS = %i[+ -].to_set` with the array turned into `nil` raises while the file loads, before any test runs. When the original file loads, that is a kill (`error_message` starts with `load failed:`); when the original fails the same way, it stays an `error` (PR #1845, GH #1834)
+- **A test process that dies on an unhandled exception gives a verdict** — under fork isolation a child that died on an exception no handler saw was an `error` reading `child exited 1 without writing a result`. While the tests ran it is now `killed`, as a crashing test would be (`error_message` starts with `child died` and names the exception); before they ran it is an `error` carrying the exception's own class (PR #1855, GH #1852)
+- **Under `in_process`, an exception outside `StandardError` is contained** — a `SystemStackError` from a mutant that recurses without end is reported for that mutation (`killed`, `error_message` starting with `test run ended by`, or `error` when raised before the tests) and the run goes on (PR #1857, GH #1853)
+- **Exit status 2 for an `in_process` run that a mutation took down** — when a mutation ends the process in a way that cannot be contained (a stack overflow through `const_missing` under the usual stack limit), stderr names the mutation and suggests `--isolation fork`, and the run ends with 2, the status of a tool error. It ended with Ruby's 1, which reads as a score below `--min-score`, although no report was written. A VM abort (`[BUG]`) still ends as an abort does. See [docs/isolation.md](docs/isolation.md#what-in_process-cannot-contain) (PRs #1857, #1866; GH #1853, #1863)
+- **Class-body operators share one rule for which method a mutant belongs to** — `mixin_removal`, `superclass_removal`, `data_struct_member` and `alias_removal` each had their own copy and disagreed. Now the first method of the scope in source order, searching body blocks such as `included do ... end`; a class whose methods all sit in `class << self` is reached through them, where it got no class-body mutants before (PR #1784, GH #1718)
+
+### Fixed
+
+- **In-process isolation no longer kills mutants that fork isolation reports as survivors** — a file that installs an anonymous module on its host (`Object.extend(Module.new { def const_missing ... })`) left one more module behind each time it was evaluated, so a mutation reached every earlier mutation's code through `super` and was reported killed for a predecessor's bug. The methods of those modules are now removed when the file is evaluated again (PR #1860, GH #1856)
+- **A constant mutation no longer outlives its file under `in_process`** — the original source is put back after every mutation, so `LIMIT = nil` from a file's last mutation cannot fail the tests of the next file's mutants and count as their kill (PR #1841, GH #1832)
+- **Mutations of a concern with an `included` block are no longer falsely killed under fork** — re-evaluating the mutated file blanked the `included do ... end` block, so a class including the concern during the example got none of its declarations and crashed whatever the mutant did. The block is kept; the same for `prepended` (PRs #1842, #1847; GH #1833, #1843)
+- **Mutations of a method defined in a concern's `included` or `prepended` block reach classes that took the concern before the run** — they survived every time, since those classes kept the original method (PR #1850, GH #1848)
+- **A result that cannot be read no longer aborts the run** — under fork isolation, bytes on the result pipe that were not a result raised in the parent and the run ended without a report; the mutation is now an `error` reading `child exited 0; its result was unreadable (...)`. Under `--jobs`, a frame a worker did not write, or one cut short (ten seconds are allowed for the rest), replaces that worker and records `worker's result could not be read; the worker was replaced`, where it raised, hung or was taken for a result (PRs #1859, #1861; GH #1854, #1858)
+- **No more mutants that only Prism accepts** — on an interpreter that compiles with parse.y (Ruby 3.3 by default), a mutant such as `def f(v); LIMIT ||= v; end` was marked parseable and then raised `SyntaxError` when evaluated, landing in `errors`. It is now `unparseable` there (PR #1839, GH #1821)
+- **The to-nil operators leave the receiver of a definition or a compound write alone** — `def self.build` -> `def nil.build` survived whatever the tests did, one false survivor per `def self.x`; `counter.total += 1` -> `nil.total += 1` was killed by any test reaching the line (PRs #1837, #1840; GH #1831, #1838)
+- **A rooted value-object definition inside a scope is named after the top level** — `module Outer; ::Point = Data.define(...)` gave `Outer::Point`, so `--target Point` missed it (PR #1836, GH #1835)
+
+### Documentation
+
+- **README: how to read a verdict when a test process died, and the `error` messages that are no verdict at all** — the statuses table, a new table under "Diagnosing errored mutations", and what `--isolation in_process` cannot contain (PR #1867, GH #1864)
+
 ## [1.4.0] - 2026-10-07
 
 Two things in this release. Code that lives in a class body rather than in a method — scopes, AASM guards, callback conditions, value-object definitions — is now mutated, where a run aimed at it used to report `0 mutations`. And the `default` profile grows from 111 to 136 operators, with two more in `strict`. Mutation scores will move on both counts — every new subject and every new operator produces mutants your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.

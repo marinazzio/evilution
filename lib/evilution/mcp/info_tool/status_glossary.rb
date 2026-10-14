@@ -8,7 +8,11 @@ module Evilution::MCP::InfoTool::StatusGlossary
     {
       "status" => "killed",
       "meaning" => "A test failed when the mutation was applied — the test suite caught the mutation. " \
-                   "This is the desired outcome.",
+                   "This is the desired outcome. Also a mutation that made its own file raise while loading, " \
+                   "before any test ran, when the original file still loads (error_message starts with " \
+                   "'load failed:'), and one whose test process died on an exception no handler saw while " \
+                   "the tests ran, as a crashing test would (error_message starts with 'child died' under " \
+                   "fork isolation, 'test run ended by' under in-process isolation).",
       "counted_in_score" => true
     },
     {
@@ -27,7 +31,14 @@ module Evilution::MCP::InfoTool::StatusGlossary
     {
       "status" => "error",
       "meaning" => "Mutation execution raised an unexpected error (syntax error at load time, " \
-                   "boot failure, test-infrastructure crash). The mutation could not be evaluated.",
+                   "boot failure, test-infrastructure crash). The mutation could not be evaluated. " \
+                   "Includes a test process that died on an unhandled exception before the tests ran " \
+                   "('child died ... before the tests ran'; error_class is the exception's own class), and " \
+                   "results that are no verdict on the mutation at all: a fork child's result that " \
+                   "was unreadable, a worker's result that could not be read (the worker was replaced), " \
+                   "a child that died on a signal without writing a result (SIGABRT: the Ruby VM aborted; " \
+                   "SIGSEGV; SIGKILL, e.g. out of memory). Re-run that one mutation; if a VM abort repeats, " \
+                   "the mutant crashes the interpreter.",
       "counted_in_score" => false
     },
     {

@@ -18,7 +18,8 @@ class Evilution::MCP::InfoTool < MCP::Tool
   tool_name "evilution-info"
   description "Discover what evilution sees before running any mutations. " \
               "One tool, five actions: " \
-              "'subjects' lists every mutatable method in the target files with its file, line, and mutation count; " \
+              "'subjects' lists every mutation subject in the target files (methods, and code outside them: " \
+              "constant assignments, scopes, AASM and callback declarations) with its file, line, and mutation count; " \
               "'tests' resolves which spec/test files cover the given sources (so you pick the right --spec before mutating); " \
               "'environment' dumps the effective config (version, ruby, config file, timeout, " \
               "integration, isolation, and every other setting); " \
@@ -36,7 +37,7 @@ class Evilution::MCP::InfoTool < MCP::Tool
         type: "string",
         enum: VALID_ACTIONS,
         description: "Which discovery operation to perform. " \
-                     "'subjects' lists mutatable methods; 'tests' resolves specs for sources; " \
+                     "'subjects' lists mutation subjects; 'tests' resolves specs for sources; " \
                      "'environment' dumps effective config; 'statuses' returns the result-status glossary; " \
                      "'feedback' returns the discussion URL and consent/privacy guidance."
       },
