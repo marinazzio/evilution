@@ -38,7 +38,7 @@ class Evilution::CLI::ExitGuard
   def initialize(register: nil, exiter: nil, pid_source: nil, streams: nil, died: nil)
     @register = register || ->(&hook) { at_exit(&hook) }
     @exiter = exiter || ->(code) { exit!(code) }
-    @streams = streams || -> { [$stdout, $stderr] }
+    @streams = streams || -> { [$stdout, $stderr, STDOUT, STDERR] } # rubocop:disable Style/GlobalStdStream -- the process's own, whatever the globals point at
     @pid_source = pid_source || -> { Process.pid }
     @died = died || -> { Evilution::Isolation::InProcess.died? }
     @status = nil
@@ -70,6 +70,9 @@ class Evilution::CLI::ExitGuard
 
   # `exit!` leaves buffered output where it stands, so anything written by the
   # report, or by a hook that ran before this one, has to be pushed out first.
+  # The process's own streams are flushed as well as the current ones: a run
+  # that died under in-process isolation is left with the null streams of the
+  # mutation it was testing.
   def flush_streams
     @streams.call.each do |stream|
       stream.flush

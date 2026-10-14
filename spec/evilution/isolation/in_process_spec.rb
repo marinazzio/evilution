@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "stringio"
+require "tempfile"
 require "evilution/isolation/in_process"
 
 RSpec.describe Evilution::Isolation::InProcess do
@@ -569,6 +570,19 @@ RSpec.describe Evilution::Isolation::InProcess do
       expect(stream.string).to include("constant_namespace_strip: lib/example.rb:202")
     ensure
       $stderr = saved
+    end
+
+    # The process is then ended without the flush a normal exit does, and the
+    # stream may be one that buffers: `$stderr` reassigned to a file.
+    it "pushes the notice out of a stream that buffers" do
+      Tempfile.create("stderr") do |file|
+        file.sync = false
+        described_class.watch(named_mutation)
+
+        described_class.report_death(error, stream: file)
+
+        expect(File.read(file.path)).to include("constant_namespace_strip: lib/example.rb:202")
+      end
     end
 
     it "says nothing when no mutation was being tested" do

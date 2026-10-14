@@ -73,6 +73,7 @@ class Evilution::Isolation::InProcess
         "In-process isolation cannot contain a mutation that takes the Ruby process down; " \
         "re-run with --isolation fork."
       )
+      stream.flush
       @died = true
     end
 

@@ -232,7 +232,7 @@ RSpec.describe Evilution::CLI::ExitGuard do
       expect(status).to eq(1)
     end
 
-    def run_dying(error:, competing_hook: "")
+    def run_dying(error:, competing_hook: "", before_death: "")
       script = <<~RUBY
         $LOAD_PATH.replace(#{$LOAD_PATH.map(&:to_s).inspect})
         require "evilution"
@@ -241,6 +241,7 @@ RSpec.describe Evilution::CLI::ExitGuard do
         mutation = Object.new
         def mutation.to_s = "constant_namespace_strip: lib/example.rb:202"
         Evilution::Isolation::InProcess.watch(mutation)
+        #{before_death}
         raise #{error}
       RUBY
       output = IO.popen([RbConfig.ruby, "-e", script], err: %i[child out], &:read)
@@ -268,6 +269,18 @@ RSpec.describe Evilution::CLI::ExitGuard do
         _status, output = run_dying(error: 'Exception, "escaped everything"', competing_hook: "at_exit { puts 'coverage report' }")
 
         expect(output).to include("coverage report")
+      end
+
+      # On such a death nothing puts `$stdout` and `$stderr` back: they are
+      # still the null streams of a mutation under test. What the run printed
+      # before went to the process's own, and standard output buffers when it
+      # is a pipe.
+      it "does not lose what the run printed before the mutation silenced it" do
+        silenced = 'print "progress so far"; $stdout = $stderr = Evilution::Isolation::InProcess.null_out'
+
+        _status, output = run_dying(error: 'Exception, "escaped everything"', before_death: silenced)
+
+        expect(output).to include("progress so far")
       end
 
       it "leaves an interrupted run the status Ruby gives it" do
