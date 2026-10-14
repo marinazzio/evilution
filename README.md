@@ -132,7 +132,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--quiet-children`           | Boolean | false        | Redirect each forked worker's stdout/stderr to per-pid files under `tmp/evilution_children/<pid>.{out,err}` so noisy app initializers (Datadog, Bullet, etc.) don't merge with parent output. Trade-off: live worker errors only appear in the side files, not the terminal — `tail -f tmp/evilution_children/*.err` to watch them. |
 | `--quiet-children-dir DIR`   | String  | `tmp/evilution_children` | Override the directory used by `--quiet-children`.    |
-| `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. See [docs/isolation.md](docs/isolation.md). |
+| `--isolation MODE`           | String  | `auto`       | Isolation strategy: `auto`, `fork`, or `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. Under `in_process` a mutation that takes the Ruby process down ends the run ([what `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain)). See [docs/isolation.md](docs/isolation.md). |
 | `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. For non-Rails gems: `spec/spec_helper.rb` → `test/test_helper.rb` → `test/helper.rb`, falling back to the gem entry `lib/<gem>.rb` (with a warning naming the searched paths). Pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--warmup NAME`              | String  | `none`       | After preload, warm lazily-initialised framework state once in the parent: `none` or `rails`. See [Warming up Rails before forking](#warming-up-rails-before-forking). |
@@ -195,6 +195,8 @@ $ evilution run lib/half_tested.rb --min-score 0.8
 Result: FAIL (score 66.67% < 80.00%)            # exit 1
 ```
 
+A run under `--isolation in_process` can end without a report: a mutation that takes the Ruby process down takes the run with it. It ends with 2, and a line on stderr names the mutation and points at `--isolation fork`. See [What `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain).
+
 Evilution owns the exit status: `--preload` loads the project's own spec helper into the parent process, and an at-exit hook it installs (SimpleCov calls `exit` with its own status when coverage is below the minimum) would otherwise replace the status evilution computed (GH #1608).
 
 The printed verdict and the exit code always use the same threshold. Previously the line was printed against a hard-coded 80% that the exit code did not share, so a failing-looking run still exited 0 (GH #1604).
@@ -213,7 +215,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # integration: rspec       # test framework: rspec, minitest, test_unit
 # suggest_tests: false     # concrete test code in suggestions (matches integration)
 # save_session: false      # persist results under .evilution/results/
-# isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems)
+# isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems, in_process otherwise; in_process cannot contain a mutation that takes the Ruby process down, see docs/isolation.md)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
 # warmup: none            # rails: warm I18n, routes, assets and templates once after preload (fork isolation)
@@ -262,7 +264,7 @@ All keys recognised under `schema_version: 1`:
 | `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
 | `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
 | `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (a mutation failing only on those is `:neutral`).                                                          |
-| `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`).              |
+| `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. Under `in_process` a mutation that takes the Ruby process down ends the run: see [What `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain). |
 | `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
 | `progress`                   | Boolean                       | `true`                                 | TTY progress bar.                                                                                                                        |
@@ -433,10 +435,10 @@ Compatibility policy for the `1.x` gem line:
 
 | Status       | Meaning                                                               | Counted in score? |
 |--------------|-----------------------------------------------------------------------|-------------------|
-| `killed`     | A test failed when the mutation was applied — test suite caught it. Also a mutation that made its own file raise while loading, before any test ran, when the original file still loads (`error_message` starts with `load failed:`) | numerator + denominator |
+| `killed`     | A test failed when the mutation was applied — test suite caught it. Also a mutation that made its own file raise while loading, before any test ran, when the original file still loads (`error_message` starts with `load failed:`). Also a mutation whose test process died on an exception no handler saw, after the mutated source loaded and while the tests ran, as a crashing test would: under fork isolation `error_message` starts with `child died` and names the exception, under in-process isolation it starts with `test run ended by` | numerator + denominator |
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
 | `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
-| `error`      | Mutation caused an unexpected error (syntax error, boot failure, a load failure the original file shares, etc.) | excluded from denominator |
+| `error`      | Mutation caused an unexpected error (syntax error, boot failure, a load failure the original file shares, etc.). Also a test process that died on an unhandled exception before the tests ran: under fork isolation `error_message` starts with `child died`, says `before the tests ran` and `error_class` is the exception's own class. Also a result that never arrived or could not be read, which is no verdict on the mutation (see [Diagnosing errored mutations](#7-diagnosing-errored-mutations)) | excluded from denominator |
 | `neutral`    | No verdict: the tests failed only on examples that were already failing in the baseline, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
@@ -931,6 +933,26 @@ For each entry in `survived[]`:
 ### 7. Diagnosing errored mutations
 
 Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. A mutation that makes its own file raise while loading is not among them when the original file still loads right after it: the mutation is what broke the load, so it is reported `killed` with an `error_message` that starts with `load failed:`. A load failure stays an error when the original fails to load as well, since that says nothing about the mutation. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
+
+A test process that dies on an exception no handler saw (a stack overflow that does not unwind, for one) reports the exception before it goes. What the mutation gets depends on when it died:
+
+| `error_message` starts with | Isolation | Status | Meaning |
+|---|---|---|---|
+| `child died`, then `while running the tests` | fork | `killed` | The mutated source loaded and the tests were running: what a crashing test does. |
+| `test run ended by` | in-process | `killed` | The same, in the process of the run. |
+| `child died`, then `before the tests ran` | fork | `error` | Nothing was tested yet. `error_class` is the exception's class. |
+
+Three messages are not about the mutation at all. No verdict was reached, and the entry says only why:
+
+| `error_message` | Meaning | What to do |
+|---|---|---|
+| `child exited 0; its result was unreadable (...)` (the status varies) | Fork isolation. The child finished, but what arrived on its result pipe does not decode to a result; the parentheses say what was found. Every process the child forks inherits that pipe, so code under test that writes to a descriptor it did not open can put bytes on it. | Re-run that one mutation (line-range targeting). If it repeats, look for code that writes to inherited descriptors. |
+| `worker's result could not be read; the worker was replaced` | Worker pool (`--jobs` above 1). The same thing on the pipe between the run and a worker: the worker was killed and replaced, and the run went on. | Re-run that one mutation, with `--jobs 1` to take the pool out of the picture. |
+| `child died on SIGABRT without writing a result` | Fork isolation. The Ruby VM aborted (a `[BUG]` report, typically), so nothing could be reported from inside the child. Other signals read the same way: a segfault is `SIGSEGV`, a child the kernel killed for memory is `SIGKILL`. | Re-run that one mutation. If it repeats, the mutant crashes the interpreter: that is Ruby's to fix, and the mutation can be disabled with a comment. |
+
+The messages in the first column of this last table are examples: the exit status, the signal and the text in parentheses vary. Search `errors[]` for `was unreadable`, `could not be read` and `without writing a result`.
+
+Under `--isolation in_process` there is no child to lose: a mutation that takes the Ruby process down takes the run with it, and no report is written. See [Exit Codes](#exit-codes).
 
 ### Unresolved mutations — behaviour-named spec layouts
 
