@@ -50,11 +50,9 @@ RSpec.describe Evilution::Memory, if: File.exist?("/proc/self/status") do
 
     it "measures memory change from an allocation" do
       GC.disable
-      held = nil
-      _result, delta_kb = described_class.delta { held = Array.new(100_000) { "x" * 1000 } }
+      _result, delta_kb = described_class.delta { Array.new(100_000) { "x" * 1000 } }
       expect(delta_kb).to be > 0
     ensure
-      held = nil
       GC.enable
       GC.start
     end
