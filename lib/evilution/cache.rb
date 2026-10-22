@@ -12,7 +12,7 @@ class Evilution::Cache
   end
 
   def fetch(mutation)
-    return nil if mutation.original_source.nil?
+    return nil if stripped?(mutation)
 
     file_key = file_key(mutation)
     entry_key = entry_key(mutation)
@@ -27,7 +27,7 @@ class Evilution::Cache
   end
 
   def store(mutation, result_data)
-    return if mutation.original_source.nil?
+    return if stripped?(mutation)
 
     file_key = file_key(mutation)
     entry_key = entry_key(mutation)
@@ -49,13 +49,23 @@ class Evilution::Cache
 
   private
 
+  # Both keys digest a source, so a mutation missing either one cannot be keyed.
+  def stripped?(mutation)
+    mutation.original_source.nil? || mutation.mutated_source.nil?
+  end
+
   def file_key(mutation)
     content_hash = Digest::SHA256.hexdigest(mutation.original_source)
     "#{safe_filename(mutation.file_path)}_#{content_hash[0, 16]}"
   end
 
+  # Several operators emit more than one mutation at the same location (e.g.
+  # nil_replacement -> true / false / 0), so the location alone would let a
+  # killed sibling answer for a survivor. The original source is fixed per
+  # cache file, so a digest of the mutated source identifies the mutation.
   def entry_key(mutation)
-    "#{mutation.operator_name}:#{mutation.line}:#{mutation.column}"
+    mutated_digest = Digest::SHA256.hexdigest(mutation.mutated_source)
+    "#{mutation.operator_name}:#{mutation.line}:#{mutation.column}:#{mutated_digest[0, 16]}"
   end
 
   def safe_filename(path)
