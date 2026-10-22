@@ -2,6 +2,16 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.5.1] - 2026-10-22
+
+### Fixed
+
+- **`--incremental` no longer lets a killed mutant answer for its siblings** — a cache entry was keyed by operator, line and column, but operators such as `nil_replacement` and `conditional_negation` emit several mutants at one location. The first one killed answered for the rest, so a survivor was reported `killed` even on an empty cache. Entries are now keyed by the mutated source as well; entries written by earlier versions are misses, never wrong verdicts, so the first run after the upgrade re-runs them (PR #1891, GH #1873; fix by [@gipcompany](https://github.com/gipcompany))
+
+### Changed
+
+- **Dependency bumps** — `mcp` 1.7.0 -> 1.8.0 (PR #1893), `ruby/setup-ruby` 1.328.0 -> 1.329.0 (PR #1894)
+
 ## [1.5.0] - 2026-10-14
 
 The `default` profile grows from 136 to 155 operators, `strict` gains one more, and several existing operators emit more mutants than before: literals, collections, constants, indexes, variable reads and compound writes are all probed more closely. Constant assignments outside a method are subjects now, as class-body code was in 1.4.0. Mutation scores will move: every new mutant is one your suite has never been measured against. Pin the gem version and the operator profile if you need a stable score across runs.
