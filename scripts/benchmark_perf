@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Performance benchmark: runs evilution versions (git refs or the working tree)
+# over a pinned corpus, interleaving versions per repeat, and writes a markdown
+# report of wall time, mutant count, per-mutant cost, the count/cost split of
+# any change, per-operator killtime shares and lost kills.
+#
+#   scripts/benchmark_perf scripts/benchmark_perf.yml --versions v1.5.0,HEAD
+#   scripts/benchmark_perf --from .artifacts/benchmark_perf/<timestamp>
+#
+# See scripts/benchmark_perf.yml for the corpus and its setup recipe.
+
+require_relative "lib/benchmark_perf/cli"
+
+exit BenchmarkPerf::CLI.new(ARGV).call if __FILE__ == $PROGRAM_NAME
