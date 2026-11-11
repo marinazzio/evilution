@@ -24,3 +24,6 @@
 evilution-report.html
 docs/superpowers/
 .artifacts/
+
+# Gemfiles generated in corpus repos by scripts/benchmark_perf
+Gemfile.benchmark_perf*

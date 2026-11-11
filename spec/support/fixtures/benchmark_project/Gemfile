@@ -1,0 +1,7 @@
+# frozen_string_literal: true
+
+# Corpus target for scripts/benchmark_perf. The harness generates
+# Gemfile.benchmark_perf.<version> from this file, adding evilution by path.
+source "https://rubygems.org"
+
+gem "rspec", "~> 3.13"

@@ -1,0 +1,77 @@
+# Default corpus for scripts/benchmark_perf.
+#
+#   scripts/benchmark_perf scripts/benchmark_perf.yml                         # versions below
+#   scripts/benchmark_perf scripts/benchmark_perf.yml --versions <base>,worktree   # one ticket
+#   scripts/benchmark_perf scripts/benchmark_perf.yml --versions v1.4.0,v1.5.0,HEAD # release
+#
+# Keep this corpus stable: numbers are only comparable between runs of the same
+# corpus. Budget: one pass of one version over the whole corpus <= ~20 min on
+# the slowest version compared (1.5.0), so a 3-version x 3-repeat release run
+# fits in ~3 h and a per-ticket before/after run in ~2 h.
+#
+# Setup (once per machine; the harness only runs evilution in prepared dirs).
+# Clone each repo below into /tmp/ev-canaries/<dir>, check out the pinned
+# commit, bundle:
+#
+#   dry-monads  https://github.com/dry-rb/dry-monads.git     5e99aff
+#   httparty    https://github.com/jnunemaker/httparty.git   781fc54
+#   grape       https://github.com/ruby-grape/grape.git      35916a8
+#   i18n        https://github.com/ruby-i18n/i18n.git        547917d
+#   redmine     https://github.com/redmine/redmine.git       3805a1dd0
+#
+#   git clone <url> /tmp/ev-canaries/<dir> && git -C /tmp/ev-canaries/<dir> checkout <sha>
+#   (cd /tmp/ev-canaries/<dir> && bundle install)
+#
+# Redmine also needs SQLite and a migrated test DB:
+#   printf 'test:\n  adapter: sqlite3\n  database: db/test.sqlite3\n' > config/database.yml
+#   bundle config set --local without development && bundle install
+#   RAILS_ENV=test bin/rails db:migrate
+# redmine-tracker runs with --jobs 1: --preload boots Rails before the workers
+# fork, so all workers share one SQLite file whatever TEST_ENV_NUMBER says,
+# and at --jobs 4 ~20% of verdicts flip between runs (and ~57 extra kills
+# appear that a single worker does not reproduce).
+#
+# The fixture target needs only `bundle install` in its dir.
+#
+# The harness writes Gemfile.benchmark_perf.<version>{,.lock} into each corpus
+# dir (evilution pointed at that version's tree). They are safe to delete.
+#
+# Timings for one v1.5.0 pass, --jobs 4, 2026-11-11 (machine partly busy):
+#   fixture 79 s, dry-monads-list 351 s, httparty-main 325 s,
+#   grape-declared 188 s, i18n-base 91 s  => ~19 min;
+#   redmine-tracker at --jobs 1: 556-732 s per pass  => ~1.7 h for 3 versions x 3
+
+versions: [v1.5.0, HEAD]
+repeats: 3
+
+targets:
+  - name: fixture
+    dir: ../spec/support/fixtures/benchmark_project
+    args: ["lib/pricing.rb", "lib/inventory.rb", "lib/grade.rb", "--jobs", "4"]
+
+  - name: dry-monads-list
+    dir: /tmp/ev-canaries/dry-monads
+    args: ["lib/dry/monads/list.rb", "--spec", "spec/unit/list_spec.rb", "--integration", "rspec",
+           "--preload", "spec/spec_helper.rb", "--jobs", "4"]
+
+  - name: httparty-main
+    dir: /tmp/ev-canaries/httparty
+    args: ["lib/httparty.rb", "--spec", "spec/httparty_spec.rb", "--integration", "rspec",
+           "--preload", "spec/spec_helper.rb", "--jobs", "4"]
+
+  - name: grape-declared
+    dir: /tmp/ev-canaries/grape
+    args: ["lib/grape/declared_params_handler.rb", "--spec", "spec/grape/endpoint/declared_spec.rb",
+           "--integration", "rspec", "--preload", "spec/spec_helper.rb", "--jobs", "4"]
+
+  - name: i18n-base
+    dir: /tmp/ev-canaries/i18n
+    args: ["lib/i18n/backend/base.rb", "--spec", "test/i18n_test.rb", "--integration", "minitest",
+           "--preload", "test/test_helper.rb", "--jobs", "4"]
+    env: { RUBYOPT: "-Itest" }
+
+  - name: redmine-tracker
+    dir: /tmp/ev-canaries/redmine
+    args: ["app/models/tracker.rb", "--spec", "test/unit/tracker_test.rb", "--integration", "minitest",
+           "--preload", "test/test_helper.rb", "--jobs", "1"]
+    env: { RUBYOPT: "-Itest", RAILS_ENV: "test" }
