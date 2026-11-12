@@ -940,6 +940,25 @@ For each entry in `survived[]`:
 4. Write a test that would fail if the mutation were applied
 5. Re-run evilution on just that file to verify the mutant is now killed
 
+#### A test exists but the mutant still survives: check the matcher
+
+Inside `have_attributes`, `match` and nested values of `include(key: [...])`, RSpec compares an expected array against an `Enumerable` actual (other than a Hash or Struct) through its `to_a`. `ActiveModel::Errors#to_a` is `full_messages`, so `have_attributes(errors: ["Name can't be blank"])` passes for *any* errors object with that message, not just the one the code should return. A mutant that hands back a different errors object (another record's, or one built with a message instead of an error kind) survives that test.
+
+When the errors object itself matters, assert on the error kinds, or on identity:
+
+```ruby
+# Before: passes for any errors object whose full messages match
+expect(result).to have_attributes(errors: ["Name can't be blank"])
+
+# After: the error kind, not just its rendered message
+expect(result.errors.details).to eq(name: [{ error: :blank }])
+expect(result.errors).to be_of_kind(:name, :blank)
+# or, when it must be the record's own errors object
+expect(result.errors).to be(participation.errors)
+```
+
+`details` and `of_kind?` still accept another record's errors with the same kinds; only the identity check (`be`) rules that out. The same `to_a` comparison applies to other `Enumerable` values (except Hash and Struct) checked against an array inside these matchers.
+
 ### 7. Diagnosing errored mutations
 
 Entries in the JSON `errors[]` array represent mutations that raised an exception (syntax error, load failure, or runtime crash) rather than producing a test outcome. A mutation that makes its own file raise while loading is not among them when the original file still loads right after it: the mutation is what broke the load, so it is reported `killed` with an `error_message` that starts with `load failed:`. A load failure stays an error when the original fails to load as well, since that says nothing about the mutation. Each entry includes `error_class`, `error_message`, and the first 5 `error_backtrace` lines. Use these fields to decide whether the error is a bug in the mutation operator (file an issue), a load-time problem in the mutated source (often `NoMethodError: super called outside of method` or constant-redefinition issues), or a genuine crash that the original tests should have caught. Run with `--verbose` to stream the same error details to stderr during the run.
