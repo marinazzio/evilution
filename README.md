@@ -295,7 +295,7 @@ All keys recognised under `schema_version: 1`:
 
 #### Stopping at the first kill (`stop_on_kill`)
 
-By default each mutation's test run stops at the first failing example that decides the verdict, so the remaining selected examples are not run. Failures that were already failing in the baseline run do not stop it (the mutation is still recorded `neutral` if only those fail), and neither do infrastructure crashes (the mutation is still recorded `neutral` if only those occur). A mutant whose first failure is followed by a hang or a dead test process is now reported `killed`; a `--no-stop-on-kill` run may report the same mutant as `timeout` or `error`, so its score can be slightly lower. Pass `--no-stop-on-kill` (or `stop_on_kill: false`) to run every selected example.
+By default each mutation's test run stops at the first failing example that decides the verdict, so the remaining selected examples are not run. Failures that were already failing in the baseline run do not stop it (the mutation is still recorded `neutral` if only those fail), and neither do infrastructure crashes (the mutation is still recorded `neutral` if only those occur). A mutant whose first failure is followed by a hang or a dead test process is now reported `killed`; a `--no-stop-on-kill` run may report the same mutant as `timeout` or `error`, so its score can be slightly lower. Pass `--no-stop-on-kill` (or `stop_on_kill: false`) to run every selected example. Minitest classes that call `parallelize_me!` are not stopped early: their tests all run, as they would with `--no-stop-on-kill`.
 
 ## Disable Comments
 

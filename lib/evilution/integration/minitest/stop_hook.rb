@@ -12,6 +12,10 @@ require_relative "../stop_policy"
 # The hook is installed for the whole process and asks whatever policy is set
 # when each test starts. Only a mutation's own run sets one; between runs, and
 # for the baseline and the canary, the policy is DISABLED and every test runs.
+#
+# Classes that call parallelize_me! are never stopped early: the run method
+# they extend sits ahead of the hook and does not call super, so their tests
+# all run, as they would without stop_on_kill.
 module Evilution::Integration::Minitest::StopHook
   # Minitest 6 runs each test through Runnable.run(klass, method_name, reporter).
   module Run
