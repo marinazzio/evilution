@@ -2,6 +2,7 @@
 
 require_relative "../integration"
 require_relative "stop_policy"
+require_relative "minitest/test_ids"
 
 class Evilution::Integration::MinitestCrashDetector
   # The run's stop policy. Left alone, the detector never stops a run: only a
@@ -73,10 +74,7 @@ class Evilution::Integration::MinitestCrashDetector
 
   private
 
-  # Loaded here rather than with this file: TestIds lives under the Minitest
-  # integration class, which requires this file before it is defined.
   def test_id(result)
-    require_relative "minitest/test_ids"
     Evilution::Integration::Minitest::TestIds.of(result)
   end
 end

@@ -4,6 +4,7 @@ require "minitest"
 require "evilution/integration/minitest_crash_detector"
 require "evilution/integration/stop_policy"
 require "evilution/integration/known_failures"
+require "open3"
 
 RSpec.describe Evilution::Integration::MinitestCrashDetector do
   subject(:detector) { described_class.new }
@@ -276,5 +277,30 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
     detector.record(result)
 
     expect(detector.instance_variable_get(:@policy)).not_to be_stopped
+  end
+
+  # Each example loads one entry point into a fresh Ruby, so nothing the
+  # suite already loaded hides a missing or cyclic require.
+  describe "loading" do
+    def constants_after(*paths)
+      lib_dir = File.expand_path("../../../lib", __dir__)
+      requires = paths.map { |path| "require #{path.dump}; " }.join
+      script = "#{requires}puts [defined?(::Minitest), defined?(Evilution::Integration::Minitest::TestIds), " \
+               "defined?(Evilution::Integration::MinitestCrashDetector)].inspect"
+      out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib_dir, "-e", script)
+      raise "load failed: #{err}" unless status.success?
+
+      out.lines.last.chomp
+    end
+
+    it "loads the test ids it names failures by along with the detector" do
+      expect(constants_after("evilution/version", "evilution/integration/minitest_crash_detector"))
+        .to eq('[nil, "constant", "constant"]')
+    end
+
+    it "loads with the Minitest integration" do
+      expect(constants_after("evilution/version", "evilution/integration/minitest"))
+        .to eq('[nil, "constant", "constant"]')
+    end
   end
 end

@@ -3,7 +3,6 @@
 require "stringio"
 require_relative "base"
 require_relative "../diagnostic"
-require_relative "minitest_crash_detector"
 require_relative "known_failures"
 require_relative "stop_policy"
 require_relative "loading/test_load_path"
@@ -348,5 +347,8 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 end
 
+# Loaded once the class is defined: TestIds and StopHook nest under it, and
+# the crash detector loads TestIds.
 require_relative "minitest/test_ids"
 require_relative "minitest/stop_hook"
+require_relative "minitest_crash_detector"
