@@ -146,7 +146,7 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     let(:pinner) { instance_double("pinner", call: []) }
     let(:cleaner) { instance_double("cleaner", call: nil) }
     let(:evaluator) { instance_double("evaluator", call: nil) }
-    let(:recovery) { ->(_src, &blk) { blk.call } }
+    let(:recovery) { ->(_src, **, &blk) { blk.call } }
 
     let(:injected_applier) do
       described_class.new(
@@ -375,6 +375,32 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
 
         expect(result).not_to have_key(:load_crashed)
         expect(result[:error]).to eq("ArgumentError: nope")
+      end
+
+      # A registry that rejects a second registration stops the original's
+      # class body there, so what follows it was never evaluated: the
+      # original is not known to load.
+      context "when the original stops at a registry that rejects a second registration" do
+        let(:recovery) { Evilution::Integration::Loading::RedefinitionRecovery.new }
+
+        let(:failing) do
+          evaluator_failing_on("MUTATED\n" => NoMethodError.new("undefined method 'map' for nil"),
+                               "ORIGINAL\n" => ArgumentError.new("plugin already registered"))
+        end
+
+        it "leaves the failure an error" do
+          result = nil
+          expect { result = applier_with(failing).call(restorable_mutation) }.not_to output.to_stderr
+
+          expect(result).not_to have_key(:load_crashed)
+          expect(result[:error]).to eq("NoMethodError: undefined method 'map' for nil")
+        end
+
+        it "still restores the original past the registry, as before" do
+          expect { applier_with(failing).restore(restorable_mutation) }
+            .to output(/swallowed idempotency violation on re-eval: ArgumentError: plugin already registered/)
+            .to_stderr
+        end
       end
 
       it "leaves the failure an error when the original no longer parses" do

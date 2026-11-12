@@ -14,7 +14,9 @@ require_relative "../../ast/constant_names"
 # registry call are already in place — and any state change blocked by the
 # guard was intentional duplicate-prevention from the gem's side. Mutations
 # that target a def *after* such a class-body call would not be applied;
-# emit a one-shot warning so that mode is visible.
+# emit a one-shot warning so that mode is visible. A caller that must know
+# the whole source evaluated passes `swallow_idempotency: false` and gets the
+# violation raised instead.
 class Evilution::Integration::Loading::RedefinitionRecovery
   IDEMPOTENCY_PATTERNS = [
     "already registered",
@@ -27,13 +29,13 @@ class Evilution::Integration::Loading::RedefinitionRecovery
     @warned_messages = Set.new
   end
 
-  def call(source, &block)
+  def call(source, swallow_idempotency: true, &block)
     block.call
   rescue ArgumentError => e
     if redefinition_conflict?(e)
       remove_defined_constants(source)
       block.call
-    elsif idempotency_violation?(e)
+    elsif swallow_idempotency && idempotency_violation?(e)
       warn_once_for(e)
       nil
     else

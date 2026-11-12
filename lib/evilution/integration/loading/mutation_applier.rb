@@ -60,7 +60,7 @@ class Evilution::Integration::Loading::MutationApplier
   # applying: a concern ignores an `included` block handed to it twice from
   # the same place, and would keep the mutated one.
   def restore(mutation)
-    evaluate_original(mutation)
+    evaluate_original(mutation, swallow_idempotency: true)
   rescue ScriptError, StandardError => e
     Evilution::Diagnostic.warn("[evilution] could not restore #{mutation.file_path}: #{e.class}: #{e.message}")
   end
@@ -70,20 +70,29 @@ class Evilution::Integration::Loading::MutationApplier
   # Whether there was an original to evaluate. The original goes over the
   # classes the file loaded before, so a class-body DSL that rejects being
   # declared twice (ActiveRecord's `enum`) raises on it as it does on the
-  # mutated source, and is recovered from the same way.
-  def evaluate_original(mutation)
+  # mutated source, and is recovered from the same way: the file's constants
+  # are removed and its classes defined afresh. Whatever still holds the old
+  # class objects (subclasses defined in other files, association
+  # reflections, caches keyed by class) keeps holding them; the mutated load
+  # replaces them the same way.
+  #
+  # Restoring may swallow a registry's refusal of a second registration and
+  # keep what the class body defined up to it. Checking that the original
+  # loads may not: the class body stopped there, so nothing after it was
+  # evaluated, and the original is not known to load.
+  def evaluate_original(mutation, swallow_idempotency:)
     source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
     return false unless source
 
     @concern_state_cleaner.call(mutation.file_path)
-    @redefinition_recovery.call(source) do
+    @redefinition_recovery.call(source, swallow_idempotency: swallow_idempotency) do
       @source_evaluator.call(source, mutation.file_path)
     end
     true
   end
 
   def original_loads?(mutation)
-    evaluate_original(mutation)
+    evaluate_original(mutation, swallow_idempotency: false)
   rescue ScriptError, StandardError
     false
   end
