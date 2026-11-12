@@ -387,7 +387,8 @@ RSpec.describe Evilution::Mutator::Registry do
         expect(registry.accepts?(subject_of(:method))).to be(false)
       end
 
-      it "mutates constant-write subjects with the nil operator, the literal operators and compound assignment" do
+      it "mutates constant-write subjects with the nil operator, the literal operators, compound assignment " \
+         "and the receiver simplifications" do
         operators = described_class.for_profile(:strict).operators.select { |op| op.subject_kinds.include?(:constant_write) }
 
         expect(operators).to contain_exactly(
@@ -403,7 +404,9 @@ RSpec.describe Evilution::Mutator::Registry do
           Evilution::Mutator::Operator::ArrayLiteral,
           Evilution::Mutator::Operator::HashLiteral,
           Evilution::Mutator::Operator::RangeReplacement,
-          Evilution::Mutator::Operator::CompoundAssignment
+          Evilution::Mutator::Operator::CompoundAssignment,
+          Evilution::Mutator::Operator::ArgumentMethodCallReplacement,
+          Evilution::Mutator::Operator::MethodCallRemoval
         )
       end
 
@@ -421,6 +424,18 @@ RSpec.describe Evilution::Mutator::Registry do
         expect(mutations.map { |m| [m.operator_name, m.mutated_slice.strip] }).to include(
           ["integer_literal", "LIMIT = 0"], ["constant_write_to_nil", "LIMIT = nil"]
         )
+      end
+
+      it "leaves a method defined in a constant's value to the method's subject" do
+        Tempfile.create(["constant_value_method", ".rb"]) do |file|
+          file.write("class C\n  H = Class.new do\n    def go(a) = a.to_i + 7\n  end\nend\n")
+          file.flush
+          handler, go = Evilution::AST::Parser.new.call(file.path)
+
+          expect(described_class.default.mutations_for(handler).map { |m| m.mutated_slice.strip })
+            .to contain_exactly("H = nil", "H = Class")
+          expect(described_class.default.mutations_for(go).map(&:operator_name)).to include("integer_literal", "method_call_removal")
+        end
       end
 
       it "accepts only method subjects in every built-in operator but DataStructMember" do

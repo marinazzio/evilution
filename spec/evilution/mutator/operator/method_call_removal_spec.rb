@@ -102,6 +102,40 @@ RSpec.describe Evilution::Mutator::Operator::MethodCallRemoval do
       end
     end
 
+    context "with a constant's value" do
+      def constant_lines(inline_source)
+        mutations_from_source(inline_source).select { |m| m.subject.kind == :constant_write }
+                                            .map { |m| m.mutated_source.lines[m.line - 1].strip }
+      end
+
+      it "runs on constant-write subjects as well as the default kinds" do
+        expect(described_class.subject_kinds).to eq(%i[method scope aasm callback constant_write])
+      end
+
+      it "replaces a call in the value with its receiver" do
+        expect(constant_lines("class C\n  LIMIT = ENV[\"X\"].to_i\nend\n"))
+          .to contain_exactly("LIMIT = ENV[\"X\"]", "LIMIT = ENV.to_i")
+      end
+
+      it "leaves the value's freeze to freeze_removal" do
+        expect(constant_lines("class C\n  NAMES = names.map(&:to_s).freeze\nend\n"))
+          .to contain_exactly("NAMES = names.freeze")
+      end
+
+      it "still drops a freeze that takes arguments" do
+        expect(constant_lines("class C\n  X = a.freeze(1)\nend\n")).to contain_exactly("X = a")
+      end
+
+      it "leaves a method defined in the value to that method's own subject" do
+        expect(constant_lines("class C\n  H = Class.new do\n    def go(a) = a.to_i\n  end\nend\n"))
+          .to contain_exactly("H = Class")
+      end
+
+      it "drops freeze in a method body as before" do
+        expect(mutated_lines_from_source("def t\n  x.freeze\nend\n")).to include("x")
+      end
+    end
+
     it "sets correct operator_name" do
       muts = mutations_for("no_args")
 

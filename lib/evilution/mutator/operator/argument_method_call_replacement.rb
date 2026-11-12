@@ -14,6 +14,8 @@ require_relative "../operator"
 # - hash values inside HashNode / KeywordHashNode (incl. inside call args)
 # - array elements inside ArrayNode
 class Evilution::Mutator::Operator::ArgumentMethodCallReplacement < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_call_node(node)
     node.arguments.arguments.each { |arg| try_replace(arg) } if node.arguments
 
@@ -48,6 +50,7 @@ class Evilution::Mutator::Operator::ArgumentMethodCallReplacement < Evilution::M
   def try_replace(value)
     return unless value.is_a?(Prism::CallNode)
     return unless value.receiver
+    return if constant_value_freeze?(value)
 
     add_mutation(
       offset: value.location.start_offset,
