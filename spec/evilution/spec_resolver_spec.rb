@@ -13,9 +13,9 @@ RSpec.describe Evilution::SpecResolver do
     end
   end
 
-  def create_file(path)
+  def create_file(path, content = "")
     FileUtils.mkdir_p(File.dirname(path))
-    File.write(path, "")
+    File.write(path, content)
   end
 
   describe "#call" do
@@ -132,6 +132,147 @@ RSpec.describe Evilution::SpecResolver do
         create_file("spec/models/game/_spec.rb")
 
         expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+    end
+
+    # When a nested source has no 1:1 spec, the specs living in the source's own
+    # mirror directory are a better bet than the parent directory's spec: they
+    # are ranked by evidence that they exercise the subject.
+    context "sibling specs in the subject's own mirror directory" do
+      def build_timeline_layout
+        create_file("app/models/game_breakdown/timeline/night_warnings.rb",
+                    "class GameBreakdown::Timeline::NightWarnings; end\n")
+        create_file("app/models/game_breakdown/timeline/warnings.rb",
+                    "class GameBreakdown::Timeline::Warnings\n  def call = NightWarnings.new.call\nend\n")
+        create_file("spec/models/game_breakdown/timeline_spec.rb",
+                    "RSpec.describe GameBreakdown::Timeline do\nend\n")
+        create_file("spec/models/game_breakdown/timeline/warnings_spec.rb",
+                    "RSpec.describe GameBreakdown::Timeline::Warnings do\n  it { expect(night).to be_empty }\nend\n")
+      end
+
+      it "prefers a sibling spec whose subject calls the source over the parent directory's spec" do
+        build_timeline_layout
+
+        expect(resolver.call("app/models/game_breakdown/timeline/night_warnings.rb"))
+          .to eq("spec/models/game_breakdown/timeline/warnings_spec.rb")
+      end
+
+      it "prefers a sibling spec that mentions the subject constant over the parent directory's spec" do
+        create_file("spec/models/game_spec.rb", "RSpec.describe Game do\nend\n")
+        create_file("spec/models/game/scoring_spec.rb",
+                    "RSpec.describe Game::Scoring do\n  let(:round) { Game::Round.new }\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game/scoring_spec.rb")
+      end
+
+      it "still falls back to the parent directory's spec when no sibling spec relates to the subject" do
+        create_file("spec/models/game_spec.rb", "RSpec.describe Game do\nend\n")
+        create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game_spec.rb")
+      end
+
+      it "prefers the 1:1 mirror spec over a related sibling spec" do
+        build_timeline_layout
+        create_file("spec/models/game_breakdown/timeline/night_warnings_spec.rb")
+
+        expect(resolver.call("app/models/game_breakdown/timeline/night_warnings.rb"))
+          .to eq("spec/models/game_breakdown/timeline/night_warnings_spec.rb")
+      end
+
+      it "does not treat a longer constant that merely starts with the subject name as a mention" do
+        create_file("spec/models/game_spec.rb", "RSpec.describe Game do\nend\n")
+        create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\n  RoundHelper\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game_spec.rb")
+      end
+
+      it "does not treat a snake_case mention of the subject as a constant mention" do
+        create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\n  round\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+
+      it "matches an acronym constant regardless of its capitalisation" do
+        create_file("spec/services/export/report_spec.rb",
+                    "RSpec.describe Export::Report do\n  HTMLRenderer.new\nend\n")
+
+        expect(resolver.call("app/services/export/html_renderer.rb"))
+          .to eq("spec/services/export/report_spec.rb")
+      end
+
+      it "only scans the subject's own mirror directory, not deeper subdirectories" do
+        create_file("spec/models/game/round/deep_spec.rb", "RSpec.describe Game::Round do\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+
+      it "does not scan the test root for a top-level source" do
+        create_file("spec/other_spec.rb", "RSpec.describe Other do\n  Foo.new\nend\n")
+
+        expect(resolver.call("lib/foo.rb")).to be_nil
+      end
+
+      it "honours spec_pattern for sibling specs" do
+        build_timeline_layout
+
+        result = resolver.call("app/models/game_breakdown/timeline/night_warnings.rb",
+                               spec_pattern: "spec/models/game_breakdown/*_spec.rb")
+
+        expect(result).to eq("spec/models/game_breakdown/timeline_spec.rb")
+      end
+
+      it "finds sibling specs in a namespace-dropped mirror directory" do
+        create_file("lib/acme/billing/invoice.rb", "class Acme::Billing::Invoice; end\n")
+        create_file("spec/billing/ledger_spec.rb", "RSpec.describe Billing::Ledger do\n  Invoice.new\nend\n")
+
+        expect(resolver.call("lib/acme/billing/invoice.rb")).to eq("spec/billing/ledger_spec.rb")
+      end
+
+      # One level below app/ the mirror directory is a whole test root
+      # (spec/models), so every model spec mentioning the subject would match.
+      it "does not scan the mirror directory of a source one level below app/" do
+        create_file("app/models/user.rb", "class User; end\n")
+        create_file("spec/models/account_spec.rb",
+                    "RSpec.describe Account do\n  it \"belongs to a User\" do\n    User.new\n  end\nend\n")
+
+        expect(resolver.call("app/models/user.rb")).to be_nil
+      end
+
+      it "does not scan the gem namespace directory for a source one level below lib/<gem>/" do
+        create_file("spec/acme/ledger_spec.rb", "RSpec.describe Acme::Ledger do\n  Acme::Invoice.new\nend\n")
+
+        expect(resolver.call("lib/acme/invoice.rb")).to be_nil
+      end
+
+      it "ignores a subject name that appears only in a comment" do
+        create_file("spec/models/game/zebra_spec.rb", "RSpec.describe Game::Zebra do\n  # Round handling\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+
+      it "ignores a subject name that appears only in a string" do
+        create_file("spec/models/game/zebra_spec.rb",
+                    "RSpec.describe Game::Zebra do\n  it \"belongs to a Round\" do\n  end\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+
+      it "ignores a sibling whose mirrored source names the subject only in a comment" do
+        create_file("app/models/game/scoring.rb", "# Round scores are kept elsewhere\nclass Game::Scoring; end\n")
+        create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to be_nil
+      end
+
+      it "does not read sibling specs that spec_pattern excludes" do
+        build_timeline_layout
+        allow(Evilution::SpecResolver::ProjectFiles).to receive(:read).and_call_original
+
+        resolver.call("app/models/game_breakdown/timeline/night_warnings.rb",
+                      spec_pattern: "spec/models/game_breakdown/*_spec.rb")
+
+        expect(Evilution::SpecResolver::ProjectFiles).not_to have_received(:read)
       end
     end
 
@@ -357,6 +498,31 @@ RSpec.describe Evilution::SpecResolver do
         expect(resolver.call("lib/foo/bar.rb")).to be_nil
       end
 
+      it "prefers a sibling test in the subject's own mirror directory over the parent directory's test" do
+        create_file("test/models/game_test.rb", "class GameTest < Minitest::Test; end\n")
+        create_file("test/models/game/scoring_test.rb",
+                    "class Game::ScoringTest < Minitest::Test\n  def test_round = Game::Round.new\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("test/models/game/scoring_test.rb")
+      end
+
+      it "ranks a sibling test named after the subject above a caller test" do
+        create_file("app/models/game/scoring.rb", "class Game::Scoring\n  def call = Round.new\nend\n")
+        create_file("test/models/game/scoring_test.rb", "class Game::ScoringTest < Minitest::Test; end\n")
+        create_file("test/models/game/test_round.rb",
+                    "class TestRound < Minitest::Test\n  def test_it = Game::Round.new\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("test/models/game/test_round.rb")
+      end
+
+      it "considers test_-prefixed sibling tests" do
+        create_file("test/models/game_test.rb", "class GameTest < Minitest::Test; end\n")
+        create_file("test/models/game/test_scoring.rb",
+                    "class TestScoring < Minitest::Test\n  def test_round = Game::Round.new\nend\n")
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("test/models/game/test_scoring.rb")
+      end
+
       it "resolves other prefixes under test/" do
         create_file("test/src/foo_test.rb")
 
@@ -404,6 +570,31 @@ RSpec.describe Evilution::SpecResolver do
         create_file("test/test_y_z.rb")
 
         expect(resolver.call("lib/x/y/z.rb")).to be_nil
+      end
+
+      # A naming convention names the subject exactly; a sibling that mentions
+      # it is only fuzzy evidence.
+      it "prefers the flat namespace-prefixed test over a sibling test that mentions the subject" do
+        create_file("test/test_acme_pool_timed_stack.rb")
+        create_file("test/acme/pool/wrapper_test.rb",
+                    "class WrapperTest < Minitest::Test\n  def test_it = Acme::Pool::TimedStack.new\nend\n")
+
+        expect(resolver.call("lib/acme/pool/timed_stack.rb")).to eq("test/test_acme_pool_timed_stack.rb")
+      end
+
+      it "prefers the test_<name>.rb prefix convention over a sibling test that mentions the subject" do
+        create_file("test/test_timed_stack.rb")
+        create_file("test/acme/pool/wrapper_test.rb",
+                    "class WrapperTest < Minitest::Test\n  def test_it = Acme::Pool::TimedStack.new\nend\n")
+
+        expect(resolver.call("lib/acme/pool/timed_stack.rb")).to eq("test/test_timed_stack.rb")
+      end
+
+      it "prefers a naming-convention test over the parent directory's test" do
+        create_file("test/acme/pool_test.rb")
+        create_file("test/test_acme_pool_timed_stack.rb")
+
+        expect(resolver.call("lib/acme/pool/timed_stack.rb")).to eq("test/test_acme_pool_timed_stack.rb")
       end
 
       it "resolves test/unit/<basename> layout" do
@@ -482,9 +673,9 @@ RSpec.describe Evilution::SpecResolver do
       Evilution.instance_variable_set(:@in_isolated_worker, previous)
     end
 
-    # Kills conditional_negation on spec_resolver.rb:34
+    # Kills conditional_negation on the ProjectFiles.exist? guard
     # (`unless Evilution.in_isolated_worker?` -> `unless true`). With the
-    # mutated guard, project_relative_exists? falls through to a
+    # mutated guard, the existence check falls through to a
     # PROJECT_ROOT lookup even when the flag is unset, silently leaking
     # the dev tree into unrelated callers.
     it "returns nil for a CWD-missing spec when the flag is unset (no PROJECT_ROOT fallback)" do
@@ -553,6 +744,21 @@ RSpec.describe Evilution::SpecResolver do
     it "finds no suggestion against an empty CWD when the flag is unset" do
       expect(resolver.suggest("lib/evilution/spec_resolver.rb")).to be_nil
     end
+
+    # The sibling ranking lists, reads and follows mirrored sources through the
+    # same PROJECT_ROOT fallback; the CWD here is an empty sandbox.
+    it "ranks sibling specs that live under PROJECT_ROOT when the flag is set" do
+      Dir.mktmpdir do |root|
+        Dir.chdir(root) do
+          create_file("app/models/game/scoring.rb", "class Game::Scoring\n  def call = Round.new\nend\n")
+          create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\nend\n")
+        end
+        stub_const("Evilution::PROJECT_ROOT", root)
+        Evilution.in_isolated_worker!
+
+        expect(resolver.call("app/models/game/round.rb")).to eq("spec/models/game/scoring_spec.rb")
+      end
+    end
   end
 
   describe "#resolve_specs" do
@@ -564,6 +770,41 @@ RSpec.describe Evilution::SpecResolver do
 
     it "returns nil when neither a mirror file nor a grouped directory exists" do
       expect(resolver.resolve_specs("lib/foo/bar.rb")).to be_nil
+    end
+
+    context "sibling specs in the subject's own mirror directory" do
+      it "returns every related sibling spec, ranked: describes the subject, then callers, then mentions" do
+        create_file("app/models/game/round.rb", "class Game::Round; end\n")
+        create_file("app/models/game/scoring.rb", "class Game::Scoring\n  def call = Round.new\nend\n")
+        create_file("spec/models/game_spec.rb", "RSpec.describe Game do\nend\n")
+        create_file("spec/models/game/a_mentions_spec.rb", "RSpec.describe Game::A do\n  Game::Round\nend\n")
+        create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\nend\n")
+        create_file("spec/models/game/round_behaviour_spec.rb", "RSpec.describe Game::Round, :slow do\nend\n")
+        create_file("spec/models/game/unrelated_spec.rb", "RSpec.describe Game::Unrelated do\nend\n")
+
+        expect(resolver.resolve_specs("app/models/game/round.rb")).to eq(
+          [
+            "spec/models/game/round_behaviour_spec.rb",
+            "spec/models/game/scoring_spec.rb",
+            "spec/models/game/a_mentions_spec.rb"
+          ]
+        )
+      end
+
+      it "returns the parent directory's spec when no sibling relates to the subject" do
+        create_file("spec/models/game_spec.rb", "RSpec.describe Game do\nend\n")
+        create_file("spec/models/game/unrelated_spec.rb", "RSpec.describe Game::Unrelated do\nend\n")
+
+        expect(resolver.resolve_specs("app/models/game/round.rb")).to eq(["spec/models/game_spec.rb"])
+      end
+
+      it "honours spec_pattern when returning sibling specs" do
+        create_file("spec/models/game/a_spec.rb", "RSpec.describe Game::A do\n  Game::Round\nend\n")
+        create_file("spec/models/game/b_spec.rb", "RSpec.describe Game::B do\n  Game::Round\nend\n")
+
+        expect(resolver.resolve_specs("app/models/game/round.rb", spec_pattern: "**/b_spec.rb"))
+          .to eq(["spec/models/game/b_spec.rb"])
+      end
     end
 
     context "dir-grouped layout (minitest)" do
@@ -602,6 +843,30 @@ RSpec.describe Evilution::SpecResolver do
         expect(resolver.resolve_specs("lib/state_machines/branch.rb")).to eq(
           ["test/unit/branch_test.rb"]
         )
+      end
+
+      # A grouped directory is dedicated to the subject; a sibling or a parent
+      # test is not.
+      it "prefers the grouped directory over a sibling test that mentions the subject" do
+        create_file("test/unit/acme/x/branch/a_test.rb")
+        create_file("test/unit/acme/x/other_test.rb",
+                    "class OtherTest < Minitest::Test\n  def test_it = Branch.new\nend\n")
+
+        expect(resolver.resolve_specs("lib/acme/x/branch.rb")).to eq(["test/unit/acme/x/branch/a_test.rb"])
+      end
+
+      it "prefers the grouped directory over the parent directory's test" do
+        create_file("test/unit/acme/x/branch/a_test.rb")
+        create_file("test/acme/x_test.rb")
+
+        expect(resolver.resolve_specs("lib/acme/x/branch.rb")).to eq(["test/unit/acme/x/branch/a_test.rb"])
+      end
+
+      it "prefers a naming-convention test over the grouped directory" do
+        create_file("test/unit/acme/x/branch/a_test.rb")
+        create_file("test/test_acme_x_branch.rb")
+
+        expect(resolver.resolve_specs("lib/acme/x/branch.rb")).to eq(["test/test_acme_x_branch.rb"])
       end
 
       it "honours spec_pattern when expanding a grouped directory" do
