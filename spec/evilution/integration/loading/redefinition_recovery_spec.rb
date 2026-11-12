@@ -194,6 +194,56 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
       end
     end
 
+    context "when told not to swallow idempotency violations" do
+      it "raises the violation without retrying the block" do
+        attempts = 0
+
+        expect do
+          recovery.call("source", swallow_idempotency: false) do
+            attempts += 1
+            raise ArgumentError, "plugin already registered"
+          end
+        end.to raise_error(ArgumentError, "plugin already registered")
+        expect(attempts).to eq(1)
+      end
+
+      it "does not warn about the violation" do
+        expect do
+          recovery.call("source", swallow_idempotency: false) { raise ArgumentError, "already registered" }
+        rescue ArgumentError
+          nil
+        end.not_to output.to_stderr
+      end
+
+      it "still retries once after a redefinition conflict" do
+        constant_names.names = ["Foo"]
+        attempts = 0
+
+        result = recovery.call("source", swallow_idempotency: false) do
+          attempts += 1
+          raise ArgumentError, "method already defined" if attempts == 1
+
+          :loaded
+        end
+
+        expect([attempts, result]).to eq([2, :loaded])
+      end
+
+      it "still retries once after a superclass mismatch" do
+        constant_names.names = ["Foo"]
+        attempts = 0
+
+        result = recovery.call("source", swallow_idempotency: false) do
+          attempts += 1
+          raise TypeError, "superclass mismatch for class Foo" if attempts == 1
+
+          :loaded
+        end
+
+        expect([attempts, result]).to eq([2, :loaded])
+      end
+    end
+
     context "when the block raises a superclass-mismatch TypeError" do
       it "strips declared constants and retries the block once" do
         constant_names.names = ["Foo"]
@@ -234,6 +284,29 @@ RSpec.describe Evilution::Integration::Loading::RedefinitionRecovery do
         expect(Object.const_defined?(:EvilSuperTarget, false)).to be(false)
       ensure
         Object.send(:remove_const, :EvilSuperTarget) if Object.const_defined?(:EvilSuperTarget, false)
+      end
+
+      it "names the constants to remove from the source it was given" do
+        attempts = 0
+
+        recovery.call("the source") do
+          attempts += 1
+          raise TypeError, "superclass mismatch" if attempts == 1
+        end
+
+        expect(constant_names.received).to eq(["the source"])
+      end
+
+      it "does not retry an error of another class that mentions a superclass mismatch" do
+        attempts = 0
+
+        expect do
+          recovery.call("source") do
+            attempts += 1
+            raise "superclass mismatch for class Foo"
+          end
+        end.to raise_error(RuntimeError, "superclass mismatch for class Foo")
+        expect(attempts).to eq(1)
       end
 
       it "re-raises a TypeError that is not a superclass mismatch" do

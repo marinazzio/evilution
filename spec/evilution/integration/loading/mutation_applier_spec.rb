@@ -146,7 +146,7 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     let(:pinner) { instance_double("pinner", call: []) }
     let(:cleaner) { instance_double("cleaner", call: nil) }
     let(:evaluator) { instance_double("evaluator", call: nil) }
-    let(:recovery) { ->(_src, &blk) { blk.call } }
+    let(:recovery) { ->(_src, **, &blk) { blk.call } }
 
     let(:injected_applier) do
       described_class.new(
@@ -377,6 +377,32 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
         expect(result[:error]).to eq("ArgumentError: nope")
       end
 
+      # A registry that rejects a second registration stops the original's
+      # class body there, so what follows it was never evaluated: the
+      # original is not known to load.
+      context "when the original stops at a registry that rejects a second registration" do
+        let(:recovery) { Evilution::Integration::Loading::RedefinitionRecovery.new }
+
+        let(:failing) do
+          evaluator_failing_on("MUTATED\n" => NoMethodError.new("undefined method 'map' for nil"),
+                               "ORIGINAL\n" => ArgumentError.new("plugin already registered"))
+        end
+
+        it "leaves the failure an error" do
+          result = nil
+          expect { result = applier_with(failing).call(restorable_mutation) }.not_to output.to_stderr
+
+          expect(result).not_to have_key(:load_crashed)
+          expect(result[:error]).to eq("NoMethodError: undefined method 'map' for nil")
+        end
+
+        it "still restores the original past the registry, as before" do
+          expect { applier_with(failing).restore(restorable_mutation) }
+            .to output(/swallowed idempotency violation on re-eval: ArgumentError: plugin already registered/)
+            .to_stderr
+        end
+      end
+
       it "leaves the failure an error when the original no longer parses" do
         failing = evaluator_failing_on("MUTATED\n" => ArgumentError.new("nope"),
                                        "ORIGINAL\n" => SyntaxError.new("unexpected end"))
@@ -482,6 +508,68 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
 
         expect($LOADED_FEATURES.count(expected)).to eq(1)
       end
+    end
+  end
+
+  # ActiveRecord's `enum` checks its values before it defines anything, and
+  # raises when a label's methods are defined already: evaluating a model's
+  # class body a second time conflicts with the first.
+  describe "a class whose enum rejects being declared twice" do
+    let(:enum_macro) do
+      Module.new do
+        def enum(name, values)
+          raise ArgumentError, "Enum values #{values} must not contain a blank name." if values.key?("")
+
+          values.each_key do |label|
+            if method_defined?(:"#{label}?")
+              raise ArgumentError, "You tried to define an enum named \"#{name}\" on the model \"#{self.name}\", but " \
+                                   "this will generate an instance method \"#{label}?\", which is already defined " \
+                                   "by another enum."
+            end
+
+            define_method(:"#{label}?") { true }
+          end
+        end
+      end
+    end
+
+    let(:model_source) do
+      <<~RUBY
+        class EkaxEnumModel
+          extend EkaxEnumMacro
+          STATUSES = { "pending" => 0 }.freeze
+          enum :status, STATUSES
+        end
+      RUBY
+    end
+
+    let(:blank_label) do
+      mutated = model_source.sub('"pending"', '""')
+      double("Mutation", file_path: "/tmp/evilution_applier_nonexistent.rb", original_source: model_source,
+                         mutated_source: mutated, eval_source: mutated, restore_source: model_source)
+    end
+
+    before do
+      stub_const("EkaxEnumMacro", enum_macro)
+      eval(model_source, TOPLEVEL_BINDING) # rubocop:disable Security/Eval
+    end
+
+    after do
+      Object.send(:remove_const, :EkaxEnumModel) if Object.const_defined?(:EkaxEnumModel)
+    end
+
+    it "counts a mutant whose enum raises as a crash of the load, the original loading again" do
+      result = applier.call(blank_label)
+
+      expect(result).to include(passed: false, load_crashed: true, error_class: "ArgumentError")
+      # Hash#inspect spaces `=>` from Ruby 3.4 on.
+      expect(result[:error]).to match(/\Aload failed: ArgumentError: Enum values \{"" ?=> ?0\} must not contain a blank name\.\z/)
+      expect(EkaxEnumModel.new).to be_pending
+    end
+
+    it "restores the original over the loaded class" do
+      expect { applier.restore(blank_label) }.not_to output.to_stderr
+      expect(EkaxEnumModel.new).to be_pending
     end
   end
 

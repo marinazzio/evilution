@@ -1,0 +1,13 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "BreakdownMove" do
+  it "knows a pending move" do
+    expect(BreakdownMove.new("pending")).to be_pending
+  end
+
+  it "knows a finished move" do
+    expect(BreakdownMove.new("done")).to be_done
+  end
+end
