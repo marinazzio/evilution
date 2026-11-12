@@ -57,6 +57,10 @@ RSpec.describe Evilution::Mutator::Operator::PinOperatorRemoval do
     end
 
     it "drops the pin of the implicit block parameter" do
+      # Before Ruby 3.4 there is no `it` to pin, and Prism 2 parses for the
+      # running Ruby.
+      skip "`it` is a block parameter from Ruby 3.4" if Gem::Version.new(RUBY_VERSION) < Gem::Version.new("3.4")
+
       muts = mutations_for("    [a].map do\n      value in ^it\n    end\n")
 
       expect(mutated_lines(muts)).to eq(["value in it"])

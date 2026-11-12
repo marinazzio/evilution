@@ -3,7 +3,7 @@
 RSpec.describe "evilution.gemspec" do
   let(:spec) { Gem::Specification.load(File.expand_path("../../evilution.gemspec", __dir__)) }
 
-  it "constrains prism to a version that ships IfNode#subsequent (>= 1.5, < 2)" do
+  it "constrains prism to a version that ships IfNode#subsequent (>= 1.5, < 3)" do
     expect(spec).not_to be_nil, "evilution.gemspec must load successfully"
 
     prism_dep = spec.dependencies.find { |d| d.name == "prism" }
@@ -14,6 +14,8 @@ RSpec.describe "evilution.gemspec" do
     expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("1.0.0"))).to be(false)
     expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("1.5.0"))).to be(true)
     expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("1.9.9"))).to be(true)
-    expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("2.0.0"))).to be(false)
+    expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("2.0.0"))).to be(true)
+    expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("2.9.9"))).to be(true)
+    expect(prism_dep.requirement.satisfied_by?(Gem::Version.new("3.0.0"))).to be(false)
   end
 end
