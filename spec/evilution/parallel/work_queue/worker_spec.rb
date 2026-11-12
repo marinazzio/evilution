@@ -5,6 +5,7 @@ require "timeout"
 require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
 require "evilution/process_supervisor"
+require_relative "../../../support/fake_active_record"
 
 RSpec.describe Evilution::Parallel::WorkQueue::Worker do
   # EV-dg69: the worker lifecycle registry is now owned by ProcessSupervisor.
@@ -150,6 +151,22 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       worker2.items_completed += 1
       worker2.pending -= 1
       worker2.retire
+    end
+
+    it "reconnects a preloaded ActiveRecord to the worker's own database" do
+      FakeActiveRecord.install(self)
+
+      worker = described_class.spawn(worker_index: 2, hooks: nil) do |_|
+        ActiveRecord::Base.connection_db_config.configuration_hash[:database]
+      end
+      worker.send_item(0, nil)
+      msg = nil
+      Timeout.timeout(5) { msg = worker.read_result until msg }
+      worker.items_completed += 1
+      worker.pending -= 1
+      worker.retire
+
+      expect(msg[2]).to eq("db/test3.sqlite3")
     end
 
     it "redirects stderr to per-pid file under ChildOutput.log_dir when set" do

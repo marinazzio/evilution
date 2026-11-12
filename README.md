@@ -1077,9 +1077,19 @@ test:
   timeout: 5000
 ```
 
-After the first `jobs > 1` run, each worker creates its own file (`db/test.sqlite3`, `db/test2.sqlite3`, …). Seed each with `rake db:test:prepare` before running Evilution, or ensure your preload sets up schema on connect.
+Each worker needs its own prepared database (`db/test.sqlite3`, `db/test2.sqlite3`, …, one per job). Create and load them before running Evilution:
 
-When Evilution detects a parallel run against a SQLite-backed `config/database.yml`, it prints a one-time startup warning pointing to this section.
+```bash
+bin/rails db:test:prepare
+TEST_ENV_NUMBER=2 bin/rails db:test:prepare
+TEST_ENV_NUMBER=3 bin/rails db:test:prepare   # … up to the number of jobs
+```
+
+Without `--preload`, a test helper that loads the schema when it boots (for example `ActiveRecord::Migration.maintain_test_schema!` in `rails_helper.rb`) can do this instead, because it runs inside each worker.
+
+Per-worker databases also work with `--preload`, which boots the app (and resolves `database.yml`) once in the parent before the workers fork: each worker re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when the result differs, re-establishes `ActiveRecord::Base`'s connection to it. Only the primary connection is switched, and only when it still matches `database.yml`; a connection your test helper set up by other means is left alone. Under `--preload` the preload's own schema setup runs once, in the parent, against the parent's database only, so prepare the worker databases with the commands above. A worker whose database is missing or lacks a table or migration of the parent's database goes back to the parent's database and prints which database to prepare; its mutations then share that database as they would without the switch. Connections other than `ActiveRecord::Base`'s (other databases set up with `connects_to`, replicas) keep using the parent's databases, and each worker says so in a warning.
+
+When Evilution detects a parallel run against a SQLite test database whose path does not depend on `TEST_ENV_NUMBER`, it prints a one-time startup warning pointing to this section. An in-memory database (`:memory:`) is never shared between workers and does not trigger it.
 
 ## Development
 
