@@ -45,6 +45,11 @@ RSpec.describe "Stopping a kill check at its first kill with RSpec", :aggregate_
     report.fetch(bucket).map { |entry| methods.find { |lines, _| lines.cover?(entry.fetch("line")) }.last }.uniq.sort
   end
 
+  # The mutants of `state` in a bucket of the report.
+  def state_mutants(report, bucket)
+    report.fetch(bucket).count { |entry| (4..6).cover?(entry.fetch("line")) }
+  end
+
   %w[fork in_process].each do |isolation|
     context "under #{isolation} isolation" do
       context "when the first example kills every mutant" do
@@ -93,6 +98,40 @@ RSpec.describe "Stopping a kill check at its first kill with RSpec", :aggregate_
           expect(subjects_of(run[:report], "killed")).to eq(["state"])
           expect(subjects_of(run[:report], "neutral")).to eq([])
           expect(run[:ran]).not_to include("mutant")
+        end
+      end
+
+      # With nothing but failures the baseline already saw, no failure decides
+      # the verdict, so every example runs and the mutant ends neutral. That
+      # failure is there on the mutants of `label` too, so they are neutral as
+      # well.
+      #
+      # Example targeting would run a mutant's examples a second time, the whole
+      # file this time, after a first run with nothing but known failures, so
+      # it is turned off to leave one run per mutant to count.
+      context "when the only failing example is one the baseline saw failing" do
+        it "runs every example, and leaves the mutants neutral" do
+          run = runs[["known_only", isolation, ["--no-example-targeting"]]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(%w[label state])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # Both examples after the failing one ran on every mutant of `state`.
+          expect(run[:ran].count("mutant")).to eq(2 * state_mutants(run[:report], "neutral"))
+          expect(run[:ran]).to include("mutant")
+        end
+      end
+
+      # With nothing but infrastructure crashes no failure decides the
+      # verdict, so every example runs and the mutant ends neutral.
+      context "when the only failure is an infrastructure crash" do
+        it "runs every example, and leaves the mutants neutral" do
+          run = runs[["infra_only", isolation, []]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(["state"])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # Both examples after the crashing one ran on every mutant of `state`.
+          expect(run[:ran].count("mutant")).to eq(2 * state_mutants(run[:report], "neutral"))
+          expect(run[:ran]).to include("mutant")
         end
       end
     end

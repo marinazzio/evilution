@@ -102,6 +102,36 @@ RSpec.describe "Stopping a kill check at its first kill with Minitest", :aggrega
         end
       end
 
+      # With nothing but failures the baseline already saw, no failure decides
+      # the verdict, so every test runs and the mutant ends neutral. That
+      # failure is there on the mutants of `label` too, so they are neutral as
+      # well.
+      context "when the only failing test is one the baseline saw failing" do
+        it "runs every test, and leaves the mutants neutral" do
+          run = runs[["known_only", isolation, []]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(%w[label state])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # Both tests after the failing one ran on every mutant of `state`.
+          expect(run[:ran].count("mutant")).to eq(2 * state_mutants(run[:report], "neutral"))
+          expect(run[:ran]).to include("mutant")
+        end
+      end
+
+      # With nothing but infrastructure crashes no failure decides the
+      # verdict, so every test runs and the mutant ends neutral.
+      context "when the only failure is an infrastructure crash" do
+        it "runs every test, and leaves the mutants neutral" do
+          run = runs[["infra_only", isolation, []]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(["state"])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # Both tests after the crashing one ran on every mutant of `state`.
+          expect(run[:ran].count("mutant")).to eq(2 * state_mutants(run[:report], "neutral"))
+          expect(run[:ran]).to include("mutant")
+        end
+      end
+
       # A run that stops at the kill never reaches the hang after it, so the
       # mutant is killed rather than timed out -- the one status change
       # stopping is allowed to make. With --no-stop-on-kill each mutant waits
