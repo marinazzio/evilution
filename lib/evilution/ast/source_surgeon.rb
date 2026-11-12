@@ -15,9 +15,18 @@ module Evilution::AST::SourceSurgeon
   end
 
   def self.apply(source, offset:, length:, replacement:)
+    check(splice(source, offset: offset, length: length, replacement: replacement))
+  end
+
+  # The source with the bytes replaced, not yet checked: cheap next to the
+  # parse that checking takes.
+  def self.splice(source, offset:, length:, replacement:)
     binary = source.b
     binary[offset, length] = replacement.b
-    mutated = binary.force_encoding(source.encoding)
+    binary.force_encoding(source.encoding)
+  end
+
+  def self.check(mutated)
     status = Evilution::AST::SyntaxCheck.valid?(mutated) ? :ok : :unparseable
     Result.new(source: mutated, status: status).freeze
   end

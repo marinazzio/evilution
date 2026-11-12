@@ -219,7 +219,9 @@ class Evilution::Config
       #   max_blocks: 10000
 
       # AST patterns to skip during mutation generation (default: [])
-      # See docs/ast_pattern_syntax.md for pattern syntax
+      # See docs/ast_pattern_syntax.md for pattern syntax. A pattern skips every
+      # mutation inside the node it matches: a call pattern covers the call's
+      # receiver, arguments and block.
       # ignore_patterns:
       #   - "call{name=info, receiver=call{name=logger}}"
       #   - "call{name=debug|warn}"

@@ -115,7 +115,7 @@ RSpec.describe Evilution::Mutator::Operator::MixinRemoval do
       src = "class C\n  include Foo\n  def m\n    1\n  end\nend\n"
       subject = subjects_from_source(src).min_by(&:line_number)
       skip_all = Class.new do
-        def skip?(_node, source: nil) = true
+        def skip?(_node, **) = true
       end.new
 
       mutations = described_class.new.call(subject, filter: skip_all)

@@ -2,6 +2,7 @@
 
 require_relative "../pattern"
 require_relative "../parent_index"
+require_relative "../parse_cache"
 require_relative "parser"
 
 # Decides whether a mutation is ignored: it is when a pattern matches the
@@ -11,48 +12,65 @@ class Evilution::AST::Pattern::Filter
   NO_ANCESTORS = [].freeze
   private_constant :NO_ANCESTORS
 
-  attr_reader :skipped_count
-
   def initialize(patterns)
     @matchers = patterns.map { |p| Evilution::AST::Pattern::Parser.new(p).parse }
-    @skipped_count = 0
+    reset_count!
   end
 
-  # source: the source the node was parsed from, where its ancestors are
-  # found; without it only the node is tested. The ancestors are looked up
-  # only when the node itself matches no pattern. A skipped mutation is
-  # counted once, however many of its nodes match.
-  def skip?(node, source: nil)
+  # file_path, source: the file the node was parsed from and its source, where
+  # its ancestors are found; without a source only the node is tested. The
+  # ancestors are looked up only when the node itself matches no pattern.
+  #
+  # mutated_source: the file as the mutation leaves it. Two operators can make
+  # the same change, which the run makes once, so an ignored mutation is
+  # counted once per file and mutated source, however many of its nodes
+  # match. Without one each skip counts.
+  def skip?(node, file_path: nil, source: nil, mutated_source: nil)
     return false if @matchers.empty?
-    return false unless matches?(node) || ancestors(node, source).any? { |ancestor| matches?(ancestor) }
+    return false unless matches?(node) || ancestors(node, file_path, source).any? { |ancestor| matches?(ancestor) }
 
-    @skipped_count += 1
+    @skipped << (mutated_source ? skip_key(file_path, mutated_source) : Object.new)
     true
   end
 
+  # made: the mutations the run makes. One of them can be an ignored mutation
+  # made all the same from a node no pattern matches, which is not counted.
+  def skipped_count(made: [])
+    made_keys = made.to_set { |mutation| skip_key(mutation.file_path, mutation.mutated_source) }
+    @skipped.count { |key| !made_keys.include?(key) }
+  end
+
   def reset_count!
-    @skipped_count = 0
+    @skipped = Set.new
   end
 
   private
+
+  # The hash stands in for the mutated source, which would keep a copy of the
+  # file per ignored mutation.
+  def skip_key(file_path, mutated_source)
+    [file_path, mutated_source.hash]
+  end
 
   def matches?(node)
     @matchers.any? { |m| m.match?(node) }
   end
 
-  def ancestors(node, source)
+  def ancestors(node, file_path, source)
     return NO_ANCESTORS if source.nil?
 
-    parent_index(source).enum_for(:each_ancestor, node)
+    parent_index(file_path, source).enum_for(:each_ancestor, node)
   end
 
   # Only the last source's index is kept: the mutations of a file are made one
   # after the other, and an index per file would hold every file's tree for
   # the whole run. The operators each read the file anew, so an equal source
   # is taken over, and the next check against it compares no bytes.
-  def parent_index(source)
+  def parent_index(file_path, source)
     unless source.equal?(@indexed_source)
-      @parent_index = Evilution::AST::ParentIndex.new(Prism.parse(source).value) unless source == @indexed_source
+      unless source == @indexed_source
+        @parent_index = Evilution::AST::ParentIndex.new(Evilution::AST::ParseCache.tree_for(file_path, source))
+      end
       @indexed_source = source
     end
     @parent_index

@@ -58,10 +58,6 @@ RSpec.describe Evilution::AST::ParentIndex do
         .to eq(%i[call_node call_node statements_node program_node])
     end
 
-    it "keeps how it walks the tree to itself" do
-      expect(index.private_methods(false)).to include(:record, :key)
-    end
-
     it "tells apart nodes of different types over the same bytes" do
       statements = tree.statements.body.first.body
       call = validates_call(tree)

@@ -94,7 +94,7 @@ class Evilution::Runner::MutationPlanner
     mutations = subjects.flat_map do |subject|
       registry.mutations_for(subject, filter: filter, operator_options: operator_options)
     end
-    skipped = filter ? filter.skipped_count : 0
+    skipped = filter ? filter.skipped_count(made: mutations) : 0
     GenerationResult.new(mutations: mutations, skipped: skipped)
   end
 

@@ -140,9 +140,16 @@ call{receiver=**, name=log}
 Prefix `!` negates a pattern or value:
 
 ```
-call{name=!log}              # any call except log
-call{receiver=!call{name=logger}}  # calls whose receiver is not logger
+call{receiver=call{name=logger}, name=!error}  # logger calls except logger.error
+call{name=info, receiver=!call{name=logger}}   # info calls not sent to logger
 ```
+
+Keep a negation inside a pattern that is narrow without it. A pattern ignores
+every mutation inside the nodes it matches (see
+[Pattern Matching Semantics](#pattern-matching-semantics)), so a negation that
+leaves the pattern broad ignores almost everything: `call{name=!log}` matches
+nearly every call, and with it every mutation of their receivers, arguments and
+blocks.
 
 ## YAML Configuration
 
@@ -177,9 +184,18 @@ ignore_patterns:
    up to the top of the file. A pattern naming a node therefore ignores every
    mutation inside it: `call{name=validates}` ignores the mutations of the
    literals in `validates :rush, inclusion: { in: [false, true] }, if: :paid`,
-   and `keyword_hash` ignores those of the options but not of `:rush`.
-2. A mutation is ignored if **any** pattern in `ignore_patterns` matches, and is
-   counted once among the skipped mutations however many patterns or nodes match.
+   and `keyword_hash` ignores those of the options but not of `:rush`. A `call`
+   pattern covers the whole call — its receiver, its arguments and its block — so
+   `call{name=on}` on `opts.on("-j", Integer) { |n| @jobs = n > 0 ? n : 1 }`
+   ignores the mutations of the handler block as well. There is no form that
+   matches the mutated node alone; to leave a call's block mutated, put
+   `# evilution:disable` at the end of the call's line and start the block's
+   body on the next line (`do |n|` … `end`).
+2. A mutation is ignored if **any** pattern in `ignore_patterns` matches. Only
+   mutations the run would otherwise make are counted as skipped: those in the
+   requested line ranges, each counted once however many patterns, nodes or
+   operators produce it, and not one that the run makes anyway from a node no
+   pattern matches.
 3. `def` patterns follow from rule 1: the method a mutation sits in is one of its
    ancestors, so `def{name=to_s}` ignores all mutations within `to_s`. A `class`
    or `module` pattern ignores all mutations within that body the same way.
@@ -227,7 +243,7 @@ names are always plain identifiers. A quoted name is at least one character long
 | `call{receiver=_}` | `x.foo()`, `obj.bar()` | `foo()` (no receiver) |
 | `call{receiver=**}` | `foo()`, `x.foo()`, `a.b.foo()` | *(matches all)* |
 | `def{name=to_s}` | `def to_s; ... end` | `def to_str; ... end` |
-| `call{name=!log}` | `debug()`, `info()` | `log()` |
+| `call{receiver=call{name=logger}, name=!error}` | `logger.info()`, `logger.debug()` | `logger.error()`, `info()` |
 | `call{name=valid?\|save!}` | `x.valid?`, `save!` | `valid`, `save` |
 | `call{name=<=>}` | `a <=> b` | `a <= b` |
 | `call{name='\|'}` | `a \| b` | `a & b` |

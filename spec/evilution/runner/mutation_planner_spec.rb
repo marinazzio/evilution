@@ -134,8 +134,12 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     end
 
     context "when ignore_patterns names a node enclosing the mutated one" do
-      def plan_for(file, patterns)
-        described_class.new(config(ignore_patterns: patterns), registry: registry).call(subjects_for(file))
+      def plan_for(file, patterns, **overrides)
+        described_class.new(config(ignore_patterns: patterns, **overrides), registry: registry).call(subjects_for(file))
+      end
+
+      def planned(plan)
+        plan.enabled + plan.equivalent
       end
 
       def mutations_on(plan, line)
@@ -178,11 +182,11 @@ RSpec.describe Evilution::Runner::MutationPlanner do
 
       %w[call{name=validates} arguments].each do |pattern|
         it "ignores every mutation inside the declaration for #{pattern}" do
-          baseline = mutations_on(plan_for(@file, []), 2).length
+          baseline = planned(plan_for(@file, []))
           plan = plan_for(@file, [pattern])
 
           expect(mutations_on(plan, 2)).to be_empty
-          expect(plan.skipped_count).to be >= baseline
+          expect(plan.skipped_count).to eq(baseline.length - planned(plan).length)
         end
       end
 
@@ -198,8 +202,27 @@ RSpec.describe Evilution::Runner::MutationPlanner do
         once = plan_for(@file, [whole_class])
         overlapping = plan_for(@file, ["def{name=to_s}", "call{name=validates}", whole_class])
 
-        expect(once.enabled + once.equivalent).to be_empty
+        expect(planned(once)).to be_empty
         expect(overlapping.skipped_count).to eq(once.skipped_count)
+      end
+
+      # Two operators can make the same change; the plan runs it once, so it
+      # is ignored once.
+      it "counts the ignored mutations the plan would have run" do
+        baseline = planned(plan_for(@file, []))
+        plan = plan_for(@file, ["class{constant_path=constant_read{name=Order}}"])
+
+        expect(plan.skipped_count).to eq(baseline.length)
+      end
+
+      it "counts only the ignored mutations of the requested lines" do
+        in_range = { line_ranges: { @file => 9..9 } }
+        baseline = planned(plan_for(@file, [], **in_range))
+        plan = plan_for(@file, ["class{constant_path=constant_read{name=Order}}"], **in_range)
+
+        expect(baseline).not_to be_empty
+        expect(planned(plan)).to be_empty
+        expect(plan.skipped_count).to eq(baseline.length)
       end
     end
 
