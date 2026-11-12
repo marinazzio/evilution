@@ -179,14 +179,15 @@ class Evilution::Mutator::Base < Prism::Visitor
   end
 
   # What the neutralizer needs to keep a redeclared subject's declaration:
-  # where the mutation is, and the lines the declaration takes up in the
-  # file as it was loaded -- which is where the callbacks it registered then
-  # say they come from, whatever the mutation does to its length.
+  # where the mutation is, the lines the declaration takes up in the file as
+  # it was loaded -- which is where the callbacks it registered then say they
+  # come from, whatever the mutation does to its length -- and the
+  # declaration as written there.
   def redeclaration(offset)
     return {} unless redeclared_subject?
 
     first = @subject.line_number
-    { keep_offset: offset, keep_lines: first..(first + @subject.source.count("\n")) }
+    { keep_offset: offset, keep_lines: first..(first + @subject.source.count("\n")), keep_source: @subject.source }
   end
 
   NEWLINE_BYTE = 10

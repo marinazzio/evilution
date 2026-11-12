@@ -32,6 +32,7 @@ class Order
       paid == true
     end
   }
+  validates :rush, inclusion: { in: [false, true] }, if: :paid
 
   def initialize(attributes = {})
     super

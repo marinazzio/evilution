@@ -719,7 +719,10 @@ RSpec.describe Evilution::AST::Parser do
         RUBY
 
         expect(subjects_in(prepended).map { |subject| [subject.name, subject.kind, subject.concern_hook?] }).to eq(
-          [["Audited.recent", :scope, true], ["Audited#ship", :aasm, true], ["Audited.validate(:limit)", :callback, true]]
+          [
+            ["Audited.recent", :scope, true], ["Audited#ship", :aasm, true],
+            ["Audited.validate(:limit)", :callback, true], ["Audited.validate(:limit)", :callback, true]
+          ]
         )
       end
 
@@ -1138,14 +1141,14 @@ RSpec.describe Evilution::AST::Parser do
     end
 
     it "makes a subject of each literal condition and callback, named as its declaration reads" do
-      subjects = subjects_for(code).select { |subject| subject.kind == :callback }
+      subjects = subjects_for(code).select { |subject| subject.kind == :callback }.first(2)
 
       expect(subjects.map(&:name)).to eq(["Shop::Order.validate(:credit_limit)", "Shop::Order.before_save"])
       expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { paid? }", "do\n      self.total = 0\n    end"])
     end
 
     it "spans the declaration" do
-      subjects = subjects_for(code).select { |subject| subject.kind == :callback }
+      subjects = subjects_for(code).select { |subject| subject.kind == :callback }.first(2)
 
       expect(subjects.map(&:line_number)).to eq([3, 4])
       expect(subjects.last.source).to eq("before_save do\n      self.total = 0\n    end")
@@ -1155,6 +1158,48 @@ RSpec.describe Evilution::AST::Parser do
       subjects = subjects_for("module Shop\n  before_save { 1 }\nend")
 
       expect(subjects).to eq([])
+    end
+
+    describe "the options of a declaration" do
+      let(:code) do
+        <<~RUBY
+          class Vote
+            validates :for_lift, inclusion: { in: [true] }, if: :lift_round?
+            validate :within_window
+            validates :title, presence: true, unless: -> { draft? }
+
+            def lift_round? = true
+          end
+        RUBY
+      end
+
+      def callback_subjects
+        subjects_for(code).select { |subject| subject.kind == :callback }
+      end
+
+      it "makes a subject of the arguments of each declaration given options, named as it reads" do
+        expect(callback_subjects.map { |subject| [subject.name, subject.node.slice] }).to eq(
+          [
+            ["Vote.validates(:title)", "-> { draft? }"],
+            ["Vote.validates(:for_lift)", ":for_lift, inclusion: { in: [true] }, if: :lift_round?"],
+            ["Vote.validates(:title)", ":title, presence: true, unless: -> { draft? }"]
+          ]
+        )
+      end
+
+      it "spans the declaration" do
+        options = callback_subjects.last
+
+        expect(options.line_number).to eq(4)
+        expect(options.source).to eq("validates :title, presence: true, unless: -> { draft? }")
+      end
+
+      it "marks the options of a declaration in a concern's included block" do
+        concern = "module Rated\n  included do\n    validates :score, inclusion: { in: 1..5 }\n  end\nend\n"
+
+        expect(subjects_for(concern).map { |subject| [subject.name, subject.kind, subject.concern_hook?] })
+          .to eq([["Rated.validates(:score)", :callback, true]])
+      end
     end
   end
 
@@ -1229,9 +1274,11 @@ RSpec.describe Evilution::AST::Parser do
     it "makes a subject of each literal condition and callback, named after the concern" do
       subjects = subjects_for(code).select { |subject| subject.kind == :callback }
 
-      expect(subjects.map(&:name)).to eq(["Publishable.validates(:title)", "Publishable.before_save"])
-      expect(subjects.map { |subject| subject.node.slice }).to eq(["-> { published? }", "{ self.slug = title }"])
-      expect(subjects.map(&:line_number)).to eq([5, 6])
+      expect(subjects.map(&:name))
+        .to eq(["Publishable.validates(:title)", "Publishable.before_save", "Publishable.validates(:title)"])
+      expect(subjects.map { |subject| subject.node.slice })
+        .to eq(["-> { published? }", "{ self.slug = title }", ":title, presence: true, if: -> { published? }"])
+      expect(subjects.map(&:line_number)).to eq([5, 6, 5])
     end
   end
 end

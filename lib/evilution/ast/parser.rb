@@ -215,9 +215,13 @@ module Evilution::AST
     # `Order.validate(:credit_limit)`. The subject spans the declaration and
     # mutates the callable's body. In a concern's `included` block it is named
     # after the concern.
+    # The options of a declaration -- `validates :for_lift, inclusion: { in:
+    # [true] }, if: :lift_round?` -- are a subject named the same way, which
+    # mutates its argument list. A condition written out there is mutated as
+    # a subject of its own first; the planner drops the copies.
     def add_callback_subjects(body)
-      CallbackDeclaration.in_body(body).each do |callable|
-        add_subject(callable.body, "#{@context.join("::")}.#{callable.label}", :callback, span: callable.declaration)
+      [*CallbackDeclaration.in_body(body), *CallbackDeclaration.options_in(body)].each do |part|
+        add_subject(part.node, "#{@context.join("::")}.#{part.label}", :callback, span: part.declaration)
       end
     end
 

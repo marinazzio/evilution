@@ -71,6 +71,12 @@ RSpec.describe Evilution::AST::CallbackDeclaration do
       expect(summary(code).map(&:last)).to eq(["-> { a }", "-> { b }", "do\n    c\n  end"])
     end
 
+    it "gives each callable its body as what mutations go into" do
+      code = "class Order\n  validate :a, if: -> { 1 }\nend"
+
+      expect(callables(code).map { |callable| callable.node.slice }).to eq(["-> { 1 }"])
+    end
+
     it "gives each callable its declaration" do
       code = "class Order\n  validate :a, if: -> { 1 }\n  validate :b, if: -> { 2 }\nend"
 
@@ -137,6 +143,71 @@ RSpec.describe Evilution::AST::CallbackDeclaration do
 
       expect(summary(wrapped)).to eq([["validate(:a)", "-> { 1 }"]])
       expect(callables("class Order\nend")).to eq([])
+    end
+  end
+
+  describe ".options_in" do
+    def options(code)
+      described_class.options_in(statement(code).body)
+    end
+
+    it "finds the argument lists of the declarations given keyword options" do
+      code = <<~RUBY
+        class Vote
+          validates :for_lift, inclusion: { in: [true] }, if: :lift_round?
+          validate :within_window
+          validates_presence_of :user, message: "is missing"
+          before_save :normalize, unless: -> { draft? }
+          after_commit on: :create do
+            notify
+          end
+        end
+      RUBY
+
+      expect(options(code).map { |found| [found.label, found.arguments.slice] }).to eq(
+        [
+          ["validates(:for_lift)", ":for_lift, inclusion: { in: [true] }, if: :lift_round?"],
+          ["validates_presence_of(:user)", ":user, message: \"is missing\""],
+          ["before_save(:normalize)", ":normalize, unless: -> { draft? }"],
+          ["after_commit", "on: :create"]
+        ]
+      )
+    end
+
+    it "gives each its declaration, and its argument list as what mutations go into" do
+      code = "class Vote\n  validates :a, presence: true\nend"
+      found = options(code).first
+
+      expect([found.declaration.slice, found.node]).to eq(["validates :a, presence: true", found.arguments])
+    end
+
+    it "finds options written out beside a double splat" do
+      code = "class Vote\n  validates :a, presence: true, **OPTIONS\nend"
+
+      expect(options(code).map(&:label)).to eq(["validates(:a)"])
+    end
+
+    it "ignores options given as a hash literal or a double splat alone, and calls that are no declarations" do
+      code = <<~RUBY
+        class Vote
+          validates :a, { presence: true }
+          validates :b, **OPTIONS
+          belongs_to :user, optional: true
+          Other.validates :c, presence: true
+          if legacy?
+            validates :d, presence: true
+          end
+          validates :e, presence: true, message: <<~TEXT
+            missing
+          TEXT
+        end
+      RUBY
+
+      expect(options(code)).to eq([])
+    end
+
+    it "returns nothing for an empty class body" do
+      expect(options("class Vote\nend")).to eq([])
     end
   end
 

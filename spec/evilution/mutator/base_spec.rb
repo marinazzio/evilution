@@ -666,7 +666,9 @@ RSpec.describe Evilution::Mutator::Base do
         )
         operator_class.new.call(subject).first
       end
-      let(:helper) { "::Evilution::Integration::Loading::CallbackRedeclaration.call(self, __FILE__, 3..4)" }
+      let(:helper) do
+        "::Evilution::Integration::Loading::CallbackRedeclaration.call(self, __FILE__, 3..4, #{declaration.slice.dump}, binding)"
+      end
 
       before do
         Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set[File.expand_path(tmpfile.path)]

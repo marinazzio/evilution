@@ -77,8 +77,9 @@ class Evilution::Runner::SubjectPipeline
 
   def warn_uncovered(entry)
     Evilution::Diagnostic.warn(
-      "[evilution] #{entry[:file]}:#{entry[:lines].join(", ")} holds code outside every subject " \
-      "(class-body code such as DSL calls is not mutated); no mutations target those lines."
+      "[evilution] #{entry[:file]}:#{entry[:lines].join(", ")} holds code outside every subject; " \
+      "no mutations target those lines. Of the DSL calls in a class body, only scopes, aasm machines, and " \
+      "callback or validation declarations with options or an inline block or lambda are mutated."
     )
   end
 

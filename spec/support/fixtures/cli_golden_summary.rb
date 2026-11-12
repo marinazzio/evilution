@@ -47,6 +47,10 @@ module CliGoldenSummary
       0
     end
 
+    def uncovered_code?
+      false
+    end
+
     def baseline_neutralizations
       []
     end

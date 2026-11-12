@@ -71,8 +71,8 @@ RSpec.describe Evilution::Integration::Loading::CallbackRedeclaration do
     klass.__callbacks[name].map(&:filter)
   end
 
-  def redeclare(klass, lines, &)
-    described_class.call(klass, file, lines, &)
+  def redeclare(klass, lines, original = nil, &)
+    described_class.call(klass, file, lines, original, &)
   end
 
   it "runs the declaration and returns its value for a class without callbacks" do
@@ -229,6 +229,318 @@ RSpec.describe Evilution::Integration::Loading::CallbackRedeclaration do
     expect(model.__callbacks[:validate]).to equal(untouched)
   end
 
+  # The neighbours are objects: the stand-in chain drops a repeated symbol.
+  it "puts what a declaration registers back where it was, after a run that registered nothing" do
+    original = proc { :original }
+    line = __LINE__ - 1
+    first = Object.new
+    last = Object.new
+    model.declare(callback_class.new(first))
+    model.declare(callback_class.new(original))
+    model.declare(callback_class.new(last))
+    restored = proc { :restored }
+    redeclare(model, line..line) { nil }
+
+    redeclare(model, line..line) { model.declare(callback_class.new(restored)) }
+
+    expect(filters(model)).to eq([first, restored, last])
+  end
+
+  it "puts it back where the first of what it registered was, when that was apart" do
+    one = proc { 1 }
+    two = proc { 2 }
+    line = __LINE__ - 2
+    middle = Object.new
+    last = Object.new
+    [one, middle, two, last].each { |filter| model.declare(callback_class.new(filter)) }
+    restored = proc { :restored }
+    redeclare(model, line..(line + 1)) { nil }
+
+    redeclare(model, line..(line + 1)) { model.declare(callback_class.new(restored)) }
+
+    expect(filters(model)).to eq([restored, middle, last])
+  end
+
+  it "keeps the place one declaration left for itself alone" do
+    original = proc { :original }
+    line = __LINE__ - 1
+    model.declare(callback_class.new(original))
+    model.declare(callback_class.new(:last))
+    redeclare(model, line..line) { nil }
+    added = proc { :added }
+
+    redeclare(model, 900..900) { model.declare(callback_class.new(added)) }
+
+    expect(filters(model)).to eq([:last, added])
+  end
+
+  it "replaces what it appended last time, though its procs say they were written elsewhere" do
+    appended = eval("proc { :appended }", binding, __FILE__, 1) # rubocop:disable Style/EvalWithLocation
+    replacement = proc { :replacement }
+    model.declare(callback_class.new(:first))
+    redeclare(model, 900..900) { model.declare(callback_class.new(appended)) }
+
+    redeclare(model, 900..900) { model.declare(callback_class.new(replacement)) }
+
+    expect(filters(model)).to eq([:first, replacement])
+  end
+
+  # `validates :for_lift, inclusion: { in: [true] }, if: :lift_round?`
+  # registers a validator object under a symbol condition: nothing in it says
+  # where it was written. Given the declaration as it is written in the file,
+  # the module runs that again first, and what it registers now is what it
+  # registered then, value for value.
+  describe "given the original declaration" do
+    let(:validator_class) do
+      Class.new do
+        attr_reader :attributes, :options
+
+        def initialize(*attributes, **options)
+          @attributes = attributes
+          @options = options
+        end
+      end
+    end
+
+    let(:original) { validator_class.new(:for_lift, in: [true]) }
+    let(:fresh) { validator_class.new(:for_lift, in: [true, false]) }
+
+    before do
+      callbacks = callback_class
+      validators = validator_class
+      model.define_singleton_method(:declare_original) do
+        declare(callbacks.new(validators.new(:for_lift, in: [true]), [:lift_round?]))
+      end
+      model.declare(callback_class.new(:first))
+      model.declare(callback_class.new(original, [:lift_round?]))
+      model.declare(callback_class.new(:last))
+    end
+
+    it "puts the mutated declaration's validator where the original's was" do
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last])
+    end
+
+    it "drops the original's validator when the mutated declaration registers none" do
+      redeclare(model, 1..1, "declare_original") { nil }
+
+      expect(filters(model)).to eq(%i[first last])
+    end
+
+    it "leaves a validator that differs from the original's in any value alone" do
+      lookalike = validator_class.new(:for_lift, in: [false])
+      model.declare(callback_class.new(lookalike, [:lift_round?]))
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last, lookalike])
+    end
+
+    it "puts what it registers again where the original's was, after a run that registered none" do
+      restored = validator_class.new(:for_lift, in: [true])
+      redeclare(model, 1..1, "declare_original") { nil }
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(restored, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, restored, :last])
+    end
+
+    it "replaces each of several validators the original registers" do
+      second = validator_class.new(:title)
+      callbacks = callback_class
+      validators = validator_class
+      model.declare(callback_class.new(second))
+      model.define_singleton_method(:declare_both) do
+        declare_original
+        declare(callbacks.new(validators.new(:title)))
+      end
+      fresh_second = validator_class.new(:title, in: [1])
+
+      redeclare(model, 1..1, "declare_both") do
+        model.declare(callback_class.new(fresh, [:lift_round?]))
+        model.declare(callback_class.new(fresh_second))
+      end
+
+      expect(filters(model)).to eq([:first, fresh, fresh_second, :last])
+    end
+
+    it "settles a later run against the original after one that changed nothing" do
+      redeclare(model, 1..1) { nil }
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last])
+    end
+
+    it "does not run the original again after a run that registered nothing" do
+      runs = 0
+      model.define_singleton_method(:count_original) { runs += 1 }
+      condition = proc { true }
+      line = __LINE__ - 1
+      model.declare(callback_class.new(validator_class.new(:title), [condition]))
+      redeclare(model, line..line) { nil }
+
+      redeclare(model, line..line, "count_original") { nil }
+
+      expect(runs).to eq(0)
+    end
+
+    it "runs the original again for a declaration on the same line of another file" do
+      runs = 0
+      model.define_singleton_method(:count_original) { runs += 1 }
+      redeclare(model, 1..1, "count_original; declare_original") { nil }
+
+      described_class.call(model, "/somewhere/else.rb", 1..1, "count_original") { nil }
+
+      expect(runs).to eq(2)
+    end
+
+    it "lets an interrupt of the original through" do
+      expect { redeclare(model, 1..1, "raise Interrupt") { nil } }.to raise_error(Interrupt)
+    end
+
+    it "runs the original the first time only" do
+      runs = 0
+      model.define_singleton_method(:count_original) { runs += 1 }
+
+      2.times { redeclare(model, 1..1, "count_original; declare_original") { nil } }
+
+      expect(runs).to eq(1)
+    end
+
+    it "leaves the one a subclass inherited from an equal declaration of its parent" do
+      child = Class.new(model)
+      twin = validator_class.new(:for_lift, in: [true])
+      child.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(child, 1..1, "declare_original") { nil }
+
+      expect([filters(child), filters(model)]).to eq([[:first, original, :last], [:first, original, :last]])
+    end
+
+    it "takes one equal callback for each the original registers, the last" do
+      twin = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, original, :last, fresh])
+    end
+
+    it "does without it when it cannot be run on its own" do
+      expect do
+        redeclare(model, 1..1, "local_only_in_the_class_body") { model.declare(callback_class.new(fresh)) }
+      end.to output(/could not run .*:1 again \(NameError/).to_stderr
+
+      expect(filters(model)).to eq([:first, original, :last, fresh])
+    end
+
+    describe "given where the declaration is written" do
+      let(:namespace) { Module.new }
+
+      before do
+        callbacks = callback_class
+        validators = validator_class
+        model.define_singleton_method(:declare_kinds) do |kinds|
+          declare(callbacks.new(validators.new(:for_lift, in: kinds), [:lift_round?]))
+        end
+        namespace.const_set(:Model, model)
+      end
+
+      # The class body of `Model`, reopened inside its namespace.
+      def class_body
+        namespace.module_eval("kinds = [true]; class Model; kinds = [true]; binding; end", __FILE__, __LINE__)
+      end
+
+      def redeclare_in_body(original, lines = 1..1, body = class_body)
+        described_class.call(model, file, lines, original, body) do
+          model.declare(callback_class.new(fresh, [:lift_round?]))
+        end
+      end
+
+      it "runs the original there, seeing the constants of the namespace around it" do
+        namespace.const_set(:KINDS, [true])
+
+        redeclare_in_body("declare_kinds(KINDS)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "runs it there, where its own constants do not hide the class's" do
+        namespace.const_set(:Origin, Module.new { const_set(:KINDS, [true]) })
+
+        redeclare_in_body("declare_kinds(Origin::KINDS)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "runs it there, seeing the class body's local variables" do
+        redeclare_in_body("declare_kinds(kinds)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "says so when the original fails there, naming where it is written, and does without it" do
+        expect { redeclare_in_body("raise ArgumentError, 'gone'", 3..4) }
+          .to output(/could not run #{Regexp.escape(File.realpath(file))}:3 again \(ArgumentError: gone\)/).to_stderr
+
+        expect(filters(model)).to eq([:first, original, :last, fresh])
+      end
+
+      # A lambda among the options says it was written where the declaration
+      # puts it: run again from the declaration's first line, it is the one
+      # the load registered.
+      [["the class body", true], ["the class", false]].each do |place, in_body|
+        it "runs a declaration of several lines from its first, in #{place}" do
+          source = "declare_kinds(\n  -> { true })"
+          model.class_eval(source, file, 3)
+          loaded = model.__callbacks[:save].to_a.last
+
+          expect { redeclare_in_body(source, 3..4, in_body ? class_body : nil) }.not_to output.to_stderr
+
+          expect(filters(model)).to eq([:first, original, :last, fresh])
+          expect(model.__callbacks[:save].to_a).not_to include(loaded)
+        end
+      end
+    end
+
+    it "takes a different equal callback for each equal one the original registers" do
+      twin = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(model, 1..1, "declare_original; declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last])
+    end
+
+    it "does not take an equal callback another declaration registered" do
+      model.declare(callback_class.new(validator_class.new(:for_lift, in: [true]), [:lift_round?]))
+      equal = validator_class.new(:for_lift, in: [true])
+      redeclare(model, 2..2, "declare_original") { model.declare(callback_class.new(equal, [:lift_round?])) }
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last, equal])
+    end
+
+    it "does not take one the class inherited, though its parent declared it after the class's own" do
+      child = Class.new(model)
+      twin = validator_class.new(:for_lift, in: [true])
+      child.declare(callback_class.new(twin, [:lift_round?]))
+      late = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(late, [:lift_round?]))
+
+      redeclare(child, 1..1, "declare_original") { nil }
+
+      expect(filters(child)).to eq([:first, original, :last, late])
+    end
+
+    it "runs nothing again without the original, and says nothing" do
+      expect { described_class.call(model, file, 1..1) { model.declare(callback_class.new(fresh)) } }.not_to output.to_stderr
+    end
+  end
+
   describe "validator reflection" do
     let(:old_validator) { Object.new }
     let(:new_validator) { Object.new }
@@ -262,6 +574,36 @@ RSpec.describe Evilution::Integration::Loading::CallbackRedeclaration do
       redeclare_validator
 
       expect(child._validators[:title]).to eq([new_validator])
+    end
+
+    it "drops the old validator when the declaration registers none in its place" do
+      redeclare(model, line..line) { nil }
+
+      expect([filters(model), model._validators[:title]]).to eq([[], []])
+    end
+
+    it "lists the next one in a subclass's own list again, after a run that registered none" do
+      child = Class.new(model)
+      child.define_singleton_method(:_validators) { @_validators ||= { title: superclass._validators[:title].dup } }
+      child._validators
+      redeclare(model, line..line) { nil }
+
+      redeclare_validator
+
+      expect([model._validators[:title], child._validators[:title]]).to eq([[new_validator], [new_validator]])
+    end
+
+    it "lists a new validator only for the attributes the class lists it for, in a subclass" do
+      child = Class.new(model)
+      child.define_singleton_method(:_validators) do
+        @_validators ||= { title: superclass._validators[:title].dup, body: [] }
+      end
+      child._validators
+      redeclare(model, line..line) { nil }
+
+      redeclare_validator
+
+      expect(child._validators).to eq(title: [new_validator], body: [])
     end
 
     it "leaves other validators where they were" do

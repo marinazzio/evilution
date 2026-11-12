@@ -16,13 +16,26 @@ require_relative "literal_callable"
 # when it is a block or a lambda. A condition or callback named by a symbol
 # is a method, and a subject of its own already.
 #
+# So are the options of a declaration: `inclusion: { in: [true] }` and
+# `if: :lift_round?` above decide what the validation checks and when, as
+# much as a condition written out does.
+#
 # Declarations are recognised by name -- `validate`, `validates`,
 # `validates_*`, `before_*`, `after_*`, `around_*` -- and only receiver-less,
 # directly in a class body: that is the call the mutated file re-runs.
 module Evilution::AST::CallbackDeclaration
   # body: the node holding the callable's body. declaration: the call it is
   # written in. label: how the declaration reads, for naming the subject.
-  Callable = Data.define(:body, :declaration, :label)
+  Callable = Data.define(:body, :declaration, :label) do
+    # What mutations go into.
+    def node = body
+  end
+
+  # arguments: the declaration's argument list, options and all.
+  Options = Data.define(:arguments, :declaration, :label) do
+    # What mutations go into.
+    def node = arguments
+  end
 
   NAME = /\A(?:validate|validates|validates_\w+|(?:before|after|around)_\w+)\z/
   CONDITIONS = %w[if unless].freeze
@@ -31,10 +44,24 @@ module Evilution::AST::CallbackDeclaration
   # The callables of every callback declaration among a class body's direct
   # statements.
   def self.in_body(body)
+    declarations_in(body).flat_map { |declaration| callables(declaration) }
+  end
+
+  # The declarations among a class body's direct statements that are given
+  # options -- `key: value` pairs, written without braces -- with their
+  # argument lists. Options passed only as a double splat are not written out
+  # here, and a hash in braces is a positional argument, not options.
+  def self.options_in(body)
+    declarations_in(body).select { |declaration| options?(declaration) }.map do |declaration|
+      Options.new(arguments: declaration.arguments, declaration: declaration, label: label_of(declaration))
+    end
+  end
+
+  def self.declarations_in(body)
     statements = body.is_a?(Prism::BeginNode) ? body.statements : body
     return [] unless statements.is_a?(Prism::StatementsNode)
 
-    statements.body.select { |node| match?(node) }.flat_map { |declaration| callables(declaration) }
+    statements.body.select { |node| match?(node) }
   end
 
   # Whether node is a callback declaration that can be run again on its own.
@@ -77,6 +104,11 @@ module Evilution::AST::CallbackDeclaration
     pair.is_a?(Prism::AssocNode) && pair.key.is_a?(Prism::SymbolNode) && CONDITIONS.include?(pair.key.unescaped)
   end
 
+  def self.options?(declaration)
+    options = arguments_of(declaration).last
+    options.is_a?(Prism::KeywordHashNode) && options.elements.any?(Prism::AssocNode)
+  end
+
   def self.arguments_of(call)
     call.arguments ? call.arguments.arguments : []
   end
@@ -87,5 +119,6 @@ module Evilution::AST::CallbackDeclaration
     node.compact_child_nodes.any? { |child| heredoc?(child) }
   end
 
-  private_class_method :callables, :label_of, :bodies_of, :condition_bodies, :condition?, :arguments_of, :heredoc?
+  private_class_method :declarations_in, :options?, :callables, :label_of, :bodies_of,
+                       :condition_bodies, :condition?, :arguments_of, :heredoc?
 end

@@ -93,14 +93,18 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # wrapped in a CallbackRedeclaration call, which puts what the re-run
   # registers in the place of what the declaration registered before.
   # `keep_lines` is where that was: the declaration's lines in the file as it
-  # was loaded.
-  def call(source, file_path: nil, keep_offset: nil, keep_lines: nil)
+  # was loaded, and `keep_source` the declaration as written there, which
+  # CallbackRedeclaration runs first, in the class body's own binding, to
+  # find what the load registered.
+  # A mutation that drops the end of a declaration -- its last option -- is
+  # made at the very end of what is left, and still keeps it.
+  def call(source, file_path: nil, keep_offset: nil, keep_lines: nil, keep_source: nil)
     return source if file_path && !preloaded?(file_path)
 
     result = Prism.parse(source)
     return source if result.failure?
 
-    edits = collect_edits(source, result.value, keep_offset, keep_lines)
+    edits = collect_edits(source, result.value, Kept.new(keep_offset, keep_lines, keep_source))
     return source if edits.empty?
 
     apply_edits(source, edits)
@@ -112,9 +116,13 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     self.class.preloaded_features.include?(File.expand_path(file_path))
   end
 
-  def collect_edits(source, tree, keep_offset, keep_lines)
+  # What the call keeps, and how a kept callback declaration is wrapped.
+  Kept = Data.define(:offset, :lines, :source)
+  private_constant :Kept
+
+  def collect_edits(source, tree, kept)
     edits = []
-    walker = Walker.new(source, IDEMPOTENT_CALLS, edits, keep_offset, keep_lines)
+    walker = Walker.new(source, IDEMPOTENT_CALLS, edits, kept)
     walker.visit(tree)
     edits
   end
@@ -135,13 +143,14 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
       Prism::ConstantAndWriteNode, Prism::ConstantPathAndWriteNode
     ].freeze
 
-    def initialize(source, allowlist, edits, keep_offset, keep_lines)
+    def initialize(source, allowlist, edits, kept)
       super()
       @source = source
       @allowlist = allowlist
       @edits = edits
-      @keep_offset = keep_offset
-      @keep_lines = keep_lines
+      @keep_offset = kept.offset
+      @keep_lines = kept.lines
+      @keep_source = kept.source
     end
 
     def visit_class_node(node)
@@ -206,8 +215,9 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
 
       start_offset = stmt.location.start_offset
       end_offset = stmt.location.end_offset
-      lines = "#{@keep_lines.first}..#{@keep_lines.last}"
-      @edits << [start_offset, start_offset, "#{CALLBACKS}.call(self, __FILE__, #{lines}) { "]
+      arguments = ["self", "__FILE__", "#{@keep_lines.first}..#{@keep_lines.last}"]
+      arguments.push(@keep_source.dump, "binding") if @keep_source
+      @edits << [start_offset, start_offset, "#{CALLBACKS}.call(#{arguments.join(", ")}) { "]
       @edits << [end_offset, end_offset, " }"]
     end
 
@@ -295,7 +305,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     end
 
     def kept?((start_offset, end_offset, _replacement))
-      @keep_offset && @keep_offset >= start_offset && @keep_offset < end_offset
+      @keep_offset && @keep_offset.between?(start_offset, end_offset)
     end
 
     # Prism CallNode location ends at the close of the call syntax (e.g. the
