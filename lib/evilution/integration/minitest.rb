@@ -348,5 +348,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 end
 
+# Loaded once the class is defined, as both nest under it. The crash detector
+# names failures by TestIds and leaves loading them to this file.
 require_relative "minitest/test_ids"
 require_relative "minitest/stop_hook"

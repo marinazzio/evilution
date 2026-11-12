@@ -73,10 +73,9 @@ class Evilution::Integration::MinitestCrashDetector
 
   private
 
-  # Loaded here rather than with this file: TestIds lives under the Minitest
-  # integration class, which requires this file before it is defined.
+  # TestIds is loaded by the Minitest integration, the detector's only user.
+  # Requiring it here would load that integration from this file, mid-load.
   def test_id(result)
-    require_relative "minitest/test_ids"
     Evilution::Integration::Minitest::TestIds.of(result)
   end
 end
