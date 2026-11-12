@@ -4,7 +4,6 @@ require_relative "../actions"
 require_relative "base"
 require_relative "../config_factory"
 require_relative "../../../runner"
-require_relative "../../../runner/line_range_filter"
 require_relative "../../../mutator/registry"
 require_relative "../../../ast/pattern/filter"
 
@@ -31,11 +30,10 @@ class Evilution::MCP::InfoTool::Actions::Subjects < Evilution::MCP::InfoTool::Ac
     def subject_entries(subjects, config)
       registry = Evilution::Mutator::Registry.default
       filter = build_subject_filter(config)
-      operator_options = { skip_heredoc_literals: config.skip_heredoc_literals? }
-      in_range = Evilution::Runner::LineRangeFilter.new(config.line_ranges)
+      operator_options = { skip_heredoc_literals: config.skip_heredoc_literals?, line_ranges: config.line_ranges }
 
       subjects.map do |subj|
-        count = in_range.call(registry.mutations_for(subj, filter: filter, operator_options: operator_options)).length
+        count = registry.mutations_for(subj, filter: filter, operator_options: operator_options).length
         { "name" => subj.name, "file" => subj.file_path, "line" => subj.line_number, "mutations" => count }
       ensure
         subj.release_node!

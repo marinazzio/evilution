@@ -992,12 +992,6 @@ RSpec.describe Evilution::CLI do
              release_node!: nil)
     end
 
-    # Inside the line range the line-range example asks for, so that each one
-    # is counted whether or not a range is given.
-    def mutation_in_range
-      double("Mutation", file_path: "lib/example.rb", changed_lines: 12..12)
-    end
-
     before do
       allow(runner).to receive(:parse_and_filter_subjects).and_return([subject1, subject2])
 
@@ -1005,10 +999,10 @@ RSpec.describe Evilution::CLI do
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for)
         .with(subject1, filter: anything, operator_options: anything)
-        .and_return(Array.new(3) { mutation_in_range })
+        .and_return([double, double, double])
       allow(registry).to receive(:mutations_for)
         .with(subject2, filter: anything, operator_options: anything)
-        .and_return([mutation_in_range])
+        .and_return([double])
     end
 
     it "returns exit code 0" do

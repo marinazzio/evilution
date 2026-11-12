@@ -66,7 +66,7 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
       expect(registry).to have_received(:mutations_for).with(
         subject_a,
         filter: an_instance_of(Evilution::AST::Pattern::Filter),
-        operator_options: { skip_heredoc_literals: true }
+        operator_options: { skip_heredoc_literals: true, line_ranges: {} }
       )
     end
 
@@ -94,22 +94,20 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
     let(:subject_a) do
       instance_double("Subject", name: "Foo#bar", file_path: "lib/a.rb", line_number: 10, release_node!: nil)
     end
-    let(:registry) { instance_double("Registry") }
+    let(:registry) { instance_double("Registry", mutations_for: []) }
 
     before do
       allow(Evilution::Runner).to receive(:new)
         .and_return(instance_double(Evilution::Runner, parse_and_filter_subjects: [subject_a]))
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).and_return(
-        [instance_double(Evilution::Mutation, file_path: "lib/a.rb", changed_lines: 11..11),
-         instance_double(Evilution::Mutation, file_path: "lib/a.rb", changed_lines: 2..2)]
-      )
     end
 
-    it "counts only the mutations that change a line inside the range" do
+    it "has the operators build only the mutations that change a line inside the range" do
       described_class.new(parsed, stdout: out, stderr: err).call
 
-      expect(out.string).to include("(1 mutation)")
+      expect(registry).to have_received(:mutations_for).with(
+        subject_a, filter: nil, operator_options: { skip_heredoc_literals: false, line_ranges: { "lib/a.rb" => 10..12 } }
+      )
     end
   end
 

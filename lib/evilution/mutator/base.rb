@@ -8,6 +8,7 @@ require_relative "constant_value_subjects"
 require_relative "receiver_positions"
 require_relative "../integration/loading/body_call_neutralizer"
 require_relative "../ast/heredoc_span"
+require_relative "line_range_filter"
 
 class Evilution::Mutator::Base < Prism::Visitor
   include Evilution::Mutator::Primitives
@@ -28,10 +29,13 @@ class Evilution::Mutator::Base < Prism::Visitor
 
   attr_reader :mutations
 
-  def initialize(**_options)
+  # line_ranges: file path => the line range a run asked for in that file;
+  # only mutations that change a line of it are built.
+  def initialize(line_ranges: {}, **_options)
     @mutations = []
     @subject = nil
     @file_source = nil
+    @line_range_filter = Evilution::Mutator::LineRangeFilter.new(line_ranges)
     @body_call_neutralizer = Evilution::Integration::Loading::BodyCallNeutralizer.new
   end
 
@@ -73,6 +77,10 @@ class Evilution::Mutator::Base < Prism::Visitor
     return if extended_length > length && replacement.match?(HEREDOC_ANCHOR_PATTERN)
 
     length = extended_length
+    # Checked before any surgery: a mutation outside the requested lines is
+    # never run, so building it would be wasted work.
+    lines = changed_lines(node, offset, length)
+    return unless @line_range_filter.cover?(@subject.file_path, lines)
 
     surgery = Evilution::AST::SourceSurgeon.apply(
       @file_source, offset: offset, length: length, replacement: replacement
@@ -86,7 +94,7 @@ class Evilution::Mutator::Base < Prism::Visitor
       replacement_bytesize: replacement.bytesize
     )
 
-    mutation = build_mutation_record(node, surgery, slices, offset, changed_lines(node, offset, length))
+    mutation = build_mutation_record(node, surgery, slices, offset, lines)
     @mutations << mutation
     mutation
   end
@@ -114,7 +122,7 @@ class Evilution::Mutator::Base < Prism::Visitor
   # so only the bytes between the node and the edit are scanned.
   def changed_lines(node, offset, length)
     first = line_at(offset, node)
-    last = first + @file_source.byteslice(offset, [length - 1, 0].max).count("\n")
+    last = first + line_breaks_in(offset, [length - 1, 0].max)
     first..last
   end
 
@@ -122,7 +130,13 @@ class Evilution::Mutator::Base < Prism::Visitor
   # breaks between the two, forwards or backwards.
   def line_at(offset, node)
     from, to = [offset, node.start_offset].minmax
-    node.start_line + ((offset <=> node.start_offset) * @file_source.byteslice(from, to - from).count("\n"))
+    node.start_line + ((offset <=> node.start_offset) * line_breaks_in(from, to - from))
+  end
+
+  # Counted on the raw bytes: a byte range can start or end inside a multibyte
+  # character, and counting such a slice as UTF-8 raises.
+  def line_breaks_in(offset, length)
+    @file_source.byteslice(offset, length).b.count("\n")
   end
 
   # Pre-compute the worker's eval target so per-iter Prism re-parse cost

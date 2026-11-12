@@ -35,7 +35,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       plan = described_class.new(config, registry: registry).call(subjects_for(file))
 
       expect(plan.mutated_lines.keys).to eq([file])
-      expect(plan.mutated_lines[file]).to eq(plan.enabled.map(&:line).uniq.sort)
+      expect(plan.mutated_lines[file]).to eq(plan.enabled.flat_map { |m| m.changed_lines.to_a }.uniq.sort)
     end
 
     it "counts a line whose mutations were disabled by a comment as mutated" do
@@ -231,6 +231,17 @@ RSpec.describe Evilution::Runner::MutationPlanner do
         end
       end
 
+      it "has the operators build only the mutations that change a line of the range" do
+        Dir.mktmpdir do |dir|
+          allow(registry).to receive(:mutations_for).and_call_original
+
+          file, = plan_for(dir, 4..6)
+
+          expect(registry).to have_received(:mutations_for)
+            .with(anything, filter: nil, operator_options: hash_including(line_ranges: { file => 4..6 })).at_least(:once)
+        end
+      end
+
       it "drops the mutations outside the range without counting them as skipped" do
         Dir.mktmpdir do |dir|
           _, plan = plan_for(dir, 4..6)
@@ -245,6 +256,16 @@ RSpec.describe Evilution::Runner::MutationPlanner do
 
           expect(plan.mutated_lines[file]).not_to include(2)
           expect(plan.mutated_lines[file]).to include(5)
+        end
+      end
+
+      it "lists every line a kept mutation changes, not only the line it is reported at" do
+        Dir.mktmpdir do |dir|
+          file, plan = plan_for(dir, 10..10)
+          changed = planned(plan).flat_map { |mutation| mutation.changed_lines.to_a }.uniq.sort
+
+          expect(changed).to include(9, 10)
+          expect(plan.mutated_lines[file]).to eq(changed)
         end
       end
     end

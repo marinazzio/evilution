@@ -9,6 +9,12 @@ RSpec.describe Evilution::Mutator::Base do
     end
   end
 
+  describe "#initialize" do
+    it "accepts the operator options other operators take alongside the line ranges" do
+      expect { described_class.new(skip_heredoc_literals: true, line_ranges: {}) }.not_to raise_error
+    end
+  end
+
   describe "#call" do
     it "returns an empty array when no mutations are generated" do
       subject_obj = double("Subject",
@@ -235,6 +241,108 @@ RSpec.describe Evilution::Mutator::Base do
 
         expect(mutation.line).to eq(5)
         expect(mutation.changed_lines).to eq(4..5)
+      end
+
+      context "with non-ASCII source" do
+        let(:fixture_path) { File.expand_path("../../support/fixtures/multibyte_changed_lines.rb", __dir__) }
+
+        it "spans the lines of replaced bytes that end in a multibyte character" do
+          operator_class = Class.new(described_class) do
+            def visit_def_node(node)
+              body = node.body.location
+              add_mutation(offset: body.start_offset, length: body.end_offset - body.start_offset,
+                           replacement: "nil", node: node)
+            end
+          end
+
+          expect(mutations_of(operator_class).map(&:changed_lines)).to eq([5..6])
+        end
+
+        it "is the line of a one-line span that ends in a multibyte character" do
+          operator_class = Class.new(described_class) do
+            def visit_call_node(node)
+              return unless node.name == :é
+
+              add_mutation(offset: node.location.start_offset,
+                           length: node.location.end_offset - node.location.start_offset,
+                           replacement: "x", node: node)
+            end
+          end
+
+          expect(mutations_of(operator_class).map(&:changed_lines)).to eq([6..6])
+        end
+      end
+
+      context "with a line range for the file" do
+        let(:def_removal) do
+          Class.new(described_class) do
+            def visit_def_node(node)
+              add_mutation(offset: node.location.start_offset,
+                           length: node.location.end_offset - node.location.start_offset,
+                           replacement: "nil", node: node)
+            end
+          end
+        end
+
+        def mutations_in(line_ranges)
+          subject_obj = double("Subject", name: "User#initialize", file_path: fixture_path, node: tree,
+                                          kind: :method, concern_hook?: false)
+          def_removal.new(line_ranges: line_ranges).call(subject_obj)
+        end
+
+        it "builds only the mutations that change a line of the range" do
+          expect(mutations_in(fixture_path => 10..10).map(&:changed_lines)).to eq([9..11])
+        end
+
+        it "builds a mutation that starts above the range and reaches into it" do
+          expect(mutations_in(fixture_path => 11..12).map(&:changed_lines)).to eq([9..11])
+        end
+
+        it "does not operate on the source for the mutations it leaves out" do
+          allow(Evilution::AST::SourceSurgeon).to receive(:apply).and_call_original
+
+          mutations_in(fixture_path => 10..10)
+
+          expect(Evilution::AST::SourceSurgeon).to have_received(:apply).once
+        end
+
+        it "builds every mutation when the range is for another file" do
+          expect(mutations_in("lib/other.rb" => 10..10).length).to eq(4)
+        end
+
+        it "returns nil from add_mutation for a mutation it leaves out" do
+          operator = described_class.new(line_ranges: { "x.rb" => 2..2 })
+          operator.instance_variable_set(:@file_source, "a = 1\nb = 2\n")
+          operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method, concern_hook?: false))
+          node = Prism.parse("a = 1\nb = 2\n").value.statements.body.first
+
+          expect(operator.send(:add_mutation, offset: 4, length: 1, replacement: "0", node: node)).to be_nil
+          expect(operator.mutations).to be_empty
+        end
+      end
+
+      context "when offsets do not fall on character boundaries" do
+        def changed_lines_in(source, node, offset, length)
+          operator = described_class.new
+          operator.instance_variable_set(:@file_source, source)
+          operator.send(:changed_lines, node, offset, length)
+        end
+
+        let(:source) { "a = \"é\"\r\nb = \"é\"\r\nc = 1\r\n" }
+        let(:statements) { Prism.parse(source).value.statements.body }
+        let(:second_e) { source.byteindex("é", source.byteindex("b")) }
+
+        it "counts lines forward from the node up to an edit inside a multibyte character" do
+          expect(changed_lines_in(source, statements[0], second_e + 1, 0)).to eq(2..2)
+        end
+
+        it "counts lines back from the node past an edit inside a multibyte character" do
+          expect(changed_lines_in(source, statements[2], second_e + 1, 0)).to eq(2..2)
+        end
+
+        it "spans CRLF lines up to a span whose last character is multibyte" do
+          expect(changed_lines_in(source, statements[0], 0, second_e + 2)).to eq(1..2)
+        end
       end
     end
 

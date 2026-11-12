@@ -52,17 +52,15 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
       )
     end
 
-    it "counts only the mutations that change a line inside the requested range" do
+    it "has the operators build only the mutations that change a line inside the requested range" do
       allow(config).to receive(:line_ranges).and_return("lib/foo.rb" => 10..12)
-      allow(registry).to receive(:mutations_for).and_return(
-        [instance_double(Evilution::Mutation, file_path: "lib/foo.rb", changed_lines: 11..11),
-         instance_double(Evilution::Mutation, file_path: "lib/foo.rb", changed_lines: 2..2)]
+
+      described_class.call(files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => 10..12 })
+
+      expect(registry).to have_received(:mutations_for).with(
+        subject_stub, filter: nil,
+                      operator_options: { skip_heredoc_literals: false, line_ranges: { "lib/foo.rb" => 10..12 } }
       )
-
-      body = parse_body(described_class.call(files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => 10..12 }))
-
-      expect(body["subjects"].first["mutations"]).to eq(1)
-      expect(body["total_mutations"]).to eq(1)
     end
 
     it "calls release_node! on each subject after counting" do
