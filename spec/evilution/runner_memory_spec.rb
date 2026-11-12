@@ -14,6 +14,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       mutated_source: "a > b",
       file_path: "lib/example.rb",
       line: 3,
+      changed_lines: 3..3,
       column: 4,
       diff: "- a >= b\n+ a > b",
       strip_sources!: nil,

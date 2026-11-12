@@ -94,12 +94,64 @@ RSpec.describe Evilution::AST::ClassBody do
     it "does not search the superclass expression" do
       source = "class C < Struct.new(:a) { def x = 1 }\n  def y = 2\nend\n"
 
-      expect(anchored(source, 1)).to eq([])
+      expect(headers(source, 1)).to eq(["{ def x = 1 }"])
       expect(headers(source, 2)).to eq(["class C < Struct.new(:a) { def x = 1 }"])
+    end
+
+    # The block of `Data.define` or `Struct.new` is the body of the class it
+    # defines: its methods are not methods of the enclosing scope.
+    it "does not take a method written in the block of a value-object definition" do
+      source = "class C\n  R = Data.define(:a) do\n    def r = 1\n  end\n  def c = 2\nend\n"
+
+      expect(headers(source, 3)).to eq(["do"])
+      expect(headers(source, 5)).to eq(["class C"])
+    end
+
+    it "does not lend a value-object definition's method to a scope without methods" do
+      source = "class C\n  X = [1].freeze\n  R = Struct.new(:a) do\n    def r = 1\n  end\nend\n"
+
+      expect(anchored(source, 4).map { |body| body.node.class }).to eq([Prism::BlockNode])
+    end
+
+    it "anchors a value-object definition written anywhere in the body" do
+      source = "module M\n  def m = 1\n  build(::Data.define(:a) { def r = 1 })\nend\n"
+
+      expect(headers(source, 3)).to eq(["{ def r = 1 }"])
+      expect(headers(source, 2)).to eq(["module M"])
+    end
+
+    it "treats the block of any other call as part of the body" do
+      source = "class C\n  Foo::Data.define(:a) do\n    def r = 1\n  end\n  def c = 2\nend\n"
+
+      expect(headers(source, 3)).to eq(["class C"])
+      expect(anchored(source, 5)).to eq([])
     end
 
     it "returns nothing for a top-level method" do
       expect(anchored("def a = 1\n", 1)).to eq([])
+    end
+  end
+
+  describe ".unanchored_in" do
+    def unanchored(source)
+      described_class.unanchored_in(Prism.parse(source).value).map { |body| body.node.slice.lines.first.chomp }
+    end
+
+    it "returns the scopes with no method of their own or borrowed, outermost first" do
+      source = "class A\n  X = 1\n  module B; end\nend\nclass C\n  def c = 1\nend\n" \
+               "class D\n  class << self\n    def d = 1\n  end\nend\n"
+
+      expect(unanchored(source)).to eq(["class A", "module B; end"])
+    end
+
+    it "returns a scope whose only methods are in the block of a value-object definition" do
+      source = "class T\n  R = Data.define(:a) do\n    def r = 1\n  end\n  S = Struct.new(:a) do\n  end\nend\n"
+
+      expect(unanchored(source)).to eq(["class T", "do"])
+    end
+
+    it "returns nothing for a file without scopes" do
+      expect(unanchored("X = [1].freeze\n")).to eq([])
     end
   end
 
@@ -134,12 +186,15 @@ RSpec.describe Evilution::AST::ClassBody do
       expect(declared(source, 2)).to eq([[]])
     end
 
-    it "never offers a method or a nested scope to the block" do
-      source = "class C\n  def a = 1\n  class Inner; end\n  class << self; end\n  module M; end\nend\n"
+    # Nil stands for a skipped child that was not dropped from the list.
+    it "never offers a method, a nested scope or a value-object block to the block" do
+      source = "class C\n  def a = 1\n  class Inner; end\n  class << self; end\n  module M; end\n  " \
+               "R = Data.define(:a) { def r = 1 }\nend\n"
       seen = []
       anchored(source, 2).first.declarations { |node| seen << node.class }
 
-      expect(seen & [Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode]).to eq([])
+      expect(seen & [Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode, Prism::BlockNode,
+                     NilClass]).to eq([])
     end
 
     # Cutting such a declaration out would leave the modifier dangling.
@@ -179,6 +234,13 @@ RSpec.describe Evilution::AST::ClassBody do
       expect(declared(source, 5)).to eq([[:include], [:include]])
       expect(anchored(source, 5).map { |body| body.declarations { |n| n.is_a?(Prism::CallNode) }.map(&:slice) })
         .to eq([["include A"], ["include B"]])
+    end
+
+    it "leaves the block of a value-object definition to that definition" do
+      source = "class C\n  def a = 1\n  R = Data.define(:a) do\n    include A\n    def r = 1\n  end\n  extend B\nend\n"
+
+      expect(declared(source, 2)).to eq([[:extend]])
+      expect(declared(source, 5)).to eq([[:include]])
     end
 
     it "returns nothing for an empty body" do

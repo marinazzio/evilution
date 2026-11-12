@@ -6,7 +6,15 @@ require_relative "version"
 class Evilution::Mutation
   Sources = Data.define(:original, :mutated)
   Slice = Data.define(:original, :mutated)
-  Location = Data.define(:file_path, :line, :column)
+  # lines: the lines of the original file the mutation's bytes sit on. A
+  # mutation is reported at the line its node starts on, which need not be the
+  # first line it changes, and it can change several. Left out, it is taken to
+  # change only the line it is reported at.
+  Location = Data.define(:file_path, :line, :column, :lines) do
+    def initialize(file_path:, line:, column:, lines: line..line)
+      super
+    end
+  end
 
   # What a mutation holds once its sources are released (see strip_sources!),
   # and when it was built without a slice. Their fields read as nil, so the
@@ -70,6 +78,10 @@ class Evilution::Mutation
 
   def column
     @location.column
+  end
+
+  def changed_lines
+    @location.lines
   end
 
   def unparseable?

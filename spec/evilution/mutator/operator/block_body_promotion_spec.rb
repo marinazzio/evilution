@@ -122,6 +122,10 @@ RSpec.describe Evilution::Mutator::Operator::BlockBodyPromotion do
     end
 
     it "skips an it-parameter block" do
+      # Before Ruby 3.4 `it` is a method call, not a block parameter, and
+      # Prism 2 parses for the running Ruby.
+      skip "`it` is a block parameter from Ruby 3.4" if Gem::Version.new(RUBY_VERSION) < Gem::Version.new("3.4")
+
       expect(mutations_from_source("def t(items)\n  items.each { process(it) }\nend\n")).to be_empty
     end
 
