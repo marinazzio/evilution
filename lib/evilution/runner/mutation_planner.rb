@@ -42,11 +42,14 @@ class Evilution::Runner::MutationPlanner
 
   attr_reader :config, :registry
 
-  # The lines mutations were generated for, per file. Taken before any filter:
-  # a line whose mutations were all disabled or judged equivalent was still
-  # reached by an operator.
+  # The lines mutations were generated for, per file: every line a mutation
+  # changes, the same lines the line-range filter judged it by. Taken before
+  # any later filter: a line whose mutations were all disabled or judged
+  # equivalent was still reached by an operator.
   def mutated_lines(mutations)
-    mutations.group_by(&:file_path).transform_values { |group| group.map(&:line).uniq.sort }
+    mutations.group_by(&:file_path).transform_values do |group|
+      group.flat_map { |mutation| mutation.changed_lines.to_a }.uniq.sort
+    end
   end
 
   def compute_disabled_mutations(disabled_filter)
@@ -95,8 +98,12 @@ class Evilution::Runner::MutationPlanner
     GenerationResult.new(mutations: mutations, skipped: skipped)
   end
 
+  # The operators build no mutation of lines outside a requested line range:
+  # those are out of the run's scope, as the subjects the range leaves out
+  # are, not suppressed within it -- so they are neither skipped nor reported
+  # as mutated lines.
   def build_operator_options
-    { skip_heredoc_literals: config.skip_heredoc_literals? }
+    { skip_heredoc_literals: config.skip_heredoc_literals?, line_ranges: config.line_ranges }
   end
 
   def build_ignore_filter

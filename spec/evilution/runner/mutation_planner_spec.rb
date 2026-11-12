@@ -35,7 +35,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       plan = described_class.new(config, registry: registry).call(subjects_for(file))
 
       expect(plan.mutated_lines.keys).to eq([file])
-      expect(plan.mutated_lines[file]).to eq(plan.enabled.map(&:line).uniq.sort)
+      expect(plan.mutated_lines[file]).to eq(plan.enabled.flat_map { |m| m.changed_lines.to_a }.uniq.sort)
     end
 
     it "counts a line whose mutations were disabled by a comment as mutated" do
@@ -176,6 +176,98 @@ RSpec.describe Evilution::Runner::MutationPlanner do
         m.diff =~ /^-\s*true\s*$/ && m.line >= predicate_true_line && m.line <= predicate_true_line + 3
       end
       expect(predicate_true_mutations.map(&:operator_name).uniq).to eq(["last_expression_removal"])
+    end
+
+    context "with a line range" do
+      let(:source) do
+        <<~RUBY
+          class Night
+            KINDS = %i[day night].freeze
+
+            def call(x)
+              x + 1
+            end
+
+            def other(y)
+              foo(y,
+                  2)
+            end
+          end
+        RUBY
+      end
+
+      def plan_for(dir, line_ranges = nil)
+        file = File.join(dir, "night.rb")
+        File.write(file, source)
+        overrides = line_ranges ? { line_ranges: { file => line_ranges } } : {}
+        [file, described_class.new(config(**overrides), registry: registry).call(subjects_for(file))]
+      end
+
+      def planned(plan)
+        plan.enabled + plan.equivalent
+      end
+
+      it "leaves out the class-body mutations an in-range method is the anchor of" do
+        Dir.mktmpdir do |dir|
+          _, unranged = plan_for(dir)
+          expect(planned(unranged).map(&:line)).to include(2)
+
+          _, plan = plan_for(dir, 4..6)
+
+          expect(planned(plan)).not_to be_empty
+          expect(planned(plan).map(&:changed_lines)).to all(satisfy { |lines| lines.first <= 6 && lines.last >= 4 })
+        end
+      end
+
+      it "keeps a mutation that starts before the range and changes a line inside it" do
+        Dir.mktmpdir do |dir|
+          _, unranged = plan_for(dir)
+          expect(planned(unranged).map(&:changed_lines)).to include(9..9)
+
+          _, plan = plan_for(dir, 10..10)
+
+          expect(planned(plan).map(&:changed_lines)).to include(9..10)
+          expect(planned(plan).map(&:changed_lines)).not_to include(9..9)
+        end
+      end
+
+      it "has the operators build only the mutations that change a line of the range" do
+        Dir.mktmpdir do |dir|
+          allow(registry).to receive(:mutations_for).and_call_original
+
+          file, = plan_for(dir, 4..6)
+
+          expect(registry).to have_received(:mutations_for)
+            .with(anything, filter: nil, operator_options: hash_including(line_ranges: { file => 4..6 })).at_least(:once)
+        end
+      end
+
+      it "drops the mutations outside the range without counting them as skipped" do
+        Dir.mktmpdir do |dir|
+          _, plan = plan_for(dir, 4..6)
+
+          expect(plan.skipped_count).to eq(0)
+        end
+      end
+
+      it "lists only the lines of the mutations it kept as mutated" do
+        Dir.mktmpdir do |dir|
+          file, plan = plan_for(dir, 4..6)
+
+          expect(plan.mutated_lines[file]).not_to include(2)
+          expect(plan.mutated_lines[file]).to include(5)
+        end
+      end
+
+      it "lists every line a kept mutation changes, not only the line it is reported at" do
+        Dir.mktmpdir do |dir|
+          file, plan = plan_for(dir, 10..10)
+          changed = planned(plan).flat_map { |mutation| mutation.changed_lines.to_a }.uniq.sort
+
+          expect(changed).to include(9, 10)
+          expect(plan.mutated_lines[file]).to eq(changed)
+        end
+      end
     end
 
     it "forwards skip_heredoc_literals to operator_options" do
