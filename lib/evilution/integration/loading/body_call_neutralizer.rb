@@ -94,7 +94,8 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
   # registers in the place of what the declaration registered before.
   # `keep_lines` is where that was: the declaration's lines in the file as it
   # was loaded, and `keep_source` the declaration as written there, which
-  # CallbackRedeclaration runs first to find what the load registered.
+  # CallbackRedeclaration runs first, in the class body's own binding, to
+  # find what the load registered.
   # A mutation that drops the end of a declaration -- its last option -- is
   # made at the very end of what is left, and still keeps it.
   def call(source, file_path: nil, keep_offset: nil, keep_lines: nil, keep_source: nil)
@@ -215,7 +216,7 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
       start_offset = stmt.location.start_offset
       end_offset = stmt.location.end_offset
       arguments = ["self", "__FILE__", "#{@keep_lines.first}..#{@keep_lines.last}"]
-      arguments << @keep_source.dump if @keep_source
+      arguments.push(@keep_source.dump, "binding") if @keep_source
       @edits << [start_offset, start_offset, "#{CALLBACKS}.call(#{arguments.join(", ")}) { "]
       @edits << [end_offset, end_offset, " }"]
     end

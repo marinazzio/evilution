@@ -460,7 +460,7 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       result = neutralizer.call(src, keep_offset: src.index("paid?"), keep_lines: 3..3, keep_source: original)
 
       expect(result.lines[2]).to eq(
-        "  #{helper}(self, __FILE__, 3..3, #{original.dump}) { validate :credit_limit, if: -> { paid? } } # why\n"
+        "  #{helper}(self, __FILE__, 3..3, #{original.dump}, binding) { validate :credit_limit, if: -> { paid? } } # why\n"
       )
     end
 

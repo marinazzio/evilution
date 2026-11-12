@@ -469,7 +469,7 @@ RSpec.describe Evilution::Mutator::Base do
         operator_class.new.call(subject).first
       end
       let(:helper) do
-        "::Evilution::Integration::Loading::CallbackRedeclaration.call(self, __FILE__, 3..4, #{declaration.slice.dump})"
+        "::Evilution::Integration::Loading::CallbackRedeclaration.call(self, __FILE__, 3..4, #{declaration.slice.dump}, binding)"
       end
 
       before do

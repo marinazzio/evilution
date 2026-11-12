@@ -2,6 +2,7 @@
 
 require_relative "../loading"
 require_relative "callback_equivalence"
+require_relative "../../diagnostic"
 
 # Runs a callback declaration again and puts what it registers where the
 # callbacks it registered before were.
@@ -24,8 +25,11 @@ require_relative "callback_equivalence"
 # :for_lift, inclusion: { in: [true] }` -- has no proc to go by, and the
 # mutated declaration registers it with other values. So when the module is
 # given the declaration as it is written in the file, it runs that again
-# first: what it registers then is the same, value for value, as what it
-# registered on load, and takes its place. After that the module goes by what
+# first, in the class body it is written in, so that it reads the constants
+# and local variables the body sees: what it registers then is the same,
+# value for value, as what it registered on load, and takes its place -- one
+# callback for each it registers, and none the class inherited. After that
+# the module goes by what
 # it registered itself: a mutation can add or remove lines, so a proc created
 # by the mutated source may report a line that belongs to another declaration
 # of the real file.
@@ -39,12 +43,13 @@ module Evilution::Integration::Loading::CallbackRedeclaration
 
   # klass: the class whose body the declaration is written in. file, lines:
   # where the declaration is in the file as it was loaded. original: the
-  # declaration's source as written there, or nil.
-  def self.call(klass, file, lines, original = nil, &)
+  # declaration's source as written there, or nil. body: the binding of the
+  # class body it is written in, or nil to run it in the class alone.
+  def self.call(klass, file, lines, original = nil, body = nil, &)
     return yield unless klass.respond_to?(:__callbacks)
 
     origin = Origin.new(file, lines)
-    rerun_original(klass, origin, file, original) if original && !ledger.registered.key?(key(klass, origin))
+    rerun_original(klass, origin, Original.new(original, body)) if original && !ledger.registered.key?(key(klass, origin))
     redeclare(klass, origin, &)
   end
 
@@ -58,14 +63,17 @@ module Evilution::Integration::Loading::CallbackRedeclaration
     result
   end
 
-  # A declaration that reads what only the class body defines -- a local
-  # variable -- cannot be run on its own; the mutated one is then settled
-  # without it, against what the file's load left behind.
-  def self.rerun_original(klass, origin, file, original)
+  # A declaration that cannot be run again -- one that raises the second
+  # time -- leaves the mutated one to be settled without it, against what
+  # the file's load left behind, which may keep the original beside it.
+  def self.rerun_original(klass, origin, original)
     redeclare(klass, origin, rerun: true) do
-      klass.class_eval(original, file, origin.lines.first)
-    rescue StandardError
-      # Settled without it.
+      original.run(klass, origin)
+    rescue StandardError => e
+      Evilution::Diagnostic.warn(
+        "[evilution] could not run #{origin.file}:#{origin.lines.first} again (#{e.class}: #{e.message}); " \
+        "its mutations are applied beside what it registered when the file loaded"
+      )
     end
   end
 
@@ -115,6 +123,17 @@ module Evilution::Integration::Loading::CallbackRedeclaration
   # callback of each chain that followed what it registered before, if any.
   Ledger = Data.define(:registered, :vacancies)
   private_constant :Ledger
+
+  # The declaration as written in the file, and the binding of the class body
+  # it is written in, if known.
+  Original = Data.define(:source, :body) do
+    def run(klass, origin)
+      return klass.class_eval(source, origin.file, origin.lines.first) unless body
+
+      body.eval(source, origin.file, origin.lines.first)
+    end
+  end
+  private_constant :Original
 
   Equivalence = Evilution::Integration::Loading::CallbackEquivalence
   private_constant :Equivalence
@@ -171,7 +190,8 @@ module Evilution::Integration::Loading::CallbackRedeclaration
     def settle(name, before, previous)
       after = @klass.__callbacks[name].to_a
       fresh = Identity.without(after, before)
-      stale = before.select { |callback| stale?(callback, previous, fresh) || !Identity.member?(after, callback) }
+      claimed = @rerun ? claim(name, before, fresh) : []
+      stale = before.select { |callback| stale?(callback, previous, claimed) || !Identity.member?(after, callback) }
       return [[], []] if fresh.empty? && stale.empty?
 
       order = reorder(name, before, stale, fresh)
@@ -185,11 +205,29 @@ module Evilution::Integration::Loading::CallbackRedeclaration
     # the declaration registers the same callbacks as on load, so those are
     # what it registered too; a mutated one registers others, whose procs may
     # say they were written anywhere.
-    def stale?(callback, previous, fresh)
+    def stale?(callback, previous, claimed)
       return Identity.member?(previous, callback) if previous
       return false if Identity.member?(@registered.values.flatten, callback)
 
-      @origin.declared?(callback) || (@rerun && fresh.any? { |other| Equivalence.call(callback, other) })
+      @origin.declared?(callback) || Identity.member?(claimed, callback)
+    end
+
+    # The callbacks the declaration, run as written, registered on load: for
+    # each it registers now, the last equal one before it that no other is
+    # taken for. One the class inherited was registered by its parent, and
+    # one recorded for another declaration by that declaration.
+    def claim(name, before, fresh)
+      others = inherited(name) + @registered.values.flatten
+      candidates = Identity.without(before, others).reverse
+      fresh.each_with_object([]) do |callback, claimed|
+        match = candidates.find { |other| !Identity.member?(claimed, other) && Equivalence.call(other, callback) }
+        claimed << match if match
+      end
+    end
+
+    def inherited(name)
+      parent = @klass.superclass if @klass.is_a?(Class)
+      parent.respond_to?(:__callbacks) ? parent.__callbacks[name].to_a : []
     end
 
     # The new callbacks take the place of the first old one. With no old one

@@ -409,10 +409,135 @@ RSpec.describe Evilution::Integration::Loading::CallbackRedeclaration do
       expect(runs).to eq(1)
     end
 
-    it "does without it when it cannot be run on its own" do
-      redeclare(model, 1..1, "local_only_in_the_class_body") { model.declare(callback_class.new(fresh)) }
+    it "leaves the one a subclass inherited from an equal declaration of its parent" do
+      child = Class.new(model)
+      twin = validator_class.new(:for_lift, in: [true])
+      child.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(child, 1..1, "declare_original") { nil }
+
+      expect([filters(child), filters(model)]).to eq([[:first, original, :last], [:first, original, :last]])
+    end
+
+    it "takes one equal callback for each the original registers, the last" do
+      twin = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
 
       expect(filters(model)).to eq([:first, original, :last, fresh])
+    end
+
+    it "does without it when it cannot be run on its own" do
+      expect do
+        redeclare(model, 1..1, "local_only_in_the_class_body") { model.declare(callback_class.new(fresh)) }
+      end.to output(/could not run .*:1 again \(NameError/).to_stderr
+
+      expect(filters(model)).to eq([:first, original, :last, fresh])
+    end
+
+    describe "given where the declaration is written" do
+      let(:namespace) { Module.new }
+
+      before do
+        callbacks = callback_class
+        validators = validator_class
+        model.define_singleton_method(:declare_kinds) do |kinds|
+          declare(callbacks.new(validators.new(:for_lift, in: kinds), [:lift_round?]))
+        end
+        namespace.const_set(:Model, model)
+      end
+
+      # The class body of `Model`, reopened inside its namespace.
+      def class_body
+        namespace.module_eval("kinds = [true]; class Model; kinds = [true]; binding; end", __FILE__, __LINE__)
+      end
+
+      def redeclare_in_body(original, lines = 1..1, body = class_body)
+        described_class.call(model, file, lines, original, body) do
+          model.declare(callback_class.new(fresh, [:lift_round?]))
+        end
+      end
+
+      it "runs the original there, seeing the constants of the namespace around it" do
+        namespace.const_set(:KINDS, [true])
+
+        redeclare_in_body("declare_kinds(KINDS)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "runs it there, where its own constants do not hide the class's" do
+        namespace.const_set(:Origin, Module.new { const_set(:KINDS, [true]) })
+
+        redeclare_in_body("declare_kinds(Origin::KINDS)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "runs it there, seeing the class body's local variables" do
+        redeclare_in_body("declare_kinds(kinds)")
+
+        expect(filters(model)).to eq([:first, fresh, :last])
+      end
+
+      it "says so when the original fails there, naming where it is written, and does without it" do
+        expect { redeclare_in_body("raise ArgumentError, 'gone'", 3..4) }
+          .to output(/could not run #{Regexp.escape(File.realpath(file))}:3 again \(ArgumentError: gone\)/).to_stderr
+
+        expect(filters(model)).to eq([:first, original, :last, fresh])
+      end
+
+      # A lambda among the options says it was written where the declaration
+      # puts it: run again from the declaration's first line, it is the one
+      # the load registered.
+      [["the class body", true], ["the class", false]].each do |place, in_body|
+        it "runs a declaration of several lines from its first, in #{place}" do
+          source = "declare_kinds(\n  -> { true })"
+          model.class_eval(source, file, 3)
+          loaded = model.__callbacks[:save].to_a.last
+
+          expect { redeclare_in_body(source, 3..4, in_body ? class_body : nil) }.not_to output.to_stderr
+
+          expect(filters(model)).to eq([:first, original, :last, fresh])
+          expect(model.__callbacks[:save].to_a).not_to include(loaded)
+        end
+      end
+    end
+
+    it "takes a different equal callback for each equal one the original registers" do
+      twin = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(twin, [:lift_round?]))
+
+      redeclare(model, 1..1, "declare_original; declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last])
+    end
+
+    it "does not take an equal callback another declaration registered" do
+      model.declare(callback_class.new(validator_class.new(:for_lift, in: [true]), [:lift_round?]))
+      equal = validator_class.new(:for_lift, in: [true])
+      redeclare(model, 2..2, "declare_original") { model.declare(callback_class.new(equal, [:lift_round?])) }
+
+      redeclare(model, 1..1, "declare_original") { model.declare(callback_class.new(fresh, [:lift_round?])) }
+
+      expect(filters(model)).to eq([:first, fresh, :last, equal])
+    end
+
+    it "does not take one the class inherited, though its parent declared it after the class's own" do
+      child = Class.new(model)
+      twin = validator_class.new(:for_lift, in: [true])
+      child.declare(callback_class.new(twin, [:lift_round?]))
+      late = validator_class.new(:for_lift, in: [true])
+      model.declare(callback_class.new(late, [:lift_round?]))
+
+      redeclare(child, 1..1, "declare_original") { nil }
+
+      expect(filters(child)).to eq([:first, original, :last, late])
+    end
+
+    it "runs nothing again without the original, and says nothing" do
+      expect { described_class.call(model, file, 1..1) { model.declare(callback_class.new(fresh)) } }.not_to output.to_stderr
     end
   end
 
