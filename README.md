@@ -889,6 +889,8 @@ A range is matched against subjects, and not every line belongs to one. Methods 
 
 Read `0 mutations` next to that message as "not measured", not as "nothing to test".
 
+Callback and validation declarations with options add to every model, controller and mailer that has them: about 10–20 mutations for each `validates` line. Some of those make the declaration invalid (`length: {}`, `inclusion: { in: nil }`, `validates nil, ...`), so the class raises while it loads, and they count as killed like any other mutation that stops the file loading. Each such mutation also runs the declaration once more as written, so option values computed in the class body (`in: Status.pluck(:name)`) are computed again, and a third-party `validates_*` macro that keeps its own list of attributes may list it once more. To leave a declaration out, put `# evilution:disable` on its line or around it (see [Disable Comments](#disable-comments)). Declarations of one class that read the same — the conditions and the options of one declaration, or two `validates :email` lines — share one subject name, so `subjects[]` reports them together under one score.
+
 ### 4. Method-name targeted scan
 
 ```bash
