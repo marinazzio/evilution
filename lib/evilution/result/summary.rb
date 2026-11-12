@@ -4,14 +4,16 @@ require_relative "../result"
 require_relative "coverage_gap_grouper"
 require_relative "subject_scorer"
 require_relative "baseline_neutralization"
+require_relative "run_timings"
+require_relative "mutation_timings"
 
 class Evilution::Result::Summary
   attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
-              :target_file_count, :infra_retried, :uncovered_code, :baseline_failures
+              :target_file_count, :infra_retried, :uncovered_code, :baseline_failures, :timings
 
   def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
                  unresolved_target_files: [], target_file_count: nil, infra_retried: 0, uncovered_code: [],
-                 baseline_failures: [])
+                 baseline_failures: [], timings: Evilution::Result::RunTimings.new)
     @results = results
     @duration = duration
     @truncated = truncated
@@ -22,7 +24,21 @@ class Evilution::Result::Summary
     @infra_retried = infra_retried
     @uncovered_code = uncovered_code.freeze
     @baseline_failures = baseline_failures.freeze
+    @timings = timings
     freeze
+  end
+
+  # Each mutation phase summed over the mutations that measured it, in
+  # seconds of process time: in a parallel run they add up across workers.
+  def mutation_timing_totals
+    totals = Evilution::Result::MutationTimings::PHASES.to_h { |phase| [phase, 0.0] }
+    results.each do |result|
+      timings = result.timings
+      next unless timings
+
+      timings.to_h.each { |phase, seconds| totals[phase] += seconds }
+    end
+    totals
   end
 
   # The kills not counted because only examples already failing in the

@@ -95,6 +95,42 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#timings" do
+    it "is empty when the run measured nothing" do
+      expect(summary.timings.phases).to eq({})
+    end
+
+    it "is what the run measured" do
+      timings = Evilution::Result::RunTimings.new(phases: { baseline: 1.0 })
+
+      expect(described_class.new(results: [], timings: timings).timings).to be(timings)
+    end
+  end
+
+  describe "#mutation_timing_totals" do
+    def timed(**phases)
+      Evilution::Result::MutationResult.new(mutation: mutation, status: :killed,
+                                            timings: Evilution::Result::MutationTimings.new(**phases))
+    end
+
+    it "sums each phase over the mutations that measured it" do
+      summary = described_class.new(results: [
+                                      timed(apply: 0.1, test_run: 1.0),
+                                      timed(apply: 0.2, test_run: 2.0, confirmation: 3.0, queue_wait: 0.5),
+                                      make_result(:killed)
+                                    ])
+
+      totals = summary.mutation_timing_totals
+
+      expect(totals.keys).to eq(%i[apply test_run confirmation queue_wait])
+      expect(totals.transform_values { |v| v.round(4) }).to eq(apply: 0.3, test_run: 3.0, confirmation: 3.0, queue_wait: 0.5)
+    end
+
+    it "is zero for every phase when no mutation measured anything" do
+      expect(summary.mutation_timing_totals).to eq(apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0)
+    end
+  end
+
   describe "#total" do
     it "returns the total number of results" do
       expect(summary.total).to eq(5)

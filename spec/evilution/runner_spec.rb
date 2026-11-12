@@ -77,6 +77,13 @@ RSpec.describe Evilution::Runner do
       expect(result).to be_a(Evilution::Result::Summary)
     end
 
+    it "times every phase of the run, in the order they ran" do
+      phases = runner.call.timings.phases
+
+      expect(phases.keys).to eq(%i[subject_discovery preload canary baseline planning execution finalize])
+      expect(phases.values).to all(be >= 0)
+    end
+
     # EV-p4sm / GH #1603: a file evilution was pointed at that resolves to no
     # spec is carried into the summary, which fails the run on its own.
     context "when a target file resolves to no spec" do
@@ -1489,6 +1496,16 @@ RSpec.describe Evilution::Runner do
       expect(result.neutral).to eq(1)
     end
 
+    it "hands the baseline's per-file durations to the summary" do
+      baseline_result = Evilution::Baseline::Result.new(
+        failed_spec_files: Set.new, duration: 0.5, spec_file_durations: { "spec/example_spec.rb" => 0.4 }
+      )
+      allow(Evilution::Baseline).to receive(:new).and_return(instance_double(Evilution::Baseline, call: baseline_result))
+      stub_resolved_spec
+
+      expect(runner.call.timings.baseline_spec_files).to eq("spec/example_spec.rb" => 0.4)
+    end
+
     it "hands the baseline's failure detail to the summary" do
       failure = Evilution::Baseline::SpecFailure.new(spec_file: "spec/example_spec.rb", error: "boom")
       stub_red_baseline(failures: [failure])
@@ -1892,6 +1909,18 @@ RSpec.describe Evilution::Runner do
       result = parallel_runner.call
 
       expect(result.total).to eq(2)
+    end
+
+    it "hands each worker's figures to the summary" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+      allow(pool).to receive(:map).and_return([{ status: :killed, duration: 0.1 }, { status: :survived, duration: 0.2 }])
+      stat = Evilution::Parallel::WorkQueue::WorkerStat.new(42, 2, 0.3, 0.4)
+      allow(pool).to receive(:worker_stats).and_return([stat])
+
+      workers = described_class.new(config: parallel_config).call.timings.workers
+
+      expect(workers.map(&:to_a)).to eq([[42, 2, 0.3, 0.4]])
     end
 
     it "uses sequential execution when jobs is 1" do

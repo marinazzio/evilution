@@ -16,7 +16,8 @@ class Evilution::Runner::MutationExecutor::ResultPacker
       error_message: result.error_message,
       error_class: result.error_class,
       error_backtrace: result.error_backtrace,
-      known_failures_only: result.known_failures_only?
+      known_failures_only: result.known_failures_only?,
+      timings: result.timings ? result.timings.to_h : nil
     }
   end
 
@@ -37,7 +38,20 @@ class Evilution::Runner::MutationExecutor::ResultPacker
         klass: data[:error_class],
         backtrace: data[:error_backtrace]
       ),
-      known_failures_only: data[:known_failures_only]
+      known_failures_only: data[:known_failures_only],
+      timings: rebuild_timings(data)
     )
+  end
+
+  private
+
+  # queue_wait is measured in the worker around the isolated run, so it
+  # arrives beside the result's own timings rather than inside them.
+  def rebuild_timings(data)
+    timings = Evilution::Result::MutationTimings.from_h(data[:timings])
+    wait = data[:queue_wait]
+    return timings unless wait.is_a?(Numeric)
+
+    timings ? timings.with_queue_wait(wait) : Evilution::Result::MutationTimings.new(queue_wait: wait)
   end
 end

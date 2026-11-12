@@ -38,11 +38,13 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @notifier.start(mutations.length)
     pool = @pool_factory.call
     state = { results: [], truncated: false, completed: 0 }
-    all_worker_stats = run_batches(mutations, pool, baseline_result, integration, state)
+    worker_stats = Evilution::Parallel::WorkQueue::WorkerStat.aggregate(
+      run_batches(mutations, pool, baseline_result, integration, state)
+    )
 
-    log_worker_diagnostics(all_worker_stats)
+    log_worker_diagnostics(worker_stats)
     @notifier.finish
-    build_result(state)
+    build_result(state, worker_stats)
   end
 
   private
@@ -59,14 +61,16 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     all_worker_stats
   end
 
-  def log_worker_diagnostics(all_worker_stats)
+  def log_worker_diagnostics(worker_stats)
     return unless @diagnostics
 
-    @diagnostics.log_worker_stats(@diagnostics.aggregate_worker_stats(all_worker_stats))
+    @diagnostics.log_worker_stats(worker_stats)
   end
 
-  def build_result(state)
-    Evilution::Runner::MutationExecutor::ExecutionResult.new(results: state[:results], truncated: state[:truncated])
+  def build_result(state, worker_stats)
+    Evilution::Runner::MutationExecutor::ExecutionResult.new(
+      results: state[:results], truncated: state[:truncated], worker_stats: worker_stats
+    )
   end
 
   def run_batch(batch, pool, integration)
@@ -109,12 +113,22 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     return [] if uncached_indices.empty?
 
     uncached = uncached_indices.map { |i| batch[i] }
-    worker_results = pool.map(uncached) do |mutation|
-      test_command = ->(m) { integration.call(m) }
-      result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
-      @packer.compact(result)
-    end
+    dispatched_at = monotonic_now
+    worker_results = pool.map(uncached) { |mutation| run_in_worker(mutation, integration, dispatched_at) }
     worker_results.map { |r| unpack_unfinished(r) }
+  end
+
+  # Runs in the worker. CLOCK_MONOTONIC is system-wide, so the parent's reading
+  # at dispatch and the worker's here are on the same clock.
+  def run_in_worker(mutation, integration, dispatched_at)
+    queue_wait = monotonic_now - dispatched_at
+    test_command = ->(m) { integration.call(m) }
+    result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
+    @packer.compact(result).merge(queue_wait: queue_wait)
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
   def unpack_unfinished(result)

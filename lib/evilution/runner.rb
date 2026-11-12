@@ -26,36 +26,23 @@ class Evilution::Runner
     configure_child_output
     emit_parallel_db_warning
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    clock = Evilution::Runner::PhaseClock.new
 
-    subjects = subject_pipeline.call
+    subjects = clock.measure(:subject_discovery) { subject_pipeline.call }
     log_memory("after parse_subjects", "#{subjects.length} subjects")
 
-    perform_preload
+    clock.measure(:preload) { perform_preload }
     log_memory("after preload") if rails_root_detected?
 
-    run_canary
-
-    baseline_result = run_baseline(subjects)
-
-    plan = mutation_planner.call(subjects)
-    subject_pipeline.report_uncovered_code(plan.mutated_lines)
-    release_subject_nodes(subjects)
-    clear_operator_caches
-    execution = run_mutations(plan.enabled, baseline_result)
-    results = execution.results + equivalent_results(plan.equivalent)
-    log_memory("after run_mutations", "#{results.length} results")
+    clock.measure(:canary) { run_canary }
+    baseline_result = clock.measure(:baseline) { run_baseline(subjects) }
+    plan = clock.measure(:planning) { plan_mutations(subjects) }
+    execution = clock.measure(:execution) { run_mutations(plan.enabled, baseline_result) }
+    outcome = clock.measure(:finalize) { finalize(plan, execution, subjects) }
 
     duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-
-    audited_files = subjects.map(&:file_path).uniq.sort
-    summary = Evilution::Result::Summary.new(results: results, duration: duration, truncated: execution.truncated,
-                                             skipped: plan.skipped_count,
-                                             disabled_mutations: plan.disabled_mutations,
-                                             unresolved_target_files: target_spec_audit.call(audited_files),
-                                             target_file_count: audited_files.length,
-                                             infra_retried: execution.infra_retried,
-                                             uncovered_code: subject_pipeline.uncovered_code,
-                                             baseline_failures: baseline_result ? baseline_result.failures : [])
+    summary = build_summary(outcome: outcome, duration: duration, plan: plan, execution: execution,
+                            baseline_result: baseline_result, phases: clock.to_h)
     output_report(summary)
     save_session(summary)
 
@@ -100,6 +87,49 @@ class Evilution::Runner
 
   def perform_preload
     isolation_resolver.perform_preload
+  end
+
+  def plan_mutations(subjects)
+    plan = mutation_planner.call(subjects)
+    subject_pipeline.report_uncovered_code(plan.mutated_lines)
+    release_subject_nodes(subjects)
+    clear_operator_caches
+    plan
+  end
+
+  # What the summary needs once the mutations have run: every result, with
+  # the equivalent mutations folded in, and the audit of the target files.
+  Outcome = Data.define(:results, :target_file_count, :unresolved_target_files)
+  private_constant :Outcome
+
+  def finalize(plan, execution, subjects)
+    results = execution.results + equivalent_results(plan.equivalent)
+    log_memory("after run_mutations", "#{results.length} results")
+    audited_files = subjects.map(&:file_path).uniq.sort
+    Outcome.new(results: results, target_file_count: audited_files.length,
+                unresolved_target_files: target_spec_audit.call(audited_files))
+  end
+
+  def build_summary(outcome:, duration:, plan:, execution:, baseline_result:, phases:)
+    Evilution::Result::Summary.new(
+      results: outcome.results, duration: duration, truncated: execution.truncated,
+      skipped: plan.skipped_count,
+      disabled_mutations: plan.disabled_mutations,
+      unresolved_target_files: outcome.unresolved_target_files,
+      target_file_count: outcome.target_file_count,
+      infra_retried: execution.infra_retried,
+      uncovered_code: subject_pipeline.uncovered_code,
+      baseline_failures: baseline_result ? baseline_result.failures : [],
+      timings: run_timings(phases, baseline_result, execution)
+    )
+  end
+
+  def run_timings(phases, baseline_result, execution)
+    Evilution::Result::RunTimings.new(
+      phases: phases,
+      baseline_spec_files: baseline_result ? baseline_result.spec_file_durations : {},
+      workers: execution.worker_stats
+    )
   end
 
   def release_subject_nodes(subjects)
@@ -258,3 +288,4 @@ require_relative "runner/baseline_runner"
 require_relative "runner/diagnostics"
 require_relative "runner/mutation_executor"
 require_relative "runner/report_publisher"
+require_relative "runner/phase_clock"

@@ -8,10 +8,11 @@ require_relative "../reporter"
 require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
-  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new)
+  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new, timings: Timings.new)
     @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
     @subjects = subjects
     @baseline = baseline
+    @timings = timings
   end
 
   def call(summary)
@@ -28,6 +29,7 @@ class Evilution::Reporter::JSON
       summary: build_summary(summary),
       coverage_gaps: build_coverage_gaps(summary),
       subjects: @subjects.call(summary),
+      timings: @timings.call(summary),
       **result_categories(summary)
     }
     append_disabled_to_report(report, summary)
@@ -122,7 +124,7 @@ class Evilution::Reporter::JSON
     append_memory_fields(detail, result)
     append_error_fields(detail, result)
     append_neutral_reason(detail, result)
-    detail
+    detail.merge!(@timings.mutation_fields(result))
   end
 
   # Why a neutral was recorded — a red baseline and an infrastructure crash want
@@ -188,3 +190,4 @@ end
 
 require_relative "json/subjects"
 require_relative "json/baseline"
+require_relative "json/timings"

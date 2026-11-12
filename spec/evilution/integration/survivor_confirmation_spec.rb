@@ -97,6 +97,27 @@ RSpec.describe "Survivor confirmation (integration)" do
     expect(result[:test_command]).to end_with("spec/thing_spec.rb")
   end
 
+  it "reports the confirming run's time apart from the targeted run" do
+    statuses = [0, 0]
+    allow(RSpec::Core::Runner).to receive(:run) do |args, _out, _err|
+      sleep 0.05 if args.last == "spec/thing_spec.rb"
+      statuses.shift
+    end
+
+    timings = integration(narrowing_applier).call(build_mutation)[:timings]
+
+    expect(timings[:confirmation]).to be >= 0.05
+    expect(timings[:test_run]).to be < timings[:confirmation]
+  end
+
+  it "reports no confirmation time when there was no confirming run" do
+    stub_runs(1)
+
+    timings = integration(narrowing_applier).call(build_mutation)[:timings]
+
+    expect(timings).not_to have_key(:confirmation)
+  end
+
   it "does not re-run a mutation the targeted examples killed" do
     captured = stub_runs(1)
 

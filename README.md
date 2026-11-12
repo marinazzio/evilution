@@ -360,9 +360,16 @@ Schema:
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)",
-      "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }"
+      "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
+      "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from its batch being handed to the pool to a worker picking it up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); absent for results read from the --incremental cache"
     }
   ],
+  "timings": {
+    "phases": "object — wall-clock seconds per phase of the run, in the order they ran: subject_discovery, preload, canary, baseline, planning (mutation generation and equivalence detection), execution (every mutation, including the serial re-run of infrastructure crashes and building the coverage map when coverage targeting is on), finalize; they add up to about summary.duration",
+    "baseline": "array — one entry per spec file the baseline ran, in order: { spec_file, duration }; empty when the baseline did not run",
+    "mutations": "object — each per-mutation timing phase summed over all mutations: { apply, test_run, confirmation, queue_wait }; process seconds, so in a parallel run they add up across workers and can exceed the execution phase",
+    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; busy and wall are null for a worker that died before reporting them; empty for --jobs 1"
+  },
   "subjects": [
     {
       "name": "string      — subject name (e.g. 'Foo#bar')",

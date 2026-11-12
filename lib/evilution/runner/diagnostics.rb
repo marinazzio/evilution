@@ -60,19 +60,6 @@ class Evilution::Runner::Diagnostics
     end
   end
 
-  def aggregate_worker_stats(stats)
-    return stats if stats.empty?
-
-    stats.group_by(&:pid).map do |pid, entries|
-      Evilution::Parallel::WorkQueue::WorkerStat.new(
-        pid,
-        entries.sum(&:items_completed),
-        entries.sum(&:busy_time),
-        entries.sum(&:wall_time)
-      )
-    end
-  end
-
   private
 
   attr_reader :config, :stderr

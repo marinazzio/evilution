@@ -258,6 +258,22 @@ RSpec.describe Evilution::Result::MutationResult do
       end
     end
   end
+  describe "#timings" do
+    it "is nil by default" do
+      expect(described_class.new(mutation: mutation, status: :killed).timings).to be_nil
+    end
+
+    it "returns the timings it was given" do
+      timings = Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.4)
+
+      expect(described_class.new(mutation: mutation, status: :killed, timings: timings).timings).to be(timings)
+    end
+
+    it "returns nil when the field is not MutationTimings" do
+      expect(described_class.new(mutation: mutation, status: :killed, timings: { apply: 0.1 }).timings).to be_nil
+    end
+  end
+
   describe "#neutral_reason" do
     it "is nil by default" do
       result = described_class.new(mutation: mutation, status: :killed)

@@ -178,7 +178,7 @@ RSpec.describe Evilution::Integration::Minitest do
     it "flags a failed run in which nothing else failed" do
       stub_failures(failing("test_red"))
 
-      expect(integration.call(mutation)).to eq(
+      expect(integration.call(mutation)).to include(
         passed: false, known_failures_only: true, test_command: "ruby -Itest test/some_test.rb"
       )
     end
@@ -206,7 +206,10 @@ RSpec.describe Evilution::Integration::Minitest do
     it "does not flag a passing run" do
       stub_minitest_run(passed: true)
 
-      expect(integration.call(mutation)).to eq(passed: true, test_command: "ruby -Itest test/some_test.rb")
+      result = integration.call(mutation)
+
+      expect(result).to include(passed: true, test_command: "ruby -Itest test/some_test.rb")
+      expect(result).not_to include(:known_failures_only)
     end
 
     it "does not flag a failed run when the baseline saw no failures" do

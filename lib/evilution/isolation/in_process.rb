@@ -198,7 +198,8 @@ class Evilution::Isolation::InProcess
         klass: result[:error_class],
         backtrace: result[:error_backtrace]
       ),
-      known_failures_only: result[:known_failures_only]
+      known_failures_only: result[:known_failures_only],
+      timings: Evilution::Result::MutationTimings.from_h(result[:timings])
     )
   end
 end

@@ -67,6 +67,14 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed 
       expect(out.status).to eq(:neutral)
     end
 
+    it "keeps the timings of the kill" do
+      timings = Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.2)
+
+      out = neutralizer.call(discounted_kill(timings: timings), baseline_result: baseline)
+
+      expect(out.timings).to be(timings)
+    end
+
     it "names the red spec file covering the mutated source" do
       out = neutralizer.call(discounted_kill, baseline_result: baseline)
 

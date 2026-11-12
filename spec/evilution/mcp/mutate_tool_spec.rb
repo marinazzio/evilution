@@ -18,6 +18,7 @@ RSpec.describe Evilution::MCP::MutateTool do
   let(:killed_result) do
     instance_double(
       Evilution::Result::MutationResult,
+      timings: nil,
       neutral_reason: nil,
       mutation: mutation,
       status: :killed,
@@ -46,6 +47,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       infra_retried: 0,
       baseline_neutralized: 0,
       baseline_failures: [],
+      timings: Evilution::Result::RunTimings.new,
+      mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
       subject_scores: [],
       results: [killed_result],
       total: 1,
@@ -474,6 +477,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diff + error_backtrace from timed_out entries (EV-187j)" do
         timed_out_result = instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :timeout,
@@ -499,6 +503,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [timed_out_result],
           total: 1,
@@ -540,6 +546,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diff + error_backtrace from errors entries (EV-187j)" do
         error_result = instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :error,
@@ -565,6 +572,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [error_result],
           total: 1,
@@ -608,6 +617,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diffs from neutral mutations" do
         neutral_result = instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :neutral,
@@ -633,6 +643,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [neutral_result],
           total: 1,
@@ -684,6 +696,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         )
         survived_result = instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,
@@ -709,6 +722,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [survived_result],
           total: 1,
@@ -762,6 +777,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         let(:survived_result) do
           instance_double(
             Evilution::Result::MutationResult,
+            timings: nil,
             neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
@@ -789,6 +805,8 @@ RSpec.describe Evilution::MCP::MutateTool do
             infra_retried: 0,
             baseline_neutralized: 0,
             baseline_failures: [],
+            timings: Evilution::Result::RunTimings.new,
+            mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
             subject_scores: [],
             results: [survived_result],
             total: 1,
@@ -918,6 +936,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         it "caches resolver lookups for survivors from the same file" do
           second_result = instance_double(
             Evilution::Result::MutationResult,
+            timings: nil,
             neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
@@ -1030,6 +1049,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       it "strips diffs from equivalent entries in full verbosity" do
         equivalent_result = instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :equivalent,
@@ -1055,6 +1075,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [equivalent_result],
           total: 1,
@@ -1114,6 +1136,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       let(:survived_result) do
         instance_double(
           Evilution::Result::MutationResult,
+          timings: nil,
           neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,
@@ -1142,6 +1165,8 @@ RSpec.describe Evilution::MCP::MutateTool do
           infra_retried: 0,
           baseline_neutralized: 0,
           baseline_failures: [],
+          timings: Evilution::Result::RunTimings.new,
+          mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 },
           subject_scores: [],
           results: [survived_result],
           total: 1,

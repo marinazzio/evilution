@@ -636,6 +636,14 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.error_message).to include("unexpected ')'")
     end
 
+    it "carries the timings the test command measured" do
+      test_command = ->(_m) { { passed: true, timings: { apply: 0.1, test_run: 0.2 } } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.timings.to_h).to eq(apply: 0.1, test_run: 0.2)
+    end
+
     it "carries the known-failures flag of a failed run back from the child" do
       test_command = ->(_m) { { passed: false, known_failures_only: true } }
 

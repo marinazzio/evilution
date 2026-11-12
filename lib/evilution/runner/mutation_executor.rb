@@ -3,8 +3,8 @@
 require_relative "../runner"
 
 class Evilution::Runner::MutationExecutor
-  ExecutionResult = Data.define(:results, :truncated, :infra_retried) do
-    def initialize(results:, truncated:, infra_retried: 0)
+  ExecutionResult = Data.define(:results, :truncated, :infra_retried, :worker_stats) do
+    def initialize(results:, truncated:, infra_retried: 0, worker_stats: [])
       super
     end
   end
@@ -57,7 +57,7 @@ class Evilution::Runner::MutationExecutor
     results = retry_pass.call(execution.results, baseline_result: baseline_result, integration: integration)
 
     ExecutionResult.new(results: results, truncated: execution.truncated,
-                        infra_retried: retry_pass.retried_count)
+                        infra_retried: retry_pass.retried_count, worker_stats: execution.worker_stats)
   end
 
   def build_mutation_runner

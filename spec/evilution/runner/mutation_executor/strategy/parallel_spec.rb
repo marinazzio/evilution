@@ -35,12 +35,59 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     diags = Evilution::Runner::Diagnostics.new(cfg)
     allow(diags).to receive(:log_memory)
     allow(diags).to receive(:log_worker_stats)
-    allow(diags).to receive(:aggregate_worker_stats).and_return({})
     diags
   end
 
   def notifier(diags = diagnostics)
     Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg, diagnostics: diags, on_result: nil)
+  end
+
+  describe "timings" do
+    def strategy_with(pool, isolator)
+      backend = instance_double("Cache", fetch: nil)
+      allow(backend).to receive(:store)
+      described_class.new(
+        cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+        isolator: isolator,
+        packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+        pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+        notifier: notifier,
+        pool_factory: -> { pool },
+        config: cfg
+      )
+    end
+
+    it "records how long each mutation waited for a worker" do
+      m1 = mutation("m1")
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call).and_return(killed(m1))
+      pool = double(:pool, worker_stats: [])
+      allow(pool).to receive(:map) do |uncached, &block|
+        sleep 0.05
+        uncached.map(&block)
+      end
+
+      execution = strategy_with(pool, isolator).call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.results.first.timings.queue_wait).to be >= 0.05
+    end
+
+    it "returns each worker's figures summed across batches" do
+      stat = Evilution::Parallel::WorkQueue::WorkerStat
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+      pool = double(:pool)
+      allow(pool).to receive(:map) { |uncached, &block| uncached.map(&block) }
+      allow(pool).to receive(:worker_stats).and_return(
+        [stat.new(11, 1, 1.0, 2.0), stat.new(12, 1, 2.0, 2.0)],
+        [stat.new(11, 1, 0.5, 1.0)]
+      )
+
+      execution = strategy_with(pool, isolator)
+                  .call([mutation("m1"), mutation("m2"), mutation("m3")], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.worker_stats.map(&:to_a)).to contain_exactly([11, 2, 1.5, 3.0], [12, 1, 2.0, 2.0])
+    end
   end
 
   it "calls isolator inside the pool for uncached mutations and rebuilds via packer" do
@@ -199,7 +246,6 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     diags = Evilution::Runner::Diagnostics.new(cfg_ff)
     allow(diags).to receive(:log_memory)
     allow(diags).to receive(:log_worker_stats)
-    allow(diags).to receive(:aggregate_worker_stats).and_return({})
 
     strategy = described_class.new(
       cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
@@ -234,7 +280,6 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     diags = Evilution::Runner::Diagnostics.new(cfg_ff)
     allow(diags).to receive(:log_memory)
     allow(diags).to receive(:log_worker_stats)
-    allow(diags).to receive(:aggregate_worker_stats).and_return({})
 
     strategy = described_class.new(
       cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
@@ -409,15 +454,15 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     allow(backend).to receive(:store)
     isolator = double(:isolator)
     allow(isolator).to receive(:call).and_return(killed(m1), killed(m2))
-    stats_batch1 = [:s1]
-    stats_batch2 = [:s2]
+    stat = Evilution::Parallel::WorkQueue::WorkerStat
+    stats_batch1 = [stat.new(7, 1, 1.0, 2.0)]
+    stats_batch2 = [stat.new(7, 1, 0.5, 1.0)]
     pool = double(:pool)
     allow(pool).to receive(:worker_stats).and_return(stats_batch1, stats_batch2)
     allow(pool).to receive(:map) { |uncached, &block| uncached.map(&block) }
 
     diags = Evilution::Runner::Diagnostics.new(cfg_j1)
     allow(diags).to receive(:log_memory)
-    allow(diags).to receive(:aggregate_worker_stats).and_return(:aggregated)
     allow(diags).to receive(:log_worker_stats)
 
     strategy = described_class.new(
@@ -433,8 +478,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
 
     strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
 
-    expect(diags).to have_received(:aggregate_worker_stats).with(%i[s1 s2])
-    expect(diags).to have_received(:log_worker_stats).with(:aggregated)
+    expect(diags).to have_received(:log_worker_stats).with([stat.new(7, 2, 1.5, 3.0)])
   end
 
   it "does not call worker diagnostics when no diagnostics object is provided" do
