@@ -190,4 +190,33 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       expect(skipped_plan.enabled.length).to be < default_plan.enabled.length
     end
   end
+
+  # Receiver simplifications (`x.to_i` -> `x`, `x.presence` -> `x`,
+  # `x.to_s` -> `x`) must reach the plan in every context they are written
+  # in. In argument and hash-value position the identical bytes are also
+  # produced by argument_method_call_replacement, which is registered first,
+  # so dedup reports them under that name rather than method_call_removal.
+  describe "receiver simplification" do
+    let(:file) { "spec/support/fixtures/receiver_simplification.rb" }
+    let(:plan) { described_class.new(config, registry: registry).call(subjects_for(file)) }
+
+    def simplified(line_text)
+      plan.enabled.select { |m| m.mutated_source.lines[m.line - 1].strip == line_text }.map(&:operator_name)
+    end
+
+    {
+      "def label = value" => "method_call_removal",
+      "params[:x]" => "method_call_removal",
+      "\"seat \#{value}\"" => "method_call_removal",
+      "value" => "method_call_removal",
+      "def keyword_default(seat: raw_seat)" => "method_call_removal",
+      "list.map { |str| str }" => "method_call_removal",
+      "def call(seat_str:) = Seat.find_by(number: seat_str)" => "argument_method_call_replacement",
+      "{ number: value }" => "argument_method_call_replacement"
+    }.each do |line_text, operator_name|
+      it "plans #{line_text.inspect} as an enabled #{operator_name} mutation" do
+        expect(simplified(line_text)).to eq([operator_name])
+      end
+    end
+  end
 end
