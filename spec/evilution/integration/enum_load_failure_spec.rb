@@ -21,11 +21,12 @@ RSpec.describe "A mutant that makes an enum model fail to load", :aggregate_fail
       # The fixture's spec is kept under another name so this suite does not
       # load it as its own.
       FileUtils.mv(File.join(dir, "spec/breakdown_move_spec.rb.fixture"), File.join(dir, "spec/breakdown_move_spec.rb"))
-      # Bundler is set up in the subprocess itself, against this gem's
-      # Gemfile, so it does not depend on the environment the suite runs in:
-      # without it the fixture's spec loads whatever gem versions are
-      # installed, which can conflict.
-      env = { "BUNDLE_GEMFILE" => File.join(root, "Gemfile") }
+      # Bundler is set up in the subprocess itself, so it does not depend on
+      # the environment the suite runs in: without it the fixture's spec
+      # loads whatever gem versions are installed, which can conflict. It
+      # uses the Gemfile the suite runs with (CI runs one job against
+      # Gemfile.min_prism), else this gem's own.
+      env = { "BUNDLE_GEMFILE" => ENV.fetch("BUNDLE_GEMFILE", File.join(root, "Gemfile")) }
       command = [RbConfig.ruby, "-rbundler/setup", "-I", File.join(root, "lib"), File.join(root, "exe/evilution"), "run",
                  "lib/breakdown_move.rb", "--preload", "spec/spec_helper.rb",
                  "--isolation", isolation, "--format", "json"]
@@ -67,7 +68,8 @@ RSpec.describe "A mutant that makes an enum model fail to load", :aggregate_fail
       end
 
       it "counts a mutant that sets the labels' constant to nil as killed, with the NoMethodError enum raised" do
-        nil_labels = load_kills.select { |entry| entry.fetch("error_message").include?("undefined method 'empty?' for nil") }
+        # Ruby 3.3 quotes the method with a backtick: "`empty?' for nil:NilClass".
+        nil_labels = load_kills.select { |entry| entry.fetch("error_message").match?(/undefined method [`']empty\?' for nil/) }
 
         expect(nil_labels).not_to be_empty
         expect(nil_labels.map { |entry| entry.fetch("error_class") }.uniq).to eq(["NoMethodError"])
