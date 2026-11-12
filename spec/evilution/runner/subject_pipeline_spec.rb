@@ -513,9 +513,31 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
 
           expect(pipeline.call).to be_empty
           expect { pipeline.report_uncovered_code }
-            .to output("[evilution] #{file}:2-4 holds code outside every subject (class-body code such as " \
-                       "DSL calls is not mutated); no mutations target those lines.\n").to_stderr
+            .to output("[evilution] #{file}:2-4 holds code outside every subject; no mutations target those " \
+                       "lines. Of the DSL calls in a class body, only scopes, aasm machines, and callback or " \
+                       "validation declarations with options or an inline block or lambda are mutated.\n").to_stderr
           expect(pipeline.uncovered_code).to eq([{ file: file, lines: ["2-4"] }])
+        end
+      end
+
+      it "selects the validation a range covers, and names only the declaration that has no options" do
+        Dir.mktmpdir do |dir|
+          file = write(dir, "app/models/vote.rb", <<~RUBY)
+            class Vote
+              validates :for_lift, inclusion: { in: [true] }, if: :lift_round?
+              validate :within_window
+
+              def lift_round? = true
+            end
+          RUBY
+          config = Evilution::Config.new(
+            target_files: [file], line_ranges: { file => (2..3) },
+            quiet: true, baseline: false, skip_config_file: true
+          )
+          pipeline = described_class.new(config, parser: parser)
+
+          expect(pipeline.call.map(&:name)).to eq(["Vote.validates(:for_lift)"])
+          expect { pipeline.report_uncovered_code }.to output(/#{Regexp.escape(file)}:3 holds code/).to_stderr
         end
       end
 

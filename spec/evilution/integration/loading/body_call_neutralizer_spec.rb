@@ -76,8 +76,16 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       expect(neutralizer.call(src, keep_offset: offset)).to include("scope :open")
     end
 
-    it "neutralizes a call that ends just before the offset" do
+    # A mutation that cuts off the end of a call is made where the call now
+    # ends.
+    it "keeps a call that ends at the offset" do
       offset = src.index("}\n  scope :open") + 1
+
+      expect(neutralizer.call(src, keep_offset: offset)).to include("scope :paid")
+    end
+
+    it "neutralizes a call that ends before the offset" do
+      offset = src.index("}\n  scope :open") + 2
 
       expect(neutralizer.call(src, keep_offset: offset)).not_to include("scope :paid")
     end
@@ -445,6 +453,26 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
       )
       expect(result.lines.length).to eq(src.lines.length - 0)
       expect(Prism.parse(result)).to be_success
+    end
+
+    it "hands over the declaration as written in the file, on the same line" do
+      original = "validate :credit_limit,\n  if: -> { paid? }"
+      result = neutralizer.call(src, keep_offset: src.index("paid?"), keep_lines: 3..3, keep_source: original)
+
+      expect(result.lines[2]).to eq(
+        "  #{helper}(self, __FILE__, 3..3, #{original.dump}) { validate :credit_limit, if: -> { paid? } } # why\n"
+      )
+    end
+
+    # Dropping the last option cuts the declaration short right where the
+    # mutation was made.
+    it "keeps a declaration that ends where the mutation was made" do
+      cut = "class Order\n  before_save :first\n  validates :title, presence: true\nend\n"
+      offset = cut.index(", presence: true")
+      mutated = cut.sub(", presence: true", "")
+
+      expect(neutralizer.call(mutated, keep_offset: offset, keep_lines: 3..3).lines[2])
+        .to eq("  #{helper}(self, __FILE__, 3..3) { validates :title }\n")
     end
 
     it "keeps the declaration unwrapped when no lines are given" do

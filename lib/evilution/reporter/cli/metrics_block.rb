@@ -7,6 +7,7 @@ require_relative "line_formatters/baseline_neutralized_notice"
 require_relative "line_formatters/error_rate_warning"
 require_relative "line_formatters/unresolved_rate_warning"
 require_relative "line_formatters/unresolved_targets"
+require_relative "line_formatters/uncovered_code"
 require_relative "line_formatters/infra_retry_notice"
 require_relative "line_formatters/duration"
 require_relative "line_formatters/efficiency"
@@ -20,6 +21,7 @@ class Evilution::Reporter::CLI::MetricsBlock
     Evilution::Reporter::CLI::LineFormatters::ErrorRateWarning.new,
     Evilution::Reporter::CLI::LineFormatters::UnresolvedRateWarning.new,
     Evilution::Reporter::CLI::LineFormatters::UnresolvedTargets.new,
+    Evilution::Reporter::CLI::LineFormatters::UncoveredCode.new,
     Evilution::Reporter::CLI::LineFormatters::InfraRetryNotice.new,
     Evilution::Reporter::CLI::LineFormatters::Duration.new,
     Evilution::Reporter::CLI::LineFormatters::Efficiency.new,

@@ -189,7 +189,7 @@ RSpec.describe Evilution::AST::UncoveredCode do
     source = <<~RUBY
       module Publishable
         included do
-          validates :title, presence: true
+          belongs_to :author
           scope :published, -> { where(published: true) }
         end
       end
@@ -202,9 +202,20 @@ RSpec.describe Evilution::AST::UncoveredCode do
     source = <<~RUBY
       module Auditable
         prepended do
-          validates :title, presence: true
+          belongs_to :author
           scope :audited, -> { where(audited: true) }
         end
+      end
+    RUBY
+
+    expect(uncovered(source)).to eq([3..3])
+  end
+
+  it "treats a callback or validation declaration given options as covered by its subject" do
+    source = <<~RUBY
+      class Vote
+        validates :for_lift, inclusion: { in: [true] }, if: :lift_round?
+        validate :within_window
       end
     RUBY
 

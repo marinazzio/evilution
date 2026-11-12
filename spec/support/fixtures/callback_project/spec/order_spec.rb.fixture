@@ -29,8 +29,14 @@ RSpec.describe Order do
     expect(order(title: nil, paid: true, total: 1).tap(&:valid?).errors[:title]).to eq([])
   end
 
+  it "asks a paid order whether it is a rush, and nobody else" do
+    expect(order(paid: true, rush: nil, total: 1).tap(&:valid?).errors[:rush]).to eq(["is not included in the list"])
+    expect(order(paid: true, rush: false, total: 1).tap(&:valid?).errors[:rush]).to eq([])
+    expect(order(paid: false, rush: nil).tap(&:valid?).errors[:rush]).to eq([])
+  end
+
   it "lists each validator once" do
-    expect(described_class.validators.length).to eq(1)
-    expect(PriorityOrder.validators.length).to eq(1)
+    expect(described_class.validators.length).to eq(2)
+    expect(PriorityOrder.validators.length).to eq(2)
   end
 end
