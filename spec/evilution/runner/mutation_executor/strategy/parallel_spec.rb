@@ -310,6 +310,39 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
   end
 
+  # Only an infrastructure crash leaves the mutation unjudged; any other crash
+  # is a verdict, so the sources go like those of any judged mutation.
+  it "strips the sources of a mutation killed by a non-infrastructure crash" do
+    m1 = mutation("m1")
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(
+      Evilution::Result::MutationResult.new(
+        mutation: m1, status: :killed, duration: 0.1, test_command: "c",
+        error: Evilution::Result::ErrorInfo.new(klass: "RuntimeError", message: "boom")
+      )
+    )
+    pool = double(:pool, worker_stats: [])
+    allow(pool).to receive(:map) { |uncached, &block| uncached.map(&block) }
+    diags = diagnostics
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier(diags),
+      pool_factory: -> { pool },
+      config: cfg,
+      diagnostics: diags
+    )
+
+    strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    expect(m1).to have_received(:strip_sources!)
+  end
+
   it "starts the notifier with the mutation count and finishes it" do
     m1 = mutation("m1")
     m2 = mutation("m2")

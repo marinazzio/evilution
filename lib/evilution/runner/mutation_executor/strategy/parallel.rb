@@ -2,6 +2,7 @@
 
 require_relative "../strategy"
 require_relative "../../../parallel/work_queue"
+require_relative "../../../infra_crash"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Compact result for a worker that exited unexpectedly (:error is not cached,
@@ -93,7 +94,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   end
 
   def infra_crash?(result)
-    Evilution::Runner::MutationExecutor::Neutralizer::InfraError.infra_crash_class?(result.error_class)
+    Evilution::InfraCrash.class_name?(result.error_class)
   end
 
   def rebuild_results(batch, compact_results)

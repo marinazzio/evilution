@@ -83,6 +83,22 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       described_class.new(backend).store(mutation, infra_crash(mutation))
     end
 
+    # Only the infrastructure crash classes are held back: any other crash is
+    # a real verdict about the mutation and is cached like a plain kill.
+    it "stores a kill whose crash class is not an infrastructure one" do
+      mut = mutation
+      backend = instance_double("Cache")
+      allow(backend).to receive(:store)
+      crash = Evilution::Result::MutationResult.new(
+        mutation: mut, status: :killed, duration: 0.1, test_command: "c",
+        error: Evilution::Result::ErrorInfo.new(klass: "RuntimeError", message: "boom")
+      )
+
+      described_class.new(backend).store(mut, crash)
+
+      expect(backend).to have_received(:store).with(mut, hash_including(status: :killed))
+    end
+
     # The baseline that discounts such a kill belongs to the run that saw it.
     it "is a no-op for a kill in which only already-failing examples failed" do
       backend = instance_double(Evilution::Cache)

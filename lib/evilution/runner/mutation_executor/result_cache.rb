@@ -2,7 +2,7 @@
 
 require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
-require_relative "neutralizer/infra_error"
+require_relative "../../infra_crash"
 
 class Evilution::Runner::MutationExecutor::ResultCache
   CACHEABLE_STATUSES = %i[killed timeout].freeze
@@ -51,7 +51,7 @@ class Evilution::Runner::MutationExecutor::ResultCache
   # would defeat both the demotion to neutral and the serial retry
   # (EV-j0bv / GH #1607).
   def infra_crash?(result)
-    Evilution::Runner::MutationExecutor::Neutralizer::InfraError.infra_crash_class?(result.error_class)
+    Evilution::InfraCrash.class_name?(result.error_class)
   end
 
   def partition(batch, packer:)
