@@ -152,6 +152,44 @@ RSpec.describe Evilution::Integration::CrashDetector do
       expect(RSpec.world.wants_to_quit).to be(true)
     end
 
+    # The integration puts the flag back down after the run only when the
+    # detector raised it: one already up, such as from the user's first Ctrl-C,
+    # must stay up.
+    it "remembers raising the flag" do
+      detector.policy = policy
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      expect(detector.raised_quit?).to be(true)
+    end
+
+    it "does not claim a flag that was already up" do
+      detector.policy = policy
+      RSpec.world.wants_to_quit = true
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      expect(RSpec.world.wants_to_quit).to be(true)
+      expect(detector.raised_quit?).to be(false)
+    end
+
+    it "does not claim the flag for a failure that is not decisive" do
+      detector.policy = policy
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:1"))
+
+      expect(detector.raised_quit?).to be(false)
+    end
+
+    it "forgets raising the flag on reset" do
+      detector.policy = policy
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      detector.reset
+
+      expect(detector.raised_quit?).to be(false)
+    end
+
     it "never stops a run without a policy" do
       detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
       detector.example_failed(make_notification(NoMethodError.new("crash"), scoped_id: "1:3"))

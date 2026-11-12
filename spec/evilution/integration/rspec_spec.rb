@@ -598,6 +598,7 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(detector).to receive(:policy=)
+      allow(detector).to receive(:raised_quit?).and_return(false)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -620,6 +621,7 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(detector).to receive(:policy=)
+      allow(detector).to receive(:raised_quit?).and_return(false)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -640,6 +642,7 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(detector).to receive(:policy=)
+      allow(detector).to receive(:raised_quit?).and_return(false)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -655,6 +658,7 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(detector).to receive(:policy=)
+      allow(detector).to receive(:raised_quit?).and_return(false)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -670,6 +674,7 @@ RSpec.describe Evilution::Integration::RSpec do
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
       allow(detector).to receive(:policy=)
+      allow(detector).to receive(:raised_quit?).and_return(false)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
@@ -701,26 +706,27 @@ RSpec.describe Evilution::Integration::RSpec do
     end
 
     # Runs the integration with RSpec::Core::Runner.run standing in for a real
-    # run: the block plays the examples, given the run's stop policy as the
-    # crash detector would see it. Returns the flag as each run started.
+    # run: the block plays the examples, given the crash detector registered
+    # for the run. Returns the flag as each run started.
     def run_with(integration, &examples)
-      policy = nil
+      detector = nil
       allow(lifecycle).to receive(:register).and_wrap_original do |original, given|
-        policy = given
-        original.call(given)
+        detector = original.call(given)
       end
       flags = []
       allow(RSpec::Core::Runner).to receive(:run) do
         flags << RSpec.world.wants_to_quit
-        examples.call(policy)
+        examples.call(detector)
       end
       integration.call(mutation)
       flags
     end
 
-    # What the crash detector does on a decisive failure.
-    def kill(policy)
-      RSpec.world.wants_to_quit = true if policy.record(id: "/p/spec/some_spec.rb[1:2]")
+    # A new assertion failure, reported to the detector as RSpec would.
+    def kill(detector)
+      example = double("Example", exception: RSpec::Expectations::ExpectationNotMetError.new("expected open"),
+                                  metadata: { rerun_file_path: "./spec/some_spec.rb", scoped_id: "1:2" })
+      detector.example_failed(double("Notification", example: example))
       1
     end
 
@@ -734,7 +740,7 @@ RSpec.describe Evilution::Integration::RSpec do
     it "puts the flag back down after a run it stopped" do
       RSpec.world.wants_to_quit = false
 
-      run_with(stopping) { |policy| kill(policy) }
+      run_with(stopping) { |detector| kill(detector) }
 
       expect(RSpec.world.wants_to_quit).to be(false)
     end
@@ -742,7 +748,7 @@ RSpec.describe Evilution::Integration::RSpec do
     it "runs the next mutation with the flag down after one it stopped" do
       RSpec.world.wants_to_quit = false
 
-      run_with(stopping) { |policy| kill(policy) }
+      run_with(stopping) { |detector| kill(detector) }
       flags = run_with(stopping) { 0 }
 
       expect(flags).to eq([false])
@@ -756,6 +762,19 @@ RSpec.describe Evilution::Integration::RSpec do
       run_with(stopping) do
         RSpec.world.wants_to_quit = true
         0
+      end
+
+      expect(RSpec.world.wants_to_quit).to be(true)
+    end
+
+    # RSpec's handler raises the flag on the first Ctrl-C; a kill later in the
+    # same run must not take it back down, or the user's Ctrl-C is lost.
+    it "keeps a flag something else raised before the kill in a run it stopped" do
+      RSpec.world.wants_to_quit = false
+
+      run_with(stopping) do |detector|
+        RSpec.world.wants_to_quit = true
+        kill(detector)
       end
 
       expect(RSpec.world.wants_to_quit).to be(true)

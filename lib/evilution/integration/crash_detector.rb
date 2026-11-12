@@ -21,6 +21,7 @@ class Evilution::Integration::CrashDetector
   def reset
     @assertion_failures = 0
     @crashes = []
+    @raised_quit = false
   end
 
   # RSpec checks RSpec.world.wants_to_quit before each example and skips the
@@ -29,7 +30,14 @@ class Evilution::Integration::CrashDetector
     example = notification.example
     crash = tally(example.exception)
     id = Evilution::Integration::RSpec::ExampleIds.of(example)
-    ::RSpec.world.wants_to_quit = true if @policy.record(id: id, exception: crash)
+    raise_quit if @policy.record(id:, exception: crash)
+  end
+
+  # Whether this run's flag went up because of this detector. A flag that was
+  # already up, such as from RSpec's handler on the user's first Ctrl-C, is
+  # not the detector's to take back down.
+  def raised_quit?
+    @raised_quit
   end
 
   def assertion_failure?
@@ -55,6 +63,13 @@ class Evilution::Integration::CrashDetector
   end
 
   private
+
+  def raise_quit
+    return if ::RSpec.world.wants_to_quit
+
+    ::RSpec.world.wants_to_quit = true
+    @raised_quit = true
+  end
 
   # Counts the failure; returns its exception when it is a crash, nil when it
   # is an assertion failure.
