@@ -147,6 +147,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def execute_run(args, command)
     snapshot = @state_guard.snapshot
     quit_before = ::RSpec.world.wants_to_quit
+    detector = nil
     begin
       out = StringIO.new
       err = StringIO.new
@@ -158,7 +159,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
-      lower_own_stop(quit_before)
+      lower_own_stop(quit_before, detector)
       @state_guard.release(snapshot)
     end
   end
@@ -166,11 +167,14 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   # A run that stops at its kill raises RSpec.world.wants_to_quit, and left up
   # it would make the next RSpec::Core::Runner.run in this process return a
   # failure status without running anything -- a false kill. So the flag goes
-  # back to what it was, but only after a run this integration stopped: raised
-  # by anything else, such as RSpec's own handler on the user's first Ctrl-C,
-  # it stays up, so the next Ctrl-C still exits.
-  def lower_own_stop(quit_before)
-    ::RSpec.world.wants_to_quit = quit_before if @stop_policy.stopped?
+  # back to what it was, but only when the crash detector raised it: raised by
+  # anything else, such as RSpec's own handler on the user's first Ctrl-C, it
+  # stays up even if the run later stopped at a kill, so the next Ctrl-C still
+  # exits.
+  def lower_own_stop(quit_before, detector)
+    return if detector.nil?
+
+    ::RSpec.world.wants_to_quit = quit_before if detector.raised_quit?
   end
 
   # RSpec redirects its own output to the streams it is handed only when the
