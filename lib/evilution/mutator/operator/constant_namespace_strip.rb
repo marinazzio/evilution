@@ -15,9 +15,9 @@ require_relative "../operator"
 #
 # A top-level path (`::LIMIT`) has no namespace to strip. The target of an
 # operator write (`Config::LIMIT ||= x`) is left alone: bare, `LIMIT ||= x`
-# is a dynamic constant assignment inside a method. Prism lets it through,
-# where parse.y rejects it with a SyntaxError, so whether the mutant exists
-# would depend on the parser the interpreter compiles with.
+# is a dynamic constant assignment inside a method. Prism before 2.0 lets it
+# through, where parse.y rejects it with a SyntaxError, so whether the mutant
+# exists would depend on the parser and the Prism version in use.
 class Evilution::Mutator::Operator::ConstantNamespaceStrip < Evilution::Mutator::Base
   def call(subject, **)
     @write_targets = Set.new

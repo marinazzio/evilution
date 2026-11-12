@@ -5,9 +5,10 @@ require "rbconfig"
 require "evilution/ast/syntax_check"
 
 RSpec.describe Evilution::AST::SyntaxCheck do
-  # Prism accepts a bare constant operator write inside a method; parse.y
-  # rejects it as a dynamic constant assignment.
-  let(:prism_only_source) { "def f(v); LIMIT ||= v; end\n" }
+  # Prism accepts a `nil[...]` pattern; parse.y rejects it. Prism 1.x also
+  # took a bare constant operator write inside a method, but 2.0 rejects
+  # that too, so it no longer tells the two parsers apart.
+  let(:prism_only_source) { "def f(v)\n  return unless v in nil[size: [first]]\n  first\nend\n" }
   let(:valid_source) { "def f(v); @limit ||= v; end\n" }
   let(:invalid_source) { "def f(\n" }
 
@@ -51,10 +52,8 @@ RSpec.describe Evilution::AST::SyntaxCheck do
       end
 
       it "rejects a pattern only Prism parses" do
-        source = "def f(v)\n  return unless v in nil[size: [first]]\n  first\nend\n"
-
-        expect(Prism.parse(source)).to be_success
-        expect(described_class.valid?(source, prism_interpreter: false)).to be(false)
+        expect(Prism.parse(prism_only_source)).to be_success
+        expect(described_class.valid?(prism_only_source, prism_interpreter: false)).to be(false)
       end
 
       it "keeps the warnings parse.y has about the source to itself" do
