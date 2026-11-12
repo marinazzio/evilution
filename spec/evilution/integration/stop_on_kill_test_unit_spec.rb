@@ -51,6 +51,13 @@ RSpec.describe "Stopping a kill check at its first kill with Test::Unit", :aggre
     report.fetch(bucket).count { |entry| (4..6).cover?(entry.fetch("line")) }
   end
 
+  # The mutants of `state` in every bucket of the report, whatever their status.
+  def all_state_mutants(report)
+    %w[killed survived neutral equivalent unresolved unparseable timed_out errors].sum do |bucket|
+      state_mutants(report, bucket)
+    end
+  end
+
   %w[fork in_process].each do |isolation|
     context "under #{isolation} isolation" do
       context "when the first test kills every mutant" do
@@ -99,6 +106,45 @@ RSpec.describe "Stopping a kill check at its first kill with Test::Unit", :aggre
           expect(subjects_of(run[:report], "killed")).to eq(["state"])
           expect(subjects_of(run[:report], "neutral")).to eq([])
           expect(run[:ran]).not_to include("mutant")
+        end
+      end
+
+      # With nothing but failures the baseline already saw, no failure decides
+      # the verdict, so every test runs and the mutant ends neutral. That
+      # failure is there on the mutants of `label` too, so they are neutral as
+      # well.
+      context "when the only failing test is one the baseline saw failing" do
+        it "runs every test, and leaves the mutants neutral" do
+          run = runs[["known_only", isolation, []]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(%w[label state])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # Every mutant of `state` is neutral, and both tests after the failing
+          # one ran on each of them.
+          state = all_state_mutants(run[:report])
+          expect(state_mutants(run[:report], "neutral")).to eq(state)
+          expect(run[:ran].count("mutant")).to eq(2 * state)
+          expect(run[:ran]).to include("mutant")
+        end
+      end
+
+      # With nothing but infrastructure crashes no failure decides the
+      # verdict, so every test runs and the mutant ends neutral.
+      context "when the only failure is an infrastructure crash" do
+        it "runs every test, and leaves the mutants neutral" do
+          run = runs[["infra_only", isolation, []]]
+
+          expect(subjects_of(run[:report], "neutral")).to eq(["state"])
+          expect(subjects_of(run[:report], "killed")).to eq([])
+          # The crash needs a mutant of `state`, so the mutants of `label`,
+          # which no test checks, survive.
+          expect(subjects_of(run[:report], "survived")).to eq(["label"])
+          # Every mutant of `state` is neutral, and both tests after the crashing
+          # one ran on each of them.
+          state = all_state_mutants(run[:report])
+          expect(state_mutants(run[:report], "neutral")).to eq(state)
+          expect(run[:ran].count("mutant")).to eq(2 * state)
+          expect(run[:ran]).to include("mutant")
         end
       end
 

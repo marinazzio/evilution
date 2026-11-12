@@ -1,0 +1,36 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "test-unit"
+require "gate"
+require "fileutils"
+
+# Each test after the first notes that it ran, and whether it saw the
+# original code or a mutant. The baseline runs the original.
+def record_run
+  state = begin
+    yield
+  rescue StandardError
+    nil
+  end
+  log = File.expand_path("../tmp/ran.log", __dir__)
+  FileUtils.mkdir_p(File.dirname(log))
+  File.open(log, "a") { |file| file.puts(state == "open" ? "original" : "mutant") }
+end
+
+# The first test fails whatever the code does, so the baseline knows it. No
+# other test fails, on the original or on any mutant. The tests run in the
+# order of their names.
+class GateTest < Test::Unit::TestCase
+  def test_1_is_closed_according_to_a_test_that_was_never_right
+    assert_equal "closed", Gate.new.state
+  end
+
+  def test_2_is_still_open
+    record_run { Gate.new.state }
+  end
+
+  def test_3_is_open_once_more
+    record_run { Gate.new.state }
+  end
+end
