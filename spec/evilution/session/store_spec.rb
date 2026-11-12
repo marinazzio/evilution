@@ -174,7 +174,10 @@ RSpec.describe Evilution::Session::Store do
     it "includes git sha and branch as non-nil trimmed strings in a git repo" do
       summary = build_summary
 
-      store.save(summary)
+      # Run from this checkout, not the CWD: evilution mutating its own code
+      # runs this example in a worker whose CWD is a scratch sandbox outside
+      # any git repo.
+      Dir.chdir(File.expand_path("../../..", __dir__)) { store.save(summary) }
 
       data = read_saved_session
       expect(data["git"]["sha"]).to be_a(String)
