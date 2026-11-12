@@ -12,10 +12,13 @@ require_relative "../../ast/class_body"
 # shows that it has to stay as it is.
 #
 # A constant is defined in the class body, outside every method, where no
-# subject reaches it. The mutation is attributed to the method anchoring the
-# enclosing body (see Evilution::AST::ClassBody); a top-level constant has no
-# body to be attributed to. A `freeze` inside a method is left to the generic
-# call operators, which already drop it.
+# method subject reaches it. The mutation is attributed to the method
+# anchoring the enclosing body (see Evilution::AST::ClassBody). A body with no
+# anchor -- a class whose only methods are in a `Data.define` block -- has
+# its constants mutated under their own constant-assignment subjects instead,
+# which hold the line. A top-level constant has no body and is left alone. A
+# `freeze` inside a method is left to the generic call operators, which
+# already drop it.
 class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
   CONSTANT_WRITES = [Prism::ConstantWriteNode, Prism::ConstantPathWriteNode, Prism::ConstantOrWriteNode].freeze
 
@@ -29,6 +32,10 @@ class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
   LEADING_COMMENTS = /\A(?:[ \t]*(?:#.*)?\n)*/
   FROZEN_STRING_LITERALS = /^[ \t]*#.*frozen[_-]string[_-]literal:[ \t]*true/i
   private_constant :CONSTANT_WRITES, :ALWAYS_FROZEN, :LEADING_COMMENTS, :FROZEN_STRING_LITERALS
+
+  def self.subject_kinds
+    super + %i[constant_write]
+  end
 
   def call(subject, filter: nil)
     @subject = subject
@@ -53,9 +60,20 @@ class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
 
   def constant_writes_for(subject)
     tree = self.class.parsed_tree_for(subject.file_path, @file_source)
+    return unanchored_writes(tree, subject.node) if subject.kind == :constant_write
 
     Evilution::AST::ClassBody.anchored_at(tree, subject.line_number).flat_map do |body|
       body.declarations { |node| CONSTANT_WRITES.include?(node.class) }
+    end
+  end
+
+  # The subject's own assignment, when it is written in a body no method
+  # anchors; under an anchor it is that method's to mutate.
+  def unanchored_writes(tree, write)
+    offset = write.location.start_offset
+
+    Evilution::AST::ClassBody.unanchored_in(tree).flat_map do |body|
+      body.declarations { |node| CONSTANT_WRITES.include?(node.class) && node.location.start_offset == offset }
     end
   end
 

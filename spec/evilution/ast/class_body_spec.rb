@@ -132,6 +132,29 @@ RSpec.describe Evilution::AST::ClassBody do
     end
   end
 
+  describe ".unanchored_in" do
+    def unanchored(source)
+      described_class.unanchored_in(Prism.parse(source).value).map { |body| body.node.slice.lines.first.chomp }
+    end
+
+    it "returns the scopes with no method of their own or borrowed, outermost first" do
+      source = "class A\n  X = 1\n  module B; end\nend\nclass C\n  def c = 1\nend\n" \
+               "class D\n  class << self\n    def d = 1\n  end\nend\n"
+
+      expect(unanchored(source)).to eq(["class A", "module B; end"])
+    end
+
+    it "returns a scope whose only methods are in the block of a value-object definition" do
+      source = "class T\n  R = Data.define(:a) do\n    def r = 1\n  end\n  S = Struct.new(:a) do\n  end\nend\n"
+
+      expect(unanchored(source)).to eq(["class T", "do"])
+    end
+
+    it "returns nothing for a file without scopes" do
+      expect(unanchored("X = [1].freeze\n")).to eq([])
+    end
+  end
+
   describe "#declarations" do
     def declared(source, line)
       anchored(source, line).map do |body|
@@ -163,12 +186,15 @@ RSpec.describe Evilution::AST::ClassBody do
       expect(declared(source, 2)).to eq([[]])
     end
 
-    it "never offers a method or a nested scope to the block" do
-      source = "class C\n  def a = 1\n  class Inner; end\n  class << self; end\n  module M; end\nend\n"
+    # Nil stands for a skipped child that was not dropped from the list.
+    it "never offers a method, a nested scope or a value-object block to the block" do
+      source = "class C\n  def a = 1\n  class Inner; end\n  class << self; end\n  module M; end\n  " \
+               "R = Data.define(:a) { def r = 1 }\nend\n"
       seen = []
       anchored(source, 2).first.declarations { |node| seen << node.class }
 
-      expect(seen & [Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode, NilClass]).to eq([])
+      expect(seen & [Prism::DefNode, Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode, Prism::BlockNode,
+                     NilClass]).to eq([])
     end
 
     # Cutting such a declaration out would leave the modifier dangling.

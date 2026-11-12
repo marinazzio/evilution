@@ -13,9 +13,15 @@ require_relative "value_object_definition"
 # each mutant has exactly one subject. That method is the scope's anchor: the
 # first method written in the scope, in source order. Blocks of the body
 # (`included do ... end`) are searched, nested scopes are not: their methods
-# anchor the inner scope, and their code is attributed to it. A scope with no method of its own borrows the anchor
-# of the first singleton class in its body that has one, so a class whose
-# methods all sit in `class << self` is still reached.
+# anchor the inner scope, and their code is attributed to it.
+#
+# A scope with no method of its own borrows the anchor of the first singleton
+# class in its body that has one, so a class whose methods all sit in
+# `class << self` is still reached. It never borrows from a value-object
+# block: those methods belong to the class the block defines, and a mutant
+# labelled with one of them would point at code it does not contain. A scope
+# left without an anchor is listed by .unanchored_in, for operators whose
+# code has a subject of its own to fall back on (a constant assignment).
 class Evilution::AST::ClassBody
   SCOPES = [Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode].freeze
 
@@ -35,6 +41,12 @@ class Evilution::AST::ClassBody
   # that borrows from it.
   def self.anchored_at(tree, line)
     scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line == line }
+  end
+
+  # The bodies with no anchor, outermost first: no method of their own, and
+  # none to borrow.
+  def self.unanchored_in(tree)
+    scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line.nil? }
   end
 
   def self.scopes_in(node)
