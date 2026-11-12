@@ -8,6 +8,9 @@ class Evilution::SpecResolver
   # rather than mirroring the lib/ tree 1:1 (EV-z7f5 / GH #1325).
   CONVENTIONAL_SUBDIRS = %w[unit lib].freeze
   MINITEST_SUFFIX = "_test.rb"
+  # Directory separators a stripped source path needs before its mirror
+  # directory is scanned for related sibling tests (see #sibling_specs).
+  MIN_SIBLING_DEPTH = 2
 
   def initialize(test_dir: "spec", test_suffix: "_spec.rb", request_dir: "requests")
     @test_dir = test_dir
@@ -16,16 +19,17 @@ class Evilution::SpecResolver
     @sibling_ranker = SiblingSpecRanker.new(test_suffix: test_suffix)
   end
 
-  # Resolution order, first hit wins: the 1:1 mirror file, then the best
+  # Resolution order, first hit wins: a test named after the source (the 1:1
+  # mirror file, then the non-mirrored naming conventions), then the best
   # related test among the siblings in the source's own mirror directory, then
-  # the parent directories' tests and the non-mirrored naming conventions.
+  # the parent directories' tests.
   def call(source_path, spec_pattern: nil)
     return nil if source_path.nil? || source_path.empty?
 
     normalized = normalize_path(source_path)
-    first_existing(primary_candidates(normalized), spec_pattern) ||
+    dedicated_spec(normalized, spec_pattern) ||
       sibling_specs(normalized, spec_pattern).first ||
-      first_existing(fallback_candidates(normalized), spec_pattern)
+      parent_spec(normalized, spec_pattern)
   end
 
   def resolve_all(source_paths)
@@ -36,23 +40,25 @@ class Evilution::SpecResolver
   # (ranked) instead of only the best one, and additionally the dir-grouped
   # layout (a source file's tests live in a directory named after the source
   # basename, e.g. lib/x/branch.rb -> test/unit/branch/*_test.rb, rather than a
-  # single mirror file). Whatever #call would pick always wins; only when it
-  # finds nothing is the first matching grouped directory expanded into its
-  # test files (EV-bi41). Returns nil when nothing resolves.
+  # single mirror file). A grouped directory is dedicated to the source, so it
+  # ranks right after a test named after the source and above the related
+  # siblings and the parent directories' tests (EV-bi41). Returns nil when
+  # nothing resolves.
   def resolve_specs(source_path, spec_pattern: nil)
     return nil if source_path.nil? || source_path.empty?
 
     normalized = normalize_path(source_path)
-    mirror = first_existing(primary_candidates(normalized), spec_pattern)
-    return [mirror] if mirror
+    dedicated = dedicated_spec(normalized, spec_pattern)
+    return [dedicated] if dedicated
+
+    grouped = resolve_grouped_dir(normalized, spec_pattern: spec_pattern)
+    return grouped if grouped
 
     siblings = sibling_specs(normalized, spec_pattern)
     return siblings unless siblings.empty?
 
-    fallback = first_existing(fallback_candidates(normalized), spec_pattern)
-    return [fallback] if fallback
-
-    resolve_grouped_dir(normalized, spec_pattern: spec_pattern)
+    parent = parent_spec(normalized, spec_pattern)
+    parent ? [parent] : nil
   end
 
   # Best-guess candidate for an unresolved source, found by basename glob
@@ -72,19 +78,32 @@ class Evilution::SpecResolver
   private
 
   def first_existing(candidates, spec_pattern)
-    candidates = filter_by_pattern(candidates, spec_pattern) if spec_pattern
-    candidates.find { |path| ProjectFiles.exist?(path) }
+    SpecPattern.filter(candidates, spec_pattern).find { |path| ProjectFiles.exist?(path) }
+  end
+
+  # A test named after the source: the 1:1 mirror (plus the controller ->
+  # request mapping), then the non-mirrored naming conventions.
+  def dedicated_spec(normalized, spec_pattern)
+    first_existing(primary_candidates(normalized) + convention_candidates(strip_source_prefix(normalized)), spec_pattern)
+  end
+
+  def parent_spec(normalized, spec_pattern)
+    first_existing(primary_candidates(normalized).flat_map { |c| parent_fallback_candidates(c) }.uniq, spec_pattern)
   end
 
   # Related tests among the direct children of the source's mirror
-  # directories, ranked by SiblingSpecRanker. Only nested sources have a mirror
-  # directory of their own: the bare-basename variant is skipped, so the test
-  # root itself is never scanned.
+  # directories, ranked by SiblingSpecRanker. Only a source at least two
+  # directories below its strip prefix has a mirror directory of its own: one
+  # level down (app/models/user.rb, lib/<gem>/x.rb) the mirror directory is a
+  # whole test bucket (spec/models, spec/<gem>), so nothing is scanned. The
+  # bare-basename variant is skipped too, so the test root is never scanned.
   def sibling_specs(normalized, spec_pattern)
-    variants = mirror_variants(strip_source_prefix(normalized)).select { |variant| variant.include?("/") }
+    stripped = strip_source_prefix(normalized)
+    return [] if stripped.count("/") < MIN_SIBLING_DEPTH
+
+    variants = mirror_variants(stripped).select { |variant| variant.include?("/") }
     dirs = variants.flat_map { |variant| roots.map { |root| "#{root}/#{File.dirname(variant)}" } }
-    specs = @sibling_ranker.call(normalized, dirs.uniq.select { |dir| ProjectFiles.directory?(dir) })
-    spec_pattern ? filter_by_pattern(specs, spec_pattern) : specs
+    @sibling_ranker.call(normalized, dirs.uniq.select { |dir| ProjectFiles.directory?(dir) }, spec_pattern: spec_pattern)
   end
 
   def suggestion_globs(stem)
@@ -93,19 +112,14 @@ class Evilution::SpecResolver
     globs
   end
 
-  def filter_by_pattern(candidates, pattern)
-    candidates.select { |path| File.fnmatch?(pattern, path, File::FNM_PATHNAME | File::FNM_EXTGLOB) }
-  end
-
   # Dir-grouped resolution: find the first candidate directory that exists and
-  # expand it into its test files. Ranked below #call's file mirrors (callers
-  # try #call first), so a 1:1 spec always wins when present.
+  # expand it into its test files. Ranked below a test named after the source,
+  # so a 1:1 spec always wins when present.
   def resolve_grouped_dir(normalized, spec_pattern: nil)
     dir = directory_candidates(normalized).find { |c| ProjectFiles.directory?(c) }
     return nil unless dir
 
-    files = test_files_in(dir)
-    files = filter_by_pattern(files, spec_pattern) if spec_pattern
+    files = SpecPattern.filter(test_files_in(dir), spec_pattern)
     files.empty? ? nil : files
   end
 
@@ -156,16 +170,9 @@ class Evilution::SpecResolver
     primary.compact
   end
 
-  # Ranked below the mirrors and the related sibling tests: the parent
-  # directories' tests, then the non-mirrored naming conventions.
-  def fallback_candidates(source_path)
-    parents = primary_candidates(source_path).flat_map { |c| parent_fallback_candidates(c) }
-    (parents + convention_candidates(strip_source_prefix(source_path))).uniq
-  end
-
   # Non-mirrored Test::Unit/minitest filename conventions: the `test_<name>.rb`
-  # prefix and the flat namespace-prefixed form. Both rank below the mirrored
-  # layouts assembled in #candidate_test_paths.
+  # prefix and the flat namespace-prefixed form. Both rank right below the 1:1
+  # mirrors (see #dedicated_spec) and above the related sibling tests.
   def convention_candidates(stripped)
     prefix_convention_candidates(stripped) + flat_prefixed_candidates(stripped)
   end
@@ -218,7 +225,8 @@ class Evilution::SpecResolver
   # basename forms (test_timed_stack.rb) that collide across namespaces and are
   # already covered by #prefix_convention_candidates. Top-level sources have no
   # namespace to flatten, so they produce nothing here. Ranked below the mirrored
-  # layouts (appended last) so a 1:1 file always wins. Minitest suffix only.
+  # layouts (see #convention_candidates) so a 1:1 file always wins. Minitest
+  # suffix only.
   def flat_prefixed_candidates(stripped)
     return [] unless @test_suffix == MINITEST_SUFFIX
     return [] unless stripped.include?("/")
@@ -266,4 +274,5 @@ class Evilution::SpecResolver
 end
 
 require_relative "spec_resolver/project_files"
+require_relative "spec_resolver/spec_pattern"
 require_relative "spec_resolver/sibling_spec_ranker"

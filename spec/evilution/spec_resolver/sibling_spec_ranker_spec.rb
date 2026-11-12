@@ -64,12 +64,91 @@ RSpec.describe Evilution::SpecResolver::SiblingSpecRanker do
     expect(ranker.call(source, dirs)).to eq(["spec/models/game/x_spec.rb", "spec/models/game/scoring_spec.rb"])
   end
 
-  it "treats a describe with a string argument as a mention, not as naming the subject" do
+  it "does not take a describe with a string argument as naming the subject" do
     create_file("app/models/game/scoring.rb", "Round\n")
-    create_file("spec/models/game/a_spec.rb", "describe \"Round\" do\nend\n")
+    create_file("spec/models/game/a_spec.rb", "describe \"Round\" do\n  Round\nend\n")
     create_file("spec/models/game/scoring_spec.rb", "")
 
     expect(ranker.call(source, dirs)).to eq(["spec/models/game/scoring_spec.rb", "spec/models/game/a_spec.rb"])
+  end
+
+  it "ignores a describe of the subject nested under a top-level string describe" do
+    create_file("app/models/game/scoring.rb", "Round\n")
+    create_file("spec/models/game/a_spec.rb", "RSpec.describe \"stuff\" do\n  describe Game::Round do\n  end\nend\n")
+    create_file("spec/models/game/scoring_spec.rb", "")
+
+    expect(ranker.call(source, dirs)).to eq(["spec/models/game/scoring_spec.rb", "spec/models/game/a_spec.rb"])
+  end
+
+  it "recognises a parenthesised describe" do
+    create_file("app/models/game/scoring.rb", "Round\n")
+    create_file("spec/models/game/scoring_spec.rb", "")
+    create_file("spec/models/game/x_spec.rb", "RSpec.describe(Game::Round, :slow) do\nend\n")
+
+    expect(ranker.call(source, dirs)).to eq(["spec/models/game/x_spec.rb", "spec/models/game/scoring_spec.rb"])
+  end
+
+  it "recognises a describe with a space before its parenthesis" do
+    create_file("app/models/game/scoring.rb", "Round\n")
+    create_file("spec/models/game/scoring_spec.rb", "")
+    create_file("spec/models/game/x_spec.rb", "describe (Game::Round) do\nend\n")
+
+    expect(ranker.call(source, dirs)).to eq(["spec/models/game/x_spec.rb", "spec/models/game/scoring_spec.rb"])
+  end
+
+  # Each spec puts a `describe` that is not a call to RSpec's describe ahead of
+  # the real one; only the real one may decide the rank.
+  it "skips a describe symbol, a describe definition and a describe on another receiver" do
+    create_file("app/models/game/scoring.rb", "Round\n")
+    create_file("spec/models/game/scoring_spec.rb", "")
+    real = "RSpec.describe Game::Round do\nend\n"
+    create_file("spec/models/game/a_spec.rb", "let(:describe) { Other }\n#{real}")
+    create_file("spec/models/game/b_spec.rb", "def describe(x) = x\n#{real}")
+    create_file("spec/models/game/c_spec.rb", "helper.describe Other\n#{real}")
+    create_file("spec/models/game/d_spec.rb", "helper&.describe Other\n#{real}")
+
+    expect(ranker.call(source, dirs)).to eq(
+      %w[a b c d].map { |name| "spec/models/game/#{name}_spec.rb" } + ["spec/models/game/scoring_spec.rb"]
+    )
+  end
+
+  it "takes a leading describe without a receiver as the top-level describe" do
+    create_file("app/models/game/scoring.rb", "Round\n")
+    create_file("spec/models/game/scoring_spec.rb", "")
+    create_file("spec/models/game/x_spec.rb", "describe Other do\n  describe Game::Round do\n  end\nend\n")
+
+    expect(ranker.call(source, dirs)).to eq(["spec/models/game/scoring_spec.rb", "spec/models/game/x_spec.rb"])
+  end
+
+  it "does not count the subject name in a comment, a string, a heredoc or an embedded document" do
+    create_file("spec/models/game/a_spec.rb", "# Round\n\"Round\"\n'Round'\n:Round\n<<~TXT\n  Round\nTXT\n=begin\nRound\n=end\n")
+
+    expect(ranker.call(source, dirs)).to eq([])
+  end
+
+  it "counts the subject constant inside string interpolation" do
+    create_file("spec/models/game/a_spec.rb", "\"#\{Round.name}\"\n")
+
+    expect(ranker.call(source, dirs)).to eq(["spec/models/game/a_spec.rb"])
+  end
+
+  it "does not count a caller whose mirrored source names the subject only in a comment or string" do
+    create_file("app/models/game/scoring.rb", "# Round\nclass Game::Scoring\n  NAME = \"Round\"\nend\n")
+    create_file("spec/models/game/scoring_spec.rb", "RSpec.describe Game::Scoring do\nend\n")
+
+    expect(ranker.call(source, dirs)).to eq([])
+  end
+
+  it "skips, without reading, the specs that spec_pattern excludes" do
+    create_file("spec/models/game/a_spec.rb", "Round\n")
+    create_file("spec/models/game/b_spec.rb", "Round\n")
+    files = class_spy(Evilution::SpecResolver::ProjectFiles)
+    allow(files).to receive(:glob) { |pattern| Dir.glob(pattern) }
+    allow(files).to receive(:read) { |path| File.exist?(path) ? File.binread(path) : "" }
+    ranker = described_class.new(test_suffix: "_spec.rb", files: files)
+
+    expect(ranker.call(source, dirs, spec_pattern: "**/b_spec.rb")).to eq(["spec/models/game/b_spec.rb"])
+    expect(files).not_to have_received(:read).with("spec/models/game/a_spec.rb")
   end
 
   it "ranks a spec named after the subject first even when it does not mention the constant" do

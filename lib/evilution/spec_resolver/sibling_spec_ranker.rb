@@ -2,22 +2,22 @@
 
 require_relative "../spec_resolver"
 require_relative "project_files"
+require_relative "constant_references"
+require_relative "spec_pattern"
 
 # Ranks the test files that sit next to a nested source's missing 1:1 spec --
 # the direct children of the source's mirror directories -- by evidence that
 # they exercise the source's constant. Files with no such evidence are dropped.
-# Only the given directories are scanned (not recursively) and only plain text
-# is matched, so the cost stays at one directory listing plus a read of each
-# sibling and of each sibling's mirrored source.
+# Only the given directories are scanned (not recursively) and constants are
+# read from Prism's token stream (comments and strings never count), so the cost
+# stays at one directory listing plus a lex of each sibling and, when the
+# sibling does not name the subject, of its mirrored source.
 class Evilution::SpecResolver::SiblingSpecRanker
   # Ranks, best first.
   NAMES_SUBJECT = 0   # file name or top-level describe constant is the subject
   CALLS_SUBJECT = 1   # the sibling's own subject (its mirrored source) references the subject
   MENTIONS_SUBJECT = 2 # the sibling mentions the subject constant
 
-  DESCRIBE_PATTERN = /^\s*(?:RSpec\.)?describe\s+(?:::)?((?:[A-Z]\w*::)*[A-Z]\w*)/
-  # Every constant segment, so Timeline::NightWarnings::LIMIT mentions NightWarnings.
-  CONSTANT_PATTERN = /(?<!\w)[A-Z]\w*/
   MINITEST_SUFFIX = "_test.rb"
   TEST_PREFIX = "test_"
 
@@ -27,10 +27,12 @@ class Evilution::SpecResolver::SiblingSpecRanker
   end
 
   # source_path: project-relative source file (e.g. app/models/a/b/c.rb).
-  # dirs: test directories to scan. Returns ranked test file paths.
-  def call(source_path, dirs)
+  # dirs: test directories to scan. spec_pattern: drops excluded test files
+  # before any of them is read. Returns ranked test file paths.
+  def call(source_path, dirs, spec_pattern: nil)
     subject = Subject.new(source_path)
-    ranked = test_files_in(dirs).filter_map do |test_file|
+    test_files = Evilution::SpecResolver::SpecPattern.filter(test_files_in(dirs), spec_pattern)
+    ranked = test_files.filter_map do |test_file|
       rank = rank_of(test_file, subject)
       [rank, test_file] if rank
     end
@@ -71,25 +73,27 @@ class Evilution::SpecResolver::SiblingSpecRanker
   end
 
   def rank_of(test_file, subject)
-    text = @files.read(test_file)
-    return NAMES_SUBJECT if names_subject?(test_file, text, subject)
-    return CALLS_SUBJECT if mentions?(@files.read(mirrored_source(test_file, subject)), subject)
-    return MENTIONS_SUBJECT if mentions?(text, subject)
+    return NAMES_SUBJECT if stem(test_file) == subject.name
+
+    references = references_in(test_file)
+    return NAMES_SUBJECT if names_subject?(references, subject)
+    return CALLS_SUBJECT if mentions?(references_in(mirrored_source(test_file, subject)), subject)
+    return MENTIONS_SUBJECT if mentions?(references, subject)
 
     nil
   end
 
-  def names_subject?(test_file, text, subject)
-    return true if stem(test_file) == subject.name
-
-    match = text.match(DESCRIBE_PATTERN)
-    return false unless match
-
-    subject.constant?(match[1].split("::").last)
+  def references_in(path)
+    Evilution::SpecResolver::ConstantReferences.new(@files.read(path))
   end
 
-  def mentions?(text, subject)
-    text.scan(CONSTANT_PATTERN).any? { |constant| subject.constant?(constant) }
+  def names_subject?(references, subject)
+    constant = references.describe_constant
+    constant ? subject.constant?(constant) : false
+  end
+
+  def mentions?(references, subject)
+    references.constants.any? { |constant| subject.constant?(constant) }
   end
 
   # The source a sibling test mirrors: same directory as the subject, named
