@@ -55,6 +55,11 @@ class Evilution::MCP::MutateTool < MCP::Tool
         type: "integer",
         description: "Stop after N surviving mutants"
       },
+      stop_on_kill: {
+        type: "boolean",
+        description: "Stop each mutation's test run at the first failure that decides the verdict " \
+                     "(default: true). Pass false to run every selected example."
+      },
       spec: {
         type: "array",
         items: { type: "string" },

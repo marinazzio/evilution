@@ -1002,7 +1002,7 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything)
+              known_failures: anything, stop_on_kill: true)
         .and_call_original
 
       runner.call
@@ -1023,7 +1023,7 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything)
+              known_failures: anything, stop_on_kill: true)
         .and_call_original
 
       empty_runner.call
@@ -1061,7 +1061,7 @@ RSpec.describe Evilution::Runner do
     it "dispatches to Integration::Minitest" do
       expect(Evilution::Integration::Minitest).to receive(:new)
         .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything, spec_selector: anything,
-              known_failures: []).and_call_original
+              known_failures: [], stop_on_kill: true).and_call_original
 
       runner.call
     end
@@ -1082,7 +1082,7 @@ RSpec.describe Evilution::Runner do
 
       expect(Evilution::Integration::Minitest).to receive(:new)
         .with(test_files: ["test/example_test.rb"], hooks: nil, fallback_to_full_suite: anything,
-              spec_selector: anything, known_failures: []).and_call_original
+              spec_selector: anything, known_failures: [], stop_on_kill: true).and_call_original
 
       minitest_runner.call
     end
@@ -2762,7 +2762,7 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything)
+              known_failures: anything, stop_on_kill: true)
         .and_call_original
 
       hooked_runner = described_class.new(

@@ -3,6 +3,7 @@
 require_relative "base"
 require_relative "test_unit_crash_detector"
 require_relative "known_failures"
+require_relative "stop_policy"
 require_relative "loading/test_load_path"
 require_relative "loading/test_class_cache"
 require_relative "../spec_resolver"
@@ -76,7 +77,8 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
   end
 
   # known_failures: the ids of the tests the baseline saw failing (see TestIds).
-  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [])
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [],
+                 stop_on_kill: false)
     require_relative "test_unit/framework_loader"
     require_relative "test_unit/subject_class_registry"
     require_relative "test_unit/dispatcher"
@@ -84,6 +86,7 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
     require_relative "test_unit/result_builder"
     require_relative "test_unit/test_ids"
     @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
+    @stop_policy = Evilution::Integration::StopPolicy.new(enabled: stop_on_kill, known_failures: @known_failures)
     @framework_loader = FrameworkLoader.new
     @file_resolver = TestFileResolver.new(
       test_files: test_files,
@@ -121,13 +124,36 @@ class Evilution::Integration::TestUnit < Evilution::Integration::Base
     return ResultBuilder.no_tests_ran(command) if Dispatcher.test_method_count(new_classes).zero?
 
     detector = reset_crash_detector
-    result = Dispatcher.call(new_classes, name: "evilution-mutation")
+    # Reset: a policy latched by the previous run would stop this one at its
+    # first failure, decisive or not.
+    @stop_policy.reset
+    result = Dispatcher.call(new_classes, name: "evilution-mutation", on_fault: method(:stop_at_decisive_fault))
     # Before the crash check: a test that was already failing may fail by
     # raising now, and a crash in it is no more a kill than its failure was.
     return ResultBuilder.known_failures_only(command) if @known_failures.only?(TestIds.failed(result))
 
     result.faults.each { |fault| detector.record(fault) }
     ResultBuilder.call(passed: result.passed?, command: command, detector: detector)
+  end
+
+  # Only failures and errors decide a run (see TestIds.faults); pendings,
+  # omissions and notifications are faults too, and are passed over. The run
+  # is stopped once the failing test has finished, not from inside its
+  # failure, so that the result counts it as run.
+  def stop_at_decisive_fault(fault, result)
+    return unless decisive_fault?(fault)
+
+    result.add_listener(::Test::Unit::TestResult::FINISHED) { result.stop }
+  end
+
+  def decisive_fault?(fault)
+    if fault.is_a?(::Test::Unit::Error)
+      @stop_policy.record(id: fault.test_name, exception: fault.exception)
+    elsif fault.is_a?(::Test::Unit::Failure)
+      @stop_policy.record(id: fault.test_name)
+    else
+      false
+    end
   end
 
   def load_test_classes(files)

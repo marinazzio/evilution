@@ -597,6 +597,7 @@ RSpec.describe Evilution::Integration::RSpec do
                                  unique_crash_classes: ["NoMethodError"])
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
+      allow(detector).to receive(:policy=)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -618,6 +619,7 @@ RSpec.describe Evilution::Integration::RSpec do
                                  unique_crash_classes: ["ActiveRecord::StatementTimeout"])
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
+      allow(detector).to receive(:policy=)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -637,6 +639,7 @@ RSpec.describe Evilution::Integration::RSpec do
                                  unique_crash_classes: %w[ActiveRecord::StatementTimeout NoMethodError])
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
+      allow(detector).to receive(:policy=)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -651,6 +654,7 @@ RSpec.describe Evilution::Integration::RSpec do
                                  only_crashes?: false)
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
+      allow(detector).to receive(:policy=)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(1)
 
@@ -665,12 +669,126 @@ RSpec.describe Evilution::Integration::RSpec do
                                  only_crashes?: false)
       allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(detector)
       allow(detector).to receive(:example_failed)
+      allow(detector).to receive(:policy=)
       allow(RSpec.configuration).to receive(:add_formatter)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)
 
       result = integration.call(mutation)
 
       expect(result[:passed]).to be true
+    end
+  end
+
+  describe "stopping at the first kill" do
+    let(:lifecycle) { Evilution::Integration::RSpec::CrashDetectorLifecycle.new }
+
+    around do |example|
+      host_flag = RSpec.world.wants_to_quit
+      example.run
+    ensure
+      RSpec.world.wants_to_quit = host_flag
+    end
+
+    before { allow(RSpec.configuration).to receive(:add_formatter) }
+
+    def policy_of(integration)
+      allow(lifecycle).to receive(:register).and_call_original
+      allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+      integration.call(mutation)
+      policy = nil
+      expect(lifecycle).to have_received(:register) { |given| policy = given }
+      policy
+    end
+
+    # Runs the integration with RSpec::Core::Runner.run standing in for a real
+    # run: the block plays the examples, given the run's stop policy as the
+    # crash detector would see it. Returns the flag as each run started.
+    def run_with(integration, &examples)
+      policy = nil
+      allow(lifecycle).to receive(:register).and_wrap_original do |original, given|
+        policy = given
+        original.call(given)
+      end
+      flags = []
+      allow(RSpec::Core::Runner).to receive(:run) do
+        flags << RSpec.world.wants_to_quit
+        examples.call(policy)
+      end
+      integration.call(mutation)
+      flags
+    end
+
+    # What the crash detector does on a decisive failure.
+    def kill(policy)
+      RSpec.world.wants_to_quit = true if policy.record(id: "/p/spec/some_spec.rb[1:2]")
+      1
+    end
+
+    let(:stopping) do
+      described_class.new(test_files: ["spec/some_spec.rb"], stop_on_kill: true, crash_detector_lifecycle: lifecycle)
+    end
+
+    # A run that stops at its kill must not leave the flag up: the next
+    # RSpec::Core::Runner.run would return a failure status without running
+    # anything, which would read as a kill.
+    it "puts the flag back down after a run it stopped" do
+      RSpec.world.wants_to_quit = false
+
+      run_with(stopping) { |policy| kill(policy) }
+
+      expect(RSpec.world.wants_to_quit).to be(false)
+    end
+
+    it "runs the next mutation with the flag down after one it stopped" do
+      RSpec.world.wants_to_quit = false
+
+      run_with(stopping) { |policy| kill(policy) }
+      flags = run_with(stopping) { 0 }
+
+      expect(flags).to eq([false])
+    end
+
+    # RSpec's own interrupt handler raises the flag on the user's first Ctrl-C
+    # and exits on the second only if it is still up.
+    it "keeps a flag something else raised during a run it did not stop" do
+      RSpec.world.wants_to_quit = false
+
+      run_with(stopping) do
+        RSpec.world.wants_to_quit = true
+        0
+      end
+
+      expect(RSpec.world.wants_to_quit).to be(true)
+    end
+
+    it "leaves a flag that was up before the run alone" do
+      RSpec.world.wants_to_quit = true
+
+      flags = run_with(stopping) { 0 }
+
+      expect(flags).to eq([true])
+      expect(RSpec.world.wants_to_quit).to be(true)
+    end
+
+    it "stops at a decisive failure when asked to" do
+      integration = described_class.new(test_files: ["spec/some_spec.rb"], stop_on_kill: true,
+                                        crash_detector_lifecycle: lifecycle)
+
+      expect(policy_of(integration).record(id: "/p/spec/some_spec.rb[1:2]")).to be(true)
+    end
+
+    it "never stops by default" do
+      integration = described_class.new(test_files: ["spec/some_spec.rb"], crash_detector_lifecycle: lifecycle)
+
+      expect(policy_of(integration).record(id: "/p/spec/some_spec.rb[1:2]")).to be(false)
+    end
+
+    it "goes on past examples the baseline already saw failing" do
+      integration = described_class.new(test_files: ["spec/some_spec.rb"], stop_on_kill: true,
+                                        known_failures: ["/p/spec/some_spec.rb[1:1]"],
+                                        crash_detector_lifecycle: lifecycle)
+
+      expect(policy_of(integration).record(id: "/p/spec/some_spec.rb[1:1]")).to be(false)
     end
   end
 

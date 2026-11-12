@@ -345,4 +345,107 @@ RSpec.describe Evilution::Integration::TestUnit, "#run_tests" do
       expect(results.map { |result| result[:error] }).to eq([nil, nil])
     end
   end
+
+  # A mutation's run stops once its first decisive failure is in: the tests
+  # after it are not run. Whatever stopped one run must not reach the next.
+  describe "stopping a run at its first kill" do
+    let(:runs) { [] }
+    let(:tag) { File.basename(tmpdir).delete("^a-zA-Z0-9") }
+
+    before { Thread.current[:evilution_test_unit_runs] = runs }
+    after { Thread.current[:evilution_test_unit_runs] = nil }
+
+    # Test::Unit runs the tests of a case in the order of their names: the
+    # first test does what `first` says, the second fails, the third passes.
+    def gate_test(label, first)
+      write_test_file("test/#{label.downcase}_test.rb", <<~RUBY)
+        require "test-unit"
+        require "timeout"
+        class StopGate#{tag}#{label} < Test::Unit::TestCase
+          def test_1_first
+            Thread.current[:evilution_test_unit_runs] << "1"
+            #{first}
+          end
+
+          def test_2_kills
+            Thread.current[:evilution_test_unit_runs] << "2"
+            flunk "killed"
+          end
+
+          def test_3_runs_after_the_kill
+            Thread.current[:evilution_test_unit_runs] << "3"
+          end
+        end
+      RUBY
+    end
+
+    def integration(path, stop_on_kill: true, known_failures: [])
+      described_class.new(test_files: [path], stop_on_kill: stop_on_kill, known_failures: known_failures)
+    end
+
+    it "runs no test after a failed assertion" do
+      result = integration(gate_test("Fail", 'flunk "killed first"')).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(result).not_to include(:test_crashed)
+      expect(runs).to eq(%w[1])
+    end
+
+    it "runs no test after a crash" do
+      result = integration(gate_test("Crash", 'raise ArgumentError, "boom"')).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false, test_crashed: true, error_class: "ArgumentError")
+      expect(runs).to eq(%w[1])
+    end
+
+    it "runs every test without stop_on_kill" do
+      result = integration(gate_test("Off", 'flunk "killed first"'), stop_on_kill: false).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(runs).to eq(%w[1 2 3])
+    end
+
+    # A failure the baseline already saw says nothing about the mutant.
+    it "goes on past a test the baseline saw failing, to the kill" do
+      known = ["test_1_first(StopGate#{tag}Known)"]
+
+      result = integration(gate_test("Known", 'flunk "never right"'), known_failures: known).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(result).not_to include(:known_failures_only)
+      expect(runs).to eq(%w[1 2])
+    end
+
+    # An infrastructure crash alone would leave the mutant neutral.
+    it "goes on past an infrastructure crash, to the kill" do
+      result = integration(gate_test("Infra", 'raise Timeout::Error, "slow"')).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(result).not_to include(:test_crashed)
+      expect(runs).to eq(%w[1 2])
+    end
+
+    it "ignores pendings, omissions and notifications" do
+      body = 'notify "note"; pend("later") { flunk "not yet" }; omit "skipped"'
+
+      integration(gate_test("Soft", body)).send(:run_tests, mutation)
+
+      expect(runs).to eq(%w[1 2])
+    end
+
+    it "gets to the kill again on the next run" do
+      gate = integration(gate_test("Again", 'flunk "killed first"'))
+
+      results = Array.new(2) { gate.send(:run_tests, mutation) }
+
+      expect(results).to all(include(passed: false))
+      expect(runs).to eq(%w[1 1])
+    end
+
+    it "never stops the baseline" do
+      described_class.run_baseline_test_file(gate_test("Baseline", 'flunk "killed first"'))
+
+      expect(runs).to eq(%w[1 2 3])
+    end
+  end
 end

@@ -2,6 +2,8 @@
 
 require "minitest"
 require "evilution/integration/minitest_crash_detector"
+require "evilution/integration/stop_policy"
+require "evilution/integration/known_failures"
 
 RSpec.describe Evilution::Integration::MinitestCrashDetector do
   subject(:detector) { described_class.new }
@@ -212,5 +214,67 @@ RSpec.describe Evilution::Integration::MinitestCrashDetector do
       expect(detector).not_to be_assertion_failure
       expect(detector.crash_summary).to be_nil
     end
+  end
+
+  describe "#policy=" do
+    let(:known_failures) { Evilution::Integration::KnownFailures.new(["GateTest#test_red"]) }
+    let(:policy) { Evilution::Integration::StopPolicy.new(enabled: true, known_failures: known_failures) }
+
+    before { detector.policy = policy }
+
+    def result_of(name, failure)
+      Minitest::Result.new(name).tap do |result|
+        result.klass = "GateTest"
+        result.failures << failure
+      end
+    end
+
+    it "stops the policy at an assertion failure" do
+      detector.record(result_of("test_open", Minitest::Assertion.new("expected open")))
+
+      expect(policy).to be_stopped
+    end
+
+    it "stops the policy at a crash" do
+      detector.record(result_of("test_open", Minitest::UnexpectedError.new(NoMethodError.new("undefined"))))
+
+      expect(policy).to be_stopped
+    end
+
+    it "does not stop it at a failure the baseline already saw" do
+      detector.record(result_of("test_red", Minitest::Assertion.new("expected open")))
+
+      expect(policy).not_to be_stopped
+    end
+
+    it "does not stop it at an infrastructure crash" do
+      stub_const("SQLite3::BusyException", Class.new(StandardError))
+
+      detector.record(result_of("test_open", Minitest::UnexpectedError.new(SQLite3::BusyException.new("locked"))))
+
+      expect(policy).not_to be_stopped
+      expect(detector).to be_crashed
+    end
+
+    it "does not stop it at a skip" do
+      detector.record(result_of("test_open", Minitest::Skip.new("later")))
+
+      expect(policy).not_to be_stopped
+    end
+
+    it "does not stop it at a passing test" do
+      detector.record(Minitest::Result.new("test_open"))
+
+      expect(policy).not_to be_stopped
+    end
+  end
+
+  it "never stops a run until it is handed a policy" do
+    result = Minitest::Result.new("test_open")
+    result.failures << Minitest::Assertion.new("expected open")
+
+    detector.record(result)
+
+    expect(detector.instance_variable_get(:@policy)).not_to be_stopped
   end
 end

@@ -18,6 +18,10 @@ class Evilution::Integration::KnownFailures
     @ids.empty?
   end
 
+  def include?(id)
+    @ids.include?(id)
+  end
+
   # Whether failed_ids names at least one test, and none the baseline did not
   # already see failing.
   def only?(failed_ids)

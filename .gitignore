@@ -27,3 +27,6 @@ docs/superpowers/
 
 # Gemfiles generated in corpus repos by scripts/benchmark_perf
 Gemfile.benchmark_perf*
+.beads.gate.lock
+.beads/backup.lock
+.beads/embeddeddolt.gate.lock

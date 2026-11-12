@@ -3,6 +3,7 @@
 require "stringio"
 require_relative "base"
 require_relative "known_failures"
+require_relative "stop_policy"
 require_relative "../spec_resolver"
 require_relative "../spec_selector"
 require_relative "../related_spec_heuristic"
@@ -26,6 +27,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     spec_selector: nil,
     example_filter: nil,
     known_failures: [],
+    stop_on_kill: false,
     framework_loader: FrameworkLoader.new,
     test_file_resolver: nil,
     example_filter_applier: nil,
@@ -47,6 +49,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @result_builder = result_builder
     @state_guard = state_guard
     @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
+    @stop_policy = Evilution::Integration::StopPolicy.new(enabled: stop_on_kill, known_failures: @known_failures)
     super(hooks: hooks)
   end
 
@@ -143,19 +146,31 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   def execute_run(args, command)
     snapshot = @state_guard.snapshot
+    quit_before = ::RSpec.world.wants_to_quit
     begin
       out = StringIO.new
       err = StringIO.new
       claim_rspec_streams(out, err)
-      detector = @crash_detector_lifecycle.register
+      detector = @crash_detector_lifecycle.register(@stop_policy)
       status = ::RSpec::Core::Runner.run(args, err, out)
       flagged = known_failures_only?(status)
       @result_builder.from_run(status, command, detector, examples_loaded:, known_failures_only: flagged)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
+      lower_own_stop(quit_before)
       @state_guard.release(snapshot)
     end
+  end
+
+  # A run that stops at its kill raises RSpec.world.wants_to_quit, and left up
+  # it would make the next RSpec::Core::Runner.run in this process return a
+  # failure status without running anything -- a false kill. So the flag goes
+  # back to what it was, but only after a run this integration stopped: raised
+  # by anything else, such as RSpec's own handler on the user's first Ctrl-C,
+  # it stays up, so the next Ctrl-C still exits.
+  def lower_own_stop(quit_before)
+    ::RSpec.world.wants_to_quit = quit_before if @stop_policy.stopped?
   end
 
   # RSpec redirects its own output to the streams it is handed only when the

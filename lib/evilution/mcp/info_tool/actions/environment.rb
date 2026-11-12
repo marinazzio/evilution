@@ -31,6 +31,7 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
         "baseline" => config.baseline,
         "incremental" => config.incremental,
         "fail_fast" => config.fail_fast,
+        "stop_on_kill" => config.stop_on_kill,
         "min_score" => config.min_score,
         "suggest_tests" => config.suggest_tests,
         "save_session" => config.save_session,

@@ -17,8 +17,13 @@ class Evilution::Integration::RSpec::CrashDetectorLifecycle
   # The run rebuilds RSpec's formatter loader so its formatters are bound to the
   # run's own streams (EV-m6xc / GH #1627), which drops any formatter registered
   # before it — the detector included. It is registered per run instead.
-  def register
+  #
+  # The policy is reset with it: one latched by the previous run would stop
+  # this one at its first failure, decisive or not.
+  def register(policy)
+    policy.reset
     detector = current
+    detector.policy = policy
     ::RSpec.configuration.add_formatter(detector)
     detector
   end

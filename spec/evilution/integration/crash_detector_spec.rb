@@ -2,12 +2,15 @@
 
 require "stringio"
 require "evilution/integration/crash_detector"
+require "evilution/integration/stop_policy"
+require "evilution/integration/known_failures"
 
 RSpec.describe Evilution::Integration::CrashDetector do
   subject(:detector) { described_class.new(StringIO.new) }
 
-  def make_notification(exception)
-    example = double("Example", exception: exception)
+  def make_notification(exception, scoped_id: "1:1")
+    example = double("Example", exception: exception,
+                                metadata: { rerun_file_path: "./spec/gate_spec.rb", scoped_id: scoped_id })
     double("Notification", example: example)
   end
 
@@ -77,6 +80,91 @@ RSpec.describe Evilution::Integration::CrashDetector do
 
     it "returns false when no failures recorded" do
       expect(detector).not_to be_only_crashes
+    end
+  end
+
+  # The run stops at its first decisive failure: RSpec checks
+  # RSpec.world.wants_to_quit before every example and skips the rest once it
+  # is set.
+  describe "stopping the run" do
+    let(:known_id) { "#{File.expand_path("spec/gate_spec.rb")}[1:1]" }
+    let(:policy) do
+      Evilution::Integration::StopPolicy.new(
+        enabled: true, known_failures: Evilution::Integration::KnownFailures.new([known_id])
+      )
+    end
+    let(:assertion) { RSpec::Expectations::ExpectationNotMetError.new("expected x to eq y") }
+
+    around do |example|
+      before = RSpec.world.wants_to_quit
+      RSpec.world.wants_to_quit = false
+      example.run
+    ensure
+      RSpec.world.wants_to_quit = before
+    end
+
+    it "asks RSpec to stop at the first assertion failure" do
+      detector.policy = policy
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      expect(RSpec.world.wants_to_quit).to be(true)
+      expect(detector).to be_assertion_failure
+    end
+
+    it "asks RSpec to stop at the first crash that is not the infrastructure's" do
+      detector.policy = policy
+
+      detector.example_failed(make_notification(NoMethodError.new("crash"), scoped_id: "1:2"))
+
+      expect(RSpec.world.wants_to_quit).to be(true)
+      expect(detector).to be_crashed
+    end
+
+    it "lets the run go on past an example the baseline already saw failing" do
+      detector.policy = policy
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:1"))
+
+      expect(RSpec.world.wants_to_quit).to be(false)
+      expect(detector).to be_assertion_failure
+    end
+
+    it "lets the run go on past a crash of the test infrastructure" do
+      stub_const("SQLite3::BusyException", Class.new(StandardError))
+      detector.policy = policy
+
+      detector.example_failed(make_notification(SQLite3::BusyException.new("database is locked"), scoped_id: "1:2"))
+
+      expect(RSpec.world.wants_to_quit).to be(false)
+      expect(detector).to be_crashed
+    end
+
+    it "stops at a decisive failure that comes after ones that are not" do
+      stub_const("SQLite3::BusyException", Class.new(StandardError))
+      detector.policy = policy
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:1"))
+      detector.example_failed(make_notification(SQLite3::BusyException.new("locked"), scoped_id: "1:2"))
+      expect(RSpec.world.wants_to_quit).to be(false)
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:3"))
+      expect(RSpec.world.wants_to_quit).to be(true)
+    end
+
+    it "never stops a run without a policy" do
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+      detector.example_failed(make_notification(NoMethodError.new("crash"), scoped_id: "1:3"))
+
+      expect(RSpec.world.wants_to_quit).to be(false)
+    end
+
+    it "never stops a run under the disabled policy" do
+      detector.policy = Evilution::Integration::StopPolicy::DISABLED
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      expect(RSpec.world.wants_to_quit).to be(false)
     end
   end
 

@@ -92,6 +92,21 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       end
     end
 
+    {
+      rspec: Evilution::Integration::RSpec,
+      minitest: Evilution::Integration::Minitest,
+      test_unit: Evilution::Integration::TestUnit
+    }.each do |name, klass|
+      [true, false].each do |stop_on_kill|
+        it "tells the #{name} integration stop_on_kill: #{stop_on_kill}" do
+          runner = described_class.new(config(integration: name, stop_on_kill: stop_on_kill), hooks: nil)
+          expect(klass).to receive(:new).with(hash_including(stop_on_kill: stop_on_kill)).and_call_original
+
+          runner.build_integration
+        end
+      end
+    end
+
     it "forwards the hooks object to the integration" do
       runner = described_class.new(config(integration: :rspec), hooks: :hooks_obj)
       expect(Evilution::Integration::RSpec).to receive(:new).with(

@@ -125,6 +125,15 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "passes stop_on_kill option" do
+      described_class.call(files: ["lib/foo.rb"], stop_on_kill: false, server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(stop_on_kill: false)
+      )
+    end
+
     it "passes target option" do
       described_class.call(files: ["lib/foo.rb"], target: "Foo#bar", server_context: nil)
 

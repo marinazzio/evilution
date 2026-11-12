@@ -63,6 +63,11 @@
       "default": null,
       "description": "Stop after N surviving mutants. null or omitted = disabled."
     },
+    "stop_on_kill": {
+      "type": "boolean",
+      "default": true,
+      "description": "Stop each mutation's test run at the first failing example that decides the verdict."
+    },
     "baseline": {
       "type": "boolean",
       "default": true,

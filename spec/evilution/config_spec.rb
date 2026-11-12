@@ -412,6 +412,37 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#stop_on_kill?" do
+      it "defaults to true" do
+        expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true
+      end
+
+      it "is false when stop_on_kill: false is given" do
+        config = Evilution::Config.new(stop_on_kill: false, skip_config_file: true)
+        expect(config.stop_on_kill?).to be false
+      end
+
+      it "loads stop_on_kill from YAML" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "stop_on_kill: false\n")
+
+            expect(Evilution::Config.new.stop_on_kill?).to be false
+          end
+        end
+      end
+
+      it "CLI options override stop_on_kill from file" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "stop_on_kill: false\n")
+
+            expect(Evilution::Config.new(stop_on_kill: true).stop_on_kill?).to be true
+          end
+        end
+      end
+    end
+
     describe "#suggest_tests?" do
       it "returns true when suggest_tests is enabled" do
         config = described_class.new(suggest_tests: true, skip_config_file: true)

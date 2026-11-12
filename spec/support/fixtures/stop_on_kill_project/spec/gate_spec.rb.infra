@@ -1,0 +1,45 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "gate"
+require "fileutils"
+
+# Stands in for the database driver: evilution counts its errors as the test
+# infrastructure failing, not as the mutant being caught.
+module SQLite3
+  class BusyException < StandardError; end
+end
+
+# Each example after the first notes that it ran, and whether it saw the
+# original code or a mutant. The baseline runs the original.
+def record_run
+  state = begin
+    yield
+  rescue StandardError
+    nil
+  end
+  log = File.expand_path("../tmp/ran.log", __dir__)
+  FileUtils.mkdir_p(File.dirname(log))
+  File.open(log, "a") { |file| file.puts(state == "open" ? "original" : "mutant") }
+end
+
+# On every mutant the first example crashes with an infrastructure error and
+# the second fails an assertion.
+RSpec.describe Gate do
+  it "reaches the database" do
+    state = begin
+      described_class.new.state
+    rescue StandardError
+      nil
+    end
+    raise SQLite3::BusyException, "database is locked" unless state == "open"
+  end
+
+  it "is open" do
+    expect(described_class.new.state).to eq("open")
+  end
+
+  it "is still open" do
+    record_run { described_class.new.state }
+  end
+end
