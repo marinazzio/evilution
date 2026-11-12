@@ -193,18 +193,26 @@ RSpec.describe Evilution::Runner::MutationPlanner do
 
   # Receiver simplifications (`x.to_i` -> `x`, `x.presence` -> `x`,
   # `x.to_s` -> `x`) must reach the plan in every context they are written
-  # in. In argument and hash-value position the identical bytes are also
-  # produced by argument_method_call_replacement, which is registered first,
-  # so dedup reports them under that name rather than method_call_removal.
+  # in, the value of a constant included. In argument and hash-value position
+  # the identical bytes are also produced by argument_method_call_replacement,
+  # which is registered first, so dedup reports them under that name rather
+  # than method_call_removal.
   describe "receiver simplification" do
     let(:file) { "spec/support/fixtures/receiver_simplification.rb" }
     let(:plan) { described_class.new(config, registry: registry).call(subjects_for(file)) }
 
+    def line_of(mutation)
+      mutation.mutated_source.lines[mutation.line - 1].strip
+    end
+
     def simplified(line_text)
-      plan.enabled.select { |m| m.mutated_source.lines[m.line - 1].strip == line_text }.map(&:operator_name)
+      plan.enabled.select { |m| line_of(m) == line_text }.map(&:operator_name)
     end
 
     {
+      "LIMIT = ENV[\"SEAT_LIMIT\"]" => "method_call_removal",
+      "SEATS = { first: \"1\" }.freeze" => "argument_method_call_replacement",
+      "SEATS = { first: \"1\".to_i }" => "freeze_removal",
       "def label = value" => "method_call_removal",
       "params[:x]" => "method_call_removal",
       "\"seat \#{value}\"" => "method_call_removal",
@@ -217,6 +225,20 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       it "plans #{line_text.inspect} as an enabled #{operator_name} mutation" do
         expect(simplified(line_text)).to eq([operator_name])
       end
+    end
+
+    it "has method_call_removal generate the argument-position ones too, before dedup relabels them" do
+      generated = subjects_for(file).flat_map { |s| registry.mutations_for(s) }
+                                    .select { |m| m.operator_name == "method_call_removal" }.map { |m| line_of(m) }
+
+      expect(generated).to include("def call(seat_str:) = Seat.find_by(number: seat_str)", "{ number: value }",
+                                   "SEATS = { first: \"1\" }.freeze")
+    end
+
+    it "attributes a method written in a constant's value to the method, not the constant" do
+      handled = plan.enabled.select { |m| line_of(m) == "def handle(raw) = raw" }
+
+      expect(handled.map { |m| [m.operator_name, m.subject.kind] }).to eq([["method_call_removal", :method]])
     end
   end
 end

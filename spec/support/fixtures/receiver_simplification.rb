@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 class ReceiverSimplification
+  LIMIT = ENV["SEAT_LIMIT"].to_i
+  SEATS = { first: "1".to_i }.freeze
+  Handler = Class.new do
+    def handle(raw) = raw.to_i
+  end
+
   Point = Data.define(:value) do
     def label = value.to_s
   end
