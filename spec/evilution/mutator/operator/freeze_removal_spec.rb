@@ -66,6 +66,19 @@ RSpec.describe Evilution::Mutator::Operator::FreezeRemoval do
       expect(mutations_for(source, "second").map { |m| m.mutated_source.lines[1].strip }).to eq(["A = [1]"])
     end
 
+    it "does not attribute a constant to a method of a value-object definition in the body" do
+      source = "class Tally\n  KINDS = [1].freeze\n  Result = Data.define(:a) do\n    def first = 1\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+    end
+
+    it "reaches a constant in the block of a value-object definition through its first method" do
+      source = "class Tally\n  Result = Data.define(:a) do\n    LIST = [1].freeze\n    def first = 1\n  end\n  def second = 2\nend\n"
+
+      expect(mutations_for(source).map(&:line)).to eq([3])
+      expect(mutations_for(source, "second")).to be_empty
+    end
+
     it "reports the mutation on the line of the freeze" do
       expect(mutations_for(klass("A = 1", "LIST = [1].freeze")).map(&:line)).to eq([3])
     end

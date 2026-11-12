@@ -59,9 +59,12 @@ class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
     end
   end
 
-  # Every `freeze` call under the node, outermost first.
+  # Every `freeze` call under the node, outermost first. What a method or a
+  # nested scope holds (the block of `Data.define`) is not the node's own.
   def freezes_in(node)
-    nested = node.compact_child_nodes.flat_map { |child| freezes_in(child) }
+    nested = node.compact_child_nodes.flat_map do |child|
+      Evilution::AST::ClassBody.opaque?(node, child) ? [] : freezes_in(child)
+    end
     removable_freeze?(node) ? [node, *nested] : nested
   end
 
