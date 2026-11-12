@@ -30,7 +30,7 @@ class Evilution::MCP::InfoTool::Actions::Subjects < Evilution::MCP::InfoTool::Ac
     def subject_entries(subjects, config)
       registry = Evilution::Mutator::Registry.default
       filter = build_subject_filter(config)
-      operator_options = { skip_heredoc_literals: config.skip_heredoc_literals? }
+      operator_options = { skip_heredoc_literals: config.skip_heredoc_literals?, line_ranges: config.line_ranges }
 
       subjects.map do |subj|
         count = registry.mutations_for(subj, filter: filter, operator_options: operator_options).length

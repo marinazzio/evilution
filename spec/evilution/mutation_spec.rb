@@ -84,6 +84,18 @@ RSpec.describe Evilution::Mutation do
     expect(mutation.column).to eq(7)
   end
 
+  describe "#changed_lines" do
+    it "is the line it is reported at when built without a span" do
+      expect(mutation.changed_lines).to eq(9..9)
+    end
+
+    it "is the span it was built with" do
+      location = described_class::Location.new(file_path: "lib/user.rb", line: 9, column: 7, lines: 9..11)
+
+      expect(build_mutation(location: location).changed_lines).to eq(9..11)
+    end
+  end
+
   describe "#diff" do
     it "returns a unified diff of the change" do
       result = mutation.diff

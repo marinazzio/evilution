@@ -7,12 +7,12 @@ require_relative "../ast"
 # Answers whether mutated source is Ruby the running interpreter will accept.
 #
 # Mutations are built and screened with Prism, but Prism and the older
-# parse.y parser do not agree on everything: Prism takes a bare constant
-# operator write inside a method (`def f; LIMIT ||= 1; end`) and a `nil[...]`
-# pattern, both of which parse.y rejects. An interpreter that compiles with
-# parse.y -- Ruby 3.3 by default, any later one started with
-# `--parser=parse.y` -- would be handed a mutant marked parseable and raise
-# SyntaxError evaluating it.
+# parse.y parser do not agree on everything: Prism takes a `nil[...]`
+# pattern, and before 2.0 also a bare constant operator write inside a method
+# (`def f; LIMIT ||= 1; end`), both of which parse.y rejects. An interpreter
+# that compiles with parse.y -- Ruby 3.3 by default, any later one started
+# with `--parser=parse.y` -- would be handed a mutant marked parseable and
+# raise SyntaxError evaluating it.
 #
 # So Prism decides first, and where the interpreter does not compile with
 # Prism, parse.y is asked as well. That second parse costs about what the

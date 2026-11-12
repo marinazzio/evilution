@@ -2,9 +2,18 @@
 
 RSpec.describe Evilution::Mutator::Operator::FreezeRemoval do
   def mutations_for(source, method_name = "first")
+    mutations_of(source) { |s| s.name.end_with?("##{method_name}", ".#{method_name}") }
+  end
+
+  # The mutations generated for the constant assignment named so.
+  def constant_mutations(source, name)
+    mutations_of(source) { |s| s.kind == :constant_write && s.name == name }
+  end
+
+  def mutations_of(source, &)
     Tempfile.create(["freeze_removal", ".rb"]) do |file|
       File.write(file.path, source)
-      subject = Evilution::AST::Parser.new.call(file.path).find { |s| s.name.end_with?("##{method_name}", ".#{method_name}") }
+      subject = Evilution::AST::Parser.new.call(file.path).find(&)
       described_class.new.call(subject)
     end
   end
@@ -64,6 +73,71 @@ RSpec.describe Evilution::Mutator::Operator::FreezeRemoval do
 
       expect(mutations_for(source, "first").map { |m| m.mutated_source.lines[3].strip }).to eq(["B = [2]"])
       expect(mutations_for(source, "second").map { |m| m.mutated_source.lines[1].strip }).to eq(["A = [1]"])
+    end
+
+    it "drops the freeze under the constant's own subject when the class has no method of its own" do
+      source = "class Tally\n  KINDS = [1].freeze\n  Result = Data.define(:a) do\n    def first = 1\n  end\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+      expect(constant_mutations(source, "Tally::KINDS").map { |m| [m.line, m.mutated_source.lines[1].strip] })
+        .to eq([[2, "KINDS = [1]"]])
+    end
+
+    it "leaves a constant of a class with a method to that method" do
+      expect(constant_mutations(klass("LIST = [1].freeze"), "Sample::LIST")).to be_empty
+    end
+
+    it "drops the freeze of a constant in a class with no method at all under the constant's subject" do
+      source = "class Sample\n  LIST = [1].freeze\nend\n"
+
+      expect(constant_mutations(source, "Sample::LIST").map(&:line)).to eq([2])
+    end
+
+    it "drops only the freeze of the constant the subject is" do
+      source = "class Sample\n  A = [1].freeze; B = [2].freeze\nend\n"
+
+      expect(constant_mutations(source, "Sample::B").map { |m| m.mutated_source.lines[1].strip })
+        .to eq(["A = [1].freeze; B = [2]"])
+    end
+
+    it "drops the freeze of a constant in a value-object block without a method under the constant's subject" do
+      source = "class Tally\n  Result = Data.define(:a) do\n    LIST = [1].freeze\n  end\n  def first = 1\nend\n"
+
+      expect(mutations_for(source)).to be_empty
+      expect(constant_mutations(source, "Tally::Result::LIST").map(&:line)).to eq([3])
+    end
+
+    # Every subject of the file is offered to the operator, as in a run: each
+    # freeze is dropped once, whether or not its class has a method.
+    it "drops each freeze once across the subjects of a file" do
+      source = "class Tally\n  KINDS = [1].freeze\n  Result = Data.define(:a) do\n    def first = 1\n  end\nend\n" \
+               "class Sample\n  LIST = [2].freeze\n  def first = 1\nend\n"
+      lines = Tempfile.create(["freeze_removal", ".rb"]) do |file|
+        File.write(file.path, source)
+        Evilution::AST::Parser.new.call(file.path)
+                              .select { |s| described_class.subject_kinds.include?(s.kind) }
+                              .flat_map { |s| described_class.new.call(s).map(&:line) }
+      end
+
+      expect(lines).to eq([2, 8])
+    end
+
+    # The modifier, not the assignment, is the statement of the body there, as
+    # it is in a class that has a method.
+    it "leaves a constant assignment guarded by a modifier alone, as under a method" do
+      expect(constant_mutations("class Sample\n  LIST = [1].freeze if x\nend\n", "Sample::LIST")).to be_empty
+      expect(mutations_for(klass("LIST = [1].freeze if x"))).to be_empty
+    end
+
+    it "leaves a top-level constant alone" do
+      expect(constant_mutations("LIST = [1].freeze\n", "LIST")).to be_empty
+    end
+
+    it "reaches a constant in the block of a value-object definition through its first method" do
+      source = "class Tally\n  Result = Data.define(:a) do\n    LIST = [1].freeze\n    def first = 1\n  end\n  def second = 2\nend\n"
+
+      expect(mutations_for(source).map(&:line)).to eq([3])
+      expect(mutations_for(source, "second")).to be_empty
     end
 
     it "reports the mutation on the line of the freeze" do

@@ -601,7 +601,7 @@ Each operator name is stable and appears in JSON output under `survived[].operat
 | `off_by_one_boundary` | Lower a count held in a variable by one: the receiver of `times`, the argument of `upto` / `downto` / `take` / `first` / `last` / `drop` / `each_slice` / `each_cons` (skips literal counts, which `integer_literal` shifts, and safe navigation) | `n.times` -> `(n - 1).times`, `items.first(n)` -> `items.first(n - 1)` |
 | `format_specifier_swap` | Loosen one conversion specifier of a literal format string in `format` / `sprintf` / `printf` / `String#%`: drop flags, width and precision, or render a non-integer number as `%s` (skips `%%`, `%{name}`, `*` widths, `%c`, `%p` and interpolated or heredoc strings) | `format("%05d", n)` -> `format("%d", n)`, `"%.2f"` -> `"%f"`, `"%s"` |
 | `alias_removal` | Drop an `alias` or `alias_method` declaration from a class, module or `class << self` body, attributed to the first method of that scope (skips aliases inside methods, `alias_method` sent to another receiver and global-variable aliases) | `alias length size` -> _(removed)_ |
-| `freeze_removal` | Drop `.freeze` from a constant defined in a class or module body, attributed to the first method of that scope (skips values that are frozen anyway: symbols, numbers, `nil`, booleans, ranges, regexps, and string literals under `# frozen_string_literal: true`; a `freeze` inside a method is left to `method_call_removal`) | `LIST = %w[a b].freeze` -> `LIST = %w[a b]` |
+| `freeze_removal` | Drop `.freeze` from a constant defined in a class or module body, attributed to the first method of that scope, or to the constant itself when the scope has no method of its own (skips values that are frozen anyway: symbols, numbers, `nil`, booleans, ranges, regexps, and string literals under `# frozen_string_literal: true`; a `freeze` inside a method is left to `method_call_removal`) | `LIST = %w[a b].freeze` -> `LIST = %w[a b]` |
 | `visibility_removal` | Drop a `private`, `protected` or `module_function` declaration from a class, module or `class << self` body, attributed to the first method of that scope; a definition it wraps is kept (skips `public`, `private_constant`, `private_class_method`, and declarations guarded by a modifier) | `private` -> _(removed)_, `private def a; end` -> `def a; end` |
 | `attr_accessor_swap` | Widen an `attr_reader` or `attr_writer` to `attr_accessor`, and remove an `attr_reader` / `attr_writer` / `attr_accessor` declaration, in a class, module or `class << self` body, attributed to the first method of that scope (skips a declaration wrapped in `private` / `protected`, or guarded by a modifier) | `attr_reader :name` -> `attr_accessor :name`, _(removed)_ |
 | `sleep_to_zero` | Take the wait out of a `sleep` / `Kernel.sleep` whose duration is a variable or an expression (a literal duration is left to `integer_literal` / `float_literal`, which already emit `sleep 0`; skips a `sleep` sent to another receiver) | `sleep delay` -> `sleep 0` |
@@ -1077,9 +1077,19 @@ test:
   timeout: 5000
 ```
 
-After the first `jobs > 1` run, each worker creates its own file (`db/test.sqlite3`, `db/test2.sqlite3`, …). Seed each with `rake db:test:prepare` before running Evilution, or ensure your preload sets up schema on connect.
+Each worker needs its own prepared database (`db/test.sqlite3`, `db/test2.sqlite3`, …, one per job). Create and load them before running Evilution:
 
-When Evilution detects a parallel run against a SQLite-backed `config/database.yml`, it prints a one-time startup warning pointing to this section.
+```bash
+bin/rails db:test:prepare
+TEST_ENV_NUMBER=2 bin/rails db:test:prepare
+TEST_ENV_NUMBER=3 bin/rails db:test:prepare   # … up to the number of jobs
+```
+
+Without `--preload`, a test helper that loads the schema when it boots (for example `ActiveRecord::Migration.maintain_test_schema!` in `rails_helper.rb`) can do this instead, because it runs inside each worker.
+
+Per-worker databases also work with `--preload`, which boots the app (and resolves `database.yml`) once in the parent before the workers fork: each worker re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when the result differs, re-establishes `ActiveRecord::Base`'s connection to it. Only the primary connection is switched, and only when it still matches `database.yml`; a connection your test helper set up by other means is left alone. Under `--preload` the preload's own schema setup runs once, in the parent, against the parent's database only, so prepare the worker databases with the commands above. A worker whose database is missing or lacks a table or migration of the parent's database goes back to the parent's database and prints which database to prepare; its mutations then share that database as they would without the switch. Connections other than `ActiveRecord::Base`'s (other databases set up with `connects_to`, replicas) keep using the parent's databases, and each worker says so in a warning.
+
+When Evilution detects a parallel run against a SQLite test database whose path does not depend on `TEST_ENV_NUMBER`, it prints a one-time startup warning pointing to this section. An in-memory database (`:memory:`) is never shared between workers and does not trigger it.
 
 ## Development
 

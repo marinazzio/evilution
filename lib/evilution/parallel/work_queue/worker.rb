@@ -4,6 +4,7 @@ require_relative "../work_queue"
 require_relative "../../child_output"
 require_relative "../../process_supervisor"
 require_relative "../../temp_dir_tracker"
+require_relative "../../worker_database"
 require_relative "channel"
 require_relative "channel/frame"
 
@@ -31,6 +32,7 @@ class Evilution::Parallel::WorkQueue::Worker
       res_read.close
       install_child_signal_handlers
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
+      Evilution::WorkerDatabase.reconnect
       Evilution::ChildOutput.redirect!
       Loop.run(cmd_read, res_write, hooks: hooks, &block)
     end
@@ -61,7 +63,9 @@ class Evilution::Parallel::WorkQueue::Worker
   # EV-kdns / GH #817: translate 0-based worker slot to parallel_tests'
   # TEST_ENV_NUMBER convention ("" for slot 0, "2" for slot 1, ...). Rails
   # apps interpolating TEST_ENV_NUMBER into database.yml get per-worker
-  # SQLite files, avoiding lock contention under jobs > 1.
+  # SQLite files, avoiding lock contention under jobs > 1. The app may already
+  # be booted by a preload, so spawn re-resolves the ActiveRecord connection
+  # after setting it (WorkerDatabase).
   def self.test_env_number_for(worker_index)
     worker_index.zero? ? "" : (worker_index + 1).to_s
   end

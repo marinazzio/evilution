@@ -2,21 +2,28 @@
 
 require "prism"
 require_relative "../ast"
+require_relative "value_object_definition"
 
-# The body of a class, module or `class << self`: the code written outside
-# every method, where no method subject reaches it.
+# The body of a class, module or `class << self`, or the block of a
+# value-object definition (`Data.define(:a) do ... end`), which is the body of
+# the class it defines: the code written outside every method, where no method
+# subject reaches it.
 #
 # Operators that mutate such code attribute their mutants to one method, so
 # each mutant has exactly one subject. That method is the scope's anchor: the
 # first method written in the scope, in source order. Blocks of the body
 # (`included do ... end`) are searched, nested scopes are not: their methods
-# anchor the inner scope. A scope with no method of its own borrows the anchor
-# of the first singleton class in its body that has one, so a class whose
-# methods all sit in `class << self` is still reached.
+# anchor the inner scope, and their code is attributed to it.
+#
+# A scope with no method of its own borrows the anchor of the first singleton
+# class in its body that has one, so a class whose methods all sit in
+# `class << self` is still reached. It never borrows from a value-object
+# block: those methods belong to the class the block defines, and a mutant
+# labelled with one of them would point at code it does not contain. A scope
+# left without an anchor is listed by .unanchored_in, for operators whose
+# code has a subject of its own to fall back on (a constant assignment).
 class Evilution::AST::ClassBody
   SCOPES = [Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode].freeze
-  # Nodes whose children belong to something else: a method, or another scope.
-  OPAQUE = [Prism::DefNode, *SCOPES].freeze
 
   # The location that closes each kind of conditional or loop.
   CLOSINGS = {
@@ -36,11 +43,28 @@ class Evilution::AST::ClassBody
     scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line == line }
   end
 
+  # The bodies with no anchor, outermost first: no method of their own, and
+  # none to borrow.
+  def self.unanchored_in(tree)
+    scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line.nil? }
+  end
+
   def self.scopes_in(node)
     node.compact_child_nodes.flat_map do |child|
       nested = scopes_in(child)
-      SCOPES.include?(child.class) ? [child, *nested] : nested
+      scope?(node, child) ? [child, *nested] : nested
     end
+  end
+
+  # Whether the child of the node opens a scope of its own.
+  def self.scope?(node, child)
+    SCOPES.include?(child.class) || (child.is_a?(Prism::BlockNode) && Evilution::AST::ValueObjectDefinition.match?(node))
+  end
+
+  # Whether the child of the node belongs to something else: a method, or
+  # another scope.
+  def self.opaque?(node, child)
+    child.is_a?(Prism::DefNode) || scope?(node, child)
   end
 
   private_class_method :scopes_in
@@ -79,7 +103,7 @@ class Evilution::AST::ClassBody
 
   def statements_in(node, removable:)
     node.compact_child_nodes.flat_map do |child|
-      next [] if OPAQUE.include?(child.class)
+      next [] if self.class.opaque?(node, child)
 
       nested = statements_in(child, removable: child.is_a?(Prism::StatementsNode) && !modifier?(node))
       removable ? [child, *nested] : nested
@@ -95,7 +119,7 @@ class Evilution::AST::ClassBody
 
   def descend(node)
     node.compact_child_nodes.flat_map do |child|
-      OPAQUE.include?(child.class) ? [child] : [child, *descend(child)]
+      self.class.opaque?(node, child) ? [child] : [child, *descend(child)]
     end
   end
 end

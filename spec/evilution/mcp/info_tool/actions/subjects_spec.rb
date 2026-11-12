@@ -9,7 +9,9 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
     JSON.parse(response.content.first[:text])
   end
 
-  let(:config) { instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: []) }
+  let(:config) do
+    instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: [], line_ranges: {})
+  end
   let(:subject_stub) do
     instance_double(
       "Evilution::Subject",
@@ -47,6 +49,17 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
       expect(body["total_mutations"]).to eq(3)
       expect(body["subjects"]).to eq(
         [{ "name" => "Foo#bar", "file" => "lib/foo.rb", "line" => 10, "mutations" => 3 }]
+      )
+    end
+
+    it "has the operators build only the mutations that change a line inside the requested range" do
+      allow(config).to receive(:line_ranges).and_return("lib/foo.rb" => 10..12)
+
+      described_class.call(files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => 10..12 })
+
+      expect(registry).to have_received(:mutations_for).with(
+        subject_stub, filter: nil,
+                      operator_options: { skip_heredoc_literals: false, line_ranges: { "lib/foo.rb" => 10..12 } }
       )
     end
 

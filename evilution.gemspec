@@ -46,7 +46,7 @@ Gem::Specification.new do |spec|
   # RSpec accepts 2.x.
   spec.add_dependency "diff-lcs", ">= 1.5", "< 2"
   spec.add_dependency "mcp", ">= 0.8", "< 2"
-  spec.add_dependency "prism", ">= 1.5", "< 2"
+  spec.add_dependency "prism", ">= 1.5", "< 3"
   # Structural regexp mutations edit a pattern by its token offsets; the range
   # matches RuboCop's own, so projects running both resolve one version.
   spec.add_dependency "regexp_parser", ">= 2.9", "< 3"

@@ -34,7 +34,9 @@ class Evilution::CLI::Commands::Subjects < Evilution::CLI::Command
   def collect_entries(subjects, config)
     registry = Evilution::Mutator::Registry.default
     filter = build_subject_filter(config)
-    operator_options = build_operator_options(config)
+    # Only mutations that change a line of the requested range are counted,
+    # as only those would run.
+    operator_options = build_operator_options(config).merge(line_ranges: config.line_ranges)
     entries = []
     total = 0
 
