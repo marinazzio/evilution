@@ -17,23 +17,32 @@ RSpec.describe Evilution::CLI::ExitGuard do
     hooks.each(&:call)
   end
 
+  # A real exit! or at_exit would end, or outlive, the process running these
+  # examples. Every guard gets traps in their place, so a guard that ignores
+  # what it was given fails the example that runs it, whatever the order the
+  # examples run in and however many of them run. The process-wide forms are
+  # trapped too, so the defaults cannot reach past the guard either. Examples
+  # that observe exit! or at_exit stub them on their own guard instead.
+  before do
+    allow_any_instance_of(described_class).to receive(:exit!).and_raise("real exit! reached")
+    allow_any_instance_of(described_class).to receive(:at_exit).and_raise("real at_exit reached")
+    allow(Process).to receive(:exit!).and_raise("real Process.exit! reached")
+    allow(Kernel).to receive(:exit!).and_raise("real Kernel.exit! reached")
+  end
+
   # The defaults reach for the process itself: Kernel's at_exit and exit!, the
   # standard streams, the pid and in-process isolation. Each is checked here
-  # with the others injected, and with at_exit and exit! stubbed on the guard,
-  # since a real one would end the process running these examples.
+  # with the others injected, and with at_exit or exit! stubbed on the guard
+  # under test in place of the traps above.
   describe "its default collaborators" do
-    # exit! is stubbed here only so that a guard ignoring the injected exiter
-    # fails the example instead of ending the process.
     it "uses the exiter it is given in place of exit!" do
       guard = described_class.new(register: register, exiter: exiter)
-      allow(guard).to receive(:exit!)
       guard.install
       guard.status = 3
 
       run_hooks
 
       expect(exits).to eq([3])
-      expect(guard).not_to have_received(:exit!)
     end
 
     it "registers its hook with at_exit" do
@@ -47,7 +56,7 @@ RSpec.describe Evilution::CLI::ExitGuard do
       expect(exits).to eq([4])
     end
 
-    it "exits with exit!, which skips whatever is left in the at_exit queue" do
+    it "exits with exit! and the status" do
       guard = described_class.new(register: register)
       allow(guard).to receive(:exit!)
       guard.install
