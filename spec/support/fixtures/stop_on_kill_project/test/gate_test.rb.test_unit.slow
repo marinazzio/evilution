@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "test-unit"
+require "gate"
+
+# Every mutant fails the first test, then hangs in the second -- past the
+# two-second timeout the spec runs with. The tests run in the order of their
+# names.
+class GateTest < Test::Unit::TestCase
+  def test_1_is_open
+    assert_equal "open", Gate.new.state
+  end
+
+  def test_2_answers_in_time
+    state = begin
+      Gate.new.state
+    rescue StandardError
+      nil
+    end
+    sleep 5 unless state == "open"
+  end
+end

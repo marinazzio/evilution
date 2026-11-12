@@ -3,10 +3,12 @@
 require "spec_helper"
 require "rspec/core"
 require "evilution/integration/rspec/crash_detector_lifecycle"
+require "evilution/integration/stop_policy"
 
 RSpec.describe Evilution::Integration::RSpec::CrashDetectorLifecycle do
   let(:lifecycle) { described_class.new }
-  let(:fake_detector) { instance_double(Evilution::Integration::CrashDetector, reset: nil) }
+  let(:fake_detector) { instance_double(Evilution::Integration::CrashDetector, reset: nil, "policy=": nil) }
+  let(:policy) { instance_double(Evilution::Integration::StopPolicy, reset: nil) }
 
   before do
     allow(Evilution::Integration::CrashDetector).to receive(:new).and_return(fake_detector)
@@ -38,14 +40,23 @@ RSpec.describe Evilution::Integration::RSpec::CrashDetectorLifecycle do
   # run's own streams (EV-m6xc / GH #1627), which drops whatever was registered
   # before it — so registration happens per run rather than once.
   it "registers the detector with RSpec each time it is asked" do
-    lifecycle.register
-    lifecycle.register
+    lifecycle.register(policy)
+    lifecycle.register(policy)
 
     expect(RSpec.configuration).to have_received(:add_formatter).with(fake_detector).twice
   end
 
   it "registers and returns the same detector" do
-    expect(lifecycle.register).to eq(fake_detector)
+    expect(lifecycle.register(policy)).to eq(fake_detector)
+  end
+
+  # Each run starts undecided: a policy left latched by the previous run would
+  # stop the next one at its first failure, decisive or not.
+  it "resets the policy and hands it to the detector" do
+    lifecycle.register(policy)
+
+    expect(policy).to have_received(:reset)
+    expect(fake_detector).to have_received(:policy=).with(policy)
   end
 
   it "does not register on its own" do

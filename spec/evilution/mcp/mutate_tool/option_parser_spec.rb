@@ -81,7 +81,7 @@ RSpec.describe Evilution::MCP::MutateTool::OptionParser do
     it "exposes the passthrough and allowed key lists" do
       expect(described_class::PASSTHROUGH_KEYS).to include(
         :target, :timeout, :jobs, :fail_fast, :suggest_tests,
-        :incremental, :integration, :isolation, :baseline, :save_session
+        :incremental, :integration, :isolation, :baseline, :save_session, :stop_on_kill
       )
       expect(described_class::ALLOWED_OPT_KEYS).to include(:spec, :skip_config)
       expect(described_class::VALID_VERBOSITIES).to eq(%w[full summary minimal])

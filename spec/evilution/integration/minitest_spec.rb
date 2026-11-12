@@ -1197,4 +1197,79 @@ RSpec.describe Evilution::Integration::Minitest do
       expect(results.map { |result| result[:error] }).to eq([nil, nil])
     end
   end
+
+  # A mutation's run stops at its first decisive failure: the tests after it
+  # are skipped. Whatever stopped one run must not reach the next.
+  describe "stopping a run at its first kill" do
+    let(:tmpdir) { Dir.mktmpdir("minitest_stop_spec") }
+    let(:runs) { [] }
+    let(:path) do
+      File.join(tmpdir, "gate_test.rb").tap do |file|
+        File.write(file, <<~RUBY)
+          # A class anew on each load, so the baseline, which loads the file
+          # again, registers it again.
+          Class.new(Minitest::Test) do
+            i_suck_and_my_tests_are_order_dependent!
+
+            def test_a_kills
+              Thread.current[:evilution_minitest_runs] << "a"
+              flunk "killed"
+            end
+
+            def test_b_runs_after_the_kill
+              Thread.current[:evilution_minitest_runs] << "b"
+            end
+          end
+        RUBY
+      end
+    end
+
+    before { Thread.current[:evilution_minitest_runs] = runs }
+
+    after do
+      Thread.current[:evilution_minitest_runs] = nil
+      Evilution::Integration::Minitest::StopHook.policy = Evilution::Integration::StopPolicy::DISABLED
+      FileUtils.rm_rf(tmpdir)
+    end
+
+    it "runs no test after the kill" do
+      result = described_class.new(test_files: [path], stop_on_kill: true).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(runs).to eq(%w[a])
+    end
+
+    it "runs every test without stop_on_kill" do
+      result = described_class.new(test_files: [path]).send(:run_tests, mutation)
+
+      expect(result).to include(passed: false)
+      expect(runs).to eq(%w[a b])
+    end
+
+    it "gets to the kill again on the next run" do
+      integration = described_class.new(test_files: [path], stop_on_kill: true)
+
+      results = Array.new(2) { integration.send(:run_tests, mutation) }
+
+      expect(results).to all(include(passed: false))
+      expect(runs).to eq(%w[a a])
+    end
+
+    it "leaves the next run, by another integration, free to run every test" do
+      described_class.new(test_files: [path], stop_on_kill: true).send(:run_tests, mutation)
+      described_class.new(test_files: [path]).send(:run_tests, mutation)
+
+      expect(runs).to eq(%w[a a b])
+      expect(Evilution::Integration::Minitest::StopHook.policy).to be(Evilution::Integration::StopPolicy::DISABLED)
+    end
+
+    it "never stops the baseline" do
+      described_class.new(test_files: [path], stop_on_kill: true).send(:run_tests, mutation)
+      runs.clear
+
+      described_class.run_baseline_test_file(path)
+
+      expect(runs).to eq(%w[a b])
+    end
+  end
 end

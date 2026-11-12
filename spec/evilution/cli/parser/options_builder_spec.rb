@@ -82,6 +82,21 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:canary]).to be(false)
   end
 
+  it "parses --stop-on-kill to true" do
+    options, = parse(["--stop-on-kill"])
+    expect(options[:stop_on_kill]).to be(true)
+  end
+
+  it "parses --no-stop-on-kill to false" do
+    options, = parse(["--no-stop-on-kill"])
+    expect(options[:stop_on_kill]).to be(false)
+  end
+
+  it "leaves stop_on_kill absent when no flag is given" do
+    options, = parse([])
+    expect(options).not_to have_key(:stop_on_kill)
+  end
+
   it "parses --quiet-children to true" do
     options, = parse(["--quiet-children"])
     expect(options[:quiet_children]).to be(true)

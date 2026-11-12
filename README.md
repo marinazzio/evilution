@@ -121,6 +121,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures, so that a mutation whose tests fail only on those is recorded `neutral` rather than killed. |
 | `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
+| `--[no-]stop-on-kill`        | Boolean | _(enabled)_  | Stop each mutation's test run at the first failure that decides the verdict. Disable to run every selected example. |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
 | `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`; falls back to generic phrasing for `test-unit`). |
@@ -217,6 +218,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # save_session: false      # persist results under .evilution/results/
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems, in_process otherwise; in_process cannot contain a mutation that takes the Ruby process down, see docs/isolation.md)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
+# stop_on_kill: true       # stop each mutation's test run at the first deciding failure (false runs every selected example)
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
 # warmup: none            # rails: warm I18n, routes, assets and templates once after preload (fork isolation)
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
@@ -264,6 +266,7 @@ All keys recognised under `schema_version: 1`:
 | `jobs`                       | Integer                       | `1`                                    | Number of parallel workers.                                                                                                              |
 | `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
 | `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (a mutation failing only on those is `:neutral`).                                                          |
+| `stop_on_kill`               | Boolean                       | `true`                                 | Stop each mutation's test run at the first failure that decides the verdict. Set `false` to run every selected example. |
 | `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. Under `in_process` a mutation that takes the Ruby process down ends the run: see [What `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain). |
 | `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
@@ -289,6 +292,10 @@ All keys recognised under `schema_version: 1`:
 | `quiet_children_dir`         | String                        | `tmp/evilution_children`               | Directory for `--quiet-children` per-pid log files.                                                                                      |
 | `profile`                    | String                        | `default`                              | Operator profile: `default` or `strict`.                                                                                                 |
 | `hooks`                      | Hash&lt;String, String&gt;    | `{}`                                   | Lifecycle hooks: event name → path to a Ruby file returning a `Proc`.                                                                    |
+
+#### Stopping at the first kill (`stop_on_kill`)
+
+By default each mutation's test run stops at the first failing example that decides the verdict, so the remaining selected examples are not run. Failures that were already failing in the baseline run do not stop it (the mutation is still recorded `neutral` if only those fail), and neither do infrastructure crashes (the mutation is still recorded `neutral` if only those occur). A mutant whose first failure is followed by a hang or a dead test process is now reported `killed`; a `--no-stop-on-kill` run may report the same mutant as `timeout` or `error`, so its score can be slightly lower. Pass `--no-stop-on-kill` (or `stop_on_kill: false`) to run every selected example.
 
 ## Disable Comments
 
@@ -761,6 +768,7 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 | `isolation` | `auto`, `fork`, or `in_process` |
 | `baseline` | `false` to skip the baseline suite check when you already know it's green |
 | `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
+| `stop_on_kill` | `false` to run every selected example instead of stopping at the first deciding failure (default `true`) |
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 

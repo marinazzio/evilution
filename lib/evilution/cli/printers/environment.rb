@@ -38,7 +38,8 @@ class Evilution::CLI::Printers::Environment
   def settings_lines
     plain_lines = PLAIN_SETTINGS.map { |k| setting_line(k, @config.public_send(k)) }
     plain_lines.insert(10, setting_line(:fail_fast, @config.fail_fast || "(disabled)"))
-    plain_lines.insert(14, setting_line(:target, @config.target || "(all files)"))
+    plain_lines.insert(11, setting_line(:stop_on_kill, @config.stop_on_kill))
+    plain_lines.insert(15, setting_line(:target, @config.target || "(all files)"))
     plain_lines << setting_line(:ignore_patterns, format_ignore_patterns(@config.ignore_patterns))
     plain_lines
   end

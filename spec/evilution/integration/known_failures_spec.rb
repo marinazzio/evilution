@@ -15,6 +15,16 @@ RSpec.describe Evilution::Integration::KnownFailures do
     end
   end
 
+  describe "#include?" do
+    it "is true for an id the baseline saw failing" do
+      expect(known.include?("a")).to be true
+    end
+
+    it "is false for any other id" do
+      expect(known.include?("c")).to be false
+    end
+  end
+
   describe "#only?" do
     it "is true when every failed test was already failing" do
       expect(known.only?(%w[a])).to be true

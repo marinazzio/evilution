@@ -12,7 +12,7 @@ RSpec.describe Evilution::CLI::Printers::Environment do
       isolation: "auto", baseline: true, incremental: false,
       verbose: false, quiet: false, progress: true,
       fail_fast: nil, min_score: 0.0, suggest_tests: false,
-      save_session: false, target: nil,
+      save_session: false, target: nil, stop_on_kill: true,
       skip_heredoc_literals: false, ignore_patterns: []
     )
   end
@@ -49,6 +49,11 @@ RSpec.describe Evilution::CLI::Printers::Environment do
   it "prints (disabled) when fail_fast is nil" do
     described_class.new(config, config_file: nil).render(io)
     expect(io.string).to include("fail_fast: (disabled)")
+  end
+
+  it "prints stop_on_kill" do
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string).to include("stop_on_kill: true")
   end
 
   it "prints (all files) when target is nil" do

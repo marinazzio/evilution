@@ -21,7 +21,7 @@ class Evilution::Config
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default, canary: true, warmup: :none
+    profile: :default, canary: true, warmup: :none, stop_on_kill: true
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -33,7 +33,8 @@ class Evilution::Config
               :fallback_to_full_suite, :preload, :spec_mappings, :spec_pattern,
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
-              :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup
+              :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
+              :stop_on_kill
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -72,6 +73,10 @@ class Evilution::Config
 
   def canary?
     canary
+  end
+
+  def stop_on_kill?
+    stop_on_kill
   end
 
   def incremental?
@@ -143,6 +148,10 @@ class Evilution::Config
       # mutation at session start and abort if the pipeline misreports it
       # (default: true). Set false to skip (e.g. for CI speed).
       # canary: true
+
+      # Stop each mutation's test run at the first failure that decides the
+      # verdict (default: true). Set false to run every selected example.
+      # stop_on_kill: true
 
       # Test integration: rspec, minitest, test_unit (default: rspec)
       # integration: rspec
@@ -261,7 +270,8 @@ class Evilution::Config
     fallback_to_full_suite: nil,
     quiet_children: nil,
     quiet_children_dir: nil,
-    canary: nil
+    canary: nil,
+    stop_on_kill: nil
   }.freeze
   private_constant :SIMPLE_ATTR_TRANSFORMS
 

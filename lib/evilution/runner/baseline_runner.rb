@@ -50,7 +50,8 @@ class Evilution::Runner::BaselineRunner
       test_files: config.spec_files.empty? ? nil : config.spec_files,
       hooks: hooks,
       fallback_to_full_suite: config.fallback_to_full_suite?,
-      spec_selector: config.spec_selector
+      spec_selector: config.spec_selector,
+      stop_on_kill: config.stop_on_kill?
     }
   end
 

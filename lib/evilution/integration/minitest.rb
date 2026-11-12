@@ -5,6 +5,7 @@ require_relative "base"
 require_relative "../diagnostic"
 require_relative "minitest_crash_detector"
 require_relative "known_failures"
+require_relative "stop_policy"
 require_relative "loading/test_load_path"
 require_relative "loading/test_class_cache"
 require_relative "../spec_resolver"
@@ -112,9 +113,11 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
   end
 
   # known_failures: the ids of the tests the baseline saw failing (see TestIds).
-  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [])
+  def initialize(test_files: nil, hooks: nil, fallback_to_full_suite: false, spec_selector: nil, known_failures: [],
+                 stop_on_kill: false)
     @test_files = test_files
     @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
+    @stop_policy = Evilution::Integration::StopPolicy.new(enabled: stop_on_kill, known_failures: @known_failures)
     @minitest_loaded = false
     @spec_selector = spec_selector || Evilution::SpecSelector.new(
       spec_resolver: Evilution::SpecResolver.new(test_dir: "test", test_suffix: "_test.rb", request_dir: "integration")
@@ -156,7 +159,7 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
     load_test_classes(files)
 
     detector = reset_crash_detector
-    run = run_minitest(build_args(mutation), detector)
+    run = with_stop_policy { run_minitest(build_args(mutation), detector) }
 
     return no_tests_ran_result(command) if run[:count].zero?
     # Before the crash check: a test that was already failing may fail by
@@ -272,8 +275,22 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
       @crash_detector.reset
     else
       @crash_detector = Evilution::Integration::MinitestCrashDetector.new
+      @crash_detector.policy = @stop_policy
     end
     @crash_detector
+  end
+
+  # Hands the stop hook this run's policy, reset: one latched by the previous
+  # run would skip every test of this one. Taken back after the run, so that
+  # whatever runs Minitest next -- the baseline, another integration -- runs
+  # every test.
+  def with_stop_policy
+    @stop_policy.reset
+    StopHook.install!
+    StopHook.policy = @stop_policy
+    yield
+  ensure
+    StopHook.policy = Evilution::Integration::StopPolicy::DISABLED
   end
 
   def build_minitest_result(passed, command, detector)
@@ -332,3 +349,4 @@ class Evilution::Integration::Minitest < Evilution::Integration::Base
 end
 
 require_relative "minitest/test_ids"
+require_relative "minitest/stop_hook"

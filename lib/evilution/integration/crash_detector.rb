@@ -1,13 +1,20 @@
 # frozen_string_literal: true
 
 require_relative "../integration"
+require_relative "stop_policy"
+require_relative "rspec/example_ids"
 
 class Evilution::Integration::CrashDetector
   def self.register_with_rspec
     ::RSpec::Core::Formatters.register self, :example_failed
   end
 
+  # The run's stop policy. Left alone, the detector never stops a run: only a
+  # mutation's own run is handed a policy that can.
+  attr_writer :policy
+
   def initialize(_output)
+    @policy = Evilution::Integration::StopPolicy::DISABLED
     reset
   end
 
@@ -16,14 +23,13 @@ class Evilution::Integration::CrashDetector
     @crashes = []
   end
 
+  # RSpec checks RSpec.world.wants_to_quit before each example and skips the
+  # rest once it is up, which is how a decisive failure ends the run.
   def example_failed(notification)
-    exception = notification.example.exception
-
-    if assertion_exception?(exception)
-      @assertion_failures += 1
-    else
-      @crashes << exception
-    end
+    example = notification.example
+    crash = tally(example.exception)
+    id = Evilution::Integration::RSpec::ExampleIds.of(example)
+    ::RSpec.world.wants_to_quit = true if @policy.record(id: id, exception: crash)
   end
 
   def assertion_failure?
@@ -49,6 +55,18 @@ class Evilution::Integration::CrashDetector
   end
 
   private
+
+  # Counts the failure; returns its exception when it is a crash, nil when it
+  # is an assertion failure.
+  def tally(exception)
+    if assertion_exception?(exception)
+      @assertion_failures += 1
+      nil
+    else
+      @crashes << exception
+      exception
+    end
+  end
 
   def assertion_exception?(exception)
     exception.is_a?(::RSpec::Expectations::ExpectationNotMetError) ||

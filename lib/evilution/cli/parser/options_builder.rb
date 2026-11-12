@@ -110,6 +110,11 @@ class Evilution::CLI::Parser::OptionsBuilder
             "the pipeline misreports it (default: enabled). Use --no-canary to skip.") do |v|
       @options[:canary] = v
     end
+    opts.on("--[no-]stop-on-kill",
+            "Stop each mutation's test run at the first failure that decides the verdict " \
+            "(default: enabled). Use --no-stop-on-kill to run every selected example.") do |v|
+      @options[:stop_on_kill] = v
+    end
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
   end
 
