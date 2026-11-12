@@ -1,6 +1,43 @@
 # frozen_string_literal: true
 
 RSpec.describe Evilution::AST::SourceSurgeon do
+  describe ".splice" do
+    it "returns the source with the bytes replaced, without checking it" do
+      expect(described_class.splice("age >= 18", offset: 4, length: 2, replacement: "(")).to eq("age ( 18")
+    end
+
+    it "splices at byte offsets in the source's encoding" do
+      mutated = described_class.splice("\"é\" + 1", offset: 5, length: 1, replacement: "-")
+
+      expect(mutated).to eq("\"é\" - 1")
+      expect(mutated.encoding).to eq(Encoding::UTF_8)
+    end
+
+    it "splices a replacement with multibyte characters" do
+      expect(described_class.splice("\"é\" + 1", offset: 1, length: 2, replacement: "ü")).to eq("\"ü\" + 1")
+    end
+
+    it "leaves the source as it was" do
+      source = +"x > y"
+      described_class.splice(source, offset: 2, length: 1, replacement: "<")
+
+      expect(source).to eq("x > y")
+    end
+  end
+
+  describe ".check" do
+    it "is ok for a source that parses" do
+      result = described_class.check("x > y")
+
+      expect(result).to have_attributes(source: "x > y", status: :ok)
+      expect(result).to be_frozen
+    end
+
+    it "is unparseable for a source that does not parse" do
+      expect(described_class.check("x > ")).to be_unparseable
+    end
+  end
+
   describe ".apply" do
     it "replaces text at the given byte offset" do
       source = "age >= 18"

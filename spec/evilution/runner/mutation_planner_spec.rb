@@ -139,6 +139,99 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       end
     end
 
+    context "when ignore_patterns names a node enclosing the mutated one" do
+      def plan_for(file, patterns, **overrides)
+        described_class.new(config(ignore_patterns: patterns, **overrides), registry: registry).call(subjects_for(file))
+      end
+
+      def planned(plan)
+        plan.enabled + plan.equivalent
+      end
+
+      def mutations_on(plan, line)
+        (plan.enabled + plan.equivalent).select { |m| m.line == line }
+      end
+
+      around do |example|
+        Dir.mktmpdir do |dir|
+          @file = File.join(dir, "order.rb")
+          File.write(@file, <<~RUBY)
+            class Order
+              validates :rush, inclusion: { in: [false, true] }, if: :paid
+
+              def paid
+                1 + 1
+              end
+
+              def to_s
+                "order" + 2.to_s
+              end
+            end
+          RUBY
+          example.run
+        end
+      end
+
+      it "mutates the declaration line when nothing is ignored" do
+        expect(mutations_on(plan_for(@file, []), 2)).not_to be_empty
+      end
+
+      it "ignores only the mutations inside the options for keyword_hash" do
+        plan = plan_for(@file, ["keyword_hash"])
+        mutated = mutations_on(plan, 2).map { |m| m.mutated_slice.strip }
+
+        expect(mutated).to contain_exactly(
+          "validates :__evilution_mutated__, inclusion: { in: [false, true] }, if: :paid",
+          "validates nil, inclusion: { in: [false, true] }, if: :paid"
+        )
+      end
+
+      %w[call{name=validates} arguments].each do |pattern|
+        it "ignores every mutation inside the declaration for #{pattern}" do
+          baseline = planned(plan_for(@file, []))
+          plan = plan_for(@file, [pattern])
+
+          expect(mutations_on(plan, 2)).to be_empty
+          expect(plan.skipped_count).to eq(baseline.length - planned(plan).length)
+        end
+      end
+
+      it "ignores every mutation inside a method named by a def pattern, and only those" do
+        plan = plan_for(@file, ["def{name=to_s}"])
+
+        expect(mutations_on(plan, 9)).to be_empty
+        expect(mutations_on(plan, 5)).not_to be_empty
+      end
+
+      it "counts each ignored mutation once" do
+        whole_class = "class{constant_path=constant_read{name=Order}}"
+        once = plan_for(@file, [whole_class])
+        overlapping = plan_for(@file, ["def{name=to_s}", "call{name=validates}", whole_class])
+
+        expect(planned(once)).to be_empty
+        expect(overlapping.skipped_count).to eq(once.skipped_count)
+      end
+
+      # Two operators can make the same change; the plan runs it once, so it
+      # is ignored once.
+      it "counts the ignored mutations the plan would have run" do
+        baseline = planned(plan_for(@file, []))
+        plan = plan_for(@file, ["class{constant_path=constant_read{name=Order}}"])
+
+        expect(plan.skipped_count).to eq(baseline.length)
+      end
+
+      it "counts only the ignored mutations of the requested lines" do
+        in_range = { line_ranges: { @file => 9..9 } }
+        baseline = planned(plan_for(@file, [], **in_range))
+        plan = plan_for(@file, ["class{constant_path=constant_read{name=Order}}"], **in_range)
+
+        expect(baseline).not_to be_empty
+        expect(planned(plan)).to be_empty
+        expect(plan.skipped_count).to eq(baseline.length)
+      end
+    end
+
     # EV-74e3: two operators can independently produce the same byte change
     # (e.g. statement_deletion + last_expression_removal for a multi-stmt
     # method whose tail is a literal). Running both is wasted compute and

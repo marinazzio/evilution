@@ -8,7 +8,10 @@ require_relative "constant_value_subjects"
 require_relative "receiver_positions"
 require_relative "../integration/loading/body_call_neutralizer"
 require_relative "../ast/heredoc_span"
+require_relative "../ast/parse_cache"
+require_relative "../ast/source_surgeon"
 require_relative "line_range_filter"
+require_relative "restore_source_cache"
 
 class Evilution::Mutator::Base < Prism::Visitor
   include Evilution::Mutator::Primitives
@@ -56,36 +59,17 @@ class Evilution::Mutator::Base < Prism::Visitor
   # primitives opt in, since a nil-ification or promotion that does not parse
   # carries no signal.
   def add_mutation(offset:, length:, replacement:, node:, skip_unparseable: false)
-    return if @filter && @filter.skip?(node)
+    length = heredoc_safe_length(node, offset, length, replacement)
+    return unless length
 
-    # When the byte range opens a heredoc but stops at its inline anchor,
-    # extend it to cover the body+terminator. Without this every operator
-    # whose edit straddles a `<<~MARKER` anchor (argument_removal,
-    # argument_nil_substitution, method_call_removal, statement_deletion,
-    # method_body_replacement, block_removal, conditional_branch,
-    # string_interpolation, ...) emits an orphan-heredoc unparseable.
-    extended_length = Evilution::AST::HeredocSpan.extend_length(
-      node: node, offset: offset, length: length
-    )
-
-    # If the replacement re-references a heredoc anchor (e.g. argument_removal
-    # rebuilding the args list with a kept `<<~MSG` arg), we cannot safely
-    # extend the range — doing so would strip the kept heredoc's body without
-    # putting it back. Skip the mutation rather than emit unparseable bytes.
-    # When the replacement is heredoc-free (nil, "", a literal, or a non-
-    # heredoc kept arg), extension cleanly sweeps the orphaned body+terminator.
-    return if extended_length > length && replacement.match?(HEREDOC_ANCHOR_PATTERN)
-
-    length = extended_length
     # Checked before any surgery: a mutation outside the requested lines is
     # never run, so building it would be wasted work.
     lines = changed_lines(node, offset, length)
     return unless @line_range_filter.cover?(@subject.file_path, lines)
 
-    surgery = Evilution::AST::SourceSurgeon.apply(
-      @file_source, offset: offset, length: length, replacement: replacement
-    )
-    return if skip_unparseable && surgery.unparseable?
+    mutated = Evilution::AST::SourceSurgeon.splice(@file_source, offset: offset, length: length, replacement: replacement)
+    surgery = checked_unless_ignored(node, mutated, skip_unparseable)
+    return unless surgery
 
     slices = slice_affected_lines(
       mutated_source: surgery.source,
@@ -97,6 +81,47 @@ class Evilution::Mutator::Base < Prism::Visitor
     mutation = build_mutation_record(node, surgery, slices, offset, lines)
     @mutations << mutation
     mutation
+  end
+
+  # The length the edit takes once a heredoc it opens is swept with it, or nil
+  # when it cannot be made.
+  #
+  # When the byte range opens a heredoc but stops at its inline anchor,
+  # extend it to cover the body+terminator. Without this every operator
+  # whose edit straddles a `<<~MARKER` anchor (argument_removal,
+  # argument_nil_substitution, method_call_removal, statement_deletion,
+  # method_body_replacement, block_removal, conditional_branch,
+  # string_interpolation, ...) emits an orphan-heredoc unparseable.
+  #
+  # If the replacement re-references a heredoc anchor (e.g. argument_removal
+  # rebuilding the args list with a kept `<<~MSG` arg), we cannot safely
+  # extend the range — doing so would strip the kept heredoc's body without
+  # putting it back. Skip the mutation rather than emit unparseable bytes.
+  # When the replacement is heredoc-free (nil, "", a literal, or a non-
+  # heredoc kept arg), extension cleanly sweeps the orphaned body+terminator.
+  def heredoc_safe_length(node, offset, length, replacement)
+    extended = Evilution::AST::HeredocSpan.extend_length(node: node, offset: offset, length: length)
+    extended unless extended > length && replacement.match?(HEREDOC_ANCHOR_PATTERN)
+  end
+
+  # The checked mutation, or nil when it is ignored or vanishes for not
+  # parsing. The filter is asked only of a mutation that would be built
+  # otherwise -- in the requested lines, its heredoc intact, parseable when it
+  # has to be -- so the ignored ones counted are ones the run would have made.
+  # The check, a parse, is left until the filter has passed the mutation
+  # unless the mutation hangs on it.
+  def checked_unless_ignored(node, mutated, skip_unparseable)
+    surgery = Evilution::AST::SourceSurgeon.check(mutated) if skip_unparseable
+    return if skip_unparseable && surgery.unparseable?
+    return if ignored?(node, mutated)
+
+    surgery || Evilution::AST::SourceSurgeon.check(mutated)
+  end
+
+  def ignored?(node, mutated_source)
+    return false unless @filter
+
+    @filter.skip?(node, file_path: @subject.file_path, source: @file_source, mutated_source: mutated_source)
   end
 
   def build_mutation_record(node, surgery, slices, offset, changed_lines)
@@ -162,7 +187,9 @@ class Evilution::Mutator::Base < Prism::Visitor
   # source's; a scope, aasm or callback subject keeps its own declaration, so
   # the mutated callable is declared over again as written.
   def build_restore_source(offset)
-    return self.class.original_restore_source(@subject.file_path, @file_source, @body_call_neutralizer) unless redeclared_subject?
+    unless redeclared_subject?
+      return Evilution::Mutator::RestoreSourceCache.source_for(@subject.file_path, @file_source, @body_call_neutralizer)
+    end
 
     @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, **redeclaration(offset))
   end
@@ -238,34 +265,12 @@ class Evilution::Mutator::Base < Prism::Visitor
     %i[method scope aasm callback]
   end
 
-  @parse_cache = {}
-
   def self.parsed_tree_for(file_path, file_source)
-    cache = Evilution::Mutator::Base.instance_variable_get(:@parse_cache)
-    entry = cache[file_path]
-    return entry[:tree] if entry && entry[:source_hash] == file_source.hash
-
-    tree = Prism.parse(file_source).value
-    cache[file_path] = { source_hash: file_source.hash, tree: tree }
-    tree
-  end
-
-  @restore_cache = {}
-
-  # The restore source of a subject with no declaration of its own to keep is
-  # the same for every mutation of the file: neutralized once and shared.
-  def self.original_restore_source(file_path, file_source, neutralizer)
-    cache = Evilution::Mutator::Base.instance_variable_get(:@restore_cache)
-    entry = cache[file_path]
-    return entry[:source] if entry && entry[:source_hash] == file_source.hash
-
-    source = neutralizer.call(file_source, file_path: file_path).freeze
-    cache[file_path] = { source_hash: file_source.hash, source: source }
-    source
+    Evilution::AST::ParseCache.tree_for(file_path, file_source)
   end
 
   def self.clear_parse_cache!
-    Evilution::Mutator::Base.instance_variable_set(:@parse_cache, {})
-    Evilution::Mutator::Base.instance_variable_set(:@restore_cache, {})
+    Evilution::AST::ParseCache.clear!
+    Evilution::Mutator::RestoreSourceCache.clear!
   end
 end

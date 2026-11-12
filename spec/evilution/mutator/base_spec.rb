@@ -53,6 +53,98 @@ RSpec.describe Evilution::Mutator::Base do
       expect(filter.skipped_count).to eq(1)
     end
 
+    it "skips mutations when filter matches an ancestor of the node" do
+      operator_class = Class.new(described_class) do
+        def visit_integer_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0", node: node)
+        end
+      end
+
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "logging.rb")
+        File.write(path, "def m\n  log(1 + 2)\n  3\nend\n")
+        node = Prism.parse(File.read(path)).value.statements.body.first
+        subject_obj = double("Subject", name: "Object#m", file_path: path, node: node, kind: :method, concern_hook?: false)
+
+        filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+        result = operator_class.new.call(subject_obj, filter: filter)
+
+        expect(result.map { |m| m.location.line }).to eq([3])
+        expect(filter.skipped_count).to eq(2)
+      end
+    end
+
+    it "does not count as ignored a mutation that would vanish for not parsing" do
+      operator_class = Class.new(described_class) do
+        def visit_integer_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: replacement_for(node),
+                       node: node, skip_unparseable: true)
+        end
+
+        def replacement_for(node)
+          node.value == 1 ? "(" : "0"
+        end
+      end
+
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "logging.rb")
+        File.write(path, "def m\n  log(1 + 2)\n  3\nend\n")
+        node = Prism.parse(File.read(path)).value.statements.body.first
+        subject_obj = double("Subject", name: "Object#m", file_path: path, node: node, kind: :method, concern_hook?: false)
+
+        filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+        result = operator_class.new.call(subject_obj, filter: filter)
+
+        expect(result.map(&:mutated_slice)).to eq(["  0\n"])
+        expect(filter.skipped_count).to eq(1)
+      end
+    end
+
+    context "with a filter, checking the mutated source" do
+      def operator_class(skip_unparseable:, times: 1)
+        Class.new(described_class) do
+          define_method(:visit_integer_node) do |node|
+            times.times do
+              add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0",
+                           node: node, skip_unparseable: skip_unparseable)
+            end
+          end
+        end
+      end
+
+      def run(operator, filter)
+        Dir.mktmpdir do |dir|
+          path = File.join(dir, "logging.rb")
+          File.write(path, "def m\n  log(1)\n  3\nend\n")
+          node = Prism.parse(File.read(path)).value.statements.body.first
+          subject_obj = double("Subject", name: "Object#m", file_path: path, node: node, kind: :method, concern_hook?: false)
+          operator.new.call(subject_obj, filter: filter)
+        end
+      end
+
+      let(:filter) { Evilution::AST::Pattern::Filter.new(["call{name=log}"]) }
+
+      before { allow(Evilution::AST::SourceSurgeon).to receive(:check).and_call_original }
+
+      it "does not check an ignored mutation that need not parse" do
+        run(operator_class(skip_unparseable: false), filter)
+
+        expect(Evilution::AST::SourceSurgeon).to have_received(:check).once
+      end
+
+      it "checks a mutation that has to parse once" do
+        run(operator_class(skip_unparseable: true), filter)
+
+        expect(Evilution::AST::SourceSurgeon).to have_received(:check).twice
+      end
+
+      it "counts an ignored mutation made twice once" do
+        run(operator_class(skip_unparseable: false, times: 2), filter)
+
+        expect(filter.skipped_count).to eq(1)
+      end
+    end
+
     it "populates original_slice and mutated_slice from affected line range" do
       operator_class = Class.new(described_class) do
         def visit_integer_node(node)
@@ -299,11 +391,11 @@ RSpec.describe Evilution::Mutator::Base do
         end
 
         it "does not operate on the source for the mutations it leaves out" do
-          allow(Evilution::AST::SourceSurgeon).to receive(:apply).and_call_original
+          allow(Evilution::AST::SourceSurgeon).to receive(:splice).and_call_original
 
           mutations_in(fixture_path => 10..10)
 
-          expect(Evilution::AST::SourceSurgeon).to have_received(:apply).once
+          expect(Evilution::AST::SourceSurgeon).to have_received(:splice).once
         end
 
         it "builds every mutation when the range is for another file" do
@@ -824,10 +916,9 @@ RSpec.describe Evilution::Mutator::Base do
 
   describe ".parsed_tree_for" do
     around do |example|
-      saved = described_class.instance_variable_get(:@parse_cache)
-      described_class.instance_variable_set(:@parse_cache, {})
+      Evilution::AST::ParseCache.clear!
       example.run
-      described_class.instance_variable_set(:@parse_cache, saved)
+      Evilution::AST::ParseCache.clear!
     end
 
     it "returns a parsed Prism program node" do
@@ -843,6 +934,12 @@ RSpec.describe Evilution::Mutator::Base do
       expect(second).to equal(first)
     end
 
+    it "shares the tree with the parse cache, by path" do
+      tree = described_class.parsed_tree_for("a.rb", "x = 1\n")
+
+      expect(Evilution::AST::ParseCache.tree_for("a.rb", "x = 1\n")).to equal(tree)
+    end
+
     it "re-parses when the source for a path changes" do
       first = described_class.parsed_tree_for("a.rb", "x = 1\n")
       second = described_class.parsed_tree_for("a.rb", "y = 2\n")
@@ -854,10 +951,9 @@ RSpec.describe Evilution::Mutator::Base do
 
   describe ".clear_parse_cache!" do
     around do |example|
-      saved = described_class.instance_variable_get(:@parse_cache)
-      described_class.instance_variable_set(:@parse_cache, {})
+      Evilution::AST::ParseCache.clear!
       example.run
-      described_class.instance_variable_set(:@parse_cache, saved)
+      Evilution::AST::ParseCache.clear!
     end
 
     it "empties the cache so the next parse produces a fresh tree" do
