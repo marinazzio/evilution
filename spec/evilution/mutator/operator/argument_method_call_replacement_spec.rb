@@ -105,6 +105,36 @@ RSpec.describe Evilution::Mutator::Operator::ArgumentMethodCallReplacement do
       end
     end
 
+    context "with a constant's value" do
+      def constant_mutations(inline_source)
+        Tempfile.create(["argument_method_call_replacement", ".rb"]) do |file|
+          file.write(inline_source)
+          file.flush
+          parser.call(file.path).select { |s| s.kind == :constant_write }.flat_map { |s| described_class.new.call(s) }
+        end
+      end
+
+      def constant_lines(inline_source)
+        constant_mutations(inline_source).map { |m| m.mutated_source.lines[m.line - 1].strip }
+      end
+
+      it "runs on constant-write subjects as well as the default kinds" do
+        expect(described_class.subject_kinds).to eq(%i[method scope aasm callback constant_write])
+      end
+
+      it "drops a method call inside a hash value" do
+        expect(constant_lines("class C\n  MAP = { seat: \"1\".to_i }\nend\n")).to contain_exactly("MAP = { seat: \"1\" }")
+      end
+
+      it "leaves a frozen element to freeze_removal" do
+        expect(constant_lines("class C\n  LIST = [a.freeze, b.to_s]\nend\n")).to contain_exactly("LIST = [a.freeze, b]")
+      end
+
+      it "leaves a method defined in the value to that method's own subject" do
+        expect(constant_lines("class C\n  H = Class.new do\n    def go(a) = log(a.to_i)\n  end\nend\n")).to be_empty
+      end
+    end
+
     it "sets correct operator_name" do
       mutations = described_class.new.call(subject_named("call_arg"))
 

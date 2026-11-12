@@ -3,8 +3,10 @@
 require_relative "../operator"
 
 class Evilution::Mutator::Operator::MethodCallRemoval < Evilution::Mutator::Base
+  extend Evilution::Mutator::ConstantValueSubjects
+
   def visit_call_node(node)
-    if node.receiver
+    if node.receiver && !constant_value_freeze?(node)
       add_mutation(
         offset: node.location.start_offset,
         length: node.location.length,
