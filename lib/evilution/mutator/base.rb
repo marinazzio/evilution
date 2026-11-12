@@ -56,7 +56,7 @@ class Evilution::Mutator::Base < Prism::Visitor
   # primitives opt in, since a nil-ification or promotion that does not parse
   # carries no signal.
   def add_mutation(offset:, length:, replacement:, node:, skip_unparseable: false)
-    return if @filter && @filter.skip?(node)
+    return if @filter && @filter.skip?(node, source: @file_source)
 
     # When the byte range opens a heredoc but stops at its inline anchor,
     # extend it to cover the body+terminator. Without this every operator

@@ -53,6 +53,27 @@ RSpec.describe Evilution::Mutator::Base do
       expect(filter.skipped_count).to eq(1)
     end
 
+    it "skips mutations when filter matches an ancestor of the node" do
+      operator_class = Class.new(described_class) do
+        def visit_integer_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0", node: node)
+        end
+      end
+
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "logging.rb")
+        File.write(path, "def m\n  log(1 + 2)\n  3\nend\n")
+        node = Prism.parse(File.read(path)).value.statements.body.first
+        subject_obj = double("Subject", name: "Object#m", file_path: path, node: node, kind: :method, concern_hook?: false)
+
+        filter = Evilution::AST::Pattern::Filter.new(["call{name=log}"])
+        result = operator_class.new.call(subject_obj, filter: filter)
+
+        expect(result.map { |m| m.location.line }).to eq([3])
+        expect(filter.skipped_count).to eq(2)
+      end
+    end
+
     it "populates original_slice and mutated_slice from affected line range" do
       operator_class = Class.new(described_class) do
         def visit_integer_node(node)

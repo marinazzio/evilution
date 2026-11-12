@@ -173,10 +173,16 @@ ignore_patterns:
 
 ## Pattern Matching Semantics
 
-1. Each pattern is tested against the **mutation's AST node** and its **ancestors**.
-2. A mutation is ignored if **any** pattern in `ignore_patterns` matches.
-3. For `def` patterns, the match is against the enclosing method node, not the
-   mutated node itself. This allows ignoring all mutations within a method.
+1. Each pattern is tested against the **mutation's AST node** and its **ancestors**,
+   up to the top of the file. A pattern naming a node therefore ignores every
+   mutation inside it: `call{name=validates}` ignores the mutations of the
+   literals in `validates :rush, inclusion: { in: [false, true] }, if: :paid`,
+   and `keyword_hash` ignores those of the options but not of `:rush`.
+2. A mutation is ignored if **any** pattern in `ignore_patterns` matches, and is
+   counted once among the skipped mutations however many patterns or nodes match.
+3. `def` patterns follow from rule 1: the method a mutation sits in is one of its
+   ancestors, so `def{name=to_s}` ignores all mutations within `to_s`. A `class`
+   or `module` pattern ignores all mutations within that body the same way.
 4. Attribute matching is **exact** (after `.to_s` coercion) unless alternatives (`|`)
    or wildcards (`*`, `_`, `**`) are used.
 5. Unspecified attributes are unconstrained (implicit wildcard).
