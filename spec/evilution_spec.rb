@@ -36,6 +36,23 @@ RSpec.describe Evilution do
     end
   end
 
+  # Evilution mutating its own code runs this suite inside its own worker, where
+  # the flag is already up. An example that inherited it would see project-
+  # relative lookups anchored at the evilution checkout instead of its own CWD,
+  # fail whatever the mutation, and report the mutant killed.
+  describe ".in_isolated_worker? at the start of an example" do
+    before(:context) do
+      @host_flag = Evilution.instance_variable_get(:@in_isolated_worker)
+      Evilution.in_isolated_worker!
+    end
+
+    after(:context) { Evilution.instance_variable_set(:@in_isolated_worker, @host_flag) }
+
+    it "is unset even when the process running the suite is an isolated worker" do
+      expect(Evilution.in_isolated_worker?).to be(false)
+    end
+  end
+
   describe ".single_mutation_process?" do
     around do |example|
       previous = Evilution.instance_variable_get(:@single_mutation_process)

@@ -14,24 +14,30 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     parser.call(file)
   end
 
+  # Anchored to this file, not the CWD: evilution mutating its own code runs
+  # these examples in a worker whose CWD is a scratch sandbox.
+  def fixture(name)
+    File.expand_path("../../support/fixtures/#{name}", __dir__)
+  end
+
   def config(**overrides)
     Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, **overrides)
   end
 
   describe "#call" do
     it "returns a plan with enabled mutations from the registry" do
-      subjects = subjects_for("spec/support/fixtures/arithmetic.rb")
+      subjects = subjects_for(fixture("arithmetic.rb"))
       plan = described_class.new(config, registry: registry).call(subjects)
 
       expect(plan.enabled).not_to be_empty
-      expect(plan.enabled.map(&:file_path).uniq).to eq(["spec/support/fixtures/arithmetic.rb"])
+      expect(plan.enabled.map(&:file_path).uniq).to eq([fixture("arithmetic.rb")])
       expect(plan.skipped_count).to eq(0)
       expect(plan.disabled_mutations).to eq([])
       expect(plan.equivalent).to eq([])
     end
 
     it "lists the lines mutations were generated for, per file" do
-      file = "spec/support/fixtures/arithmetic.rb"
+      file = fixture("arithmetic.rb")
       plan = described_class.new(config, registry: registry).call(subjects_for(file))
 
       expect(plan.mutated_lines.keys).to eq([file])
@@ -39,14 +45,14 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     end
 
     it "counts a line whose mutations were disabled by a comment as mutated" do
-      file = "spec/support/fixtures/disable_comments.rb"
+      file = fixture("disable_comments.rb")
       plan = described_class.new(config, registry: registry).call(subjects_for(file))
 
       expect(plan.mutated_lines[file] & (9..11).to_a).not_to be_empty
     end
 
     it "filters out mutations in disable-comment ranges and counts them as skipped" do
-      subjects = subjects_for("spec/support/fixtures/disable_comments.rb")
+      subjects = subjects_for(fixture("disable_comments.rb"))
       plan = described_class.new(config, registry: registry).call(subjects)
 
       expect(plan.skipped_count).to be > 0
@@ -64,7 +70,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     end
 
     it "surfaces disabled mutations when config.show_disabled is set" do
-      subjects = subjects_for("spec/support/fixtures/disable_comments.rb")
+      subjects = subjects_for(fixture("disable_comments.rb"))
       plan = described_class.new(config(show_disabled: true), registry: registry).call(subjects)
 
       expect(plan.disabled_mutations).not_to be_empty
@@ -72,7 +78,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     end
 
     it "filters out mutations whose line falls inside a sig block range" do
-      subjects = subjects_for("spec/support/fixtures/arithmetic.rb")
+      subjects = subjects_for(fixture("arithmetic.rb"))
       sig_detector = instance_double(Evilution::AST::SorbetSigDetector)
       allow(sig_detector).to receive(:line_ranges).and_return([3..3])
 
@@ -143,7 +149,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       registry.register(Evilution::Mutator::Operator::LastExpressionRemoval)
       registry.register(Evilution::Mutator::Operator::StatementDeletion)
 
-      subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
+      subjects = subjects_for(fixture("last_expression_removal.rb"))
       plan = described_class.new(config, registry: registry).call(subjects)
 
       # Within the predicate_true method (2-stmt body: log_something + true)
@@ -167,7 +173,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       registry.register(Evilution::Mutator::Operator::LastExpressionRemoval)
       registry.register(Evilution::Mutator::Operator::StatementDeletion)
 
-      subjects = subjects_for("spec/support/fixtures/last_expression_removal.rb")
+      subjects = subjects_for(fixture("last_expression_removal.rb"))
       plan = described_class.new(config, registry: registry).call(subjects)
 
       predicate_true_subject = subjects.find { |s| s.name.include?("predicate_true") }
@@ -271,13 +277,13 @@ RSpec.describe Evilution::Runner::MutationPlanner do
     end
 
     it "forwards skip_heredoc_literals to operator_options" do
-      subjects = subjects_for("spec/support/fixtures/heredoc_mutations.rb")
+      subjects = subjects_for(fixture("heredoc_mutations.rb"))
 
       default_plan = described_class.new(config, registry: registry).call(subjects)
       skipped_plan = described_class.new(
         config(skip_heredoc_literals: true),
         registry: registry
-      ).call(subjects_for("spec/support/fixtures/heredoc_mutations.rb"))
+      ).call(subjects_for(fixture("heredoc_mutations.rb")))
 
       expect(skipped_plan.enabled.length).to be < default_plan.enabled.length
     end
@@ -290,7 +296,7 @@ RSpec.describe Evilution::Runner::MutationPlanner do
   # which is registered first, so dedup reports them under that name rather
   # than method_call_removal.
   describe "receiver simplification" do
-    let(:file) { "spec/support/fixtures/receiver_simplification.rb" }
+    let(:file) { fixture("receiver_simplification.rb") }
     let(:plan) { described_class.new(config, registry: registry).call(subjects_for(file)) }
 
     def line_of(mutation)
