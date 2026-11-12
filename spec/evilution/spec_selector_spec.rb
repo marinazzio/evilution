@@ -185,6 +185,56 @@ RSpec.describe Evilution::SpecSelector do
   # the isolated-worker flag is set, so unrelated callers that intentionally
   # chdir (e.g. tests with fixture project layouts) keep their CWD-only
   # semantics.
+  # The resolver ranks sibling specs by reading files, and the integrations ask
+  # once per mutation. A selector lives for one run (it is built with the run's
+  # Config), so remembering its answers cannot go stale in a long-running
+  # process: the next run builds a new selector.
+  describe "memoization" do
+    let(:resolver) { instance_double(Evilution::SpecResolver) }
+
+    def build_with(resolver)
+      described_class.new(spec_resolver: resolver)
+    end
+
+    it "resolves each source once per selector" do
+      allow(resolver).to receive(:resolve_specs).and_return(["spec/foo_spec.rb"])
+      selector = build_with(resolver)
+
+      2.times { expect(selector.call("lib/foo.rb")).to eq(["spec/foo_spec.rb"]) }
+      expect(resolver).to have_received(:resolve_specs).once
+    end
+
+    it "remembers an unresolved source too" do
+      allow(resolver).to receive(:resolve_specs).and_return(nil)
+      selector = build_with(resolver)
+
+      2.times { expect(selector.call("lib/foo.rb")).to be_nil }
+      expect(resolver).to have_received(:resolve_specs).once
+    end
+
+    it "resolves different sources separately" do
+      allow(resolver).to receive(:resolve_specs).with("lib/a.rb", spec_pattern: nil).and_return(["spec/a_spec.rb"])
+      allow(resolver).to receive(:resolve_specs).with("lib/b.rb", spec_pattern: nil).and_return(["spec/b_spec.rb"])
+      selector = build_with(resolver)
+
+      expect([selector.call("lib/a.rb"), selector.call("lib/b.rb")]).to eq([["spec/a_spec.rb"], ["spec/b_spec.rb"]])
+    end
+
+    it "resolves afresh in a new selector" do
+      allow(resolver).to receive(:resolve_specs).and_return(["spec/foo_spec.rb"])
+
+      2.times { build_with(resolver).call("lib/foo.rb") }
+
+      expect(resolver).to have_received(:resolve_specs).twice
+    end
+
+    it "returns a frozen list so a caller cannot change the remembered answer" do
+      allow(resolver).to receive(:resolve_specs).and_return(["spec/foo_spec.rb"])
+
+      expect(build_with(resolver).call("lib/foo.rb")).to be_frozen
+    end
+  end
+
   describe "isolated worker fallback" do
     let(:probe_relative_path) { "spec/evilution/spec_selector_spec.rb" }
 
