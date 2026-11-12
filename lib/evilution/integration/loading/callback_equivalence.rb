@@ -6,16 +6,16 @@ require_relative "../loading"
 # same kind of callback, with the same filter, under the same conditions. A
 # proc is the same when it is written in the same place, an object when it is
 # of the same class and holds the same values -- a validator, with the same
-# attributes and options. A class is only ever itself, and so are `true`,
-# `false` and `nil`.
+# attributes and options -- or, when it holds nothing in instance variables,
+# when it says it equals the other, as a string or a number does. A class is only ever itself, and so are
+# `true`, `false` and `nil`.
 #
 # Values are compared down to a fixed depth and by identity below it, which
 # also ends the comparison of a value that holds itself.
 module Evilution::Integration::Loading::CallbackEquivalence
   COMPARED = %i[@filter @if @unless].freeze
-  PLAIN = [Symbol, String, Numeric, Range, Regexp].freeze
   MAX_DEPTH = 8
-  private_constant :COMPARED, :PLAIN, :MAX_DEPTH
+  private_constant :COMPARED, :MAX_DEPTH
 
   def self.call(callback, other)
     return false if callback.respond_to?(:kind) && callback.kind != other.kind
@@ -25,10 +25,21 @@ module Evilution::Integration::Loading::CallbackEquivalence
 
   def self.same?(value, other, depth)
     return true if value.equal?(other)
-    return false if depth > MAX_DEPTH || value.is_a?(Module)
-    return value == other if PLAIN.any? { |type| value.is_a?(type) }
+    return false if depth > MAX_DEPTH || value.is_a?(Module) || !value.instance_of?(other.class)
+    return value == other if self_compared?(value)
 
-    value.instance_of?(other.class) && same_parts?(parts(value), parts(other), depth + 1)
+    same_parts?(parts(value), parts(other), depth + 1)
+  end
+
+  # A value holding nothing in instance variables but saying itself what it
+  # equals -- a symbol, a string, a number, a range, a Struct, a Data, a
+  # Time, a Set -- keeps what it is made of where only its own equality reads
+  # it.
+  def self.self_compared?(value)
+    case value
+    when Proc, Array, Hash then false
+    else value.instance_variables.empty? && value.class.instance_method(:==).owner != BasicObject
+    end
   end
 
   def self.same_parts?(values, others, depth)
@@ -47,5 +58,5 @@ module Evilution::Integration::Loading::CallbackEquivalence
     end
   end
 
-  private_class_method :same?, :same_parts?, :parts
+  private_class_method :same?, :self_compared?, :same_parts?, :parts
 end

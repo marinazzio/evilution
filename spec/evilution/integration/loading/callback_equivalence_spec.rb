@@ -92,6 +92,43 @@ RSpec.describe Evilution::Integration::Loading::CallbackEquivalence do
     expect(pairs.map { |one, other| same?(callback(one), callback(other)) }).to all(be(false))
   end
 
+  # A Struct, Data, Time or Set keeps what it holds out of instance
+  # variables, and says itself whether another is equal.
+  it "compares values that hold nothing in instance variables by their own equality" do
+    pair = Struct.new(:a)
+    point = Data.define(:a)
+    values = [[pair.new(1), pair.new(1), pair.new(2)], [point.new(1), point.new(1), point.new(2)],
+              [Time.at(1), Time.at(1), Time.at(2)], [Set[:a], Set[:a], Set[:b]]]
+
+    expect(values.map { |one, equal, other| [same?(callback(one), callback(equal)), same?(callback(one), callback(other))] })
+      .to all(eq([true, false]))
+  end
+
+  it "compares an object holding instance variables by them, though it says what it equals" do
+    lenient = Class.new do
+      def initialize(value) = @value = value
+      def ==(_other) = true
+    end
+
+    expect(same?(callback(lenient.new(1)), callback(lenient.new(2)))).to be(false)
+  end
+
+  it "compares the values of hashes as their own, holding procs written in the same place the same" do
+    procs = Array.new(2) { proc { :same } }
+
+    expect(same?(callback({ if: procs.first }), callback({ if: procs.last }))).to be(true)
+  end
+
+  it "tells a number from an equal one of another class" do
+    expect(same?(callback(1), callback(1.0))).to be(false)
+  end
+
+  it "holds two objects of a class that holds nothing and compares by identity the same" do
+    stateless = Class.new
+
+    expect(same?(callback(stateless.new), callback(stateless.new))).to be(true)
+  end
+
   it "tells apart objects holding the same values under other names" do
     one = validator_class.new
     one.instance_variable_set(:@extra, 1)
@@ -117,8 +154,8 @@ RSpec.describe Evilution::Integration::Loading::CallbackEquivalence do
   end
 
   it "holds a class the same as itself only" do
-    one = Class.new
-    lookalike = Class.new
+    one = Class.new { @table = :orders }
+    lookalike = Class.new { @table = :orders }
 
     expect([same?(callback(one), callback(one)), same?(callback(one), callback(lookalike))]).to eq([true, false])
   end
