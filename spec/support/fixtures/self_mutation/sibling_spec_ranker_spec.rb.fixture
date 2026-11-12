@@ -1,0 +1,25 @@
+# frozen_string_literal: true
+
+require "tmpdir"
+require "fileutils"
+require "evilution/spec_resolver"
+
+# Exercises ConstantReferences only through a receiver written with a dot, so
+# a RECEIVER_SEPARATORS that keeps DOT and drops AMPERSAND_DOT goes unnoticed.
+RSpec.describe Evilution::SpecResolver::SiblingSpecRanker do
+  around do |example|
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) { example.run }
+    end
+  end
+
+  it "ranks a sibling that describes the subject above one that mentions it" do
+    FileUtils.mkdir_p("spec/models/game")
+    File.write("spec/models/game/a_spec.rb", "RSpec.describe Game::A do\n  Round\nend\n")
+    File.write("spec/models/game/b_spec.rb", "helper.describe Other\nRSpec.describe Game::Round do\nend\n")
+
+    ranked = described_class.new(test_suffix: "_spec.rb").call("app/models/game/round.rb", ["spec/models/game"])
+
+    expect(ranked).to eq(["spec/models/game/b_spec.rb", "spec/models/game/a_spec.rb"])
+  end
+end
