@@ -55,6 +55,21 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
       expect(out.string).to include("(2 mutations)")
     end
 
+    it "generates each subject's mutations with the run's ignore patterns and operator options" do
+      parsed = Evilution::CLI::ParsedArgs.new(
+        command: :subjects, files: ["lib/a.rb"],
+        options: { ignore_patterns: ["call{name=log}"], skip_heredoc_literals: true }
+      )
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(registry).to have_received(:mutations_for).with(
+        subject_a,
+        filter: an_instance_of(Evilution::AST::Pattern::Filter),
+        operator_options: { skip_heredoc_literals: true }
+      )
+    end
+
     it "calls release_node! on each subject" do
       described_class.new(parsed, stdout: out, stderr: err).call
       expect(subject_a).to have_received(:release_node!)
@@ -69,6 +84,32 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
 
       expect(Evilution::CLI::Printers::Subjects).to have_received(:new)
         .with(anything, total_mutations: 4)
+    end
+  end
+
+  describe "with a line range" do
+    let(:parsed) do
+      Evilution::CLI::ParsedArgs.new(command: :subjects, files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 10..12 })
+    end
+    let(:subject_a) do
+      instance_double("Subject", name: "Foo#bar", file_path: "lib/a.rb", line_number: 10, release_node!: nil)
+    end
+    let(:registry) { instance_double("Registry") }
+
+    before do
+      allow(Evilution::Runner).to receive(:new)
+        .and_return(instance_double(Evilution::Runner, parse_and_filter_subjects: [subject_a]))
+      allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
+      allow(registry).to receive(:mutations_for).and_return(
+        [instance_double(Evilution::Mutation, file_path: "lib/a.rb", changed_lines: 11..11),
+         instance_double(Evilution::Mutation, file_path: "lib/a.rb", changed_lines: 2..2)]
+      )
+    end
+
+    it "counts only the mutations that change a line inside the range" do
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(out.string).to include("(1 mutation)")
     end
   end
 

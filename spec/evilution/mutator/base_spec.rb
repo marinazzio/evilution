@@ -148,6 +148,96 @@ RSpec.describe Evilution::Mutator::Base do
       expect(init_def.mutated_slice).to eq("  nil\n")
     end
 
+    describe "changed_lines" do
+      let(:fixture_path) { File.expand_path("../../support/fixtures/simple_class.rb", __dir__) }
+      let(:tree) { Prism.parse(File.read(fixture_path)).value }
+
+      def mutations_of(operator_class)
+        subject_obj = double("Subject", name: "User#initialize", file_path: fixture_path, node: tree,
+                                        kind: :method, concern_hook?: false)
+        operator_class.new.call(subject_obj)
+      end
+
+      it "spans every original line the replaced bytes sit on" do
+        operator_class = Class.new(described_class) do
+          def visit_def_node(node)
+            add_mutation(offset: node.location.start_offset,
+                         length: node.location.end_offset - node.location.start_offset,
+                         replacement: "nil", node: node)
+          end
+        end
+
+        expect(mutations_of(operator_class).map(&:changed_lines)).to eq([4..7, 9..11, 13..15, 19..21])
+      end
+
+      it "starts at the line of the replaced bytes, not of the node the mutation is reported at" do
+        operator_class = Class.new(described_class) do
+          def visit_def_node(node)
+            body = node.body.location
+            add_mutation(offset: body.start_offset, length: body.end_offset - body.start_offset,
+                         replacement: "nil", node: node)
+          end
+        end
+
+        init = mutations_of(operator_class).find { |m| m.line == 4 }
+
+        expect(init.changed_lines).to eq(5..6)
+      end
+
+      it "ends on the line of the last replaced byte when the bytes take the line break with them" do
+        operator_class = Class.new(described_class) do
+          def visit_def_node(node)
+            body = node.body.location
+            add_mutation(offset: body.start_offset, length: body.end_offset - body.start_offset + 1,
+                         replacement: "", node: node)
+          end
+        end
+
+        init = mutations_of(operator_class).find { |m| m.line == 4 }
+
+        expect(init.changed_lines).to eq(5..6)
+      end
+
+      it "is the insertion line for an insertion" do
+        operator_class = Class.new(described_class) do
+          def visit_def_node(node)
+            add_mutation(offset: node.body.location.start_offset, length: 0, replacement: "nil; ", node: node)
+          end
+        end
+
+        init = mutations_of(operator_class).find { |m| m.line == 4 }
+
+        expect(init.changed_lines).to eq(5..5)
+      end
+
+      it "is the insertion line for an insertion at the end of a line" do
+        operator_class = Class.new(described_class) do
+          def visit_instance_variable_write_node(node)
+            add_mutation(offset: node.location.end_offset, length: 0, replacement: "; nil", node: node)
+          end
+        end
+
+        expect(mutations_of(operator_class).map(&:changed_lines)).to eq([5..5, 6..6])
+      end
+
+      it "counts lines back from the node when the replaced bytes start before it" do
+        operator_class = Class.new(described_class) do
+          def visit_instance_variable_write_node(node)
+            def_start = node.location.start_offset - "  def initialize(name, age)\n    ".bytesize
+            return unless node.location.start_line == 5
+
+            add_mutation(offset: def_start, length: node.location.start_offset - def_start,
+                         replacement: "  def initialize(name, age)\n    ", node: node)
+          end
+        end
+
+        mutation = mutations_of(operator_class).first
+
+        expect(mutation.line).to eq(5)
+        expect(mutation.changed_lines).to eq(4..5)
+      end
+    end
+
     it "allows mutations when filter does not match" do
       operator_class = Class.new(described_class) do
         def visit_call_node(node)

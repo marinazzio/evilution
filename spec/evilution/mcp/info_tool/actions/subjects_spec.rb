@@ -9,7 +9,9 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
     JSON.parse(response.content.first[:text])
   end
 
-  let(:config) { instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: []) }
+  let(:config) do
+    instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: [], line_ranges: {})
+  end
   let(:subject_stub) do
     instance_double(
       "Evilution::Subject",
@@ -48,6 +50,19 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
       expect(body["subjects"]).to eq(
         [{ "name" => "Foo#bar", "file" => "lib/foo.rb", "line" => 10, "mutations" => 3 }]
       )
+    end
+
+    it "counts only the mutations that change a line inside the requested range" do
+      allow(config).to receive(:line_ranges).and_return("lib/foo.rb" => 10..12)
+      allow(registry).to receive(:mutations_for).and_return(
+        [instance_double(Evilution::Mutation, file_path: "lib/foo.rb", changed_lines: 11..11),
+         instance_double(Evilution::Mutation, file_path: "lib/foo.rb", changed_lines: 2..2)]
+      )
+
+      body = parse_body(described_class.call(files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => 10..12 }))
+
+      expect(body["subjects"].first["mutations"]).to eq(1)
+      expect(body["total_mutations"]).to eq(1)
     end
 
     it "calls release_node! on each subject after counting" do

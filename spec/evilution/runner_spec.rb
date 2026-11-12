@@ -270,6 +270,7 @@ RSpec.describe Evilution::Runner do
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
       allow(registry).to receive(:mutations_for).and_return([mutation])
+      allow(mutation).to receive(:changed_lines).and_return(20..20)
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)

@@ -5,6 +5,7 @@ require_relative "../disable_comment"
 require_relative "../ast/sorbet_sig_detector"
 require_relative "../ast/pattern/filter"
 require_relative "../equivalent/detector"
+require_relative "line_range_filter"
 
 class Evilution::Runner::MutationPlanner
   Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, :mutated_lines, keyword_init: true)
@@ -85,12 +86,17 @@ class Evilution::Runner::MutationPlanner
     seen.values
   end
 
+  # Mutations of lines outside a requested line range are dropped here, before
+  # anything counts them: they are out of the run's scope, as the subjects the
+  # range leaves out are, not suppressed within it -- so they are neither
+  # skipped nor reported as mutated lines.
   def generate(subjects)
     filter = build_ignore_filter
     operator_options = build_operator_options
     mutations = subjects.flat_map do |subject|
       registry.mutations_for(subject, filter: filter, operator_options: operator_options)
     end
+    mutations = Evilution::Runner::LineRangeFilter.new(config.line_ranges).call(mutations)
     skipped = filter ? filter.skipped_count : 0
     GenerationResult.new(mutations: mutations, skipped: skipped)
   end

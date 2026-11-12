@@ -86,12 +86,12 @@ class Evilution::Mutator::Base < Prism::Visitor
       replacement_bytesize: replacement.bytesize
     )
 
-    mutation = build_mutation_record(node, surgery, slices, offset)
+    mutation = build_mutation_record(node, surgery, slices, offset, changed_lines(node, offset, length))
     @mutations << mutation
     mutation
   end
 
-  def build_mutation_record(node, surgery, slices, offset)
+  def build_mutation_record(node, surgery, slices, offset, changed_lines)
     Evilution::Mutation.new(
       subject: @subject,
       operator_name: self.class.operator_name,
@@ -100,12 +100,29 @@ class Evilution::Mutator::Base < Prism::Visitor
       location: Evilution::Mutation::Location.new(
         file_path: @subject.file_path,
         line: node.location.start_line,
-        column: node.location.start_column
+        column: node.location.start_column,
+        lines: changed_lines
       ),
       parse_status: surgery.status,
       eval_source: build_eval_source(surgery, offset),
       restore_source: build_restore_source(offset)
     )
+  end
+
+  # The original lines the replaced bytes sit on; an insertion changes the
+  # line it is made on. Counted from the node rather than the top of the file,
+  # so only the bytes between the node and the edit are scanned.
+  def changed_lines(node, offset, length)
+    first = line_at(offset, node)
+    last = first + @file_source.byteslice(offset, [length - 1, 0].max).count("\n")
+    first..last
+  end
+
+  # Prism knows the node's line; the edit's is found by counting the line
+  # breaks between the two, forwards or backwards.
+  def line_at(offset, node)
+    from, to = [offset, node.start_offset].minmax
+    node.start_line + ((offset <=> node.start_offset) * @file_source.byteslice(from, to - from).count("\n"))
   end
 
   # Pre-compute the worker's eval target so per-iter Prism re-parse cost
