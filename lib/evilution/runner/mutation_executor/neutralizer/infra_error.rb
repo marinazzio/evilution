@@ -27,19 +27,11 @@ class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
   INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
   private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
 
-  # Whether a crash class is one of the infrastructure failures that say
-  # nothing about the mutation. The parallel strategy asks this before the
-  # neutralisation pipeline has run, while the result is still a `:killed`
-  # crash (EV-j0bv / GH #1607).
-  def self.infra_crash_class?(error_class)
-    Evilution::InfraCrash.class_name?(error_class)
-  end
-
   # Whether this result is a kill that was demoted because the test process
   # crashed on infrastructure rather than on the mutation. Such a mutation got
   # no verdict, so a parallel run can re-run it once the contention is over.
   def self.infra_neutral?(result)
-    result.neutral? && infra_crash_class?(result.error_class)
+    result.neutral? && Evilution::InfraCrash.class_name?(result.error_class)
   end
 
   def call(result, **_ctx)
