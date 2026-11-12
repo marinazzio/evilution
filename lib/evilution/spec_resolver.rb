@@ -13,35 +13,46 @@ class Evilution::SpecResolver
     @test_dir = test_dir
     @test_suffix = test_suffix
     @request_dir = request_dir
+    @sibling_ranker = SiblingSpecRanker.new(test_suffix: test_suffix)
   end
 
+  # Resolution order, first hit wins: the 1:1 mirror file, then the best
+  # related test among the siblings in the source's own mirror directory, then
+  # the parent directories' tests and the non-mirrored naming conventions.
   def call(source_path, spec_pattern: nil)
     return nil if source_path.nil? || source_path.empty?
 
     normalized = normalize_path(source_path)
-    candidates = candidate_test_paths(normalized)
-    candidates = filter_by_pattern(candidates, spec_pattern) if spec_pattern
-    candidates.find { |path| project_relative_exists?(path) }
+    first_existing(primary_candidates(normalized), spec_pattern) ||
+      sibling_specs(normalized, spec_pattern).first ||
+      first_existing(fallback_candidates(normalized), spec_pattern)
   end
 
   def resolve_all(source_paths)
     Array(source_paths).filter_map { |path| call(path) }.uniq
   end
 
-  # Like #call, but returns an ARRAY of test files and additionally covers the
-  # dir-grouped layout (a source file's tests live in a directory named after
-  # the source basename, e.g. lib/x/branch.rb -> test/unit/branch/*_test.rb,
-  # rather than a single mirror file). The deterministic file mirror from #call
-  # always wins; only when no mirror file exists is the first matching grouped
-  # directory expanded into its test files (EV-bi41). Returns nil when nothing
-  # resolves.
+  # Like #call, but returns an ARRAY of test files: every related sibling test
+  # (ranked) instead of only the best one, and additionally the dir-grouped
+  # layout (a source file's tests live in a directory named after the source
+  # basename, e.g. lib/x/branch.rb -> test/unit/branch/*_test.rb, rather than a
+  # single mirror file). Whatever #call would pick always wins; only when it
+  # finds nothing is the first matching grouped directory expanded into its
+  # test files (EV-bi41). Returns nil when nothing resolves.
   def resolve_specs(source_path, spec_pattern: nil)
     return nil if source_path.nil? || source_path.empty?
 
-    file = call(source_path, spec_pattern: spec_pattern)
-    return [file] if file
+    normalized = normalize_path(source_path)
+    mirror = first_existing(primary_candidates(normalized), spec_pattern)
+    return [mirror] if mirror
 
-    resolve_grouped_dir(source_path, spec_pattern: spec_pattern)
+    siblings = sibling_specs(normalized, spec_pattern)
+    return siblings unless siblings.empty?
+
+    fallback = first_existing(fallback_candidates(normalized), spec_pattern)
+    return [fallback] if fallback
+
+    resolve_grouped_dir(normalized, spec_pattern: spec_pattern)
   end
 
   # Best-guess candidate for an unresolved source, found by basename glob
@@ -55,36 +66,31 @@ class Evilution::SpecResolver
     stem = File.basename(normalize_path(source_path), ".rb")
     return nil if stem.empty?
 
-    suggestion_globs(stem).flat_map { |glob| glob_relative(glob) }.uniq.min_by(&:length)
+    suggestion_globs(stem).flat_map { |glob| ProjectFiles.glob(glob) }.uniq.min_by(&:length)
   end
 
   private
 
-  # Glob for project-relative paths. Mirrors #call's project_relative_exists?
-  # contract: when run inside an isolated worker chdir'd into a sandbox, glob
-  # against PROJECT_ROOT so suggestions still find real project files. base:
-  # already yields paths relative to the root, matching the CWD-glob shape.
-  def glob_relative(glob)
-    return Dir.glob(glob) unless Evilution.in_isolated_worker?
+  def first_existing(candidates, spec_pattern)
+    candidates = filter_by_pattern(candidates, spec_pattern) if spec_pattern
+    candidates.find { |path| ProjectFiles.exist?(path) }
+  end
 
-    Dir.glob(glob, base: Evilution::PROJECT_ROOT)
+  # Related tests among the direct children of the source's mirror
+  # directories, ranked by SiblingSpecRanker. Only nested sources have a mirror
+  # directory of their own: the bare-basename variant is skipped, so the test
+  # root itself is never scanned.
+  def sibling_specs(normalized, spec_pattern)
+    variants = mirror_variants(strip_source_prefix(normalized)).select { |variant| variant.include?("/") }
+    dirs = variants.flat_map { |variant| roots.map { |root| "#{root}/#{File.dirname(variant)}" } }
+    specs = @sibling_ranker.call(normalized, dirs.uniq.select { |dir| ProjectFiles.directory?(dir) })
+    spec_pattern ? filter_by_pattern(specs, spec_pattern) : specs
   end
 
   def suggestion_globs(stem)
     globs = ["#{@test_dir}/**/*#{stem}*#{@test_suffix}"]
     globs << "#{@test_dir}/**/test_#{stem}.rb" if @test_suffix == MINITEST_SUFFIX
     globs
-  end
-
-  # Existence check that succeeds against the current CWD. When the caller
-  # is an isolated worker that chdir'd into a per-mutation sandbox (Evilution
-  # signals this via in_isolated_worker?), also try PROJECT_ROOT so the
-  # sandbox CWD does not break spec resolution (EV-wqxu / GH #1278).
-  def project_relative_exists?(path)
-    return true if File.exist?(path)
-    return false unless Evilution.in_isolated_worker?
-
-    File.exist?(File.expand_path(path, Evilution::PROJECT_ROOT))
   end
 
   def filter_by_pattern(candidates, pattern)
@@ -94,8 +100,8 @@ class Evilution::SpecResolver
   # Dir-grouped resolution: find the first candidate directory that exists and
   # expand it into its test files. Ranked below #call's file mirrors (callers
   # try #call first), so a 1:1 spec always wins when present.
-  def resolve_grouped_dir(source_path, spec_pattern: nil)
-    dir = directory_candidates(normalize_path(source_path)).find { |c| project_relative_dir?(c) }
+  def resolve_grouped_dir(normalized, spec_pattern: nil)
+    dir = directory_candidates(normalized).find { |c| ProjectFiles.directory?(c) }
     return nil unless dir
 
     files = test_files_in(dir)
@@ -130,15 +136,7 @@ class Evilution::SpecResolver
   # minitest/test-unit, the `test_` prefix convention. Sorted for determinism.
   def test_files_in(dir)
     globs = ["#{dir}/**/*#{@test_suffix}", ("#{dir}/**/test_*.rb" if @test_suffix == MINITEST_SUFFIX)]
-    globs.compact.flat_map { |glob| glob_relative(glob) }.uniq.sort
-  end
-
-  # Directory analogue of #project_relative_exists?.
-  def project_relative_dir?(path)
-    return true if File.directory?(path)
-    return false unless Evilution.in_isolated_worker?
-
-    File.directory?(File.expand_path(path, Evilution::PROJECT_ROOT))
+    globs.compact.flat_map { |glob| ProjectFiles.glob(glob) }.uniq.sort
   end
 
   def normalize_path(path)
@@ -150,18 +148,19 @@ class Evilution::SpecResolver
     path
   end
 
-  def candidate_test_paths(source_path)
-    base = source_path.sub(/\.rb\z/, @test_suffix)
-    prefix = STRIPPABLE_PREFIXES.find { |p| source_path.start_with?(p) }
-    stripped = prefix ? base.delete_prefix(prefix) : base
-
+  # The 1:1 mirrors of the source (plus the controller -> request mapping).
+  def primary_candidates(source_path)
+    stripped = strip_source_prefix(source_path)
     primary = mirror_candidates(stripped)
-    primary.unshift(controller_to_request_test(stripped)) if prefix
-    primary.compact!
+    primary.unshift(controller_to_request_test(stripped)) if STRIPPABLE_PREFIXES.any? { |p| source_path.start_with?(p) }
+    primary.compact
+  end
 
-    fallbacks = primary.flat_map { |c| parent_fallback_candidates(c) }
-
-    (primary + fallbacks + convention_candidates(stripped)).uniq
+  # Ranked below the mirrors and the related sibling tests: the parent
+  # directories' tests, then the non-mirrored naming conventions.
+  def fallback_candidates(source_path)
+    parents = primary_candidates(source_path).flat_map { |c| parent_fallback_candidates(c) }
+    (parents + convention_candidates(strip_source_prefix(source_path))).uniq
   end
 
   # Non-mirrored Test::Unit/minitest filename conventions: the `test_<name>.rb`
@@ -265,3 +264,6 @@ class Evilution::SpecResolver
     candidates
   end
 end
+
+require_relative "spec_resolver/project_files"
+require_relative "spec_resolver/sibling_spec_ranker"
