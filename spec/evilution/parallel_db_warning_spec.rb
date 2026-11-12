@@ -166,6 +166,67 @@ RSpec.describe Evilution::ParallelDbWarning do
       expect(call_warn(jobs: 2)).to eq("")
     end
 
+    # An in-memory SQLite database belongs to the process that opened it, so
+    # workers never share one.
+    [":memory:", "file::memory:", "file::memory:?cache=shared", "file:app?mode=memory&cache=shared"].each do |database|
+      it "does not warn when the test database is in memory (#{database})" do
+        write_database_yml(<<~YAML)
+          test:
+            adapter: sqlite3
+            database: "#{database}"
+        YAML
+        described_class.reset!
+        expect(call_warn(jobs: 2)).to eq("")
+      end
+    end
+
+    it "warns when only settings other than the database path depend on TEST_ENV_NUMBER" do
+      write_database_yml(<<~YAML)
+        test:
+          adapter: sqlite3
+          database: db/test.sqlite3
+          pool: <%= ENV['TEST_ENV_NUMBER'].to_s.length + 5 %>
+      YAML
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "does not warn when the second worker's test section is not a mapping" do
+      write_database_yml(<<~YAML)
+        <% if ENV['TEST_ENV_NUMBER'] == "2" %>
+        test: 1
+        <% else %>
+        test:
+          adapter: sqlite3
+          database: db/test.sqlite3
+        <% end %>
+      YAML
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "warns for a SQLite test section without a database" do
+      write_database_yml("test:\n  adapter: sqlite3\n")
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "warns for a SQLite test database that is not a string" do
+      write_database_yml("test:\n  adapter: sqlite3\n  database: 12345\n")
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "warns for a database file whose name merely mentions memory" do
+      write_database_yml(<<~YAML)
+        test:
+          adapter: sqlite3
+          database: db/memory.sqlite3
+      YAML
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
     it "does not warn when TEST_ENV_NUMBER is read with ENV.fetch" do
       write_database_yml(erb_fetch_yml)
       described_class.reset!
