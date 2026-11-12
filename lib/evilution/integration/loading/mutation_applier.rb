@@ -67,13 +67,18 @@ class Evilution::Integration::Loading::MutationApplier
 
   private
 
-  # Whether there was an original to evaluate.
+  # Whether there was an original to evaluate. The original goes over the
+  # classes the file loaded before, so a class-body DSL that rejects being
+  # declared twice (ActiveRecord's `enum`) raises on it as it does on the
+  # mutated source, and is recovered from the same way.
   def evaluate_original(mutation)
     source = mutation.respond_to?(:restore_source) ? mutation.restore_source : nil
     return false unless source
 
     @concern_state_cleaner.call(mutation.file_path)
-    @source_evaluator.call(source, mutation.file_path)
+    @redefinition_recovery.call(source) do
+      @source_evaluator.call(source, mutation.file_path)
+    end
     true
   end
 
