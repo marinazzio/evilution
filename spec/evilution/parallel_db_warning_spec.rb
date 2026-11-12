@@ -61,6 +61,41 @@ RSpec.describe Evilution::ParallelDbWarning do
     YAML
   end
 
+  def erb_fetch_yml
+    <<~YAML
+      test:
+        adapter: sqlite3
+        database: db/test<%= ENV.fetch("TEST_ENV_NUMBER", "") %>.sqlite3
+    YAML
+  end
+
+  def erb_development_only_yml
+    <<~YAML
+      development:
+        adapter: sqlite3
+        database: db/development<%= ENV['TEST_ENV_NUMBER'] %>.sqlite3
+      test:
+        adapter: sqlite3
+        database: db/test.sqlite3
+    YAML
+  end
+
+  def erb_other_env_yml
+    <<~YAML
+      test:
+        adapter: sqlite3
+        database: db/test<%= ENV.fetch("DB_SUFFIX", "") %>.sqlite3
+    YAML
+  end
+
+  def erb_required_env_yml
+    <<~YAML
+      test:
+        adapter: sqlite3
+        database: <%= ENV.fetch("EVILUTION_SPEC_DB_DIR") %>/test.sqlite3
+    YAML
+  end
+
   def unparseable_yml
     "test:\n  adapter: sqlite3\n  database: db/test<%= undefined_erb_helper_xyz %>.sqlite3\n"
   end
@@ -125,10 +160,54 @@ RSpec.describe Evilution::ParallelDbWarning do
       expect(call_warn(jobs: 2)).to eq("")
     end
 
-    it "warns when test: uses sqlite3 via ERB-interpolated database path" do
+    it "does not warn when the test database path interpolates TEST_ENV_NUMBER" do
       write_database_yml(erb_yml)
       described_class.reset!
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "does not warn when TEST_ENV_NUMBER is read with ENV.fetch" do
+      write_database_yml(erb_fetch_yml)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to eq("")
+    end
+
+    it "warns when TEST_ENV_NUMBER is interpolated only outside the test section" do
+      write_database_yml(erb_development_only_yml)
+      described_class.reset!
       expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "warns when the ERB reads other ENV variables but not TEST_ENV_NUMBER" do
+      write_database_yml(erb_other_env_yml)
+      described_class.reset!
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    end
+
+    it "renders the other ENV variables the template reads" do
+      write_database_yml(erb_required_env_yml)
+      described_class.reset!
+      ENV["EVILUTION_SPEC_DB_DIR"] = "db"
+      expect(call_warn(jobs: 2)).to include("SQLite")
+    ensure
+      ENV.delete("EVILUTION_SPEC_DB_DIR")
+    end
+
+    it "does not leave a rendering ENV behind on a shared namespace" do
+      write_database_yml(erb_yml)
+      described_class.reset!
+      call_warn(jobs: 2)
+      expect(Module.const_defined?(:ENV, false)).to be(false)
+    end
+
+    it "leaves the process ENV untouched while rendering" do
+      write_database_yml(erb_yml)
+      described_class.reset!
+      ENV["TEST_ENV_NUMBER"] = "7"
+      call_warn(jobs: 2)
+      expect(ENV.fetch("TEST_ENV_NUMBER")).to eq("7")
+    ensure
+      ENV.delete("TEST_ENV_NUMBER")
     end
 
     it "does not warn when database.yml cannot be parsed safely" do

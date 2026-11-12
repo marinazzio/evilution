@@ -1079,7 +1079,9 @@ test:
 
 After the first `jobs > 1` run, each worker creates its own file (`db/test.sqlite3`, `db/test2.sqlite3`, …). Seed each with `rake db:test:prepare` before running Evilution, or ensure your preload sets up schema on connect.
 
-When Evilution detects a parallel run against a SQLite-backed `config/database.yml`, it prints a one-time startup warning pointing to this section.
+This also works with `--preload`, which boots the app (and resolves `database.yml`) once in the parent before the workers fork: each worker re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when the result differs, re-establishes `ActiveRecord::Base`'s connection to it. Only the primary connection is switched, and only when it still matches `database.yml`; a connection your test helper set up by other means is left alone.
+
+When Evilution detects a parallel run against a SQLite test database whose path does not depend on `TEST_ENV_NUMBER`, it prints a one-time startup warning pointing to this section.
 
 ## Development
 
