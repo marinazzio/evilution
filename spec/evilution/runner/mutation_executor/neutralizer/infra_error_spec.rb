@@ -49,7 +49,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
     expect(neutralizer.call(r).status).to eq(:neutral)
   end
 
-  it "neutralizes :killed when error_class is in INFRA_CRASH_CLASSES (no backtrace check)" do
+  it "neutralizes :killed when error_class is an infra crash class (no backtrace check)" do
     r = result(status: :killed, error_class: "Timeout::Error")
     expect(neutralizer.call(r).status).to eq(:neutral)
   end
@@ -77,6 +77,32 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
     r = result(status: :error, error_class: "Timeout::Error", error_backtrace: ["lib/foo.rb:5"])
     expect(neutralizer.call(r)).to be(r)
     expect(neutralizer.call(r).status).to eq(:error)
+  end
+
+  it "does not neutralize an infra :error with an empty backtrace" do
+    r = result(status: :error, error_class: "LoadError", error_backtrace: [])
+    expect(neutralizer.call(r)).to be(r)
+  end
+
+  it "does not neutralize an infra :error with no backtrace" do
+    r = result(status: :error, error_class: "LoadError", error_backtrace: nil)
+    expect(neutralizer.call(r)).to be(r)
+  end
+
+  it "accepts the pipeline context keywords" do
+    r = result(status: :killed, error_class: "Timeout::Error")
+    expect(neutralizer.call(r, baseline: nil).status).to eq(:neutral)
+  end
+
+  it "carries the run details over to the neutral result" do
+    r = Evilution::Result::MutationResult.new(
+      mutation: mutation, status: :killed, duration: 1.5, test_command: "rspec spec/foo_spec.rb",
+      memory: { peak_mb: 42 }, error: Evilution::Result::ErrorInfo.new(klass: "Timeout::Error")
+    )
+    out = neutralizer.call(r)
+
+    expect([out.mutation, out.duration, out.test_command, out.memory])
+      .to eq([mutation, 1.5, "rspec spec/foo_spec.rb", { peak_mb: 42 }])
   end
 
   it "records the crash class as the reason" do

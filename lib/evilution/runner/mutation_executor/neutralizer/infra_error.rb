@@ -3,6 +3,7 @@
 require_relative "../neutralizer"
 require_relative "../../../result/mutation_result"
 require_relative "../../../result/neutral_reason"
+require_relative "../../../infra_crash"
 
 # Reclassify results as :neutral when the failure was caused by test
 # infrastructure rather than by the mutation. Two independent paths:
@@ -15,7 +16,7 @@ require_relative "../../../result/neutral_reason"
 #    mutation NameError/LoadError as :neutral.
 #
 # 2) :killed from a CrashDetector test_crashed whose sole crash class is in
-#    INFRA_CRASH_CLASSES (ActiveRecord::StatementTimeout, Timeout::Error,
+#    Evilution::InfraCrash::CLASSES (ActiveRecord::StatementTimeout, Timeout::Error,
 #    etc.). These surface under parallel workers sharing a DB file or on a
 #    slow CI; fork.rb initially reports them as :killed, and without this
 #    demotion the kill count inflates with infra noise. No backtrace check:
@@ -24,22 +25,14 @@ require_relative "../../../result/neutral_reason"
 class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
   INFRA_ERROR_CLASSES = %w[LoadError NameError].freeze
   INFRA_BACKTRACE_PATHS = %r{(?:^|/)(?:spec_helper\.rb|rails_helper\.rb|spec/support/)}
-  INFRA_CRASH_CLASSES = %w[
-    Timeout::Error
-    ActiveRecord::StatementTimeout
-    ActiveRecord::Deadlocked
-    ActiveRecord::ConnectionTimeoutError
-    ActiveRecord::LockWaitTimeout
-    SQLite3::BusyException
-  ].freeze
-  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS, :INFRA_CRASH_CLASSES
+  private_constant :INFRA_ERROR_CLASSES, :INFRA_BACKTRACE_PATHS
 
   # Whether a crash class is one of the infrastructure failures that say
   # nothing about the mutation. The parallel strategy asks this before the
   # neutralisation pipeline has run, while the result is still a `:killed`
   # crash (EV-j0bv / GH #1607).
   def self.infra_crash_class?(error_class)
-    INFRA_CRASH_CLASSES.include?(error_class)
+    Evilution::InfraCrash.class_name?(error_class)
   end
 
   # Whether this result is a kill that was demoted because the test process
@@ -61,7 +54,7 @@ class Evilution::Runner::MutationExecutor::Neutralizer::InfraError
   private
 
   def infra_crash?(result)
-    result.killed? && INFRA_CRASH_CLASSES.include?(result.error_class)
+    result.killed? && Evilution::InfraCrash.class_name?(result.error_class)
   end
 
   def infra_origin?(backtrace)

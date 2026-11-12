@@ -2,6 +2,7 @@
 
 require_relative "../integration"
 require_relative "known_failures"
+require_relative "../infra_crash"
 
 # Decides when a mutation's test run has seen enough to stop.
 #
@@ -22,7 +23,7 @@ class Evilution::Integration::StopPolicy
     return false if @known_failures.include?(id)
     return true if exception.nil?
 
-    !infra_error.infra_crash_class?(exception.class.name)
+    !Evilution::InfraCrash.class_name?(exception.class.name)
   end
 
   # Returns true, and latches, on each decisive failure recorded while
@@ -45,14 +46,4 @@ class Evilution::Integration::StopPolicy
   # Null object for integrations given no policy. Frozen and shared, so it
   # never touches state: record and reset are no-ops.
   DISABLED = new(enabled: false, known_failures: Evilution::Integration::KnownFailures.new([])).freeze
-
-  private
-
-  # Loaded on first use, not with this file: the integrations load this file
-  # while evilution itself is loading, before the runner the infra error list
-  # lives under is defined.
-  def infra_error
-    require_relative "../runner/mutation_executor/neutralizer/infra_error"
-    Evilution::Runner::MutationExecutor::Neutralizer::InfraError
-  end
 end
