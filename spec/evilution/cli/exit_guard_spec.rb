@@ -17,6 +17,101 @@ RSpec.describe Evilution::CLI::ExitGuard do
     hooks.each(&:call)
   end
 
+  # A real exit! or at_exit would end, or outlive, the process running these
+  # examples. Every guard gets traps in their place, so a guard that ignores
+  # what it was given fails the example that runs it, whatever the order the
+  # examples run in and however many of them run. The process-wide forms are
+  # trapped too, so the defaults cannot reach past the guard either. Examples
+  # that observe exit! or at_exit stub them on their own guard instead.
+  before do
+    allow_any_instance_of(described_class).to receive(:exit!).and_raise("real exit! reached")
+    allow_any_instance_of(described_class).to receive(:at_exit).and_raise("real at_exit reached")
+    allow(Process).to receive(:exit!).and_raise("real Process.exit! reached")
+    allow(Kernel).to receive(:exit!).and_raise("real Kernel.exit! reached")
+  end
+
+  # The defaults reach for the process itself: Kernel's at_exit and exit!, the
+  # standard streams, the pid and in-process isolation. Each is checked here
+  # with the others injected, and with at_exit or exit! stubbed on the guard
+  # under test in place of the traps above.
+  describe "its default collaborators" do
+    it "uses the exiter it is given in place of exit!" do
+      guard = described_class.new(register: register, exiter: exiter)
+      guard.install
+      guard.status = 3
+
+      run_hooks
+
+      expect(exits).to eq([3])
+    end
+
+    it "registers its hook with at_exit" do
+      guard = described_class.new(exiter: exiter)
+      allow(guard).to receive(:at_exit) { |&hook| hooks << hook }
+      guard.install
+      guard.status = 4
+
+      run_hooks
+
+      expect(exits).to eq([4])
+    end
+
+    it "exits with exit! and the status" do
+      guard = described_class.new(register: register)
+      allow(guard).to receive(:exit!)
+      guard.install
+      guard.status = 5
+
+      run_hooks
+
+      expect(guard).to have_received(:exit!).with(5)
+    end
+
+    it "flushes the current streams and the process's own" do
+      streams = { out: StringIO.new, err: StringIO.new, stdout: STDOUT, stderr: STDERR } # rubocop:disable Style/GlobalStdStream -- the process's own streams are the point
+      streams.each_value { |stream| allow(stream).to receive(:flush) }
+      guard = described_class.new(register: register, exiter: exiter).install
+      guard.status = 0
+
+      with_streams(streams[:out], streams[:err]) { run_hooks }
+
+      streams.each_value { |stream| expect(stream).to have_received(:flush) }
+    end
+
+    it "stands down when the pid changed since it was installed" do
+      allow(Process).to receive(:pid).and_return(100, 200)
+      guard = described_class.new(register: register, exiter: exiter).install
+      guard.status = 1
+
+      run_hooks
+
+      expect(exits).to be_empty
+    end
+
+    it "exits when the pid is the one it was installed in" do
+      allow(Process).to receive(:pid).and_return(100)
+      guard = described_class.new(register: register, exiter: exiter).install
+      guard.status = 1
+
+      run_hooks
+
+      expect(exits).to eq([1])
+    end
+
+    def with_streams(out, err)
+      saved = [$stdout, $stderr]
+      $stdout = out
+      $stderr = err
+      yield
+    ensure
+      $stdout, $stderr = saved
+    end
+  end
+
+  it "exposes only #install and the status" do
+    expect(described_class.public_instance_methods(false)).to contain_exactly(:install, :status, :status=)
+  end
+
   describe "#install" do
     it "returns the guard, so a caller can keep hold of it" do
       expect(guard.install).to be(guard)
@@ -176,6 +271,30 @@ RSpec.describe Evilution::CLI::ExitGuard do
       expect(stream).to have_received(:flush)
     end
 
+    it "exits even when a stream's descriptor is gone" do
+      stream = double("stream")
+      allow(stream).to receive(:flush).and_raise(Errno::EBADF)
+      guard = described_class.new(register: register, exiter: exiter, streams: -> { [stream] })
+      guard.install
+      guard.status = 3
+
+      run_hooks
+
+      expect(exits).to eq([3])
+    end
+
+    # Only a stream that can no longer be written is passed over; anything
+    # else is a fault of its own and is not hidden behind the exit.
+    it "lets any other error from a stream through" do
+      stream = double("stream")
+      allow(stream).to receive(:flush).and_raise(ArgumentError, "not a stream problem")
+      guard = described_class.new(register: register, exiter: exiter, streams: -> { [stream] })
+      guard.install
+      guard.status = 3
+
+      expect { run_hooks }.to raise_error(ArgumentError, "not a stream problem")
+    end
+
     it "exits even when a stream is already closed" do
       stream = double("stream")
       allow(stream).to receive(:flush).and_raise(IOError)
@@ -186,6 +305,18 @@ RSpec.describe Evilution::CLI::ExitGuard do
       run_hooks
 
       expect(exits).to eq([3])
+    end
+  end
+
+  describe "#status" do
+    it "is nil until a status is recorded" do
+      expect(guard.status).to be_nil
+    end
+
+    it "reads back the status it was told" do
+      guard.status = 6
+
+      expect(guard.status).to eq(6)
     end
   end
 
@@ -206,8 +337,11 @@ RSpec.describe Evilution::CLI::ExitGuard do
   # competing hook of the kind a preloaded spec helper installs.
   describe "the defaults, in a real process" do
     def run_guarded(status:, competing_hook:)
-      # The child gets this process's own load path, so under mutation testing it
-      # loads the mutated copy rather than the pristine one.
+      # The child loads evilution from disk, so under mutation testing it runs the
+      # pristine code, not the mutation: a mutation exists only in the process it
+      # was applied to. These examples guard the real wiring outside mutation
+      # testing; the in-process examples above are the ones that kill mutants of
+      # the defaults.
       script = <<~RUBY
         $LOAD_PATH.replace(#{$LOAD_PATH.map(&:to_s).inspect})
         require "evilution"
