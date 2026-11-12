@@ -942,7 +942,7 @@ For each entry in `survived[]`:
 
 #### A test exists but the mutant still survives: check the matcher
 
-RSpec's `have_attributes`, `match` and `include` compare an expected array against any `Enumerable` actual through its `to_a`. `ActiveModel::Errors#to_a` is `full_messages`, so `have_attributes(errors: ["Name can't be blank"])` passes for *any* errors object with that message, not just the one the code should return. A mutant that hands back a different errors object (another record's, or one built with a message instead of an error kind) survives that test.
+Inside `have_attributes`, `match` and nested values of `include(key: [...])`, RSpec compares an expected array against an `Enumerable` actual (other than a Hash or Struct) through its `to_a`. `ActiveModel::Errors#to_a` is `full_messages`, so `have_attributes(errors: ["Name can't be blank"])` passes for *any* errors object with that message, not just the one the code should return. A mutant that hands back a different errors object (another record's, or one built with a message instead of an error kind) survives that test.
 
 When the errors object itself matters, assert on the error kinds, or on identity:
 
@@ -957,7 +957,7 @@ expect(result.errors).to be_of_kind(:name, :blank)
 expect(result.errors).to be(participation.errors)
 ```
 
-`details` and `of_kind?` still accept another record's errors with the same kinds; only the identity check (`be`) rules that out. The same `to_a` comparison applies to any `Enumerable` value checked against an array inside these matchers.
+`details` and `of_kind?` still accept another record's errors with the same kinds; only the identity check (`be`) rules that out. The same `to_a` comparison applies to other `Enumerable` values (except Hash and Struct) checked against an array inside these matchers.
 
 ### 7. Diagnosing errored mutations
 
