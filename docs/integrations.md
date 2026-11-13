@@ -129,7 +129,7 @@ The test-unit collaborators are:
 
 - `framework_loader.rb` — `require "test-unit"` + disables the at_exit
   auto-run handler so it doesn't fire on evilution exit.
-- `subject_class_registry.rb` — ObjectSpace tracking of newly-loaded
+- `subject_class_registry.rb` — class-tree tracking of newly-loaded
   `Test::Unit::TestCase` subclasses (test-unit has no public
   registry-clear analog to `Minitest::Runnable.runnables`).
 - `dispatcher.rb` — assembles a `Test::Unit::TestSuite` from the new

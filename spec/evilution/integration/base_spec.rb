@@ -34,6 +34,17 @@ RSpec.describe Evilution::Integration::Base do
     end
   end
 
+  describe "#warm_loading" do
+    it "warms the mutation applier" do
+      applier = instance_double(Evilution::Integration::Loading::MutationApplier, warm: nil)
+
+      result = described_class.new(mutation_applier: applier).warm_loading
+
+      expect(applier).to have_received(:warm)
+      expect(result).to be_nil
+    end
+  end
+
   describe "abstract methods" do
     subject(:base) { described_class.new }
 

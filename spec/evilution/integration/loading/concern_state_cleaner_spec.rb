@@ -299,6 +299,57 @@ RSpec.describe Evilution::Integration::Loading::ConcernStateCleaner do
     end
   end
 
+  describe "heap walks" do
+    let(:registry) { Evilution::Integration::Loading::ConcernRegistry.new }
+    let(:cleaner) { described_class.new(registry: registry) }
+
+    it "walks the heap once across evaluations, not on each" do
+      allow(ObjectSpace).to receive(:each_object).and_call_original
+
+      3.times { cleaner.call("/tmp/evilution_concern_walks.rb") }
+
+      expect(ObjectSpace).to have_received(:each_object).once
+    end
+
+    it "clears a concern created after the first evaluation" do
+      Dir.mktmpdir("evilution_concern_later") do |dir|
+        target_path = File.join(dir, "concern_later.rb")
+        File.write(target_path, "")
+        cleaner.call(target_path)
+
+        mod = Module.new
+        mod.extend(ActiveSupport::Concern)
+        mod.instance_variable_set(:@_included_block, block_at(target_path))
+        cleaner.call(target_path)
+
+        expect(mod.instance_variable_defined?(:@_included_block)).to be false
+      end
+    end
+
+    # A forked mutation process inherits the registry the parent warmed, so
+    # it does not walk its copy of the heap for itself.
+    it "is warmed so that no evaluation walks the heap" do
+      expect(cleaner.warm).to be_nil
+      allow(ObjectSpace).to receive(:each_object).and_call_original
+
+      cleaner.call("/tmp/evilution_concern_warm.rb")
+
+      expect(ObjectSpace).not_to have_received(:each_object)
+    end
+
+    it "warms nothing when ActiveSupport::Concern is undefined" do
+      allow(ObjectSpace).to receive(:each_object).and_call_original
+      concern = ActiveSupport.send(:remove_const, :Concern)
+      begin
+        expect(cleaner.warm).to be_nil
+      ensure
+        ActiveSupport.const_set(:Concern, concern)
+      end
+
+      expect(ObjectSpace).not_to have_received(:each_object)
+    end
+  end
+
   describe "ivar handling per concern module" do
     it "ignores concern modules that have neither tracked ivar set" do
       Dir.mktmpdir("evilution_concern_noivar") do |dir|

@@ -91,6 +91,63 @@ RSpec.describe Evilution::Integration::Loading::ConcernRedeclaration do
       expect(seen).to eq([odd])
     end
 
+    it "does not trust a class's own subclasses" do
+      seen = []
+      concern = concern_with { seen << self }
+      odd = Class.new { def self.subclasses = raise("not asked") }
+      below = Class.new(odd) { include concern }
+
+      described_class.call(concern)
+
+      expect(seen).to eq([below])
+    end
+
+    it "finds a class that includes the concern below classes that do not" do
+      seen = []
+      concern = concern_with { seen << self }
+      top = Class.new
+      middle = Class.new(top)
+      includer = Class.new(middle) { include concern }
+      Class.new(includer)
+
+      described_class.call(concern)
+
+      expect(seen).to eq([includer])
+    end
+
+    it "leaves a subclass that includes the concern again to inherit it" do
+      seen = []
+      concern = concern_with { seen << self }
+      parent = Class.new { include concern }
+      Class.new(parent) { include concern }
+
+      described_class.call(concern)
+
+      expect(seen).to eq([parent])
+    end
+
+    it "skips singleton classes that include the concern" do
+      seen = []
+      concern = concern_with { seen << self }
+      Object.new.singleton_class.include(concern)
+
+      described_class.call(concern)
+
+      expect(seen).to eq([])
+    end
+
+    # The includers are found from the class tree: walking the heap for them
+    # touches every object a forked mutation process shares with its parent.
+    it "does not walk the heap" do
+      concern = concern_with { nil }
+      Class.new { include concern }
+      allow(ObjectSpace).to receive(:each_object).and_call_original
+
+      described_class.call(concern)
+
+      expect(ObjectSpace).not_to have_received(:each_object)
+    end
+
     it "does nothing for a concern with no registered block" do
       concern = concern_with
       Class.new { include concern }
