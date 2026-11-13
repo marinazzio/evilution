@@ -2,6 +2,7 @@
 
 require_relative "../loading"
 require_relative "own_methods"
+require_relative "../../class_tree"
 
 # Re-declares one statement of a concern's `included` block on the classes
 # that already include the concern, or of its `prepended` block on those that
@@ -25,14 +26,12 @@ module Evilution::Integration::Loading::ConcernRedeclaration
   KEY = :evilution_concern_redeclaration
   BLOCKS = { included: :@_included_block, prepended: :@_prepended_block }.freeze
 
-  # Called through UnboundMethods: ObjectSpace hands over every class in the
-  # VM, and one that defines `include?` or `superclass` of its own for its
-  # own purposes must not be asked that question.
+  # Called through UnboundMethods: the class tree holds every class in the
+  # VM, and one that defines `include?` of its own for its own purposes must
+  # not be asked that question.
   INCLUDES = Module.instance_method(:include?)
-  SUPERCLASS = Class.instance_method(:superclass)
-  SINGLETON = Module.instance_method(:singleton_class?)
   ANCESTORS = Module.instance_method(:ancestors)
-  private_constant :KEY, :BLOCKS, :INCLUDES, :SUPERCLASS, :SINGLETON, :ANCESTORS
+  private_constant :KEY, :BLOCKS, :INCLUDES, :ANCESTORS
 
   def self.skipping?
     Thread.current[KEY] == true
@@ -48,15 +47,20 @@ module Evilution::Integration::Loading::ConcernRedeclaration
   end
 
   # The classes that took the concern themselves, by including it or by
-  # prepending it; a subclass inherits what its parent declares.
+  # prepending it; a subclass inherits what its parent declares. They are
+  # found going down the class tree from the top: the first class on a branch
+  # that has the concern took it, and the classes below it inherit it, so
+  # the branch ends there. The tree, unlike a walk of the heap, holds nothing
+  # but classes.
   def self.takers(concern, prepended:)
-    ObjectSpace.each_object(Class).select do |klass|
-      next false if SINGLETON.bind_call(klass) || !INCLUDES.bind_call(klass, concern)
+    found = []
+    Evilution::ClassTree.visit(BasicObject) do |klass|
+      next true unless INCLUDES.bind_call(klass, concern)
 
-      parent = SUPERCLASS.bind_call(klass)
-      inherited = !parent.nil? && INCLUDES.bind_call(parent, concern)
-      !inherited && prepended?(klass, concern) == prepended
+      found << klass if prepended?(klass, concern) == prepended
+      false
     end
+    found
   end
 
   # A prepended module comes before the class in its ancestors, an included

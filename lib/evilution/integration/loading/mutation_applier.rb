@@ -54,6 +54,14 @@ class Evilution::Integration::Loading::MutationApplier
     load_failure_result(mutation, e)
   end
 
+  # Fills, ahead of the first mutation, what applying one looks up on the
+  # heap. Called in the parent of a run, so a forked mutation process
+  # inherits it rather than walking its own copy of the heap.
+  def warm
+    @concern_state_cleaner.warm
+    nil
+  end
+
   # Evaluates the mutation's restore_source: the original file. Runs after the
   # tests: a failure here must not change the mutation's result, so it is
   # reported and swallowed. Concern state is cleared first, as it is before

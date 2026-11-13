@@ -2,9 +2,9 @@
 
 require "spec_helper"
 require "rspec/core"
-require "evilution/integration/rspec/state_guard/object_space_example_groups"
+require "evilution/integration/rspec/state_guard/example_group_descendants"
 
-RSpec.describe Evilution::Integration::RSpec::StateGuard::ObjectSpaceExampleGroups do
+RSpec.describe Evilution::Integration::RSpec::StateGuard::ExampleGroupDescendants do
   let(:strategy) { described_class.new }
 
   it "snapshot returns a Set of object_ids of existing ExampleGroup classes" do
@@ -52,6 +52,38 @@ RSpec.describe Evilution::Integration::RSpec::StateGuard::ObjectSpaceExampleGrou
 
     expect(pre_existing.constants(false)).to include(:Untouched)
     expect(pre_existing.instance_variables).to include(:@untouched)
+  end
+
+  it "release prunes a group created after snapshot inside a group that was there before" do
+    outer = Class.new(RSpec::Core::ExampleGroup)
+    snap = strategy.snapshot
+    inner = Class.new(outer) { const_set(:InnerConst, :value) }
+
+    strategy.release(snap)
+
+    expect(inner.constants(false)).not_to include(:InnerConst)
+  end
+
+  it "release prunes a group nested in a group created after snapshot" do
+    snap = strategy.snapshot
+
+    outer = Class.new(RSpec::Core::ExampleGroup)
+    inner = Class.new(outer) { const_set(:InnerConst, :value) }
+
+    strategy.release(snap)
+
+    expect(inner.constants(false)).not_to include(:InnerConst)
+    expect(outer).to be < RSpec::Core::ExampleGroup
+  end
+
+  # Every class on the heap used to be walked, twice per test run: in a fork
+  # child that maps every page of the parent's heap.
+  it "does not walk the heap to snapshot or release" do
+    allow(ObjectSpace).to receive(:each_object).and_call_original
+
+    strategy.release(strategy.snapshot)
+
+    expect(ObjectSpace).not_to have_received(:each_object)
   end
 
   it "release is a no-op when snapshot is nil" do

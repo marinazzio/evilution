@@ -24,6 +24,14 @@ class Evilution::Integration::Base
     nil
   end
 
+  # Fills what loading a mutated file looks up on the heap (see
+  # Loading::MutationApplier#warm). Called in the parent before any mutation
+  # runs, for the same reason as #warm_targeting.
+  def warm_loading
+    @mutation_applier.warm
+    nil
+  end
+
   # The timing methods are taken as method objects before the mutation is
   # applied. When the file under mutation is this one, applying it replaces
   # them, and a mutant of the code that builds the result would otherwise
