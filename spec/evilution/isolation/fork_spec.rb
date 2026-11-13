@@ -104,6 +104,8 @@ RSpec.describe Evilution::Isolation::Fork do
 
       expect(result).to be_timeout
       expect(elapsed).to be < 5 # Fork::GRACE_PERIOD (2s) + margin
+      # The child never reported back; the time went to its test run.
+      expect(result.timings.to_h).to eq(test_run: result.duration)
     end
 
     it "cleans up tracked temp dirs after a timeout" do
@@ -634,6 +636,14 @@ RSpec.describe Evilution::Isolation::Fork do
 
       expect(result).to be_error
       expect(result.error_message).to include("unexpected ')'")
+    end
+
+    it "carries the timings the test command measured" do
+      test_command = ->(_m) { { passed: true, timings: { apply: 0.1, test_run: 0.2 } } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result.timings.to_h).to eq(apply: 0.1, test_run: 0.2)
     end
 
     it "carries the known-failures flag of a failed run back from the child" do

@@ -160,6 +160,7 @@ RSpec.describe Evilution::Runner::ReportPublisher do
         :unresolved_results, :unparseable_results, :coverage_gaps,
         :unresolved_target_files, :target_file_count, :infra_retried, :subject_scores,
         :baseline_neutralizations, :baseline_neutralized, :baseline_failures,
+        :timings, :mutation_timing_totals,
         keyword_init: true
       ) do
         def initialize(errors: 0, unparseable: 0, unresolved: 0)
@@ -174,7 +175,9 @@ RSpec.describe Evilution::Runner::ReportPublisher do
             unparseable_results: [], coverage_gaps: [],
             unresolved_target_files: [], target_file_count: 0, infra_retried: 0,
             subject_scores: [],
-            baseline_neutralizations: [], baseline_neutralized: 0, baseline_failures: []
+            baseline_neutralizations: [], baseline_neutralized: 0, baseline_failures: [],
+            timings: Evilution::Result::RunTimings.new,
+            mutation_timing_totals: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 }
           )
         end
 

@@ -68,6 +68,34 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out["errors"].first).to have_key("error_message")
   end
 
+  # Timings are for profiling a run; summary verbosity keeps the agent's
+  # context small, so neither the run's block nor any entry's field survives.
+  it "drops the run's timings and every entry's timings in summary mode" do
+    entry = { "operator" => "x", "file" => "f", "line" => 1, "timings" => { "apply" => 0.1 } }
+    json = JSON.generate({
+                           "summary" => { "total" => 4 },
+                           "timings" => { "phases" => {}, "workers" => [] },
+                           "survived" => [entry], "timed_out" => [entry], "errors" => [entry], "unresolved" => [entry],
+                           "coverage_gaps" => [{ "file" => "f", "mutations" => [entry] }]
+                         })
+    out = JSON.parse(described_class.call(json, verbosity: "summary", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out).not_to have_key("timings")
+    %w[survived timed_out errors unresolved].each do |key|
+      expect(out[key].first).not_to have_key("timings"), "expected #{key} entry to drop timings"
+    end
+    expect(out["coverage_gaps"].first["mutations"].first).not_to have_key("timings")
+  end
+
+  it "keeps timings in full mode" do
+    entry = { "operator" => "x", "file" => "f", "line" => 1, "timings" => { "apply" => 0.1 } }
+    json = JSON.generate({ "summary" => {}, "timings" => { "phases" => {} }, "survived" => [entry] })
+    out = JSON.parse(described_class.call(json, verbosity: "full", survived_results: [], config: nil, enricher: noop_enricher))
+
+    expect(out).to have_key("timings")
+    expect(out["survived"].first).to have_key("timings")
+  end
+
   it "leaves a non-Array summary-trim section untouched instead of iterating it" do
     # Guards `data[key].is_a?(Array)` in strip_heavy_fields: a String section is
     # truthy but cannot be iterated; real code returns early and leaves it intact.

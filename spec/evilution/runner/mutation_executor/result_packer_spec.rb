@@ -21,7 +21,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       ),
       error: Evilution::Result::ErrorInfo.new(
         message: "msg", klass: "RuntimeError", backtrace: ["a.rb:1"]
-      )
+      ),
+      timings: Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.3)
     )
   end
 
@@ -40,7 +41,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
         error_message: "msg",
         error_class: "RuntimeError",
         error_backtrace: ["a.rb:1"],
-        known_failures_only: false
+        known_failures_only: false,
+        timings: { apply: 0.1, test_run: 0.3 }
       )
     end
   end
@@ -57,6 +59,27 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       expect(rebuilt.error_class).to eq("RuntimeError")
       expect(rebuilt.error_backtrace).to eq(["a.rb:1"])
       expect(rebuilt.known_failures_only?).to be(false)
+      expect(rebuilt.timings.to_h).to eq(apply: 0.1, test_run: 0.3)
+    end
+
+    it "carries the time the item waited for a worker" do
+      rebuilt = packer.rebuild(mutation, packer.compact(result).merge(queue_wait: 0.2))
+
+      expect(rebuilt.timings.to_h).to eq(apply: 0.1, test_run: 0.3, queue_wait: 0.2)
+    end
+
+    it "builds timings from the queue wait alone when the worker sent none" do
+      bare = Evilution::Result::MutationResult.new(mutation: mutation, status: :error)
+
+      rebuilt = packer.rebuild(mutation, packer.compact(bare).merge(queue_wait: 0.2))
+
+      expect(rebuilt.timings.to_h).to eq(queue_wait: 0.2)
+    end
+
+    it "leaves timings nil when nothing was measured" do
+      bare = Evilution::Result::MutationResult.new(mutation: mutation, status: :error)
+
+      expect(packer.rebuild(mutation, packer.compact(bare)).timings).to be_nil
     end
 
     it "carries the known-failures flag across" do

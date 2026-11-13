@@ -37,6 +37,17 @@ RSpec.describe Evilution::Baseline do
       expect(baseline).to have_received(:check_spec_file).with("spec/user_spec.rb").once
     end
 
+    it "records how long each spec file took, in the order they ran" do
+      allow(baseline).to receive(:check_spec_file).with("spec/user_spec.rb") { sleep(0.05) && nil }
+      allow(baseline).to receive(:check_spec_file).with("spec/order_spec.rb").and_return(nil)
+
+      result = baseline.call([subject1, subject3])
+
+      expect(result.spec_file_durations.keys).to eq(%w[spec/user_spec.rb spec/order_spec.rb])
+      expect(result.spec_file_durations["spec/user_spec.rb"]).to be >= 0.05
+      expect(result.spec_file_durations["spec/order_spec.rb"]).to be < 0.05
+    end
+
     it "returns empty set when all specs pass" do
       allow(baseline).to receive(:check_spec_file).and_return(nil)
 
@@ -469,6 +480,10 @@ RSpec.describe Evilution::Baseline do
       result = described_class.new(failed_spec_files: Set["spec/user_spec.rb"], duration: 1.0)
 
       expect(result.failed_spec_files).to contain_exactly("spec/user_spec.rb")
+    end
+
+    it "has no spec file durations unless given some" do
+      expect(described_class.new(failed_spec_files: Set.new, duration: 0.0).spec_file_durations).to eq({})
     end
 
     it "exposes duration" do

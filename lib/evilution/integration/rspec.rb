@@ -79,7 +79,9 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     result = run_targets(targets)
     return result unless confirm?(result, targets, files)
 
-    run_targets(files)
+    confirmation_started = monotonic_now
+    confirmed = run_targets(files)
+    confirmed.merge(timings: { confirmation: monotonic_now - confirmation_started })
   end
 
   # Targeting runs a subset of the examples in a spec file, chosen by name. A

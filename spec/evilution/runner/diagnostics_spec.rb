@@ -262,23 +262,4 @@ RSpec.describe Evilution::Runner::Diagnostics do
       expect(io.string).to eq("")
     end
   end
-
-  describe "#aggregate_worker_stats" do
-    it "returns stats unchanged when empty" do
-      diag = described_class.new(config)
-      expect(diag.aggregate_worker_stats([])).to eq([])
-    end
-
-    it "combines entries with the same pid" do
-      stat_class = Evilution::Parallel::WorkQueue::WorkerStat
-      a = stat_class.new(1, 2, 1.0, 2.0)
-      b = stat_class.new(1, 3, 2.0, 3.0)
-      diag = described_class.new(config)
-      result = diag.aggregate_worker_stats([a, b])
-      expect(result.length).to eq(1)
-      expect(result.first.items_completed).to eq(5)
-      expect(result.first.busy_time).to eq(3.0)
-      expect(result.first.wall_time).to eq(5.0)
-    end
-  end
 end

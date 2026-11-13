@@ -3,6 +3,7 @@
 require_relative "../result"
 require_relative "error_info"
 require_relative "memory_stats"
+require_relative "mutation_timings"
 
 class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
@@ -13,7 +14,8 @@ class Evilution::Result::MutationResult
   # already failing before any mutation ran, so the failure says nothing
   # about this one.
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
-                 test_command: nil, memory: nil, error: nil, neutral_reason: nil, known_failures_only: false)
+                 test_command: nil, memory: nil, error: nil, neutral_reason: nil, known_failures_only: false,
+                 timings: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -25,7 +27,14 @@ class Evilution::Result::MutationResult
     @error = error
     @neutral_reason = neutral_reason
     @known_failures_only = known_failures_only == true
+    @timings = timings
     freeze
+  end
+
+  # Where the duration went (Evilution::Result::MutationTimings), when the
+  # test process measured it.
+  def timings
+    @timings.is_a?(Evilution::Result::MutationTimings) ? @timings : nil
   end
 
   # Positive type checks, not nil checks. EV-s5br / GH #1174: the

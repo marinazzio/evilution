@@ -17,19 +17,55 @@ class Evilution::Integration::Base
     @mutation_applier = mutation_applier
   end
 
+  # The timing methods are taken as method objects before the mutation is
+  # applied. When the file under mutation is this one, applying it replaces
+  # them, and a mutant of the code that builds the result would otherwise
+  # decide its own verdict. A method object keeps the definition the call
+  # started with.
   def call(mutation)
     ensure_framework_loaded
-    fire_hook(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
-    load_error = @mutation_applier.call(mutation)
-    return load_error if load_error
+    fire_insert_hook(:mutation_insert_pre, mutation)
+    timed = timer
+    attach_timings = method(:with_timings)
+    load_error, apply = timed.call { @mutation_applier.call(mutation) }
+    return attach_timings.call(load_error, apply: apply) if load_error
 
-    fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
-    Evilution.while_running_tests { run_tests(mutation) }
+    fire_insert_hook(:mutation_insert_post, mutation)
+    result, tests = timed.call { Evilution.while_running_tests { run_tests(mutation) } }
+    attach_timings.call(result, apply: apply, tests: tests)
   ensure
     @mutation_applier.restore(mutation) unless restored_by_applier?(load_error)
   end
 
   private
+
+  # An integration that re-runs a survivor reports that run's time as
+  # `timings: { confirmation: }`; the rest of the test time is the first run.
+  def with_timings(result, apply:, tests: nil)
+    return result unless result.is_a?(Hash)
+
+    reported = result[:timings].is_a?(Hash) ? result[:timings] : {}
+    confirmation = reported[:confirmation]
+    timings = { apply: apply }
+    timings[:test_run] = tests - (confirmation || 0.0) if tests
+    timings[:confirmation] = confirmation if confirmation
+    result.merge(timings: timings)
+  end
+
+  # A callable returning the block's value and the seconds it took, bound to
+  # the clock as it is now.
+  def timer
+    clock = method(:monotonic_now)
+    lambda do |&block|
+      started = clock.call
+      value = block.call
+      [value, clock.call - started]
+    end
+  end
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  end
 
   # The applier evaluates the original to tell that a mutant broke the load of
   # its file; after that the file is as it was, and need not be restored again.
@@ -53,6 +89,10 @@ class Evilution::Integration::Base
 
   def reset_state
     raise NotImplementedError, "#{self.class}#reset_state must be implemented"
+  end
+
+  def fire_insert_hook(event, mutation)
+    fire_hook(event, mutation: mutation, file_path: mutation.file_path)
   end
 
   def fire_hook(event, **payload)

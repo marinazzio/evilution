@@ -198,7 +198,16 @@ class Evilution::Isolation::InProcess
         klass: result[:error_class],
         backtrace: result[:error_backtrace]
       ),
-      known_failures_only: result[:known_failures_only]
+      known_failures_only: result[:known_failures_only],
+      timings: mutation_timings(result, duration)
     )
+  end
+
+  # A timed-out run never reports its own timings. Applying a mutation takes
+  # a fraction of a second, so its time is counted as the test run's.
+  def mutation_timings(result, duration)
+    return Evilution::Result::MutationTimings.new(test_run: duration) if result[:timeout]
+
+    Evilution::Result::MutationTimings.from_h(result[:timings])
   end
 end

@@ -176,7 +176,74 @@ RSpec.describe Evilution::Integration::Base do
     it "returns the result from run_tests" do
       result = integration.call(mutation)
 
-      expect(result).to eq({ passed: false, test_command: "test" })
+      expect(result).to include(passed: false, test_command: "test")
+    end
+
+    describe "timings" do
+      let(:slow_class) do
+        Class.new(described_class) do
+          define_method(:ensure_framework_loaded) { nil }
+          define_method(:run_tests) do |_mutation|
+            sleep 0.05
+            { passed: true }
+          end
+          define_method(:build_args) { |_mutation| [] }
+          define_method(:reset_state) { nil }
+        end
+      end
+
+      it "reports how long applying the mutation and running the tests took" do
+        timings = slow_class.new.call(mutation)[:timings]
+
+        expect(timings.keys).to eq(%i[apply test_run])
+        expect(timings[:apply]).to be >= 0
+        expect(timings[:test_run]).to be >= 0.05
+      end
+
+      it "counts a confirming run the integration reports apart from the first test run" do
+        confirming_class = Class.new(slow_class) do
+          define_method(:run_tests) { |_mutation| { passed: true, timings: { confirmation: 0.4 } } }
+        end
+        integration = confirming_class.new
+        # Clock readings: apply starts 0.0, ends 0.1; tests start 0.1, end 1.1.
+        allow(integration).to receive(:monotonic_now).and_return(0.0, 0.1, 0.1, 1.1)
+
+        timings = integration.call(mutation)[:timings]
+
+        expect(timings).to eq(apply: 0.1, test_run: 0.6, confirmation: 0.4)
+      end
+
+      # When evilution mutates this very file, applying the mutation replaces
+      # the methods that build the result. The result must still be built by
+      # the code the call started with.
+      it "builds the result with the timing methods it had before the mutation was applied" do
+        integration = slow_class.new
+        klass = integration.class
+        applier = instance_double(Evilution::Integration::Loading::MutationApplier)
+        allow(applier).to receive(:restore)
+        allow(applier).to receive(:call) do
+          klass.send(:define_method, :with_timings) { |*, **| { mutant: true } }
+          klass.send(:define_method, :timer) { -> { [{ mutant: true }, 0.0] } }
+          klass.send(:define_method, :monotonic_now) { raise "mutant clock" }
+          nil
+        end
+        integration.instance_variable_set(:@mutation_applier, applier)
+
+        result = integration.call(mutation)
+
+        expect(result).to include(passed: true)
+        expect(result[:timings].keys).to eq(%i[apply test_run])
+      end
+
+      it "reports the apply time of a mutation whose load failed" do
+        applier = instance_double(Evilution::Integration::Loading::MutationApplier)
+        allow(applier).to receive(:call).and_return({ passed: false, error: "injected" })
+        allow(applier).to receive(:restore)
+
+        result = slow_class.new(mutation_applier: applier).call(mutation)
+
+        expect(result[:timings].keys).to eq(%i[apply])
+      end
     end
 
     # A child that dies while the tests run tells its parent so; the flag is how
@@ -232,7 +299,7 @@ RSpec.describe Evilution::Integration::Base do
 
         result = integration.call(mutation)
 
-        expect(result).to eq(failure)
+        expect(result).to include(failure)
         expect(events).not_to include(:run_tests)
       end
 

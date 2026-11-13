@@ -70,6 +70,34 @@ RSpec.describe Evilution::Reporter::JSON do
       expect { JSON.parse(output) }.not_to raise_error
     end
 
+    it "includes the run's timings" do
+      timed = Evilution::Result::Summary.new(
+        results: [survived_result], duration: 0.6,
+        timings: Evilution::Result::RunTimings.new(phases: { execution: 0.5 })
+      )
+
+      parsed = JSON.parse(reporter.call(timed))
+
+      expect(parsed["timings"]["phases"]).to eq("execution" => 0.5)
+    end
+
+    it "includes each mutation's timings, rounded" do
+      timed_result = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation, status: :killed, duration: 0.5,
+        timings: Evilution::Result::MutationTimings.new(apply: 0.123456, test_run: 0.3)
+      )
+
+      parsed = JSON.parse(reporter.call(Evilution::Result::Summary.new(results: [timed_result])))
+
+      expect(parsed["killed"].first["timings"]).to eq("apply" => 0.1235, "test_run" => 0.3)
+    end
+
+    it "leaves timings off a mutation that measured none" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first).not_to have_key("timings")
+    end
+
     it "includes version" do
       parsed = JSON.parse(reporter.call(summary))
 

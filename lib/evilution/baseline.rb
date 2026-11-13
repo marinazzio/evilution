@@ -5,8 +5,9 @@ require_relative "process_cleanup"
 require_relative "diagnostic"
 
 class Evilution::Baseline
-  Result = Struct.new(:failed_spec_files, :duration, :failures) do
-    def initialize(failed_spec_files:, duration:, failures: [])
+  # spec_file_durations: seconds each spec file took, in the order they ran.
+  Result = Struct.new(:failed_spec_files, :duration, :failures, :spec_file_durations) do
+    def initialize(failed_spec_files:, duration:, failures: [], spec_file_durations: {})
       super
       freeze
     end
@@ -42,11 +43,17 @@ class Evilution::Baseline
   end
 
   def call(subjects)
-    start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    failures = baseline_spec_files(subjects).filter_map { |spec_file| check_spec_file(spec_file) }
+    start_time = monotonic_now
+    durations = {}
+    failures = baseline_spec_files(subjects).filter_map do |spec_file|
+      spec_started = monotonic_now
+      failure = check_spec_file(spec_file)
+      durations[spec_file] = monotonic_now - spec_started
+      failure
+    end
 
-    duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
-    Result.new(failed_spec_files: failures.to_set(&:spec_file), duration: duration, failures: failures)
+    Result.new(failed_spec_files: failures.to_set(&:spec_file), duration: monotonic_now - start_time,
+               failures: failures, spec_file_durations: durations.freeze)
   end
 
   def run_spec_file(spec_file)
@@ -117,6 +124,10 @@ class Evilution::Baseline
   end
 
   private
+
+  def monotonic_now
+    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  end
 
   # Runs in the child. A runner that raises -- a spec helper that cannot load,
   # a framework that is not there -- is a failure with a reason, not a child

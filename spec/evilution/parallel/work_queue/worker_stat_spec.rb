@@ -27,4 +27,22 @@ RSpec.describe Evilution::Parallel::WorkQueue::WorkerStat do
       expect(stat.utilization).to eq(0.0)
     end
   end
+
+  describe ".aggregate" do
+    it "returns an empty list for no stats" do
+      expect(described_class.aggregate([])).to eq([])
+    end
+
+    it "combines entries with the same pid" do
+      result = described_class.aggregate([described_class.new(1, 2, 1.0, 2.0), described_class.new(1, 3, 2.0, 3.0)])
+
+      expect(result.map(&:to_a)).to eq([[1, 5, 3.0, 5.0]])
+    end
+
+    it "keeps workers with different pids apart" do
+      result = described_class.aggregate([described_class.new(1, 2, 1.0, 2.0), described_class.new(2, 3, 2.0, 3.0)])
+
+      expect(result.map(&:pid)).to eq([1, 2])
+    end
+  end
 end

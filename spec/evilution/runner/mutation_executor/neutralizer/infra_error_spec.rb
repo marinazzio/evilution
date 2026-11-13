@@ -132,4 +132,14 @@ RSpec.describe Evilution::Runner::MutationExecutor::Neutralizer::InfraError do
       expect(described_class.infra_neutral?(result(status: :neutral, error_class: "RuntimeError"))).to be(false)
     end
   end
+
+  it "keeps the timings of the result it neutralizes" do
+    timings = Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.2)
+    r = Evilution::Result::MutationResult.new(
+      mutation: mutation, status: :error, duration: 0.01, timings: timings,
+      error: Evilution::Result::ErrorInfo.new(klass: "LoadError", message: "x", backtrace: ["spec/spec_helper.rb:3"])
+    )
+
+    expect(neutralizer.call(r).timings).to be(timings)
+  end
 end

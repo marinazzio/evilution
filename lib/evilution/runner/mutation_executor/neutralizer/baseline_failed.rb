@@ -60,6 +60,7 @@ class Evilution::Runner::MutationExecutor::Neutralizer::BaselineFailed
       test_command: result.test_command,
       memory: result.memory,
       error: result.error,
+      timings: result.timings,
       neutral_reason: Evilution::Result::NeutralReason.baseline_failure(spec_file)
     )
   end
