@@ -141,6 +141,17 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     end
   end
 
+  describe "#warm" do
+    it "warms the concern state cleaner" do
+      cleaner = instance_double(Evilution::Integration::Loading::ConcernStateCleaner, warm: nil)
+
+      result = described_class.new(concern_state_cleaner: cleaner).warm
+
+      expect(cleaner).to have_received(:warm)
+      expect(result).to be_nil
+    end
+  end
+
   describe "#call with injected collaborators" do
     let(:validator) { instance_double("validator", call: nil) }
     let(:pinner) { instance_double("pinner", call: []) }

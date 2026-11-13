@@ -144,6 +144,15 @@ creates and removes their methods when the file is evaluated next, so that
 method lookup passes through them. Only modules are emptied, not anonymous
 classes, and only the methods written in that file.
 
+To see those modules being created without walking the heap (which touches
+every object in the process, twice per evaluation), an `in_process` run
+prepends a hook to `Module#initialize` the first time it evaluates a file. It
+records nothing outside an evaluation. Likewise, a run that loads
+`ActiveSupport::Concern` modules prepends a hook to the concern module's
+`extended`, so the concerns it must clear before each evaluation are listed
+as they are defined; the heap is walked once per run, in the parent, for the
+ones that already existed.
+
 Other things a file can add to at load time are not undone: an `at_exit`
 hook, a `Signal.trap`, a `TracePoint`, a callback pushed into a registry of
 some library. If the file you are mutating does one of those at the top

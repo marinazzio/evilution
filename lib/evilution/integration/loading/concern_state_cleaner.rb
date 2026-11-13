@@ -2,17 +2,21 @@
 
 require_relative "../loading"
 require_relative "../../load_path/subpath_resolver"
+require_relative "concern_registry"
 
 # Re-evaluating an `ActiveSupport::Concern` module raises
 # "MultipleIncludedBlocks" because AS::Concern records the block source
 # location on the first include/prepend call. Before a re-eval we clear the
 # `@_included_block` / `@_prepended_block` ivar on modules whose block came
 # from the file we're about to re-eval.
+#
+# The concern modules come from a ConcernRegistry, which walks the heap once
+# for the process rather than once per evaluation.
 class Evilution::Integration::Loading::ConcernStateCleaner
   IVARS = %i[@_included_block @_prepended_block].freeze
 
-  # ObjectSpace hands us every Module in the VM, including ones that answer no
-  # message honestly. ActiveSupport::Deprecation::DeprecatedConstantProxy
+  # The registry's first lookup walks every Module in the VM, including ones
+  # that answer no message honestly. ActiveSupport::Deprecation::DeprecatedConstantProxy
   # subclasses Module and undefines all of its instance methods, so asking it
   # anything lands in its method_missing and emits the deprecation; where the
   # deprecator's behaviour is :raise (grape's spec_helper sets that), the
@@ -31,8 +35,19 @@ class Evilution::Integration::Loading::ConcernStateCleaner
   REMOVE_IVAR = Object.instance_method(:remove_instance_variable)
   private_constant :IVAR_DEFINED, :IVAR_GET, :REMOVE_IVAR
 
-  def initialize(subpath_resolver: Evilution::LoadPath::SubpathResolver.new)
+  def initialize(subpath_resolver: Evilution::LoadPath::SubpathResolver.new,
+                 registry: Evilution::Integration::Loading::ConcernRegistry.default)
     @subpath_resolver = subpath_resolver
+    @registry = registry
+  end
+
+  # Fills the registry ahead of the first evaluation. Called in the parent of
+  # a run, so that a forked mutation process inherits it filled.
+  def warm
+    return unless defined?(ActiveSupport::Concern)
+
+    @registry.concerns(ActiveSupport::Concern)
+    nil
   end
 
   def call(file_path)
@@ -44,11 +59,7 @@ class Evilution::Integration::Loading::ConcernStateCleaner
     absolute = File.expand_path(file_path, Evilution.project_base_dir)
     subpath = @subpath_resolver.call(absolute)
 
-    ObjectSpace.each_object(Module) do |mod|
-      next unless ActiveSupport::Concern === mod # rubocop:disable Style/CaseEquality
-
-      clear_concern_ivars(mod, absolute, subpath)
-    end
+    @registry.concerns(ActiveSupport::Concern).each { |mod| clear_concern_ivars(mod, absolute, subpath) }
   end
 
   private
