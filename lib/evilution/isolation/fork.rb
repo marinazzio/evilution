@@ -13,6 +13,11 @@ require_relative "../isolation"
 class Evilution::Isolation::Fork
   GRACE_PERIOD = 2
   REAP_DEADLINE = 1.0
+  # Bounds of one wait between liveness checks while reaping. A child that has
+  # written its result exits within a millisecond or two, so the first waits
+  # are short; they double towards the cap for one that takes longer.
+  REAP_STEP_MIN = 0.001
+  REAP_STEP_MAX = 0.05
 
   def initialize(hooks: nil)
     @hooks = hooks
@@ -186,7 +191,7 @@ class Evilution::Isolation::Fork
 
       if read_io.wait_readable([remaining, 0.5].min)
         payload = read_payload(read_io, deadline)
-        return reap_and_decode(handle, payload) if payload
+        return reap_and_decode(handle, payload, read_io) if payload
       end
 
       next unless @supervisor.reap_nonblock(handle)
@@ -206,20 +211,44 @@ class Evilution::Isolation::Fork
   # in execute_in_child waiting on a subject grandchild the mutation broke.
   # wait_for_result has already returned by this point, so the per-mutation
   # timeout cannot fire. Bound the wait and fall back to the TERM/KILL ladder.
-  def reap_and_decode(handle, payload)
+  #
+  # The child closes its end of the pipe right before it exits, so the wait is
+  # on the pipe: it ends the moment the child lets go of it, not at the end of
+  # a fixed step. A grandchild holding the pipe keeps it open past the child's
+  # exit, so the waits are sliced and the child's liveness checked after each.
+  def reap_and_decode(handle, payload, read_io)
     deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + REAP_DEADLINE
-    loop do
-      break if @supervisor.reap_nonblock(handle)
+    step = REAP_STEP_MIN
+    pipe_open = true
+    until @supervisor.reap_nonblock(handle)
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      return terminate_after_reap_deadline(handle, payload) if remaining <= 0
 
-      if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-        @supervisor.terminate(handle, grace: GRACE_PERIOD)
-        # The status now records OUR signal, so it cannot be reported as the
-        # child's own cause of death.
-        return decode_payload(payload, handle, terminated: true)
-      end
-      sleep 0.05
+      pipe_open = wait_for_pipe_close(read_io, [remaining, step].min, pipe_open)
+      step = [step * 2, REAP_STEP_MAX].min
     end
     decode_payload(payload, handle)
+  end
+
+  def terminate_after_reap_deadline(handle, payload)
+    @supervisor.terminate(handle, grace: GRACE_PERIOD)
+    # The status now records OUR signal, so it cannot be reported as the
+    # child's own cause of death.
+    decode_payload(payload, handle, terminated: true)
+  end
+
+  # Waits up to `seconds` for every writer to close the pipe and returns
+  # whether it is still open. Once it has closed it stays readable, so from
+  # then on the wait is a plain pause; bytes written after the result are
+  # discarded.
+  def wait_for_pipe_close(read_io, seconds, pipe_open)
+    unless pipe_open
+      sleep(seconds)
+      return false
+    end
+    return true unless read_io.wait_readable(seconds)
+
+    !read_io.read_nonblock(4096, exception: false).nil?
   end
 
   def read_payload(read_io, deadline)

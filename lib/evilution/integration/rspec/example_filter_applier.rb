@@ -7,6 +7,8 @@ module Evilution::Integration::RSpec::ExampleFilterApplier
     def call(_mutation, files)
       files
     end
+
+    def warm(_mutation, _files); end
   end
 
   class Custom
@@ -16,6 +18,11 @@ module Evilution::Integration::RSpec::ExampleFilterApplier
 
     def call(mutation, files)
       @filter.call(mutation, files)
+    end
+
+    # Only a filter that caches what it parses has anything to warm.
+    def warm(mutation, files)
+      @filter.warm(mutation, files) if @filter.respond_to?(:warm)
     end
   end
 end

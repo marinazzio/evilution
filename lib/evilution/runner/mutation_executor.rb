@@ -31,6 +31,7 @@ class Evilution::Runner::MutationExecutor
 
   def call(mutations, baseline_result = nil)
     integration = @baseline_runner.build_integration(baseline_result)
+    warm_targeting(integration, mutations)
     spec_resolver = baseline_failed?(baseline_result) ? @baseline_runner.neutralization_resolver : nil
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)
@@ -40,6 +41,14 @@ class Evilution::Runner::MutationExecutor
   end
 
   private
+
+  # Here, before the first mutation child or pool worker is forked, so every
+  # one of them inherits the filled caches rather than parsing the same source
+  # and spec files for itself and losing the result when it exits. An
+  # integration is any callable; one without targeting caches has no hook.
+  def warm_targeting(integration, mutations)
+    integration.warm_targeting(mutations) if integration.respond_to?(:warm_targeting)
+  end
 
   def sequential_run(notifier, pipeline, mutations, baseline_result, integration)
     build_sequential(notifier, pipeline)

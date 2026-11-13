@@ -32,8 +32,10 @@ class Evilution::ProcessSupervisor
   # leader), the parent-side fds to close on reap, and an optional sandbox dir
   # to remove on reap.
   # `status` is filled in when the child is reaped, so a caller that got no
-  # payload out of it can still say how it died.
-  Handle = Struct.new(:pid, :pgid, :fds, :sandbox_dir, :status, keyword_init: true)
+  # payload out of it can still say how it died. `reaped` is set once it has
+  # been: from then on the pid may belong to another process, so it is never
+  # signalled or waited on again.
+  Handle = Struct.new(:pid, :pgid, :fds, :sandbox_dir, :status, :reaped, keyword_init: true)
 
   @registry = [].freeze
 
@@ -147,8 +149,11 @@ class Evilution::ProcessSupervisor
   end
 
   # Bounded TERM -> grace -> KILL ladder, then reap. Always ends with the child
-  # reaped and its resources released, whichever rung it dies on.
+  # reaped and its resources released, whichever rung it dies on. A child
+  # already reaped was released along with it and is past signalling.
   def terminate(handle, grace: GRACE_PERIOD)
+    return if handle.reaped
+
     signal_group("TERM", handle)
     unless exited?(handle.pid)
       sleep(grace)
@@ -161,7 +166,10 @@ class Evilution::ProcessSupervisor
   # release the resources the handle owns: close parent-side fds, remove the
   # sandbox dir, and drop the handle from the registry.
   def reap(handle)
+    return if handle.reaped
+
     handle.status = safe_wait(handle.pid)
+    handle.reaped = true
   ensure
     release(handle)
   end
@@ -173,10 +181,13 @@ class Evilution::ProcessSupervisor
   # it releases the handle in the same step it reaps, so the process-global
   # registry never holds a stale, already-reaped pgid.
   def reap_nonblock(handle)
+    return true if handle.reaped
+
     outcome = nonblocking_wait(handle.pid)
     return false unless outcome
 
     handle.status = outcome if outcome.is_a?(::Process::Status)
+    handle.reaped = true
     release(handle)
     true
   end

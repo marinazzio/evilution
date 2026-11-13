@@ -96,6 +96,62 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(execution.truncated).to be(false)
     end
 
+    # Fork isolation runs each mutation in a child that keeps what the parent
+    # cached; filled here, before the first child or worker is forked, the
+    # targeting caches are filled once instead of once per mutation.
+    context "with an integration that has targeting to warm" do
+      let(:events) { [] }
+      let(:integration) do
+        recorded = events
+        Class.new do
+          define_method(:warm_targeting) { |muts| recorded << [:warm, muts] }
+          define_method(:call) { |_m| { passed: false } }
+        end.new
+      end
+      let(:baseline_runner) do
+        instance_double(
+          Evilution::Runner::BaselineRunner,
+          build_integration: integration, neutralization_resolver: ->(_f) {}, neutralization_fallback_dir: "spec"
+        )
+      end
+
+      it "warms it once before the first mutation runs (sequential)" do
+        mutations = [mutation, mutation]
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call) do |mutation:, **|
+          events << :run
+          killed_result(mutation)
+        end
+
+        build(config(jobs: 1), isolator: isolator, baseline_runner: baseline_runner).call(mutations, nil)
+
+        expect(events).to eq([[:warm, mutations], :run, :run])
+      end
+
+      it "warms it once before the pool starts (parallel)" do
+        mutations = [mutation, mutation]
+        parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+        allow(parallel_strategy).to receive(:call) do
+          events << :pool
+          Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
+        end
+        allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+        build(config(jobs: 2), isolator: instance_double(Evilution::Isolation::Fork), baseline_runner: baseline_runner)
+          .call(mutations, nil)
+
+        expect(events).to eq([[:warm, mutations], :pool])
+      end
+    end
+
+    it "runs an integration that has no targeting to warm" do
+      execution = build(config(jobs: 1), isolator: instance_double(Evilution::Isolation::Fork).tap do |iso|
+        allow(iso).to receive(:call) { |mutation:, **| killed_result(mutation) }
+      end).call([mutation], nil)
+
+      expect(execution.results).to all(be_killed)
+    end
+
     it "dispatches to the parallel strategy when jobs > 1" do
       cfg = config(jobs: 2)
       mutations = [mutation, mutation]

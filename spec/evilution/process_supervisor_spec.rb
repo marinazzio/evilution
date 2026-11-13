@@ -420,6 +420,37 @@ RSpec.describe Evilution::ProcessSupervisor do
       supervisor.terminate(h, grace: 0.2)
       expect(described_class.registry).not_to include(h)
     end
+
+    # Once reaped, the pid is free for the kernel to hand to an unrelated
+    # process; signalling it would hit that process instead.
+    context "when the child has already been reaped" do
+      it "sends no signal" do
+        h = supervisor.spawn { exit!(0) }
+        wait_until { supervisor.reap_nonblock(h) }
+        allow(Process).to receive(:kill).and_call_original
+
+        supervisor.terminate(h, grace: 0.2)
+
+        expect(Process).not_to have_received(:kill)
+      end
+
+      it "keeps the exit status recorded when it was reaped" do
+        h = supervisor.spawn { exit!(5) }
+        wait_until { supervisor.reap_nonblock(h) }
+
+        supervisor.terminate(h, grace: 0.2)
+
+        expect(h.status.exitstatus).to eq(5)
+      end
+
+      it "does not wait out the grace period" do
+        h = supervisor.spawn { exit!(0) }
+        supervisor.reap(h)
+        expect(supervisor).not_to receive(:sleep)
+
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
   end
 
   describe "#reap" do
@@ -443,6 +474,21 @@ RSpec.describe Evilution::ProcessSupervisor do
       h = supervisor.spawn { exit!(0) }
       supervisor.reap(h)
       expect { supervisor.reap(h) }.not_to raise_error
+    end
+
+    it "keeps the exit status of a child it already reaped" do
+      h = supervisor.spawn { exit!(4) }
+      supervisor.reap(h)
+
+      supervisor.reap(h)
+
+      expect(h.status.exitstatus).to eq(4)
+    end
+
+    it "marks the handle reaped" do
+      h = supervisor.spawn { exit!(0) }
+
+      expect { supervisor.reap(h) }.to change(h, :reaped).from(nil).to(true)
     end
   end
 
@@ -481,6 +527,24 @@ RSpec.describe Evilution::ProcessSupervisor do
 
       expect(h.status).to be_signaled
       expect(Signal.signame(h.status.termsig)).to eq("KILL")
+    end
+
+    it "marks the handle reaped once the child has exited" do
+      h = supervisor.spawn { exit!(0) }
+
+      wait_until { supervisor.reap_nonblock(h) }
+
+      expect(h.reaped).to be(true)
+    end
+
+    # The pid may already belong to another child of this process.
+    it "does not wait on the pid of a child it already reaped" do
+      h = supervisor.spawn { exit!(0) }
+      wait_until { supervisor.reap_nonblock(h) }
+      allow(Process).to receive(:waitpid).and_call_original
+
+      expect(supervisor.reap_nonblock(h)).to be(true)
+      expect(Process).not_to have_received(:waitpid)
     end
 
     # $? would hold some earlier child's status here, and attributing that

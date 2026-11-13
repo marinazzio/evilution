@@ -38,4 +38,10 @@ class Evilution::CoverageExampleFilter
 
     @lexical.call(mutation, spec_paths)
   end
+
+  # The map is built before this filter is; the lexical filter it falls back
+  # on parses lazily, and is what a forked child would otherwise fill.
+  def warm(mutation, spec_paths)
+    @lexical.warm(mutation, spec_paths)
+  end
 end

@@ -31,7 +31,25 @@ class Evilution::ExampleFilter
     locations.sort
   end
 
+  # Parses what #call would for this mutation and spec files, so the caches
+  # hold it before any per-mutation process is forked: a forked child keeps
+  # what its parent cached, and loses what it adds itself. A file that does
+  # not parse is left for #call to report when a mutation needs it.
+  def warm(mutation, spec_paths)
+    source = mutation.original_source
+    return if source.nil?
+
+    @source_cache.fetch(source) unless @source_cache.nil?
+    spec_paths.each { |path| warm_spec(path) }
+  end
+
   private
+
+  def warm_spec(path)
+    @cache.fetch(path)
+  rescue Evilution::ParseError
+    nil
+  end
 
   def fallback_result(spec_paths)
     case @fallback

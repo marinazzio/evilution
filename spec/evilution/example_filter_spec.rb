@@ -658,6 +658,78 @@ RSpec.describe Evilution::ExampleFilter do
     end
   end
 
+  # Fork isolation runs each mutation in a child that inherits the caches as
+  # they were when it was forked and loses whatever it adds to them; filled
+  # before the fork, they spare every child the same parses.
+  describe "#warm" do
+    let(:src) do
+      <<~RUBY
+        class Foo
+          def bar_method
+            1
+          end
+        end
+      RUBY
+    end
+    let(:spec_path) do
+      write_source(<<~RUBY)
+        RSpec.describe Foo do
+          it "exercises bar_method" do
+            Foo.new.bar_method
+          end
+        end
+      RUBY
+    end
+    let(:source_cache) { Evilution::SourceAstCache.new }
+    let(:warmed) { described_class.new(cache: cache, source_cache: source_cache) }
+
+    it "parses the spec files ahead of the first call" do
+      warmed.warm(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(cache.cached?(spec_path)).to be(true)
+    end
+
+    it "leaves nothing to parse for a call on the same source and spec files" do
+      warmed.warm(mutation(original_source: src, line: 3), [spec_path])
+      expect(Prism).not_to receive(:parse)
+
+      expect(warmed.call(mutation(original_source: src, line: 3), [spec_path])).to eq(["#{spec_path}:2"])
+    end
+
+    # A file that does not parse fails the same way when the mutation that
+    # needs it runs; warming must not fail the whole run ahead of it.
+    it "skips a spec file it cannot parse" do
+      broken = write_source("RSpec.describe Foo do\n  it 'x' do\n")
+
+      expect { warmed.warm(mutation(original_source: src, line: 3), [broken, spec_path]) }.not_to raise_error
+      expect(cache.cached?(spec_path)).to be(true)
+    end
+
+    it "lets through an error that is not a parse failure" do
+      failing = instance_double(Evilution::SpecAstCache)
+      allow(failing).to receive(:fetch).and_raise(RuntimeError, "bug")
+
+      expect { described_class.new(cache: failing).warm(mutation(original_source: src, line: 3), [spec_path]) }
+        .to raise_error(RuntimeError, "bug")
+    end
+
+    it "skips a spec file that does not exist" do
+      expect { warmed.warm(mutation(original_source: src, line: 3), ["no/such_spec.rb"]) }.not_to raise_error
+    end
+
+    it "does nothing for a mutation whose source is gone" do
+      expect(Prism).not_to receive(:parse)
+
+      warmed.warm(mutation(original_source: nil, line: 3), [])
+    end
+
+    it "warms the spec files without a source cache" do
+      filter.warm(mutation(original_source: src, line: 3), [spec_path])
+
+      expect(cache.cached?(spec_path)).to be(true)
+    end
+  end
+
   describe "location formatting" do
     it "dedups identical locations across matching siblings and sorts output" do
       src = <<~RUBY

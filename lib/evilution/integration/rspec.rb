@@ -53,6 +53,15 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     super(hooks: hooks)
   end
 
+  # One mutation per source file is enough: every mutation in a file shares
+  # its source and resolves to the same spec files.
+  def warm_targeting(mutations)
+    mutations.uniq(&:file_path).each do |mutation|
+      files = @test_file_resolver.call(mutation, warn: false)
+      @example_filter_applier.warm(mutation, files) unless files.nil?
+    end
+  end
+
   private
 
   def build_example_filter_applier(example_filter)
