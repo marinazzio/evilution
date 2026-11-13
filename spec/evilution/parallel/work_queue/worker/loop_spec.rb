@@ -70,6 +70,14 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker::Loop do
       expect(results.first).to eq([0, :ok, nil])
     end
 
+    it "passes nil for the wait when the send time is not a number" do
+      Evilution::Parallel::WorkQueue::Channel.write(cmd_write, [0, 5, "soon"])
+
+      results = results_after_shutdown { described_class.run(cmd_read, res_write) { |_x, waited| waited } }
+
+      expect(results.first).to eq([0, :ok, nil])
+    end
+
     # A command that does not decode leaves the worker with a stream it cannot
     # follow. It ends, and the parent, seeing the pipe close, replaces it.
     describe "a command frame that cannot be read" do
