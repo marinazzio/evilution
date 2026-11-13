@@ -146,6 +146,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     # Duration reflects the item_timeout the stuck worker exhausted (config
     # timeout 30 * 2), not a misleading 0.0 that would be cached/reported.
     expect(result.duration).to eq(60.0)
+    expect(result.timings.to_h).to eq(test_run: 60.0)
   end
 
   it "translates an UNREADABLE pool sentinel into an :error result that says so" do

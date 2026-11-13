@@ -104,6 +104,8 @@ RSpec.describe Evilution::Isolation::Fork do
 
       expect(result).to be_timeout
       expect(elapsed).to be < 5 # Fork::GRACE_PERIOD (2s) + margin
+      # The child never reported back; the time went to its test run.
+      expect(result.timings.to_h).to eq(test_run: result.duration)
     end
 
     it "cleans up tracked temp dirs after a timeout" do

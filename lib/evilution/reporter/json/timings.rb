@@ -29,18 +29,13 @@ class Evilution::Reporter::JSON::Timings
 
   private
 
-  # A worker that died before sending its figures has nil busy and wall times.
   def worker_row(worker)
     {
       pid: worker.pid,
       items: worker.items_completed,
-      busy: round(worker.busy_time),
-      wall: round(worker.wall_time),
+      busy: worker.busy_time.round(4),
+      wall: worker.wall_time.round(4),
       utilization: worker.utilization.round(4)
     }
-  end
-
-  def round(seconds)
-    seconds.nil? ? nil : seconds.round(4)
   end
 end

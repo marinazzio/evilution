@@ -347,7 +347,7 @@ Schema:
     "baseline_failures": "array (optional) — one entry per spec file that was red in the baseline: { spec_file, error: string|null — what stopped the file outside any example (load error, runner exception, timeout, a baseline process that died), failing_examples: integer — every failing example, examples: [{ id, description, message }] — the first few of them }; present only when non-empty",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
-    "duration": "float   — total wall-clock seconds, rounded to 4 decimals",
+    "duration": "float   — total wall-clock seconds of the run, from subject discovery through the audit of target files for unresolved specs (the phases in timings.phases add up to it), rounded to 4 decimals",
     "peak_memory_mb": "float (optional) — peak RSS across all mutation child processes, in MB"
   },
   "survived": [
@@ -361,14 +361,14 @@ Schema:
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)",
       "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
-      "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from its batch being handed to the pool to a worker picking it up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); absent for results read from the --incremental cache"
+      "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from its batch being handed to the pool to a worker picking it up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
     }
   ],
   "timings": {
     "phases": "object — wall-clock seconds per phase of the run, in the order they ran: subject_discovery, preload, canary, baseline, planning (mutation generation and equivalence detection), execution (every mutation, including the serial re-run of infrastructure crashes and building the coverage map when coverage targeting is on), finalize; they add up to about summary.duration",
     "baseline": "array — one entry per spec file the baseline ran, in order: { spec_file, duration }; empty when the baseline did not run",
     "mutations": "object — each per-mutation timing phase summed over all mutations: { apply, test_run, confirmation, queue_wait }; process seconds, so in a parallel run they add up across workers and can exceed the execution phase",
-    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; busy and wall are null for a worker that died before reporting them; empty for --jobs 1"
+    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; busy and wall are 0.0 for a worker that died before reporting them; empty for --jobs 1"
   },
   "subjects": [
     {
@@ -728,8 +728,8 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
-| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace` to bound payload size) |
-| `full`      |         | All entries (killed/neutral/equivalent diffs stripped)        |
+| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
+| `full`      |         | All entries (killed/neutral/equivalent diffs stripped), including `timings` |
 | `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 
 Use `minimal` when context window budget is tight and you only need to see what survived. The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.

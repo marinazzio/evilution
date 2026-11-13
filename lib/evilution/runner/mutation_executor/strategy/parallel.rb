@@ -145,7 +145,8 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # worker exhausted the dispatcher's item_timeout (config.timeout * 2) before
   # being killed. A 0.0 here would be cached and skew summaries/reuse.
   def timeout_compact
-    { status: :timeout, duration: @config.timeout * 2.0 }
+    duration = @config.timeout * 2.0
+    { status: :timeout, duration: duration, timings: { test_run: duration } }
   end
 
   def merge(batch, uncached_indices, cached_results, worker_results)

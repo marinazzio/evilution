@@ -64,6 +64,7 @@ RSpec.describe Evilution::Isolation::InProcess do
       result = isolator.call(mutation:, test_command:, timeout: 0.1)
 
       expect(result).to be_timeout
+      expect(result.timings.to_h).to eq(test_run: result.duration)
     end
 
     # A test framework rescues what a test raises and moves on to the next

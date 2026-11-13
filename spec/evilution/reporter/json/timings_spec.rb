@@ -43,12 +43,12 @@ RSpec.describe Evilution::Reporter::JSON::Timings do
     expect(out[:workers]).to eq([{ pid: 42, items: 3, busy: 1.5, wall: 2.0, utilization: 0.75 }])
   end
 
-  it "reports a worker whose figures never arrived without failing" do
-    worker = Evilution::Parallel::WorkQueue::WorkerStat.new(42, 3, nil, nil)
+  it "reports a worker whose figures never arrived as zero busy and wall time" do
+    worker = Evilution::Parallel::WorkQueue::WorkerStat.new(42, 3, 0.0, 0.0)
 
     out = described_class.new.call(summary(workers: [worker]))
 
-    expect(out[:workers]).to eq([{ pid: 42, items: 3, busy: nil, wall: nil, utilization: 0.0 }])
+    expect(out[:workers]).to eq([{ pid: 42, items: 3, busy: 0.0, wall: 0.0, utilization: 0.0 }])
   end
 
   it "has an empty section for each part a run did not measure" do

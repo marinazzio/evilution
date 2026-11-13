@@ -10,13 +10,16 @@ require_relative "../../feedback/setup_warning"
 module Evilution::MCP::MutateTool::ReportTrimmer
   MINIMAL_KEYS = %w[summary survived].freeze
   FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved unparseable].freeze
-  SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable].freeze
+  SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable timings].freeze
   # EV-187j / GH #1169: at summary verbosity, non-survived entries that remain
   # (timed_out, errors, unresolved) shed `diff` and `error_backtrace` payload —
   # those two fields dominate response size at scale and aren't actionable for
   # a scanning agent. Survived stays full-detail.
   SUMMARY_HEAVY_FIELDS = %w[diff error_backtrace].freeze
   SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved].freeze
+  # Per-mutation timings are for profiling a run, not for acting on a result,
+  # so summary verbosity drops them from every entry it keeps, survived included.
+  SUMMARY_TIMED_KEYS = %w[survived timed_out errors unresolved].freeze
 
   # EV-t7kh / GH #1170: at minimal verbosity we surface a small sample of any
   # errored mutations so agents are not stuck in a diagnose-vs-token-cap
@@ -33,6 +36,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     when "summary"
       SUMMARY_DROP_KEYS.each { |key| data.delete(key) }
       SUMMARY_TRIM_KEYS.each { |key| strip_heavy_fields(data, key) }
+      strip_entry_timings(data)
     when "minimal"
       apply_minimal(data)
     end
@@ -79,6 +83,23 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     end
   end
   private_class_method :strip_heavy_fields
+
+  def self.strip_entry_timings(data)
+    entries = SUMMARY_TIMED_KEYS.flat_map { |key| array_at(data, key) }
+    entries += array_at(data, "coverage_gaps").flat_map { |gap| array_at(gap, "mutations") }
+    entries.each { |entry| entry.delete("timings") if entry.is_a?(Hash) }
+  end
+  private_class_method :strip_entry_timings
+
+  # The Array under key, or none when the container or the value is not what
+  # a report holds there.
+  def self.array_at(container, key)
+    return [] unless container.is_a?(Hash)
+
+    value = container[key]
+    value.is_a?(Array) ? value : []
+  end
+  private_class_method :array_at
 
   def self.embed_feedback(data, summary)
     return unless Evilution::Feedback::Detector.friction?(summary)

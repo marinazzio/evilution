@@ -17,15 +17,22 @@ class Evilution::Integration::Base
     @mutation_applier = mutation_applier
   end
 
+  # The timing methods are taken as method objects before the mutation is
+  # applied. When the file under mutation is this one, applying it replaces
+  # them, and a mutant of the code that builds the result would otherwise
+  # decide its own verdict. A method object keeps the definition the call
+  # started with.
   def call(mutation)
     ensure_framework_loaded
-    fire_hook(:mutation_insert_pre, mutation: mutation, file_path: mutation.file_path)
-    load_error, apply = timed { @mutation_applier.call(mutation) }
-    return with_timings(load_error, apply: apply) if load_error
+    fire_insert_hook(:mutation_insert_pre, mutation)
+    timed = timer
+    attach_timings = method(:with_timings)
+    load_error, apply = timed.call { @mutation_applier.call(mutation) }
+    return attach_timings.call(load_error, apply: apply) if load_error
 
-    fire_hook(:mutation_insert_post, mutation: mutation, file_path: mutation.file_path)
-    result, tests = timed { Evilution.while_running_tests { run_tests(mutation) } }
-    with_timings(result, apply: apply, tests: tests)
+    fire_insert_hook(:mutation_insert_post, mutation)
+    result, tests = timed.call { Evilution.while_running_tests { run_tests(mutation) } }
+    attach_timings.call(result, apply: apply, tests: tests)
   ensure
     @mutation_applier.restore(mutation) unless restored_by_applier?(load_error)
   end
@@ -45,11 +52,15 @@ class Evilution::Integration::Base
     result.merge(timings: timings)
   end
 
-  # The block's value and the seconds it took.
-  def timed
-    started = monotonic_now
-    value = yield
-    [value, monotonic_now - started]
+  # A callable returning the block's value and the seconds it took, bound to
+  # the clock as it is now.
+  def timer
+    clock = method(:monotonic_now)
+    lambda do |&block|
+      started = clock.call
+      value = block.call
+      [value, clock.call - started]
+    end
   end
 
   def monotonic_now
@@ -78,6 +89,10 @@ class Evilution::Integration::Base
 
   def reset_state
     raise NotImplementedError, "#{self.class}#reset_state must be implemented"
+  end
+
+  def fire_insert_hook(event, mutation)
+    fire_hook(event, mutation: mutation, file_path: mutation.file_path)
   end
 
   def fire_hook(event, **payload)
