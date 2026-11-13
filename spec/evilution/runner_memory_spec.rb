@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "evilution/runner"
+require_relative "../support/streaming_pool"
 
 RSpec.describe Evilution::Runner, "memory instrumentation" do
   let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3, release_node!: nil) }
@@ -281,7 +282,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       output = capture_stderr_with_tty { runner.call }
@@ -292,7 +293,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
 
       stat1 = Evilution::Parallel::WorkQueue::WorkerStat.new(1001, 3, 0.45, 0.60)
       stat2 = Evilution::Parallel::WorkQueue::WorkerStat.new(1002, 2, 0.30, 0.60)
@@ -307,7 +308,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
       compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       output = capture_stderr_with_tty { runner.call }

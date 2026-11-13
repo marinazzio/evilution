@@ -298,9 +298,11 @@ aborted parallel run leaves no stray worker or mutation processes behind.
 - `--timeout N` sets the per-mutation time limit. Under `fork`, this drives
   SIGKILL. Under `in_process`, this drives `Timeout.timeout` and is subject
   to the interrupt-mask hazard described above.
-- `--jobs N` runs N workers in parallel. The parallel pool respects the
-  configured isolation strategy, so `--jobs 4 --isolation fork` uses fork
-  isolation per-mutation inside each worker.
+- `--jobs N` runs N workers in parallel. The workers live for the whole run,
+  each taking the next mutation as soon as it is done with the last. The
+  parallel pool respects the configured isolation strategy, so
+  `--jobs 4 --isolation fork` uses fork isolation per-mutation inside each
+  worker.
 - `--[no-]canary` toggles the proof-of-life pre-flight check (see above).
 
 [rails-handle-interrupt]: https://github.com/rails/rails/blob/main/activesupport/lib/active_support/concurrency/thread_monitor.rb

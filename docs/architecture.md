@@ -162,7 +162,13 @@ class that owns it.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
-   `@isolator.call(mutation:, test_command:, timeout:)`.
+   `@isolator.call(mutation:, test_command:, timeout:)`. The parallel pool's
+   workers live for the whole run and take the next mutation as soon as they
+   finish one, so a slow mutation holds up only its own worker; results stream
+   back through `Strategy::Parallel::OrderedDelivery`, which puts them in
+   mutation order before the notifier (progress, `--fail-fast`) and the reports
+   see them. On fail-fast the pool sends nothing more, lets the mutations in
+   flight finish and shuts its workers down.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

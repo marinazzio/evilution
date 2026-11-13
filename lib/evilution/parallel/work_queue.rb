@@ -32,11 +32,21 @@ class Evilution::Parallel::WorkQueue
     @worker_stats = []
   end
 
-  def map(items, &block)
+  # Runs the block on every item in the worker processes, which live for the
+  # whole call: each takes the next item as soon as it is done with the last.
+  # The block gets the item and the seconds it waited between being sent to a
+  # worker and that worker starting it.
+  #
+  # `on_result`, when given, is called in this process with (index, value) as
+  # each item finishes, in the order they finish; value is an Unfinished
+  # sentinel for an item whose worker gave none. When it answers :stop no
+  # further item is sent: the ones in flight finish, the workers shut down,
+  # and the slots of the items never sent stay nil.
+  def map(items, on_result: nil, &block)
     return [] if items.empty?
 
     workers = (0...[@size, items.length].min).map { |i| spawn_one(i, &block) }
-    dispatcher = build_dispatcher(workers, items, &block)
+    dispatcher = build_dispatcher(workers, items, on_result, &block)
 
     retired = []
     begin
@@ -60,11 +70,12 @@ class Evilution::Parallel::WorkQueue
     Worker.spawn(worker_index: worker_index, hooks: @hooks, &)
   end
 
-  def build_dispatcher(workers, items, &block)
+  def build_dispatcher(workers, items, on_result, &block)
     Dispatcher.new(
       workers: workers, items: items, prefetch: @prefetch,
       item_timeout: @item_timeout, worker_max_items: @worker_max_items,
-      recycle_factory: ->(old) { spawn_one(old.worker_index, &block) }
+      recycle_factory: ->(old) { spawn_one(old.worker_index, &block) },
+      on_result: on_result
     )
   end
 
