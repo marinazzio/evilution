@@ -5,9 +5,10 @@ require "evilution/mutation"
 require "evilution/result/mutation_result"
 require "evilution/runner/mutation_executor/result_cache"
 require "evilution/runner/mutation_executor/mutation_runner"
+require "evilution/runner/mutation_executor/timeout_policy"
 
 RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
-  let(:cfg) { Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, timeout: 30) }
+  let(:fixed_policy) { Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(30) }
 
   def mutation(unparseable: false)
     instance_double(Evilution::Mutation, file_path: "lib/foo.rb", unparseable?: unparseable)
@@ -30,7 +31,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
     isolator = double(:isolator)
     expect(isolator).not_to receive(:call)
 
-    runner = described_class.new(config: cfg, cache: cache_with, isolator: isolator)
+    runner = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy)
     out = runner.call(mut, integration: ->(_) { "cmd" })
     expect(out.status).to eq(:unparseable)
   end
@@ -41,7 +42,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
     isolator = double(:isolator)
     expect(isolator).not_to receive(:call)
 
-    runner = described_class.new(config: cfg, cache: cache_with(backend), isolator: isolator)
+    runner = described_class.new(cache: cache_with(backend), isolator: isolator, timeout_policy: fixed_policy)
     out = runner.call(mut, integration: ->(_) { "cmd" })
     expect(out.status).to eq(:killed)
     expect(out.duration).to eq(0.2)
@@ -61,9 +62,45 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
       killed(mut)
     end
 
-    runner = described_class.new(config: cfg, cache: cache_with(backend), isolator: isolator)
+    runner = described_class.new(cache: cache_with(backend), isolator: isolator, timeout_policy: fixed_policy)
     out = runner.call(mut, integration: integration)
     expect(out.status).to eq(:killed)
+  end
+
+  it "runs the mutation under the limit the timeout policy gives it" do
+    mut = mutation
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(killed(mut))
+    policy = ->(m) { m.equal?(mut) ? 7.5 : 99 }
+
+    runner = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: policy)
+    runner.call(mut, integration: ->(_) { "cmd" })
+
+    expect(isolator).to have_received(:call).with(hash_including(timeout: 7.5))
+  end
+
+  it "records the limit on a timed-out result" do
+    mut = mutation
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(
+      Evilution::Result::MutationResult.new(mutation: mut, status: :timeout, duration: 7.6)
+    )
+    policy = Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(7.5)
+
+    out = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: policy)
+                         .call(mut, integration: ->(_) { "cmd" })
+
+    expect([out.status, out.duration, out.time_limit]).to eq([:timeout, 7.6, 7.5])
+  end
+
+  it "records no limit on a result that finished in time" do
+    mut = mutation
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(killed(mut))
+
+    out = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy).call(mut, integration: ->(_) { "cmd" })
+
+    expect(out.time_limit).to be_nil
   end
 
   it "does not store survived results in cache" do
@@ -73,7 +110,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
     isolator = double(:isolator)
     allow(isolator).to receive(:call).and_return(survived(mut))
 
-    runner = described_class.new(config: cfg, cache: cache_with(backend), isolator: isolator)
+    runner = described_class.new(cache: cache_with(backend), isolator: isolator, timeout_policy: fixed_policy)
     runner.call(mut, integration: ->(_) { "cmd" })
   end
 end

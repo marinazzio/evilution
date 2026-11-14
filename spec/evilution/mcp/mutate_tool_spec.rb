@@ -19,6 +19,7 @@ RSpec.describe Evilution::MCP::MutateTool do
     instance_double(
       Evilution::Result::MutationResult,
       timings: nil,
+      time_limit: nil,
       neutral_reason: nil,
       mutation: mutation,
       status: :killed,
@@ -478,6 +479,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         timed_out_result = instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :timeout,
@@ -547,6 +549,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         error_result = instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :error,
@@ -618,6 +621,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         neutral_result = instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :neutral,
@@ -697,6 +701,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         survived_result = instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,
@@ -778,6 +783,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           instance_double(
             Evilution::Result::MutationResult,
             timings: nil,
+            time_limit: nil,
             neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
@@ -937,6 +943,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           second_result = instance_double(
             Evilution::Result::MutationResult,
             timings: nil,
+            time_limit: nil,
             neutral_reason: nil,
             mutation: survived_mutation,
             status: :survived,
@@ -1050,6 +1057,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         equivalent_result = instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: mutation,
           status: :equivalent,
@@ -1137,6 +1145,7 @@ RSpec.describe Evilution::MCP::MutateTool do
         instance_double(
           Evilution::Result::MutationResult,
           timings: nil,
+          time_limit: nil,
           neutral_reason: nil,
           mutation: survived_mutation,
           status: :survived,

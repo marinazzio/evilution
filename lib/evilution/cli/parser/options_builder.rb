@@ -45,8 +45,24 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_core_options(opts)
     opts.on("-j", "--jobs N", Integer, "Number of parallel workers (default: 1)") { |n| @options[:jobs] = n }
-    opts.on("-t", "--timeout N", Integer, "Per-mutation timeout in seconds") { |n| @options[:timeout] = n }
+    opts.on("-t", "--timeout N", Integer,
+            "Per-mutation timeout in seconds, the same for every mutation",
+            "(default: derived from the baseline, see --timeout-factor)") { |n| @options[:timeout] = n }
+    add_adaptive_timeout_options(opts)
     opts.on("-f", "--format FORMAT", "Output format: text, json, html") { |f| @options[:format] = f.to_sym }
+  end
+
+  def add_adaptive_timeout_options(opts)
+    opts.on("--timeout-factor K", Float,
+            "Without --timeout: limit each mutation to K x the baseline time of its spec files (default: 10)") do |k|
+      @options[:timeout_factor] = k
+    end
+    opts.on("--timeout-floor N", Float, "Without --timeout: shortest such limit in seconds (default: 10)") do |n|
+      @options[:timeout_floor] = n
+    end
+    opts.on("--timeout-ceiling N", Float, "Without --timeout: longest such limit in seconds (default: 60)") do |n|
+      @options[:timeout_ceiling] = n
+    end
   end
 
   def add_filter_options(opts)

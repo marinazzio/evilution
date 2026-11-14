@@ -65,5 +65,11 @@ RSpec.describe Evilution::Reporter::JSON::Timings do
     it "gives nothing for a mutation that measured nothing" do
       expect(described_class.new.mutation_fields(result)).to eq({})
     end
+
+    it "gives the limit a timed-out mutation ran under, rounded, beside its timings" do
+      timed_out = result(test_run: 10.2).with_time_limit(10.12344)
+
+      expect(described_class.new.mutation_fields(timed_out)).to eq(time_limit: 10.1234, timings: { test_run: 10.2 })
+    end
   end
 end

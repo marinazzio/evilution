@@ -2,6 +2,7 @@
 
 require_relative "../strategy"
 require_relative "../../../parallel/work_queue"
+require_relative "../timeout_policy"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Autoloaded rather than required at the bottom: ordered_delivery requires
@@ -28,7 +29,11 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     error_class: "Evilution::Error"
   }.freeze
 
-  def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil)
+  # pool_factory: called with the pool's item timeout, the backstop for a
+  # worker that stops answering. timeout_policy: the limit each mutation runs
+  # under; the configured timeout for every one of them when not given.
+  def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil,
+                 timeout_policy: nil)
     @cache = cache
     @isolator = isolator
     @packer = packer
@@ -37,6 +42,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @pool_factory = pool_factory
     @diagnostics = diagnostics
     @config = config
+    @timeout_policy = timeout_policy || Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(config.timeout)
   end
 
   def call(mutations, baseline_result:, integration:)
@@ -73,12 +79,14 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
 
   # Returns the pool's worker figures once every worker has been wound down.
   def run_uncached(mutations, uncached_indices, delivery, integration)
-    pool = @pool_factory.call
+    uncached = uncached_indices.map { |i| mutations[i] }
+    item_timeout = @timeout_policy.item_timeout(uncached)
+    pool = @pool_factory.call(item_timeout)
     on_result = lambda do |position, raw|
-      delivery.accept(uncached_indices[position], unpack_unfinished(raw), fresh: true)
+      delivery.accept(uncached_indices[position], unpack_unfinished(raw, item_timeout), fresh: true)
       :stop if delivery.truncated?
     end
-    pool.map(uncached_indices.map { |i| mutations[i] }, on_result: on_result) do |mutation, waited|
+    pool.map(uncached, on_result: on_result) do |mutation, waited|
       run_in_worker(mutation, integration, waited)
     end
     pool.worker_stats
@@ -94,25 +102,27 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # dispatcher sending it and this worker starting it, nil when not measured.
   def run_in_worker(mutation, integration, waited)
     test_command = ->(m) { integration.call(m) }
-    result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
+    limit = @timeout_policy.call(mutation)
+    result = @isolator.call(mutation: mutation, test_command: test_command, timeout: limit)
+    result = result.with_time_limit(limit) if result.timeout?
     @packer.compact(result).merge(queue_wait: waited)
   end
 
-  def unpack_unfinished(result)
+  def unpack_unfinished(result, item_timeout)
     return result unless result.is_a?(Evilution::Parallel::WorkQueue::Unfinished)
 
     case result.reason
-    when :timeout then timeout_compact
+    when :timeout then timeout_compact(item_timeout)
     when :died then DIED_COMPACT
     when :unreadable then UNREADABLE_COMPACT
     end
   end
 
   # A :timeout result is cacheable, so give it a realistic duration: the stuck
-  # worker exhausted the dispatcher's item_timeout (config.timeout * 2) before
-  # being killed. A 0.0 here would be cached and skew summaries/reuse.
-  def timeout_compact
-    duration = @config.timeout * 2.0
-    { status: :timeout, duration: duration, timings: { test_run: duration } }
+  # worker exhausted the dispatcher's item_timeout before being killed. A 0.0
+  # here would be cached and skew summaries/reuse. Only a pool that has an
+  # item timeout times an item out, so it is never nil here.
+  def timeout_compact(item_timeout)
+    { status: :timeout, duration: item_timeout, timings: { test_run: item_timeout }, time_limit: item_timeout }
   end
 end

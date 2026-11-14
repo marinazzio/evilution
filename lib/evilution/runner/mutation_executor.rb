@@ -17,6 +17,7 @@ class Evilution::Runner::MutationExecutor
   autoload :InfraRetry, File.expand_path("mutation_executor/infra_retry", __dir__)
   autoload :Strategy, File.expand_path("mutation_executor/strategy", __dir__)
   autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
+  autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config
@@ -35,6 +36,7 @@ class Evilution::Runner::MutationExecutor
     spec_resolver = baseline_failed?(baseline_result) ? @baseline_runner.neutralization_resolver : nil
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)
+    @timeout_policy = TimeoutPolicy.build(@config, baseline_result)
     return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
 
     parallel_run(notifier, pipeline, mutations, baseline_result, integration)
@@ -72,7 +74,7 @@ class Evilution::Runner::MutationExecutor
   end
 
   def build_mutation_runner
-    MutationRunner.new(config: @config, cache: @cache, isolator: @isolator)
+    MutationRunner.new(cache: @cache, isolator: @isolator, timeout_policy: @timeout_policy)
   end
 
   def baseline_failed?(baseline_result)
@@ -111,17 +113,14 @@ class Evilution::Runner::MutationExecutor
       packer: @packer,
       pipeline: pipeline,
       notifier: notifier,
-      pool_factory: -> { build_pool },
+      pool_factory: ->(item_timeout) { build_pool(item_timeout) },
       diagnostics: @diagnostics,
-      config: @config
+      config: @config,
+      timeout_policy: @timeout_policy
     )
   end
 
-  def build_pool
-    Evilution::Parallel::Pool.new(
-      size: @config.jobs,
-      hooks: @hooks,
-      item_timeout: @config.timeout ? @config.timeout * 2 : nil
-    )
+  def build_pool(item_timeout)
+    Evilution::Parallel::Pool.new(size: @config.jobs, hooks: @hooks, item_timeout: item_timeout)
   end
 end

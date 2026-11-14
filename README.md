@@ -107,7 +107,10 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 
 | Flag                         | Type    | Default      | Description                                       |
 |------------------------------|---------|--------------|---------------------------------------------------|
-| `-t`, `--timeout N`          | Integer | 30           | Per-mutation timeout in seconds.                   |
+| `-t`, `--timeout N`          | Integer | _(adaptive)_ | Per-mutation timeout in seconds, the same for every mutation. Without it the limit adapts to the baseline, see [Per-mutation timeout](#per-mutation-timeout). |
+| `--timeout-factor K`         | Float   | 10           | Without `--timeout`: limit each mutation to K × the baseline time of its spec files. |
+| `--timeout-floor N`          | Float   | 10           | Without `--timeout`: the shortest such limit, in seconds. |
+| `--timeout-ceiling N`        | Float   | 60           | Without `--timeout`: the longest such limit, in seconds. |
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
 | `--target EXPR`              | String  | _(none)_     | Only mutate matching subjects. Supports method name (`Foo::Bar#calculate`), class (`Foo`, which also matches a value-object constant named `Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
 | `--output FILE`              | String  | _(stdout)_   | Write the report to FILE instead of stdout. Useful when a preloaded spec helper writes to stdout on exit. |
@@ -210,7 +213,10 @@ Creates `.evilution.yml`:
 
 ```yaml
 schema_version: 1            # opts into strict validation (rejects unknown keys, refuses future versions)
-# timeout: 30              # seconds per mutation
+# timeout: 30              # seconds per mutation; unset = adaptive (see Per-mutation timeout)
+# timeout_factor: 10       # adaptive limit = factor x baseline time of the mutation's spec files...
+# timeout_floor: 10        # ...but at least this many seconds...
+# timeout_ceiling: 60      # ...and at most this many
 # format: text             # text | json | html
 # min_score: 0.0           # 0.0–1.0
 # integration: rspec       # test framework: rspec, minitest, test_unit
@@ -255,7 +261,10 @@ All keys recognised under `schema_version: 1`:
 | Key                          | Type                          | Default                                | Description                                                                                                                              |
 |------------------------------|-------------------------------|----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | `schema_version`             | Integer                       | `1`                                    | Config schema version. Declaring it enables strict validation; omit for lenient mode.                                                    |
-| `timeout`                    | Integer                       | `30`                                   | Per-mutation timeout in seconds.                                                                                                         |
+| `timeout`                    | Integer                       | _(adaptive)_                           | Per-mutation timeout in seconds, the same for every mutation. Unset, the limit adapts to the baseline (see [Per-mutation timeout](#per-mutation-timeout)). |
+| `timeout_factor`             | Number                        | `10`                                   | Adaptive limit: this many times the baseline time of the mutation's spec files. Ignored when `timeout` is set.                           |
+| `timeout_floor`              | Number                        | `10`                                   | Shortest adaptive limit, in seconds. Must not exceed `timeout_ceiling`.                                                                  |
+| `timeout_ceiling`            | Number                        | `60`                                   | Longest adaptive limit, in seconds.                                                                                                      |
 | `format`                     | String                        | `text`                                 | Output format: `text`, `json`, `html`.                                                                                                   |
 | `target`                     | String / null                 | `null`                                 | Filter expression: method (`Foo#bar`), class (`Foo`), namespace (`Foo*`), descendants (`descendants:Foo`), source glob (`source:**/*.rb`). |
 | `output`                     | String                        | _(stdout)_                             | Write the report to this file instead of stdout.                                                                                         |
@@ -360,6 +369,7 @@ Schema:
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)",
+      "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; absent for results read from the --incremental cache",
       "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
       "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from the dispatcher sending it to a worker to that worker starting it; a worker is sent its next mutation as soon as it finishes one, so this is the cost of the hand-over, and for a worker's first mutation also of the worker starting up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
     }
@@ -451,7 +461,7 @@ Compatibility policy for the `1.x` gem line:
 |--------------|-----------------------------------------------------------------------|-------------------|
 | `killed`     | A test failed when the mutation was applied — test suite caught it. Also a mutation that made its own file raise while loading, before any test ran, when the original file still loads (`error_message` starts with `load failed:`). Also a mutation whose test process died on an exception no handler saw, after the mutated source loaded and while the tests ran, as a crashing test would: under fork isolation `error_message` starts with `child died` and names the exception, under in-process isolation it starts with `test run ended by` | numerator + denominator |
 | `survived`   | No test failed — gap in coverage                                       | denominator only  |
-| `timeout`    | Test run exceeded `--timeout` — treated like survived for scoring     | denominator only  |
+| `timeout`    | Test run exceeded its time limit (`--timeout`, or the [adaptive limit](#per-mutation-timeout)) — treated like survived for scoring | denominator only  |
 | `error`      | Mutation caused an unexpected error (syntax error, boot failure, a load failure the original file shares, etc.). Also a test process that died on an unhandled exception before the tests ran: under fork isolation `error_message` starts with `child died`, says `before the tests ran` and `error_class` is the exception's own class. Also a result that never arrived or could not be read, which is no verdict on the mutation (see [Diagnosing errored mutations](#7-diagnosing-errored-mutations)) | excluded from denominator |
 | `neutral`    | No verdict: the tests failed only on examples that were already failing in the baseline, or the test process crashed on infrastructure (DB lock, statement timeout) rather than on the mutation. Every neutral records which of the two, and the report groups them by it | excluded          |
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
@@ -482,6 +492,22 @@ Per-mutation targeting runs a subset of a spec file's examples, chosen by matchi
 Before any survivor is reported, it is therefore re-run against the whole resolved spec file, and that run is the one reported. Only survivors pay for the extra run, and only where the targeted subset was narrower than the file; a mutation the targeted examples already killed is never re-run.
 
 On evilution's own `lib/evilution/reporter/json/subjects.rb` this moved the reported score from 74.19% with 8 survivors to 93.55% with 2 — the six that disappeared were killed by an example in the same file all along, and the run now agrees with `--no-example-targeting` instead of contradicting it.
+
+### Per-mutation timeout
+
+A mutation that makes the code loop runs until its time limit, so the limit is most of what such a mutant costs. A fixed limit is either far too long for a spec file that passes in a fraction of a second or too short for a slow one.
+
+So when no timeout is given, each mutation's limit follows the time its own spec files took in the baseline:
+
+```
+limit = clamp(timeout_factor × baseline seconds of the mutation's spec files, timeout_floor, timeout_ceiling)
+```
+
+With the defaults (factor 10, floor 10s, ceiling 60s) a mutant on a spec file that passes in 0.3s is given up after 10s instead of 30s, and one whose spec files take 4s gets 40s. The baseline runs each spec file in a forked process of its own, so its time already holds the fork and loading the file; the factor leaves room for a mutant that legitimately slows the code down, for the re-run of a survivor against its whole spec files ([Survivor Confirmation](#survivor-confirmation)) and for workers competing for the CPU under `--jobs`, and the floor covers spec files so fast that scheduling noise outweighs them. Raise `timeout_floor` on a loaded or slow machine if kills turn into timeouts.
+
+A mutation keeps the fixed 30s limit when the baseline cannot vouch for its spec files: no baseline ran (`--no-baseline`), no spec file resolves for its source (it falls back to the whole suite, or is reported unresolved), one of its spec files failed in the baseline, or `related_specs_heuristic` adds spec files the baseline never ran.
+
+`--timeout N` (or `timeout:` in the config file) gives every mutation the same N seconds, as before; pass `--timeout 30` for the previous behaviour. The limit a timed-out mutation ran under is in the JSON report as `time_limit`. Under `--jobs` the pool gives up on a worker that has not answered within twice the longest limit of the run.
 
 ### Neutral Mutations
 

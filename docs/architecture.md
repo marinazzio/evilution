@@ -179,7 +179,9 @@ class that owns it.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
-   `@isolator.call(mutation:, test_command:, timeout:)`. The parallel pool's
+   `@isolator.call(mutation:, test_command:, timeout:)`, the timeout chosen per
+   mutation by `MutationExecutor::TimeoutPolicy` (the given `--timeout`, or a
+   multiple of the baseline time of the mutation's spec files). The parallel pool's
    workers live for the whole run and take the next mutation as soon as they
    finish one, so a slow mutation holds up only its own worker; results stream
    back through `Strategy::Parallel::OrderedDelivery`, which puts them in
