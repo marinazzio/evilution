@@ -8,8 +8,8 @@ class Evilution::Parallel::Pool
     @queue = Evilution::Parallel::WorkQueue.new(size: size, hooks: hooks, item_timeout: item_timeout)
   end
 
-  def map(items, &)
-    @queue.map(items, &)
+  def map(items, on_result: nil, &)
+    @queue.map(items, on_result: on_result, &)
   end
 
   def worker_stats

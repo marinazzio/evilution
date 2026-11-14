@@ -112,6 +112,20 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
   end
 
   describe ".spawn + lifecycle" do
+    it "stamps each item with the time it was sent, which the block sees as its wait" do
+      worker = described_class.spawn(worker_index: 0, hooks: nil) { |_x, waited| waited }
+      worker.send_item(0, :item)
+
+      message = nil
+      Timeout.timeout(5) do
+        message = worker.read_result until message
+      end
+      expect(message[2]).to be_a(Float).and be_between(0.0, 5.0)
+
+      worker.pending -= 1
+      worker.retire
+    end
+
     it "forks a child, processes one item, retires cleanly" do
       worker = described_class.spawn(worker_index: 0, hooks: nil) { |x| x * 2 }
       worker.send_item(0, 21)

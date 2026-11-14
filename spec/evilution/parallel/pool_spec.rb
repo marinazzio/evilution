@@ -21,6 +21,14 @@ RSpec.describe Evilution::Parallel::Pool do
       expect(results).to eq([10, 20, 30])
     end
 
+    it "streams results to on_result" do
+      pool = described_class.new(size: 2)
+      streamed = []
+      pool.map([1, 2], on_result: ->(index, value) { streamed << [index, value] }) { |n| n + 1 }
+
+      expect(streamed).to contain_exactly([0, 2], [1, 3])
+    end
+
     it "runs items in separate worker processes" do
       pool = described_class.new(size: 3)
       results = pool.map([1, 2, 3]) { |n| [n, Process.pid] }

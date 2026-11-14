@@ -8,7 +8,8 @@ class Evilution::Parallel::WorkQueue::Dispatcher
 
   attr_reader :first_error
 
-  def initialize(workers:, items:, prefetch:, item_timeout:, worker_max_items:, recycle_factory:)
+  def initialize(workers:, items:, prefetch:, item_timeout:, worker_max_items:, recycle_factory:,
+                 on_result: nil)
     @workers = workers
     @items = items
     @prefetch = prefetch
@@ -17,6 +18,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     @state = Evilution::Parallel::WorkQueue.send(:const_get, :CollectionState).new(items.length)
     @retired = []
     @deadlines = DeadlineTracker.new(item_timeout:, workers: @workers)
+    @stream = ResultStream.new(on_result)
   end
 
   def run
@@ -43,6 +45,10 @@ class Evilution::Parallel::WorkQueue::Dispatcher
   # so a single stuck worker is reaped in isolation -- its in-flight item gets
   # the WorkQueue::TIMED_OUT sentinel and the worker is recycled -- instead of
   # the old pool-wide watchdog that SIGKILLed every worker and aborted the run.
+  #
+  # Finished items are handed to on_result only after the round's workers have
+  # been given their next item, so the caller's handling never holds a worker
+  # idle.
   def collect
     io_to_worker = @workers.to_h { |w| [w.res_io, w] }
     result_ios = io_to_worker.keys
@@ -50,12 +56,16 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     while @state.in_flight.positive?
       readable, = IO.select(result_ios, nil, nil, @deadlines.select_timeout)
       reap_timed_out(io_to_worker, result_ios)
-      next if readable.nil?
-
-      readable.each do |io|
+      Array(readable).each do |io|
         process_readable(io, io_to_worker, result_ios) if result_ios.include?(io)
       end
+      @stream.flush
     end
+  end
+
+  def finish(index, value)
+    @state.results[index] = value
+    @stream.push(index, value)
   end
 
   def reap_timed_out(io_to_worker, result_ios)
@@ -89,7 +99,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
   def record(message, worker)
     index, status, value = message
     @state.first_error = value if status == :error && @state.first_error.nil?
-    @state.results[index] = value if status == :ok
+    finish(index, value) if status == :ok
     @state.in_flight -= 1
     worker.pending -= 1
     worker.items_completed += 1
@@ -117,7 +127,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
   end
 
   def mark_unfinished(worker, sentinel)
-    worker.in_flight_indices.each { |index| @state.results[index] = sentinel }
+    worker.in_flight_indices.each { |index| finish(index, sentinel) }
     @state.in_flight -= worker.pending
     worker.pending = 0
     worker.in_flight_indices.clear
@@ -190,9 +200,10 @@ class Evilution::Parallel::WorkQueue::Dispatcher
   end
 
   def more_to_send?
-    @state.next_index < @items.length
+    !@stream.stopped? && @state.next_index < @items.length
   end
 end
 
 require_relative "dispatcher/deadline_tracker"
 require_relative "dispatcher/reply"
+require_relative "dispatcher/result_stream"

@@ -90,7 +90,8 @@ class Evilution::Parallel::WorkQueue::Worker
   end
 
   def send_item(index, item)
-    Evilution::Parallel::WorkQueue::Channel.write(@cmd_write, [index, item])
+    sent_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    Evilution::Parallel::WorkQueue::Channel.write(@cmd_write, [index, item, sent_at])
     @pending += 1
     @in_flight_indices << index
   end

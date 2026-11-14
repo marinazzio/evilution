@@ -61,6 +61,35 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       expect(results).to eq([10, 20, 30, 40, 50])
     end
 
+    it "streams each result to on_result as it arrives" do
+      queue = described_class.new(size: 2)
+      streamed = []
+      results = queue.map([1, 2, 3], on_result: ->(index, value) { streamed << [index, value] }) { |n| n * 10 }
+
+      expect(streamed).to contain_exactly([0, 10], [1, 20], [2, 30])
+      expect(results).to eq([10, 20, 30])
+    end
+
+    it "serves every item from the same workers instead of spawning per item" do
+      queue = described_class.new(size: 2)
+      pids = queue.map((1..8).to_a) { |_n| Process.pid }
+
+      expect(pids.uniq.length).to eq(2)
+      expect(queue.worker_stats.length).to eq(2)
+    end
+
+    it "stops dispatching when on_result answers :stop and leaves no worker behind" do
+      queue = described_class.new(size: 2)
+      results = Timeout.timeout(10) do
+        queue.map((1..20).to_a, on_result: ->(_index, _value) { :stop }) { |n| n }
+      end
+
+      expect(results.compact.length).to be_between(1, 4)
+      queue.worker_stats.each do |stat|
+        expect { Process.wait(stat.pid) }.to raise_error(Errno::ECHILD)
+      end
+    end
+
     it "propagates exceptions raised by the user block" do
       queue = described_class.new(size: 2)
 

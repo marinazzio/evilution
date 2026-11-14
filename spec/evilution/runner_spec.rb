@@ -2,6 +2,7 @@
 
 require "tmpdir"
 require "evilution/runner"
+require_relative "../support/streaming_pool"
 
 RSpec.describe Evilution::Runner do
   let(:config) do
@@ -1902,7 +1903,7 @@ RSpec.describe Evilution::Runner do
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       parallel_runner = described_class.new(config: parallel_config)
@@ -1914,7 +1915,9 @@ RSpec.describe Evilution::Runner do
     it "hands each worker's figures to the summary" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
-      allow(pool).to receive(:map).and_return([{ status: :killed, duration: 0.1 }, { status: :survived, duration: 0.2 }])
+      allow(pool).to receive(:map) do |_items, on_result: nil|
+        StreamingPool.replay([{ status: :killed, duration: 0.1 }, { status: :survived, duration: 0.2 }], on_result)
+      end
       stat = Evilution::Parallel::WorkQueue::WorkerStat.new(42, 2, 0.3, 0.4)
       allow(pool).to receive(:worker_stats).and_return([stat])
 
@@ -1948,7 +1951,7 @@ RSpec.describe Evilution::Runner do
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       parallel_runner = described_class.new(config: parallel_config)
@@ -1964,7 +1967,7 @@ RSpec.describe Evilution::Runner do
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       expect(mutation).to receive(:strip_sources!)
@@ -1979,9 +1982,9 @@ RSpec.describe Evilution::Runner do
       allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
 
       captured_block = nil
-      allow(pool).to receive(:map) do |batch, &block|
+      allow(pool).to receive(:map) do |batch, on_result: nil, &block|
         captured_block = block
-        batch.map { |item| block.call(item) }
+        StreamingPool.replay(batch.map { |item| block.call(item) }, on_result)
       end
       allow(pool).to receive(:worker_stats).and_return([])
 
@@ -2094,8 +2097,8 @@ RSpec.describe Evilution::Runner do
 
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
-      allow(pool).to receive(:map) do |batch, &block|
-        batch.map { |item| block.call(item) }
+      allow(pool).to receive(:map) do |batch, on_result: nil, &block|
+        StreamingPool.replay(batch.map { |item| block.call(item) }, on_result)
       end
       allow(pool).to receive(:worker_stats).and_return([])
 
@@ -2119,8 +2122,8 @@ RSpec.describe Evilution::Runner do
 
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
-      allow(pool).to receive(:map) do |batch, &block|
-        batch.map { |item| block.call(item) }
+      allow(pool).to receive(:map) do |batch, on_result: nil, &block|
+        StreamingPool.replay(batch.map { |item| block.call(item) }, on_result)
       end
       allow(pool).to receive(:worker_stats).and_return([])
 
@@ -2403,7 +2406,7 @@ RSpec.describe Evilution::Runner do
         pool = instance_double(Evilution::Parallel::Pool)
         allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
         compact = [{ status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil }]
-        allow(pool).to receive(:map).and_return(compact)
+        allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
         allow(pool).to receive(:worker_stats).and_return([])
 
         runner = described_class.new(config: parallel_incremental_config)
@@ -2853,7 +2856,7 @@ RSpec.describe Evilution::Runner do
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
       ]
-      allow(pool).to receive(:map).and_return(compact)
+      allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
       expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks, item_timeout: 10).and_return(pool)
