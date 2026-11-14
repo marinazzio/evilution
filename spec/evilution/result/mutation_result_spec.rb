@@ -117,6 +117,18 @@ RSpec.describe Evilution::Result::MutationResult do
     end
   end
 
+  describe "#implied_by" do
+    it "is nil for a verdict the mutation earned by its own run" do
+      expect(described_class.new(mutation: mutation, status: :survived).implied_by).to be_nil
+    end
+
+    it "names the sentinel operator whose survival implied the verdict" do
+      result = described_class.new(mutation: mutation, status: :survived, implied_by: "method_body_to_raise")
+
+      expect(result.implied_by).to eq("method_body_to_raise")
+    end
+  end
+
   describe "#time_limit" do
     it "is nil unless one was recorded" do
       expect(described_class.new(mutation: mutation, status: :timeout).time_limit).to be_nil
@@ -129,15 +141,16 @@ RSpec.describe Evilution::Result::MutationResult do
       original = described_class.new(
         mutation: mutation, status: :timeout, duration: 4.1, killing_test: "t", test_command: "c",
         memory: memory, error: error, neutral_reason: :reason, known_failures_only: true, timings: timings,
-        examples_run: 7
+        examples_run: 7, implied_by: "method_body_to_raise"
       )
 
       copy = original.with_time_limit(4.0)
 
       expect(copy.time_limit).to eq(4.0)
       expect([copy.mutation, copy.status, copy.duration, copy.killing_test, copy.test_command, copy.memory,
-              copy.error, copy.neutral_reason, copy.known_failures_only?, copy.timings, copy.examples_run])
-        .to eq([mutation, :timeout, 4.1, "t", "c", memory, error, :reason, true, timings, 7])
+              copy.error, copy.neutral_reason, copy.known_failures_only?, copy.timings, copy.examples_run,
+              copy.implied_by])
+        .to eq([mutation, :timeout, 4.1, "t", "c", memory, error, :reason, true, timings, 7, "method_body_to_raise"])
       expect(copy).to be_frozen
       expect(original.time_limit).to be_nil
     end

@@ -49,6 +49,10 @@ RSpec.describe Evilution::Cache::RunFingerprint do
       .not_to eq(fingerprint(example_targeting_strategy: :coverage, skip_uncovered: false))
   end
 
+  it "changes with whether a survived sentinel implies its subject's other verdicts" do
+    expect(fingerprint).not_to eq(fingerprint(probe_first: true))
+  end
+
   it "changes with the adaptive timeout's settings" do
     expect(fingerprint(timeout_factor: 10)).not_to eq(fingerprint(timeout_factor: 5))
   end

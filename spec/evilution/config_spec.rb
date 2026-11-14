@@ -507,6 +507,25 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#probe_first?" do
+      it "is off by default" do
+        expect(Evilution::Config.new(skip_config_file: true).probe_first?).to be false
+      end
+
+      it "is on when probe_first: true is given" do
+        expect(Evilution::Config.new(probe_first: true, skip_config_file: true).probe_first?).to be true
+      end
+
+      it "loads probe_first from a strict YAML config" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nprobe_first: true\n")
+            expect(Evilution::Config.new.probe_first?).to be true
+          end
+        end
+      end
+    end
+
     describe "#stop_on_kill?" do
       it "defaults to true" do
         expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true
