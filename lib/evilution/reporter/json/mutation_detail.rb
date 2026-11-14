@@ -19,6 +19,7 @@ class Evilution::Reporter::JSON::MutationDetail
     detail = base_mutation_fields(mutation, result)
     append_survived_fields(detail, mutation) if UNTESTED_STATUSES.include?(result.status)
     detail[:test_command] = result.test_command if result.test_command
+    append_run_fields(detail, result)
     append_memory_fields(detail, result)
     append_error_fields(detail, result)
     append_neutral_reason(detail, result)
@@ -51,6 +52,13 @@ class Evilution::Reporter::JSON::MutationDetail
     detail[:suggestion] = @suggestion.suggestion_for(mutation)
     unified = mutation.unified_diff
     detail[:unified_diff] = unified if unified
+  end
+
+  # Which test killed the mutation and how many tests its run took, where the
+  # integration tells.
+  def append_run_fields(detail, result)
+    detail[:killing_test] = result.killing_test if result.killing_test
+    detail[:examples_run] = result.examples_run if result.examples_run
   end
 
   def append_memory_fields(detail, result)

@@ -61,4 +61,11 @@ class Evilution::Integration::RSpec::ResultBuilder
 
     { passed: false, test_command: command }
   end
+
+  # killing_example: the id of the example whose failure killed, nil when
+  # none did. examples_run: how many examples the run executed, nil when
+  # RSpec could not say. Either is left out when nil.
+  def with_run_facts(result, killing_example:, examples_run:)
+    result.merge({ killing_example: killing_example, examples_run: examples_run }.compact)
+  end
 end

@@ -70,6 +70,25 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration
     end
 
+    it "hands the RSpec integration the time each example took in the baseline" do
+      runner = described_class.new(config(integration: :rspec), hooks: nil)
+      baseline_result = Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 0.0,
+                                                        example_durations: { "/p/a_spec.rb[1:1]" => 0.5 })
+      expect(Evilution::Integration::RSpec).to receive(:new).with(
+        hash_including(example_durations: { "/p/a_spec.rb[1:1]" => 0.5 })
+      ).and_call_original
+
+      runner.build_integration(baseline_result)
+    end
+
+    it "hands the RSpec integration no example times without a baseline result" do
+      runner = described_class.new(config(integration: :rspec), hooks: nil)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(example_durations: {}))
+                                                            .and_call_original
+
+      runner.build_integration
+    end
+
     {
       minitest: [Evilution::Integration::Minitest, "CalcTest#test_red"],
       test_unit: [Evilution::Integration::TestUnit, "test_red(CalcTest)"]

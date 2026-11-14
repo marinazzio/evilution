@@ -70,6 +70,26 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       expect(results).to eq([10, 20, 30])
     end
 
+    # on_result waits for the round's workers to have their next item;
+    # on_arrival comes first, so what it learns reaches the item sent next.
+    it "hands each result to on_arrival before the worker that sent it is given its next item" do
+      queue = described_class.new(size: 1)
+      arrived = []
+      taken = []
+      items = Object.new
+      items.define_singleton_method(:length) { 3 }
+      items.define_singleton_method(:empty?) { false }
+      items.define_singleton_method(:[]) do |index|
+        taken << arrived.dup
+        index
+      end
+
+      results = queue.map(items, on_arrival: ->(index, _value) { arrived << index }) { |n| n * 10 }
+
+      expect(results).to eq([0, 10, 20])
+      expect(taken).to eq([[], [0], [0, 1]])
+    end
+
     it "serves every item from the same workers instead of spawning per item" do
       queue = described_class.new(size: 2)
       pids = queue.map((1..8).to_a) { |_n| Process.pid }

@@ -28,6 +28,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     example_filter: nil,
     known_failures: [],
     stop_on_kill: false,
+    example_durations: {},
     framework_loader: FrameworkLoader.new,
     test_file_resolver: nil,
     example_filter_applier: nil,
@@ -50,7 +51,14 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @state_guard = state_guard
     @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
     @stop_policy = Evilution::Integration::StopPolicy.new(enabled: stop_on_kill, known_failures: @known_failures)
+    @killer_first = KillerFirst.new(stop_on_kill: stop_on_kill, durations: example_durations)
+    @target_resolver = TargetResolver.new
     super(hooks: hooks)
+  end
+
+  # Taken by the runs that follow, until the next call (see KillerFirst).
+  def prioritize(test_ids)
+    @killer_first.prioritize(test_ids)
   end
 
   # One mutation per source file is enough: every mutation in a file shares
@@ -95,12 +103,20 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     targets = @example_filter_applier.call(mutation, files)
     return @result_builder.unresolved_example(mutation) if targets.nil?
 
-    result = run_targets(targets)
+    result = run_targets(targets, ordered: @killer_first.applies?)
     return result unless confirm?(result, targets, files)
 
-    confirmation_started = monotonic_now
+    confirm_run(result, files)
+  end
+
+  # A survivor's confirming run is left in the defined order, so its verdict
+  # comes from the file as it always ran. The examples both runs ran count.
+  def confirm_run(first, files)
+    started = monotonic_now
     confirmed = run_targets(files)
-    confirmed.merge(timings: { confirmation: monotonic_now - confirmation_started })
+    examples_run = [first[:examples_run], confirmed[:examples_run]].compact
+    confirmed = confirmed.merge(examples_run: examples_run.sum) unless examples_run.empty?
+    confirmed.merge(timings: { confirmation: monotonic_now - started })
   end
 
   # Targeting runs a subset of the examples in a spec file, chosen by name. A
@@ -120,52 +136,23 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     (result[:passed] || result[:known_failures_only]) && targets != files
   end
 
-  def run_targets(targets)
-    args = ["--format", "progress", "--no-color", "--order", "defined", *resolve_targets(targets)]
-    command = "rspec #{args.join(" ")}"
+  # The command reported is the run in the defined order: it is what a reader
+  # can run to reproduce the verdict, and the killer-first ordering exists
+  # only inside evilution.
+  def run_targets(targets, ordered: false)
+    files = @target_resolver.call(targets)
+    command = "rspec #{run_args("defined", files).join(" ")}"
+    args = ordered ? run_args(ExampleOrder::NAME, files) : run_args("defined", files)
 
     reset_examples
-    execute_run(args, command)
+    execute_run(args, command, ordered: ordered)
   end
 
-  # Targets are passed straight through when they resolve against Dir.pwd,
-  # preserving the relative-path contract for callers/tests. When the CWD
-  # cannot find them — workers chdir'd into a per-mutation sandbox by the
-  # isolator (EV-wqxu / GH #1278) — the targets are expanded against
-  # Evilution::PROJECT_ROOT so RSpec::Core::Runner can still load the files.
-  def resolve_targets(targets)
-    targets.map { |target| resolve_target(target) }
+  def run_args(order, files)
+    ["--format", "progress", "--no-color", "--order", order.to_s, *files]
   end
 
-  # Splits a target into (path, line). RSpec example locations end in
-  # `:LINE` (or `:LINE:LINE...` for nested groups), so the suffix is
-  # anchored to the END of the string — that way path components which
-  # themselves contain colons (e.g. a Windows-style `C:/proj/spec/x.rb`)
-  # are not mis-split by a naive `partition(":")`.
-  TARGET_LINE_SUFFIX = /\A(.+?)(:\d+(?::\d+)*)\z/
-  private_constant :TARGET_LINE_SUFFIX
-
-  def resolve_target(target)
-    return target if target.start_with?("/")
-
-    if (match = TARGET_LINE_SUFFIX.match(target))
-      path = match[1]
-      line_suffix = match[2]
-    else
-      path = target
-      line_suffix = ""
-    end
-
-    return target if File.exist?(path)
-    return target unless Evilution.in_isolated_worker?
-
-    absolute = File.expand_path(path, Evilution::PROJECT_ROOT)
-    return target unless File.exist?(absolute)
-
-    "#{absolute}#{line_suffix}"
-  end
-
-  def execute_run(args, command)
+  def execute_run(args, command, ordered: false)
     snapshot = @state_guard.snapshot
     quit_before = ::RSpec.world.wants_to_quit
     detector = nil
@@ -174,15 +161,24 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
       err = StringIO.new
       claim_rspec_streams(out, err)
       detector = @crash_detector_lifecycle.register(@stop_policy)
-      status = ::RSpec::Core::Runner.run(args, err, out)
-      flagged = known_failures_only?(status)
-      @result_builder.from_run(status, command, detector, examples_loaded:, known_failures_only: flagged)
+      status = @killer_first.during(ordered) { ::RSpec::Core::Runner.run(args, err, out) }
+      build_result(status, command, detector)
     rescue StandardError => e
       { passed: false, error: e.message, test_command: command }
     ensure
       lower_own_stop(quit_before, detector)
       @state_guard.release(snapshot)
     end
+  end
+
+  # Which example killed, if one did, and how many ran: the parent runs the
+  # killer first for the mutations next to this one, and the count is what
+  # the ordering saves.
+  def build_result(status, command, detector)
+    flagged = known_failures_only?(status)
+    result = @result_builder.from_run(status, command, detector, examples_loaded:, known_failures_only: flagged)
+    @result_builder.with_run_facts(result, killing_example: detector.killing_id,
+                                           examples_run: ExampleIds.executed_count(::RSpec.world))
   end
 
   # A run that stops at its kill raises RSpec.world.wants_to_quit, and left up
@@ -252,6 +248,9 @@ end
 
 require_relative "rspec/framework_loader"
 require_relative "rspec/example_ids"
+require_relative "rspec/example_order"
+require_relative "rspec/killer_first"
+require_relative "rspec/target_resolver"
 require_relative "rspec/test_file_resolver"
 require_relative "rspec/unresolved_spec_warner"
 require_relative "rspec/example_filter_applier"

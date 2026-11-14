@@ -206,6 +206,81 @@ RSpec.describe Evilution::Integration::CrashDetector do
     end
   end
 
+  # The example that decided the verdict, which the parent runs first for the
+  # mutations next to this one.
+  describe "#killing_id" do
+    let(:known_id) { "#{File.expand_path("spec/gate_spec.rb")}[1:1]" }
+    let(:assertion) { RSpec::Expectations::ExpectationNotMetError.new("expected x to eq y") }
+
+    def policy(enabled:)
+      Evilution::Integration::StopPolicy.new(
+        enabled: enabled, known_failures: Evilution::Integration::KnownFailures.new([known_id])
+      )
+    end
+
+    around do |example|
+      before = RSpec.world.wants_to_quit
+      example.run
+    ensure
+      RSpec.world.wants_to_quit = before
+    end
+
+    it "is nil before any failure" do
+      expect(detector.killing_id).to be_nil
+    end
+
+    it "names the first decisive failure" do
+      detector.policy = policy(enabled: true)
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      expect(detector.killing_id).to eq("#{File.expand_path("spec/gate_spec.rb")}[1:2]")
+    end
+
+    it "keeps the first decisive failure when more follow" do
+      detector.policy = policy(enabled: false)
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+      detector.example_failed(make_notification(NoMethodError.new("crash"), scoped_id: "1:3"))
+
+      expect(detector.killing_id).to eq("#{File.expand_path("spec/gate_spec.rb")}[1:2]")
+    end
+
+    it "passes over a failure the baseline already saw" do
+      detector.policy = policy(enabled: true)
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:1"))
+
+      expect(detector.killing_id).to be_nil
+    end
+
+    it "passes over a crash of the test infrastructure" do
+      stub_const("SQLite3::BusyException", Class.new(StandardError))
+      detector.policy = policy(enabled: true)
+
+      detector.example_failed(make_notification(SQLite3::BusyException.new("locked"), scoped_id: "1:2"))
+
+      expect(detector.killing_id).to be_nil
+    end
+
+    it "names it under a policy that does not stop the run" do
+      detector.policy = policy(enabled: false)
+
+      detector.example_failed(make_notification(assertion, scoped_id: "1:3"))
+
+      expect(detector.killing_id).to eq("#{File.expand_path("spec/gate_spec.rb")}[1:3]")
+    end
+
+    it "forgets it on reset" do
+      detector.policy = policy(enabled: false)
+      detector.example_failed(make_notification(assertion, scoped_id: "1:2"))
+
+      detector.reset
+
+      expect(detector.killing_id).to be_nil
+    end
+  end
+
   describe ".register_with_rspec" do
     it "registers the class with RSpec's formatter registry for :example_failed" do
       expect(RSpec::Core::Formatters).to receive(:register)

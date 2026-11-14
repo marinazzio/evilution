@@ -202,6 +202,18 @@ class that owns it.
    counts from before the preload (`Coverage::LoadTracker`) and `MapBuilder`
    hands the parent's counts to its forked child, whose own start at zero.
    These results are never cached and are scored as survivors.
+   Each mutation also goes to the integration with the tests that killed its
+   neighbours earlier in the run (`MutationExecutor::KillHistory`: same line,
+   then same subject, latest first), through `Integration::Base#prioritize`
+   before the isolator runs, so a forked child inherits it. A parallel run
+   looks them up when the pool sends the mutation (`Strategy::Parallel::
+   HintedItems`) and records each kill the moment its result is read
+   (`WorkQueue#map(on_arrival:)`), ahead of the ordered delivery. The RSpec
+   integration (`Integration::RSpec::KillerFirst` / `ExampleOrder`) runs those
+   killers first, then the cheapest examples by their baseline time
+   (`Baseline::Result#example_durations`), when the run stops at its first kill;
+   it sends back the killing example's id (`killing_test`) and the number of
+   examples that ran (`examples_run`).
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

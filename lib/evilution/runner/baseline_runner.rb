@@ -41,7 +41,7 @@ class Evilution::Runner::BaselineRunner
   def build_integration(baseline_result = nil)
     klass = integration_class
     kwargs = base_integration_kwargs(baseline_result)
-    kwargs.merge!(rspec_integration_kwargs) if klass == Evilution::Integration::RSpec
+    kwargs.merge!(rspec_integration_kwargs(baseline_result)) if klass == Evilution::Integration::RSpec
     klass.new(**kwargs)
   end
 
@@ -56,10 +56,13 @@ class Evilution::Runner::BaselineRunner
     }
   end
 
-  def rspec_integration_kwargs
+  # example_durations: what each example cost in the baseline, so a run that
+  # stops at its first kill can try the cheapest first.
+  def rspec_integration_kwargs(baseline_result)
     {
       related_specs_heuristic: config.related_specs_heuristic?,
-      example_filter: build_example_filter
+      example_filter: build_example_filter,
+      example_durations: baseline_result ? baseline_result.example_durations : {}
     }
   end
 

@@ -199,7 +199,9 @@ class Evilution::Isolation::InProcess
         backtrace: result[:error_backtrace]
       ),
       known_failures_only: result[:known_failures_only],
-      timings: mutation_timings(result, duration)
+      timings: mutation_timings(result, duration),
+      killing_test: result[:killing_example],
+      examples_run: result[:examples_run]
     )
   end
 

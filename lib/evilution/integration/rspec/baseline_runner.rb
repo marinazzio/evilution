@@ -33,12 +33,13 @@ class Evilution::Integration::RSpec::BaselineRunner
   # What RSpec printed is the only account of a failure outside any example --
   # a file that does not load, a suite hook that raises.
   def report(passed, output)
-    return Evilution::Baseline::Report.build(passed: true) if passed
+    durations = Evilution::Integration::RSpec::ExampleIds.durations(::RSpec.world)
+    return Evilution::Baseline::Report.build(passed: true, example_durations: durations) if passed
 
     failures = failed_examples
     Evilution::Baseline::Report.build(
       passed: false, failures: failures, error: failures.empty? ? output : nil,
-      failed_ids: Evilution::Integration::RSpec::ExampleIds.failed(::RSpec.world)
+      failed_ids: Evilution::Integration::RSpec::ExampleIds.failed(::RSpec.world), example_durations: durations
     )
   end
 

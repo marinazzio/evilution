@@ -48,6 +48,33 @@ RSpec.describe Evilution::Baseline do
       expect(result.spec_file_durations["spec/order_spec.rb"]).to be < 0.05
     end
 
+    it "gathers how long each example took from the reports of every spec file" do
+      reports = {
+        "spec/user_spec.rb" => Evilution::Baseline::Report.build(passed: true, example_durations: { "/p/u[1:1]" => 0.5 }),
+        "spec/order_spec.rb" => Evilution::Baseline::Report.build(passed: true, example_durations: { "/p/o[1:1]" => 0.25 })
+      }
+      timed = described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: ->(file) { reports.fetch(file) })
+
+      result = timed.call([subject1, subject3])
+
+      expect(result.example_durations).to eq("/p/u[1:1]" => 0.5, "/p/o[1:1]" => 0.25)
+      expect(result.example_durations).to be_frozen
+    end
+
+    it "keeps the durations a failing spec file reports" do
+      allow(Evilution::Diagnostic).to receive(:warn)
+      report = Evilution::Baseline::Report.build(passed: false, example_durations: { "/p/u[1:1]" => 0.5 })
+      timed = described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: ->(_file) { report })
+
+      expect(timed.call([subject1]).example_durations).to eq("/p/u[1:1]" => 0.5)
+    end
+
+    it "has no example durations from a runner that answers only pass or fail" do
+      bare = described_class.new(spec_resolver: spec_resolver, timeout: 5, runner: ->(_file) { true })
+
+      expect(bare.call([subject1]).example_durations).to eq({})
+    end
+
     it "returns empty set when all specs pass" do
       allow(baseline).to receive(:check_spec_file).and_return(nil)
 
@@ -480,6 +507,10 @@ RSpec.describe Evilution::Baseline do
       result = described_class.new(failed_spec_files: Set["spec/user_spec.rb"], duration: 1.0)
 
       expect(result.failed_spec_files).to contain_exactly("spec/user_spec.rb")
+    end
+
+    it "has no example durations unless given some" do
+      expect(described_class.new(failed_spec_files: Set.new, duration: 0.0).example_durations).to eq({})
     end
 
     it "has no spec file durations unless given some" do

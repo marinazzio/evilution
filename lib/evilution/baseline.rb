@@ -6,8 +6,10 @@ require_relative "diagnostic"
 
 class Evilution::Baseline
   # spec_file_durations: seconds each spec file took, in the order they ran.
-  Result = Struct.new(:failed_spec_files, :duration, :failures, :spec_file_durations) do
-    def initialize(failed_spec_files:, duration:, failures: [], spec_file_durations: {})
+  # example_durations: seconds each example took, by the id the integration
+  # gives it; empty where the integration does not time its examples.
+  Result = Struct.new(:failed_spec_files, :duration, :failures, :spec_file_durations, :example_durations) do
+    def initialize(failed_spec_files:, duration:, failures: [], spec_file_durations: {}, example_durations: {})
       super
       freeze
     end
@@ -45,6 +47,7 @@ class Evilution::Baseline
   def call(subjects)
     start_time = monotonic_now
     durations = {}
+    @example_durations = {}
     failures = baseline_spec_files(subjects).filter_map do |spec_file|
       spec_started = monotonic_now
       failure = check_spec_file(spec_file)
@@ -53,7 +56,8 @@ class Evilution::Baseline
     end
 
     Result.new(failed_spec_files: failures.to_set(&:spec_file), duration: monotonic_now - start_time,
-               failures: failures, spec_file_durations: durations.freeze)
+               failures: failures, spec_file_durations: durations.freeze,
+               example_durations: @example_durations.freeze)
   end
 
   def run_spec_file(spec_file)
@@ -103,6 +107,7 @@ class Evilution::Baseline
     return warned(SpecFailure.new(spec_file: spec_file, error: unreported_error(status))) if data.empty?
 
     report = Marshal.load(data)
+    collect_example_durations(report)
     report[:passed] ? nil : warned(SpecFailure.from_report(spec_file, report))
   end
 
@@ -124,6 +129,12 @@ class Evilution::Baseline
   end
 
   private
+
+  # Gathered while #call runs, from each spec file's report as it comes in.
+  def collect_example_durations(report)
+    durations = report[:example_durations]
+    @example_durations.merge!(durations) if @example_durations && durations.is_a?(Hash)
+  end
 
   def monotonic_now
     Process.clock_gettime(Process::CLOCK_MONOTONIC)

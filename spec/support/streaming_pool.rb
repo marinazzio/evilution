@@ -24,11 +24,12 @@ class StreamingPool
     @stopped = false
   end
 
-  def map(items, on_result: nil, &block)
+  def map(items, on_result: nil, on_arrival: nil, &block)
     @map_calls += 1
     out = Array.new(items.length)
-    (@order || items.each_index.to_a).each do |i|
+    (@order || (0...items.length).to_a).each do |i|
       out[i] = @results ? @results[i] : block.call(items[i], @waited)
+      on_arrival.call(i, out[i]) if on_arrival
       next unless on_result && on_result.call(i, out[i]) == :stop
 
       @stopped = true

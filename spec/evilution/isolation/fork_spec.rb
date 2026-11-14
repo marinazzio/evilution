@@ -717,6 +717,23 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.timings.to_h).to eq(apply: 0.1, test_run: 0.2)
     end
 
+    it "names the example that killed, and counts the examples that ran" do
+      test_command = ->(_m) { { passed: false, killing_example: "/p/a_spec.rb[1:2]", examples_run: 3 } }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_killed
+      expect(result.killing_test).to eq("/p/a_spec.rb[1:2]")
+      expect(result.examples_run).to eq(3)
+    end
+
+    it "counts no examples for a run that did not say" do
+      result = isolator.call(mutation:, test_command: ->(_m) { { passed: true } }, timeout: 5)
+
+      expect(result.examples_run).to be_nil
+      expect(result.killing_test).to be_nil
+    end
+
     it "carries the known-failures flag of a failed run back from the child" do
       test_command = ->(_m) { { passed: false, known_failures_only: true } }
 
