@@ -11,6 +11,9 @@ RSpec.describe Gate do
   end
 
   it "answers in time" do
+    # Longer than the first example takes even on the original code, so a
+    # run that tries its cheapest examples first still comes to this one last.
+    sleep 0.05
     state = begin
       described_class.new.state
     rescue StandardError

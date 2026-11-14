@@ -131,4 +131,23 @@ RSpec.describe Evilution::Integration::RSpec::ResultBuilder do
       expect(result).to eq({ passed: false, test_command: "rspec args" })
     end
   end
+
+  describe "#with_run_facts" do
+    let(:result) { { passed: false, test_command: "rspec x" } }
+
+    it "adds the example that killed and the count of examples that ran" do
+      expect(builder.with_run_facts(result, killing_example: "/p/a_spec.rb[1:2]", examples_run: 3))
+        .to eq(passed: false, test_command: "rspec x", killing_example: "/p/a_spec.rb[1:2]", examples_run: 3)
+    end
+
+    it "leaves out what the run could not say" do
+      expect(builder.with_run_facts(result, killing_example: nil, examples_run: nil)).to eq(result)
+    end
+
+    it "leaves the result it was given alone" do
+      builder.with_run_facts(result, killing_example: "x", examples_run: 1)
+
+      expect(result).to eq(passed: false, test_command: "rspec x")
+    end
+  end
 end

@@ -19,6 +19,7 @@ class Evilution::Runner::MutationExecutor
   autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
   autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
   autoload :RunlessVerdict, File.expand_path("mutation_executor/runless_verdict", __dir__)
+  autoload :KillHistory, File.expand_path("mutation_executor/kill_history", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config
@@ -39,6 +40,7 @@ class Evilution::Runner::MutationExecutor
     pipeline = build_pipeline(spec_resolver)
     @timeout_policy = TimeoutPolicy.build(@config, baseline_result)
     @runless = RunlessVerdict.new(coverage: uncovered_lines(integration))
+    @kill_history = KillHistory.new
     return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
 
     parallel_run(notifier, pipeline, mutations, baseline_result, integration)
@@ -88,7 +90,8 @@ class Evilution::Runner::MutationExecutor
   end
 
   def build_mutation_runner
-    MutationRunner.new(cache: @cache, isolator: @isolator, timeout_policy: @timeout_policy, runless: @runless)
+    MutationRunner.new(cache: @cache, isolator: @isolator, timeout_policy: @timeout_policy, runless: @runless,
+                       kill_history: @kill_history)
   end
 
   def baseline_failed?(baseline_result)
@@ -131,7 +134,8 @@ class Evilution::Runner::MutationExecutor
       diagnostics: @diagnostics,
       config: @config,
       timeout_policy: @timeout_policy,
-      runless: @runless
+      runless: @runless,
+      kill_history: @kill_history
     )
   end
 

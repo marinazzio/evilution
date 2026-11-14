@@ -99,6 +99,84 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     end
   end
 
+  describe "killer-first hints" do
+    let(:history) { instance_double(Evilution::Runner::MutationExecutor::KillHistory, record: nil) }
+
+    def strategy_with(pool, isolator, backend: nil)
+      backend ||= instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }
+      described_class.new(
+        cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+        isolator: isolator,
+        packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+        pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+        notifier: notifier,
+        pool_factory: ->(_item_timeout) { pool },
+        config: cfg,
+        kill_history: history
+      )
+    end
+
+    def ordering_integration
+      Class.new do
+        attr_reader :given
+
+        def prioritize(ids)
+          (@given ||= []) << ids
+        end
+
+        def call(_mutation)
+          "cmd"
+        end
+      end.new
+    end
+
+    it "sends each mutation with the killers known when it is sent, and tells the worker's integration" do
+      m1 = mutation("m1")
+      m2 = mutation("m2")
+      known = []
+      allow(history).to receive(:killers_for) { |_m| known.dup }
+      allow(history).to receive(:record) { |_m, killing_test:, **| known << killing_test }
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+      integration = ordering_integration
+
+      strategy_with(fake_pool, isolator).call([m1, m2], baseline_result: nil, integration: integration)
+
+      expect(integration.given).to eq([[], ["t"]])
+    end
+
+    it "records the kill each worker reports" do
+      m1 = mutation("m1")
+      allow(history).to receive(:killers_for).and_return([])
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+
+      strategy_with(fake_pool, isolator).call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :killed, killing_test: "t")
+    end
+
+    it "records a cached kill" do
+      m1 = mutation("m1")
+      backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, killing_test: "a[1:3]" })
+
+      strategy_with(fake_pool, double(:isolator), backend: backend)
+        .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :killed, killing_test: "a[1:3]")
+    end
+
+    it "tells the history of a worker that died, which names no killer" do
+      m1 = mutation("m1")
+      allow(history).to receive(:killers_for).and_return([])
+
+      strategy_with(fake_pool(results: [Evilution::Parallel::WorkQueue::DIED]), double(:isolator))
+        .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :error, killing_test: nil)
+    end
+  end
+
   describe "streaming" do
     def strategy_for(pool, isolator, config: cfg, notifier: nil, backend: nil, timeout_policy: nil, pool_factory: nil)
       backend ||= instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }

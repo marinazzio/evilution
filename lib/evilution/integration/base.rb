@@ -30,6 +30,14 @@ class Evilution::Integration::Base
     false
   end
 
+  # The ids of the tests that killed the next mutation's neighbours earlier in
+  # the run, the most telling first. An integration that stops at the first
+  # kill and can choose the order of its tests runs these first; the others
+  # have nothing to do with them.
+  def prioritize(_test_ids)
+    nil
+  end
+
   # Fills what loading a mutated file looks up on the heap (see
   # Loading::MutationApplier#warm). Called in the parent before any mutation
   # runs, for the same reason as #warm_targeting.

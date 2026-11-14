@@ -42,11 +42,16 @@ class Evilution::Parallel::WorkQueue
   # sentinel for an item whose worker gave none. When it answers :stop no
   # further item is sent: the ones in flight finish, the workers shut down,
   # and the slots of the items never sent stay nil.
-  def map(items, on_result: nil, &block)
+  #
+  # `on_arrival`, when given, is called with the same (index, value) the
+  # moment the result is read, before its worker is sent the next item, which
+  # can then be built from it (items need only answer #length, #empty? and
+  # #[]). It should be quick: the worker waits for it.
+  def map(items, on_result: nil, on_arrival: nil, &block)
     return [] if items.empty?
 
     workers = (0...[@size, items.length].min).map { |i| spawn_one(i, &block) }
-    dispatcher = build_dispatcher(workers, items, on_result, &block)
+    dispatcher = build_dispatcher(workers, items, on_result, on_arrival, &block)
 
     retired = []
     begin
@@ -70,12 +75,12 @@ class Evilution::Parallel::WorkQueue
     Worker.spawn(worker_index: worker_index, hooks: @hooks, &)
   end
 
-  def build_dispatcher(workers, items, on_result, &block)
+  def build_dispatcher(workers, items, on_result, on_arrival, &block)
     Dispatcher.new(
       workers: workers, items: items, prefetch: @prefetch,
       item_timeout: @item_timeout, worker_max_items: @worker_max_items,
       recycle_factory: ->(old) { spawn_one(old.worker_index, &block) },
-      on_result: on_result
+      on_result: on_result, on_arrival: on_arrival
     )
   end
 

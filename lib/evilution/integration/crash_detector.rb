@@ -18,10 +18,16 @@ class Evilution::Integration::CrashDetector
     reset
   end
 
+  # The id of the run's first decisive failure (see StopPolicy#decisive?),
+  # the example that killed the mutation; nil while there is none. Named
+  # whether or not the policy stops the run there.
+  attr_reader :killing_id
+
   def reset
     @assertion_failures = 0
     @crashes = []
     @raised_quit = false
+    @killing_id = nil
   end
 
   # RSpec checks RSpec.world.wants_to_quit before each example and skips the
@@ -30,6 +36,7 @@ class Evilution::Integration::CrashDetector
     example = notification.example
     crash = tally(example.exception)
     id = Evilution::Integration::RSpec::ExampleIds.of(example)
+    @killing_id ||= id if @policy.decisive?(id:, exception: crash)
     raise_quit if @policy.record(id:, exception: crash)
   end
 

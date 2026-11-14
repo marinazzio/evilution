@@ -92,6 +92,22 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first["timings"]).to eq("apply" => 0.1235, "test_run" => 0.3)
     end
 
+    it "names the test that killed a mutation, and counts the tests that ran" do
+      counted = Evilution::Result::MutationResult.new(
+        mutation: killed_mutation, status: :killed, duration: 0.5, killing_test: "/p/a_spec.rb[1:2]", examples_run: 3
+      )
+
+      parsed = JSON.parse(reporter.call(Evilution::Result::Summary.new(results: [counted])))
+
+      expect(parsed["killed"].first).to include("killing_test" => "/p/a_spec.rb[1:2]", "examples_run" => 3)
+    end
+
+    it "leaves the killing test and the count off a mutation whose run gave neither" do
+      parsed = JSON.parse(reporter.call(summary))
+
+      expect(parsed["killed"].first.keys).not_to include("killing_test", "examples_run")
+    end
+
     it "leaves timings off a mutation that measured none" do
       parsed = JSON.parse(reporter.call(summary))
 

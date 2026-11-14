@@ -22,7 +22,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       error: Evilution::Result::ErrorInfo.new(
         message: "msg", klass: "RuntimeError", backtrace: ["a.rb:1"]
       ),
-      timings: Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.3)
+      timings: Evilution::Result::MutationTimings.new(apply: 0.1, test_run: 0.3),
+      examples_run: 4
     )
   end
 
@@ -43,7 +44,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
         error_backtrace: ["a.rb:1"],
         known_failures_only: false,
         timings: { apply: 0.1, test_run: 0.3 },
-        time_limit: nil
+        time_limit: nil,
+        examples_run: 4
       )
     end
   end
@@ -57,6 +59,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       expect(rebuilt.status).to eq(:killed)
       expect(rebuilt.duration).to eq(0.5)
       expect(rebuilt.killing_test).to eq("spec/foo_spec.rb:10")
+      expect(rebuilt.examples_run).to eq(4)
       expect(rebuilt.error_class).to eq("RuntimeError")
       expect(rebuilt.error_backtrace).to eq(["a.rb:1"])
       expect(rebuilt.known_failures_only?).to be(false)

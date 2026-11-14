@@ -7,6 +7,7 @@ require "evilution/runner/mutation_executor/result_cache"
 require "evilution/runner/mutation_executor/mutation_runner"
 require "evilution/runner/mutation_executor/timeout_policy"
 require "evilution/runner/mutation_executor/runless_verdict"
+require "evilution/runner/mutation_executor/kill_history"
 
 RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
   let(:fixed_policy) { Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(30) }
@@ -125,5 +126,73 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
 
     runner = described_class.new(cache: cache_with(backend), isolator: isolator, timeout_policy: fixed_policy)
     runner.call(mut, integration: ->(_) { "cmd" })
+  end
+
+  describe "killer-first hints" do
+    let(:history) { instance_double(Evilution::Runner::MutationExecutor::KillHistory, record: nil) }
+
+    def ordering_integration
+      Class.new do
+        attr_reader :given
+
+        def prioritize(ids)
+          @given = ids
+        end
+
+        def call(_mutation)
+          "cmd"
+        end
+      end.new
+    end
+
+    it "hands the integration the tests that killed the mutation's neighbours, before it runs" do
+      mut = mutation
+      allow(history).to receive(:killers_for).with(mut).and_return(["a[1:2]"])
+      integration = ordering_integration
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) do
+        expect(integration.given).to eq(["a[1:2]"])
+        killed(mut)
+      end
+
+      described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy, kill_history: history)
+                     .call(mut, integration: integration)
+
+      expect(isolator).to have_received(:call)
+    end
+
+    it "runs an integration that cannot order its tests as before" do
+      mut = mutation
+      allow(history).to receive(:killers_for).and_return(["a[1:2]"])
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call).and_return(killed(mut))
+
+      out = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy, kill_history: history)
+                           .call(mut, integration: ->(_) { "cmd" })
+
+      expect(out.status).to eq(:killed)
+    end
+
+    it "records what the run found" do
+      mut = mutation
+      allow(history).to receive(:killers_for).and_return([])
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call).and_return(killed(mut))
+
+      described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy, kill_history: history)
+                     .call(mut, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(mut, status: :killed, killing_test: "t")
+    end
+
+    it "records a cached kill as well" do
+      mut = mutation
+      backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, killing_test: "a[1:3]" })
+
+      described_class.new(cache: cache_with(backend), isolator: double(:isolator), timeout_policy: fixed_policy,
+                          kill_history: history).call(mut, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(mut, status: :killed, killing_test: "a[1:3]")
+    end
   end
 end

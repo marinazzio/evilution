@@ -7,18 +7,23 @@ require_relative "../dispatcher"
 # item is to be sent. The Dispatcher pushes as results come in and flushes
 # once the round's workers have their next item, so the caller's handling never
 # holds a worker idle.
+#
+# A caller that needs a result before the next item goes out -- to build that
+# item from it -- is handed it on arrival as well, as soon as it is pushed.
 class Evilution::Parallel::WorkQueue::Dispatcher::ResultStream
   # Stands in for a caller that takes the results at the end of the run only.
   IGNORE = ->(_index, _value) {}
   private_constant :IGNORE
 
-  def initialize(on_result)
+  def initialize(on_result, on_arrival = nil)
     @on_result = on_result || IGNORE
+    @on_arrival = on_arrival || IGNORE
     @finished = []
     @stopped = false
   end
 
   def push(index, value)
+    @on_arrival.call(index, value)
     @finished << [index, value]
   end
 

@@ -11,6 +11,24 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher::ResultStream do
     expect(seen).to be_empty
   end
 
+  it "hands each item on arrival as soon as it is pushed" do
+    arrived = []
+    stream = described_class.new(nil, ->(index, value) { arrived << [index, value] })
+    stream.push(1, :a)
+
+    expect(arrived).to eq([[1, :a]])
+  end
+
+  it "hands an item on arrival once, whatever is flushed after" do
+    arrived = []
+    stream = described_class.new(nil, ->(index, value) { arrived << [index, value] })
+    stream.push(1, :a)
+    stream.flush
+    stream.flush
+
+    expect(arrived).to eq([[1, :a]])
+  end
+
   it "hands every pushed item on once, in the order pushed" do
     seen = []
     stream = described_class.new(->(index, value) { seen << [index, value] })
