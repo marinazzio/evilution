@@ -6,8 +6,10 @@ require_relative "../timeout_policy"
 require_relative "../runless_verdict"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
-  # Autoloaded rather than required at the bottom, which would require this
-  # file again while it is still loading (see TimeoutPolicy).
+  # Autoloaded rather than required at the bottom: ordered_delivery requires
+  # this file, and requiring it while it is still loading is a circular
+  # require, which Ruby warns about -- and a project that turns warnings into
+  # exceptions loads this after its spec helper did so.
   autoload :OrderedDelivery, File.expand_path("parallel/ordered_delivery", __dir__)
 
   # Compact result for a worker that exited unexpectedly (:error is not cached,
