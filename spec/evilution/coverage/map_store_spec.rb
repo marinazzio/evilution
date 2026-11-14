@@ -2,6 +2,8 @@
 
 require "spec_helper"
 require "tmpdir"
+require "json"
+require "fileutils"
 require "evilution/coverage/map"
 require "evilution/coverage/map_store"
 
@@ -110,6 +112,53 @@ RSpec.describe Evilution::Coverage::MapStore do
       store.save(map, [calc, util])
       File.write(File.join(dir, ".evilution/coverage/map.json"), "{ not valid json")
       expect(store.load([calc, util])).to be_nil
+    end
+  end
+
+  describe "unexecuted lines and spec files" do
+    let(:map) do
+      Evilution::Coverage::Map.new(
+        index: {}, built_files: [calc, util],
+        executed_lines: { calc => [1] }, missed_lines: { calc => [2], util => [1] },
+        spec_files: ["/p/spec/calc_spec.rb"]
+      )
+    end
+
+    it "keeps them for the files that are still fresh" do
+      store.save(map, [calc, util])
+      File.write(util, "def changed = 1\n")
+      loaded = store.load([calc, util])
+
+      expect(loaded.uncovered?(calc, [2])).to be(true)
+      expect(loaded.uncovered?(util, [1])).to be(false)
+      expect(loaded.built_from?(["/p/spec/calc_spec.rb"])).to be(true)
+    end
+  end
+
+  # A map written before unexecuted lines were recorded would never report one,
+  # so it is rebuilt rather than read.
+  describe "a cache from an earlier format" do
+    before do
+      FileUtils.mkdir_p(File.join(dir, ".evilution/coverage"))
+      payload = { "digests" => {}, "map" => map.to_h }
+      File.write(File.join(dir, ".evilution/coverage/map.json"), JSON.generate(payload))
+    end
+
+    it "loads as no cache at all" do
+      expect(store.load([calc, util])).to be_nil
+      expect(store.stale_files([calc, util])).to eq([calc, util])
+    end
+  end
+
+  describe "a cache file that holds no object" do
+    before do
+      FileUtils.mkdir_p(File.join(dir, ".evilution/coverage"))
+      File.write(File.join(dir, ".evilution/coverage/map.json"), "[2]")
+    end
+
+    it "loads as no cache at all" do
+      expect(store.load([calc, util])).to be_nil
+      expect(store.stale_files([calc, util])).to eq([calc, util])
     end
   end
 end

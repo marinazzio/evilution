@@ -3,9 +3,10 @@
 RSpec.describe Evilution::Reporter::JSON::Subjects do
   subject(:builder) { described_class.new }
 
-  def score(name: "Helper#call", file: "lib/helper.rb", total: 4, killed: 3, verified: 4, survived: 1)
+  def score(name: "Helper#call", file: "lib/helper.rb", total: 4, killed: 3, verified: 4, survived: 1, uncovered: 0)
     Evilution::Result::SubjectScore.new(
-      name: name, file_path: file, total: total, killed: killed, verified: verified, survived: survived
+      name: name, file_path: file, total: total, killed: killed, verified: verified, survived: survived,
+      uncovered: uncovered
     )
   end
 
@@ -21,7 +22,7 @@ RSpec.describe Evilution::Reporter::JSON::Subjects do
     it "describes a subject in full" do
       expect(builder.call(summary_with(score))).to eq(
         [{ name: "Helper#call", file: "lib/helper.rb", total: 4, killed: 3,
-           verified: 4, survived: 1, score: 0.75, reached: true }]
+           verified: 4, survived: 1, uncovered: 0, score: 0.75, reached: true }]
       )
     end
 
@@ -31,6 +32,12 @@ RSpec.describe Evilution::Reporter::JSON::Subjects do
       row = builder.call(summary_with(score(total: 9, killed: 0, verified: 0, survived: 0))).first
 
       expect([row[:reached], row[:score], row[:total]]).to eq([false, 0.0, 9])
+    end
+
+    it "says how many of its mutations no test executes" do
+      row = builder.call(summary_with(score(killed: 2, survived: 0, uncovered: 2))).first
+
+      expect([row[:uncovered], row[:verified]]).to eq([2, 4])
     end
 
     it "rounds the score to four decimals" do

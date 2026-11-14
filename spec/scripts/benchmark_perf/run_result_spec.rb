@@ -89,6 +89,15 @@ RSpec.describe BenchmarkPerf::RunResult do
       expect(result.statuses.values).to eq(["timeout"])
     end
 
+    # A mutation no test executes is reported without a run; dropping it would
+    # hide a lost kill from the comparison.
+    it "keeps mutations reported uncovered" do
+      uncovered = detail(file: "lib/a.rb", line: 9, operator: "cmp", status: "uncovered", duration: 0.0)
+      result = described_class.from_json({ "uncovered" => [uncovered] }, wall: 1.0)
+
+      expect(result.statuses.values).to eq(["uncovered"])
+    end
+
     it "defaults missing summary timings to zero" do
       result = described_class.from_json({ "killed" => [] }, wall: 1.0)
 

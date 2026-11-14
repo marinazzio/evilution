@@ -21,7 +21,7 @@ RSpec.describe Evilution::MCP::MutateTool::ProgressStreamer do
       allow(ctx).to receive(:report_progress)
       callback = described_class.build(server_context: ctx, suggest_tests: true, integration: :rspec)
 
-      callback.call(double(survived?: false))
+      callback.call(double(survived?: false, uncovered?: false))
       expect(ctx).not_to have_received(:report_progress)
     end
 

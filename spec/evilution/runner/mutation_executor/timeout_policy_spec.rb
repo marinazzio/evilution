@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "open3"
 require "evilution/config"
 require "evilution/baseline"
 require "evilution/mutation"
@@ -56,5 +57,20 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimeoutPolicy do
 
       expect(described_class.build(cfg, baseline(durations: durations)).call(mutation)).to eq(15.0)
     end
+  end
+
+  # A project that turns warnings into exceptions (dry-monads does) loads
+  # this lazily, after its spec helper ran, so a warning here fails the run.
+  it "loads lazily without a warning" do
+    script = <<~RUBY
+      require "evilution"
+      require "evilution/runner"
+      $VERBOSE = true
+      Evilution::Runner::MutationExecutor::TimeoutPolicy::Adaptive
+    RUBY
+    _out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("../../../../lib", __dir__), "-e", script)
+
+    expect(status).to be_success
+    expect(err).not_to include("warning")
   end
 end

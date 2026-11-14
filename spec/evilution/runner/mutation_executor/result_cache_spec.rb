@@ -4,6 +4,7 @@ require "evilution/mutation"
 require "evilution/result/mutation_result"
 require "evilution/runner/mutation_executor/result_packer"
 require "evilution/runner/mutation_executor/result_cache"
+require "evilution/runner/mutation_executor/runless_verdict"
 
 RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
   def mutation(unparseable: false)
@@ -196,6 +197,22 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       expect(partition.cached_results.keys).to contain_exactly(1, 2)
       expect(partition.cached_results[1][:status]).to eq(:killed)
       expect(partition.cached_results[2][:status]).to eq(:unparseable)
+    end
+
+    it "puts the mutations the runless verdict answers among the cached results, uncached and unstored" do
+      m1 = mutation
+      m2 = mutation
+      backend = instance_double("Cache")
+      allow(backend).to receive(:fetch).and_return(nil)
+      coverage = double("Integration")
+      allow(coverage).to receive(:uncovered?) { |m| m.equal?(m2) }
+      runless = Evilution::Runner::MutationExecutor::RunlessVerdict.new(coverage: coverage)
+
+      partition = described_class.new(backend).partition([m1, m2], packer: packer, runless: runless)
+
+      expect(partition.uncached_indices).to eq([0])
+      expect(partition.cached_results[1][:status]).to eq(:uncovered)
+      expect(backend).not_to have_received(:fetch).with(m2)
     end
   end
 end

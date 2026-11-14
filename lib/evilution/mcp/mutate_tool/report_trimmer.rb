@@ -12,11 +12,11 @@ module Evilution::MCP::MutateTool::ReportTrimmer
   FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved unparseable].freeze
   SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable timings].freeze
   # EV-187j / GH #1169: at summary verbosity, non-survived entries that remain
-  # (timed_out, errors, unresolved) shed `diff` and `error_backtrace` payload —
+  # (timed_out, errors, unresolved, uncovered) shed `diff` and `error_backtrace` payload —
   # those two fields dominate response size at scale and aren't actionable for
   # a scanning agent. Survived stays full-detail.
   SUMMARY_HEAVY_FIELDS = %w[diff error_backtrace].freeze
-  SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved].freeze
+  SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved uncovered].freeze
   # Per-mutation timings are for profiling a run, not for acting on a result,
   # so summary verbosity drops them from every entry it keeps, survived included.
   SUMMARY_TIMED_KEYS = %w[survived timed_out errors unresolved].freeze

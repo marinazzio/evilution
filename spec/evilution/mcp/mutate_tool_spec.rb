@@ -26,6 +26,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       duration: 0.123,
       killed?: true,
       survived?: false,
+      uncovered?: false,
       timeout?: false,
       error?: false,
       neutral?: false,
@@ -61,6 +62,8 @@ RSpec.describe Evilution::MCP::MutateTool do
       equivalent: 0,
       unparseable: 0,
       unparseable_results: [],
+      uncovered: 0,
+      uncovered_results: [],
       score: 1.0,
       duration: 0.5,
       killtime: 0.123,
@@ -533,7 +536,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
         allow(runner).to receive(:call).and_return(timed_out_summary)
 
@@ -603,7 +608,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
         allow(runner).to receive(:call).and_return(error_summary)
 
@@ -675,7 +682,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
         allow(runner).to receive(:call).and_return(neutral_summary)
 
@@ -755,7 +764,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
         allow(runner).to receive(:call).and_return(survived_summary)
 
@@ -839,7 +850,9 @@ RSpec.describe Evilution::MCP::MutateTool do
             unresolved: 0,
             unresolved_results: [],
             unparseable: 0,
-            unparseable_results: []
+            unparseable_results: [],
+            uncovered: 0,
+            uncovered_results: []
           )
         end
 
@@ -1111,7 +1124,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
         allow(runner).to receive(:call).and_return(equivalent_summary)
 
@@ -1202,7 +1217,9 @@ RSpec.describe Evilution::MCP::MutateTool do
           unresolved: 0,
           unresolved_results: [],
           unparseable: 0,
-          unparseable_results: []
+          unparseable_results: [],
+          uncovered: 0,
+          uncovered_results: []
         )
       end
 

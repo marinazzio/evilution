@@ -190,6 +190,28 @@ RSpec.describe Evilution::Reporter::HTML do
       expect(output).to include("2 killed / 0 survived / 2 total")
     end
 
+    context "with uncovered mutations" do
+      let(:uncovered_summary) do
+        mutation = double("Mutation", operator_name: "comparison_replacement", file_path: "lib/user.rb",
+                                      line: 9, column: 0, diff: "- a\n+ b")
+        uncovered = Evilution::Result::MutationResult.new(mutation: mutation, status: :uncovered)
+        Evilution::Result::Summary.new(results: [killed_result, uncovered], duration: 0.6)
+      end
+
+      it "renders an uncovered details section with operators and locations" do
+        output = reporter.call(uncovered_summary)
+
+        expect(output).to include('class="uncovered-details"')
+        expect(output).to include("Uncovered (1)")
+        expect(output).to include("lib/user.rb:9")
+        expect(output).to include("1 uncovered")
+      end
+
+      it "omits the uncovered section when no uncovered results exist" do
+        expect(reporter.call(summary)).not_to include('class="uncovered-details"')
+      end
+    end
+
     context "with unparseable mutations" do
       let(:unparseable_mutation_b) do
         double(

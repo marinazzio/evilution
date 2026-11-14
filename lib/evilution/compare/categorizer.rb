@@ -4,7 +4,8 @@ require_relative "../compare"
 require_relative "record"
 
 module Evilution::Compare::Categorizer
-  ALIVE = %i[survived].freeze
+  # An uncovered mutation is a survivor that was not run: no test executes it.
+  ALIVE = %i[survived uncovered].freeze
   DEAD  = %i[killed timeout error].freeze
   # neutral, equivalent, unresolved, unparseable are non-actionable signals
   # — excluded from alive/dead buckets, counted in summary.

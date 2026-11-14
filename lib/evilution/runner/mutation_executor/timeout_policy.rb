@@ -14,6 +14,14 @@ module Evilution::Runner::MutationExecutor::TimeoutPolicy
   # answering, so it sits well past the limit the worker enforces itself.
   ITEM_TIMEOUT_FACTOR = 2
 
+  # Autoloaded rather than required at the bottom: each policy file requires
+  # this one, and requiring it while it is still loading is a circular require,
+  # which Ruby warns about -- and a project that turns warnings into exceptions
+  # loads this after its spec helper did so.
+  autoload :Base, File.expand_path("timeout_policy/base", __dir__)
+  autoload :Fixed, File.expand_path("timeout_policy/fixed", __dir__)
+  autoload :Adaptive, File.expand_path("timeout_policy/adaptive", __dir__)
+
   def self.build(config, baseline_result)
     fixed = Fixed.new(config.timeout)
     return fixed unless adaptive?(config, baseline_result)
@@ -36,7 +44,3 @@ module Evilution::Runner::MutationExecutor::TimeoutPolicy
   end
   private_class_method :adaptive?
 end
-
-require_relative "timeout_policy/base"
-require_relative "timeout_policy/fixed"
-require_relative "timeout_policy/adaptive"

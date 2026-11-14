@@ -221,8 +221,27 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       described_class.new(cfg).build_integration
 
       expect(Evilution::Coverage::MapBuilder).to have_received(:new).with(spec_files: [spec], target_files: [target])
-      expect(store).to have_received(:stale_files).with([target, spec])
-      expect(store).to have_received(:save).with(map, [target, spec])
+      expect(store).to have_received(:stale_files).with(array_including(target, spec))
+      expect(store).to have_received(:save).with(map, array_including(target, spec))
+    end
+
+    # A support file that starts calling the code changes which lines run, so
+    # the map has to be rebuilt rather than read.
+    it "keys the cached coverage map on the helpers every spec file loads too" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).with("lib/foo.rb").and_return(["spec/foo_spec.rb"])
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["x"], save: nil)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      allow(Evilution::Coverage::MapBuilder).to receive(:new)
+        .and_return(instance_double(Evilution::Coverage::MapBuilder, call: Evilution::Coverage::Map.new(index: {}, built_files: [])))
+      allow(Evilution::Integration::RSpec).to receive(:new).and_return(Evilution::Integration::RSpec.allocate)
+
+      described_class.new(cfg).build_integration
+
+      helpers = [".rspec", "spec/spec_helper.rb"].map { |path| File.join(Evilution::PROJECT_ROOT, path) }
+      support = Dir.glob(File.join(Evilution::PROJECT_ROOT, "spec/support/**/*.rb")).first
+      expect(store).to have_received(:stale_files).with(array_including(*helpers, support))
     end
 
     it "falls back to lexical when the target source resolves to no spec file" do

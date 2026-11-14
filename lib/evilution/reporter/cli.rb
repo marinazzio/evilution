@@ -64,6 +64,11 @@ Evilution::Reporter::CLI.const_set(
       formatter: Evilution::Reporter::CLI::ItemFormatters::CoverageGap.new
     ),
     Evilution::Reporter::CLI::Section.new(
+      title: "Uncovered mutations (no test executes their line, not run):",
+      fetcher: lambda(&:uncovered_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
       title: lambda { |groups|
         subjects = groups.sum(&:length)
         "Subjects needing attention (#{subjects} subject#{"s" unless subjects == 1} " \

@@ -210,6 +210,24 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#uncovered" do
+    it "counts mutations on lines no test executes" do
+      s = described_class.new(results: [make_result(:killed), make_result(:uncovered), make_result(:uncovered)])
+
+      expect(s.uncovered).to eq(2)
+      expect(s.survived).to eq(0)
+    end
+  end
+
+  describe "#uncovered_results" do
+    it "returns only uncovered results" do
+      unc = make_result(:uncovered)
+      s = described_class.new(results: [make_result(:killed), make_result(:survived), unc])
+
+      expect(s.uncovered_results).to eq([unc])
+    end
+  end
+
   describe "#unparseable" do
     it "counts unparseable mutations" do
       s = described_class.new(results: [make_result(:killed), make_result(:unparseable), make_result(:unparseable)])
@@ -340,6 +358,14 @@ RSpec.describe Evilution::Result::Summary do
       s = described_class.new(results: results_with_unresolved)
 
       expect(s.score).to eq(1.0 / 2)
+    end
+
+    # A line no test executes is untested code: it scores as a survivor would.
+    it "counts uncovered in the denominator, like a survivor" do
+      s = described_class.new(results: [make_result(:killed), make_result(:uncovered)])
+
+      expect(s.score).to eq(1.0 / 2)
+      expect(s.success?(min_score: 0.6)).to be(false)
     end
 
     it "excludes unparseable from denominator" do

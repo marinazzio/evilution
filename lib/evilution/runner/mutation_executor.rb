@@ -18,6 +18,7 @@ class Evilution::Runner::MutationExecutor
   autoload :Strategy, File.expand_path("mutation_executor/strategy", __dir__)
   autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
   autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
+  autoload :RunlessVerdict, File.expand_path("mutation_executor/runless_verdict", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config
@@ -37,6 +38,7 @@ class Evilution::Runner::MutationExecutor
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)
     @timeout_policy = TimeoutPolicy.build(@config, baseline_result)
+    @runless = RunlessVerdict.new(coverage: uncovered_lines(integration))
     return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
 
     parallel_run(notifier, pipeline, mutations, baseline_result, integration)
@@ -77,8 +79,16 @@ class Evilution::Runner::MutationExecutor
                         infra_retried: retry_pass.retried_count, worker_stats: execution.worker_stats)
   end
 
+  # What tells the mutations no test executes, when the run skips them: the
+  # integration, which only knows with a coverage map behind it.
+  def uncovered_lines(integration)
+    return nil unless @config.skip_uncovered? && integration.respond_to?(:uncovered?)
+
+    integration
+  end
+
   def build_mutation_runner
-    MutationRunner.new(cache: @cache, isolator: @isolator, timeout_policy: @timeout_policy)
+    MutationRunner.new(cache: @cache, isolator: @isolator, timeout_policy: @timeout_policy, runless: @runless)
   end
 
   def baseline_failed?(baseline_result)
@@ -120,7 +130,8 @@ class Evilution::Runner::MutationExecutor
       pool_factory: ->(item_timeout) { build_pool(item_timeout) },
       diagnostics: @diagnostics,
       config: @config,
-      timeout_policy: @timeout_policy
+      timeout_policy: @timeout_policy,
+      runless: @runless
     )
   end
 

@@ -93,8 +93,15 @@ class Evilution::Runner
     isolation_resolver.rails_root_detected?
   end
 
+  # With coverage targeting, the lines the preload runs are counted: the
+  # coverage map is built in a child forked after it, and needs the preloaded
+  # files, and what ran while they loaded, to tell which lines no test executes.
   def perform_preload
+    tracker = Evilution::Coverage::LoadTracker.new
+    tracker.start if config.coverage_targeting?
     isolation_resolver.perform_preload
+  ensure
+    tracker.pause if tracker
   end
 
   def plan_mutations(subjects)
@@ -280,6 +287,7 @@ require_relative "git/changed_files"
 require_relative "result/mutation_result"
 require_relative "result/summary"
 require_relative "baseline"
+require_relative "coverage/load_tracker"
 require_relative "cache"
 require_relative "parallel/pool"
 require_relative "process_supervisor"

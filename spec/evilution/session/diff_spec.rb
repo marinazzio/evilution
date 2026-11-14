@@ -113,6 +113,19 @@ RSpec.describe Evilution::Session::Diff do
       end
     end
 
+    # Mutations no test executes are survivors that were not run: one that
+    # survived before is not fixed by now being reported uncovered.
+    context "when survivors are now reported uncovered" do
+      it "keeps them persistent rather than fixed" do
+        base = session_data(score: 0.8, survivors: [mutation_a])
+        head = session_data(score: 0.8, survived: 0).merge("uncovered" => [mutation_a])
+
+        result = diff_engine.call(base, head)
+
+        expect([result.fixed, result.new_survivors, result.persistent]).to eq([[], [], [mutation_a]])
+      end
+    end
+
     context "when new survivors appear (survived in head, not in base)" do
       it "returns them in new_survivors array" do
         base = session_data(score: 0.9, total: 10, killed: 9, survived: 1, survivors: [mutation_a])

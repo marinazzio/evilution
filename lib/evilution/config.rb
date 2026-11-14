@@ -22,7 +22,7 @@ class Evilution::Config
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
     profile: :default, canary: true, warmup: :none, stop_on_kill: true,
-    timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60
+    timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60, skip_uncovered: true
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -35,7 +35,7 @@ class Evilution::Config
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
-              :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling
+              :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -124,6 +124,12 @@ class Evilution::Config
 
   def fallback_to_full_suite?
     fallback_to_full_suite
+  end
+
+  # Whether a mutation no test executes is reported uncovered without being
+  # run. Only coverage targeting builds the coverage map that can tell.
+  def skip_uncovered?
+    skip_uncovered && coverage_targeting?
   end
 
   def self.file_options
@@ -221,6 +227,12 @@ class Evilution::Config
       #            any file the map has not fully built)
       # example_targeting_strategy: lexical
 
+      # With coverage targeting, report a mutation no example executes the line
+      # of as `uncovered`, without running it (default: true). It scores as a
+      # survivor. Lines that run only while files load (class bodies, constants,
+      # `def` lines) count as executed. Set false to run them anyway.
+      # skip_uncovered: true
+
       # Behavior when targeting finds no matching example (default: full_file).
       # full_file  - run every example in the resolved spec files
       # unresolved - mark the mutation :unresolved and skip
@@ -287,7 +299,8 @@ class Evilution::Config
     quiet_children: nil,
     quiet_children_dir: nil,
     canary: nil,
-    stop_on_kill: nil
+    stop_on_kill: nil,
+    skip_uncovered: nil
   }.freeze
   private_constant :SIMPLE_ATTR_TRANSFORMS
 

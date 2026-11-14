@@ -3,7 +3,7 @@
 require_relative "../line_formatters"
 
 class Evilution::Reporter::CLI::LineFormatters::Mutations
-  OPTIONAL_FIELDS = %i[neutral equivalent unresolved unparseable skipped].freeze
+  OPTIONAL_FIELDS = %i[uncovered neutral equivalent unresolved unparseable skipped].freeze
 
   def format(summary)
     base_line(summary) + optional_sections(summary)

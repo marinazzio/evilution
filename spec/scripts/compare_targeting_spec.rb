@@ -18,7 +18,8 @@ RSpec.describe CompareTargeting do
     details.each { |d| grouped[d["status"]] << d }
     {
       "killed" => grouped["killed"], "survived" => grouped["survived"],
-      "unresolved" => grouped["unresolved"], "errors" => grouped["errors"]
+      "unresolved" => grouped["unresolved"], "errors" => grouped["errors"],
+      "uncovered" => grouped["uncovered"]
     }
   end
 
@@ -33,6 +34,15 @@ RSpec.describe CompareTargeting do
       expect(result.killed_count).to eq(1)
       expect(result.measurable_count).to eq(2) # killed + survived
       expect(result.total_duration).to be_within(1e-9).of(0.7)
+    end
+
+    it "counts an uncovered mutation as measured, the survivor it would be" do
+      data = report(
+        detail(file: "lib/a.rb", line: 3, operator: "cmp", status: "killed", duration: 0.5),
+        detail(file: "lib/a.rb", line: 7, operator: "lit", status: "uncovered", duration: 0.0)
+      )
+
+      expect(described_class.from_json(data).measurable_count).to eq(2)
     end
 
     it "does not double-count a mutation that appears in overlapping categories" do

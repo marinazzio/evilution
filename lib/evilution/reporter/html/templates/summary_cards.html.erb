@@ -2,6 +2,9 @@
   <div class="card"><span class="card-value"><%= @summary.total %></span><span class="card-label">Total</span></div>
   <div class="card card-killed"><span class="card-value"><%= @summary.killed %></span><span class="card-label">Killed</span></div>
   <div class="card card-survived"><span class="card-value"><%= @summary.survived %></span><span class="card-label">Survived</span></div>
+  <%- if @summary.uncovered.positive? -%>
+  <div class="card card-survived"><span class="card-value"><%= @summary.uncovered %></span><span class="card-label">Uncovered</span></div>
+  <%- end -%>
   <div class="card"><span class="card-value"><%= @summary.timed_out %></span><span class="card-label">Timed Out</span></div>
   <div class="card"><span class="card-value"><%= @summary.errors %></span><span class="card-label">Errors</span></div>
   <div class="card"><span class="card-value"><%= @summary.neutral %></span><span class="card-label">Neutral</span></div>

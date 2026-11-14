@@ -3,8 +3,13 @@
 require_relative "../strategy"
 require_relative "../../../parallel/work_queue"
 require_relative "../timeout_policy"
+require_relative "../runless_verdict"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
+  # Autoloaded rather than required at the bottom, which would require this
+  # file again while it is still loading (see TimeoutPolicy).
+  autoload :OrderedDelivery, File.expand_path("parallel/ordered_delivery", __dir__)
+
   # Compact result for a worker that exited unexpectedly (:error is not cached,
   # so the 0.0 duration is never persisted).
   DIED_COMPACT = {
@@ -26,8 +31,9 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # pool_factory: called with the pool's item timeout, the backstop for a
   # worker that stops answering. timeout_policy: the limit each mutation runs
   # under; the configured timeout for every one of them when not given.
+  # runless: the verdict a mutation gets without a run, when it has one.
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil,
-                 timeout_policy: nil)
+                 timeout_policy: nil, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
     @cache = cache
     @isolator = isolator
     @packer = packer
@@ -37,6 +43,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @diagnostics = diagnostics
     @config = config
     @timeout_policy = timeout_policy || Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(config.timeout)
+    @runless = runless
   end
 
   def call(mutations, baseline_result:, integration:)
@@ -60,11 +67,12 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     )
   end
 
-  # The cached results go in first; the rest run on one pool whose workers
+  # The cached results, and the verdicts given without a run, go in first;
+  # the rest run on one pool whose workers
   # live for the whole run and take the next mutation as soon as they are done
   # with the last, so a slow mutation holds up only its own worker.
   def run(mutations, delivery, integration)
-    partition = @cache.partition(mutations, packer: @packer)
+    partition = @cache.partition(mutations, packer: @packer, runless: @runless)
     partition.cached_results.each { |index, compact| delivery.accept(index, compact, fresh: false) }
     return [] if delivery.truncated? || partition.uncached_indices.empty?
 
@@ -120,5 +128,3 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     { status: :timeout, duration: item_timeout, timings: { test_run: item_timeout }, time_limit: item_timeout }
   end
 end
-
-require_relative "parallel/ordered_delivery"

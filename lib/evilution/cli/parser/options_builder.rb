@@ -68,6 +68,7 @@ class Evilution::CLI::Parser::OptionsBuilder
   def add_filter_options(opts)
     add_spec_filter_options(opts)
     add_targeting_options(opts)
+    add_uncovered_options(opts)
   end
 
   def add_spec_filter_options(opts)
@@ -97,6 +98,14 @@ class Evilution::CLI::Parser::OptionsBuilder
             "Filter: method (Foo#bar), type (Foo#/Foo.), namespace (Foo*),",
             "class (Foo), glob (source:**/*.rb), hierarchy (descendants:Foo)") do |m|
       @options[:target] = m
+    end
+  end
+
+  def add_uncovered_options(opts)
+    opts.on("--[no-]skip-uncovered",
+            "With --example-targeting coverage, report a mutation no example executes the line of",
+            "as uncovered without running it (default: enabled)") do |v|
+      @options[:skip_uncovered] = v
     end
   end
 
