@@ -60,6 +60,7 @@ Everything lives under `lib/evilution/`.
 | `Isolation::{Fork,InProcess}`, `ProcessSupervisor` | Run one mutation's tests in isolation; process-group lifecycle, sandboxing, TERM/KILL ladder. | `isolation/fork.rb`, `process_supervisor.rb` |
 | `Integration::{RSpec,Minitest,TestUnit}` | Apply a mutation and run the configured test framework; report the raw outcome. | `integration/base.rb`, `integration/rspec.rb` |
 | `Parallel::{Pool,WorkQueue}` | Fan mutations across worker processes for `jobs > 1`. | `parallel/pool.rb`, `parallel/work_queue.rb` |
+| `WorkerDatabase` | In each parallel worker of a preloaded Rails app, move `ActiveRecord::Base` off the shared test database: to the worker's `TEST_ENV_NUMBER` database, or to a copy of a SQLite one (`WorkerDatabase::Copies`). | `worker_database.rb`, `worker_database/` |
 | `Result::{MutationResult,Summary}` | Per-mutation result + aggregated, scored summary. | `result/mutation_result.rb`, `result/summary.rb` |
 | `Result::{SubjectScore,SubjectScorer,NeutralReason}` | Score each subject on its own, and record why a neutral is neutral — what the file-level score does not speak for. | `result/subject_scorer.rb`, `result/neutral_reason.rb` |
 | `Reporter::{CLI,JSON,HTML,Suggestion}` | Render a `Summary` to text / JSON / HTML. | `reporter/*` |

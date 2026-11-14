@@ -4,6 +4,8 @@ require "tmpdir"
 require "timeout"
 require "evilution/parallel/work_queue"
 require "evilution/hooks"
+require "evilution/worker_database/copies"
+require_relative "../../support/fake_active_record"
 
 # This spec covers the public API contract of WorkQueue and a small set of
 # end-to-end smoke tests that exercise real Process.fork. Granular coverage of
@@ -267,6 +269,85 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       allow(queue).to receive(:build_dispatcher).and_return(faulty)
 
       expect { queue.map([1]) { |n| n } }.to raise_error(RuntimeError, "dispatcher boom")
+    end
+  end
+
+  describe "per-worker database copies" do
+    around do |example|
+      Dir.mktmpdir("evilution-wq-copies") do |dir|
+        @dir = dir
+        example.run
+      end
+    end
+
+    let(:copies) { Evilution::WorkerDatabase::Copies.new(root: File.join(@dir, "copies")) }
+
+    before do
+      FakeActiveRecord.install(self, root: @dir) do
+        { "test" => { "adapter" => "sqlite3", "database" => "db/test.sqlite3" } }
+      end
+      allow(Evilution::WorkerDatabase::SqliteCopy).to receive(:call) do |_source, destination|
+        FileUtils.mkdir_p(File.dirname(destination))
+        File.write(destination, "copy")
+      end
+      allow(Evilution::WorkerDatabase::Copies).to receive(:new).and_return(copies)
+    end
+
+    def database_of_worker
+      path = ActiveRecord::Base.connection_db_config.configuration_hash[:database]
+      [path, File.exist?(path)]
+    end
+
+    it "gives each worker its own copy of a shared SQLite database" do
+      queue = described_class.new(size: 2, copy_worker_databases: true)
+      seen = []
+
+      queue.map([1, 2], on_arrival: ->(_index, value) { seen << value }) { |_n| database_of_worker }
+
+      paths = seen.map(&:first)
+      expect(paths).to all(start_with(File.join(@dir, "copies", "worker-")))
+      expect(seen.map(&:last)).to all(be(true))
+    end
+
+    it "gives a worker that replaces a recycled one a fresh copy" do
+      queue = described_class.new(size: 1, worker_max_items: 1, copy_worker_databases: true)
+      seen = []
+
+      queue.map([1, 2], on_arrival: ->(_index, value) { seen << value }) { |_n| database_of_worker }
+
+      expect(seen.map(&:first).uniq.length).to eq(2)
+      expect(seen.map(&:first)).to all(start_with(File.join(@dir, "copies", "worker-")))
+    end
+
+    it "removes the copies once the pass ends" do
+      queue = described_class.new(size: 2, copy_worker_databases: true)
+
+      queue.map([1, 2]) { |_n| database_of_worker }
+
+      expect(File.exist?(copies.root)).to be(false)
+    end
+
+    it "removes the copies when the pass ends on an error" do
+      queue = described_class.new(size: 1, copy_worker_databases: true)
+
+      expect do
+        queue.map([1]) do |n|
+          database_of_worker
+          raise "boom" if n == 1
+
+          n
+        end
+      end.to raise_error(RuntimeError, "boom")
+      expect(File.exist?(copies.root)).to be(false)
+    end
+
+    it "copies nothing by default" do
+      queue = described_class.new(size: 1)
+
+      results = queue.map([1]) { |_n| database_of_worker }
+
+      expect(results).to eq([["db/test.sqlite3", false]])
+      expect(Evilution::WorkerDatabase::Copies).not_to have_received(:new)
     end
   end
 end

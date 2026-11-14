@@ -22,7 +22,8 @@ class Evilution::Parallel::WorkQueue::Worker
   # missing from the registry). EV-cnx8 group-leadership (so #kill sweeps the
   # whole subtree) is still established, now by the supervisor's parent-side
   # setpgid.
-  def self.spawn(worker_index:, hooks:, supervisor: Evilution::ProcessSupervisor.new, &block)
+  def self.spawn(worker_index:, hooks:, copies: Evilution::WorkerDatabase::Copies::NONE,
+                 supervisor: Evilution::ProcessSupervisor.new, &block)
     cmd_read, cmd_write = IO.pipe
     res_read, res_write = IO.pipe
     [cmd_read, cmd_write, res_read, res_write].each(&:binmode)
@@ -32,7 +33,7 @@ class Evilution::Parallel::WorkQueue::Worker
       res_read.close
       install_child_signal_handlers
       ENV["TEST_ENV_NUMBER"] = test_env_number_for(worker_index)
-      Evilution::WorkerDatabase.reconnect
+      Evilution::WorkerDatabase.reconnect(copies: copies)
       Evilution::ChildOutput.redirect!
       Loop.run(cmd_read, res_write, hooks: hooks, &block)
     end
@@ -65,7 +66,8 @@ class Evilution::Parallel::WorkQueue::Worker
   # apps interpolating TEST_ENV_NUMBER into database.yml get per-worker
   # SQLite files, avoiding lock contention under jobs > 1. The app may already
   # be booted by a preload, so spawn re-resolves the ActiveRecord connection
-  # after setting it (WorkerDatabase).
+  # after setting it, and with copies moves a worker still on the preloaded
+  # SQLite database to a copy of its own (WorkerDatabase).
   def self.test_env_number_for(worker_index)
     worker_index.zero? ? "" : (worker_index + 1).to_s
   end

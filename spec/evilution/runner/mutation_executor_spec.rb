@@ -612,6 +612,17 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(size: 2, item_timeout: 18))
     end
 
+    it "builds the pool with worker database copies as configured" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_parallel_kwargs(config(jobs: 2), hooks: nil)[:pool_factory].call(18)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(copy_worker_databases: true))
+
+      capture_parallel_kwargs(config(jobs: 2, copy_worker_databases: false), hooks: nil)[:pool_factory].call(18)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(copy_worker_databases: false))
+    end
+
     it "hands the strategy a timeout policy built from the baseline" do
       cfg = config(jobs: 2, spec_files: ["spec/foo_spec.rb"])
       baseline = Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 2.0,

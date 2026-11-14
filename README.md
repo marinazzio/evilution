@@ -142,6 +142,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--preload FILE`             | String  | _(auto)_     | File to require in parent before forking workers. Auto-detect chain for Rails projects: `spec/rails_helper.rb` → `spec/spec_helper.rb` → `test/test_helper.rb`. For non-Rails gems: `spec/spec_helper.rb` → `test/test_helper.rb` → `test/helper.rb`, falling back to the gem entry `lib/<gem>.rb` (with a warning naming the searched paths). Pass `--no-preload` to opt out. |
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--warmup NAME`              | String  | `none`       | After preload, warm lazily-initialised framework state once in the parent: `none` or `rails`. See [Warming up Rails before forking](#warming-up-rails-before-forking). |
+| `--[no-]copy-worker-databases` | Boolean | _(enabled)_ | With `--jobs` above 1 and a preloaded Rails app, give each worker its own copy of a SQLite test database the workers would otherwise share. See [Per-worker database copies](#per-worker-database-copies). |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
 | `--skip-sites PRESETS`       | List    | _(none)_     | Leave low-value code unmutated, comma-separated: `logging`, `debug_output`, `error_messages`, `requires`. `--no-skip-sites` overrides `skip_sites` from the config file. See [Skipping Low-Value Code](#skipping-low-value-code). |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
@@ -232,6 +233,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # probe_first: false       # experimental: when a method's body-to-raise mutant survives, report its other mutants as implied survivors without running them
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
 # warmup: none            # rails: warm I18n, routes, assets and templates once after preload (fork isolation)
+# copy_worker_databases: true  # with jobs > 1 and a preloaded Rails app, give each worker its own copy of a shared SQLite test database
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
@@ -298,6 +300,7 @@ All keys recognised under `schema_version: 1`:
 | `fallback_to_full_suite`     | Boolean                       | `false`                                | When no matching spec resolves, run the entire suite instead of marking the mutation `:unresolved`.                                      |
 | `preload`                    | String / Boolean / null       | `null`                                 | File to preload in parent before forking. `false` to disable. `null` to auto-detect for Rails projects and packaged gems.                |
 | `warmup`                     | String                        | `none`                                 | `rails` warms lazily-initialised Rails state once after preload so forks do not each pay it. `none` / `false` to skip.                  |
+| `copy_worker_databases`      | Boolean                       | `true`                                 | With `jobs` above 1 and a preloaded Rails app, give each worker its own copy of a SQLite test database the workers would otherwise share. See [Per-worker database copies](#per-worker-database-copies). |
 | `spec_mappings`              | Hash&lt;String, String/Array&gt; | `{}`                                | Custom mapping from source path to spec path(s).                                                                                         |
 | `spec_pattern`               | String / null                 | `null`                                 | Glob restricting resolved spec candidates.                                                                                               |
 | `example_targeting`          | Boolean                       | `true`                                 | Per-mutation example-level targeting.                                                                                                    |
@@ -586,7 +589,7 @@ Verdicts are kept per subject (a method, a constant, a declaration). A cached ve
 - the contents of the spec files that resolve for the file (`--spec`, `spec_mappings`, or the resolver), and of the files the related-specs heuristic adds for the mutation when it is on;
 - the conventional helpers every spec file loads: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, `spec/support/**/*.rb`, `test/test_helper.rb`, `test/support/**/*.rb`, the `preload` file, and `Gemfile.lock` / `gems.locked`;
 - the evilution and Ruby versions;
-- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill`, `warmup`, whether uncovered mutations are skipped (`skip_uncovered` with coverage targeting) and `probe_first`.
+- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill`, `warmup`, whether uncovered mutations are skipped (`skip_uncovered` with coverage targeting), `probe_first` and `copy_worker_databases`.
 
 So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a class-body line (comments between methods included) or a spec file re-runs every subject of the file.
 
@@ -1199,17 +1202,38 @@ Do not warm up by sending a real request from your preload (`Rails.application.c
 
 ## Parallel Runs with SQLite
 
-Running with `-j N` forks worker processes. If your Rails app uses SQLite, every worker opens the same `db/test.sqlite3` file, and concurrent writers collide on the database-level lock. Symptoms: `ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, and slow runs. Evilution classifies these crashes as `:neutral` (see [GH #814](https://github.com/marinazzio/evilution/issues/814)) so the mutation score is not polluted, but the wall-clock penalty remains.
+Running with `-j N` forks worker processes. If your Rails app uses SQLite and every worker opens the same `db/test.sqlite3` file, concurrent writers collide on the database-level lock (`ActiveRecord::StatementTimeout`, `SQLite3::BusyException`, slow runs), and, worse, one worker's fixture loads and writes land in the middle of another worker's tests. Verdicts then depend on which mutations happen to run at the same time: on a Redmine model, a shared database turned 47 of 500 survivors into kills at `-j 4` that a `-j 1` run does not reproduce.
 
-Because that contention only exists while several workers are running, those mutations are re-run one at a time once the pool is done, and the verdict from the quiet re-run is the one reported. Without it the neutral bucket moved with `-j` on identical input — the same files scoring 24 killed / 0 neutral at `-j 1` and 6 killed / 18 neutral at `-j 4` (GH #1607). The run says how much it had to redo:
+### Per-worker database copies
+
+By default each worker gets a database of its own, with no setup. When the app is preloaded in the parent (the default for a Rails app under fork isolation, see `--preload`) and `--jobs` is above 1, a worker that would share the preloaded SQLite test database makes a copy of it when it starts and reconnects `ActiveRecord::Base` to the copy. The copy goes through SQLite's backup API, so it holds what the write-ahead log holds and is no larger than the data; it is taken after the preload and the baseline, from a database no worker writes to, so every worker starts from the same schema and data. A worker started in place of a dead or recycled one makes a fresh copy. The `ActiveRecord::Base.configurations` entry is pointed at the copy too, so `establish_connection(:test)` in a test stays on it.
+
+The copies live in a directory under the system temp dir (`evilution-worker-db-<pid>-<random>/worker-<worker pid>/`) and are deleted when the parallel pass ends, also when it ends on an error or Ctrl-C; only a run killed with `SIGKILL` leaves the directory behind. The database in `database.yml` is not written by the workers.
+
+A worker copies only when all of these hold:
+
+- the app was loaded by the preload, so the worker inherits an `ActiveRecord::Base` connection;
+- that connection still matches `database.yml` (a connection your test helper set up by other means is left alone);
+- the adapter is SQLite and the database is a file path, not `:memory:` (never shared anyway) or a `file:` URI;
+- the worker would otherwise use the preloaded database: `database.yml` names one database for all workers, or the worker's own `TEST_ENV_NUMBER` database (below) is not prepared.
+
+Not covered yet: a run with `--no-preload` (the app boots in each mutation's process and reads `database.yml` there, so use `TEST_ENV_NUMBER` below), connections other than `ActiveRecord::Base`'s (other databases set up with `connects_to`, replicas keep using the shared databases, and each worker says so in a warning), and PostgreSQL or MySQL, where a per-worker database would come from a template database; for those, set up per-worker databases with `TEST_ENV_NUMBER`. If a copy fails (a full disk, a locked database), the worker warns and shares the preloaded database as before.
+
+Turn it off with `--no-copy-worker-databases` or `copy_worker_databases: false`. The setting is part of the [incremental cache](#incremental-cache) fingerprint, since it can change verdicts.
+
+### Infrastructure crashes
+
+Contention that still happens (copies off, or a run the copies do not cover) is handled after the fact. Evilution classifies these crashes as `:neutral` (see [GH #814](https://github.com/marinazzio/evilution/issues/814)) so the mutation score is not polluted, and because the contention only exists while several workers are running, those mutations are re-run one at a time once the pool is done, and the verdict from the quiet re-run is the one reported. Without it the neutral bucket moved with `-j` on identical input — the same files scoring 24 killed / 0 neutral at `-j 1` and 6 killed / 18 neutral at `-j 4` (GH #1607). The run says how much it had to redo:
 
 ```
 ! 18 mutations hit infrastructure errors under parallel workers; re-ran them serially.
 ```
 
-The count is in JSON output as `summary.infra_retried`. Such a crash is also never written to the `--incremental` cache: the cache keeps no error class, so a cached `:killed` would be indistinguishable from a real one on the next run and would short-circuit both the demotion and the retry. A neutral from a failing baseline is never re-run — that is a real statement about the spec, not a missed verdict. The retry costs wall-clock time in proportion to the contention, which is another reason to give each worker its own database file:
+The count is in JSON output as `summary.infra_retried`. Such a crash is also never written to the `--incremental` cache: the cache keeps no error class, so a cached `:killed` would be indistinguishable from a real one on the next run and would short-circuit both the demotion and the retry. A neutral from a failing baseline is never re-run — that is a real statement about the spec, not a missed verdict. The retry costs wall-clock time in proportion to the contention, and it does not undo a wrong kill: a test that failed on another worker's data rather than on a lock is not an infrastructure crash. Give each worker its own database instead.
 
-Evilution follows the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention: each worker receives a `TEST_ENV_NUMBER` environment variable (`""` for worker 1, `"2"` for worker 2, `"3"` for worker 3, …). Interpolate it into `config/database.yml` so each worker gets its own SQLite file:
+### Your own per-worker databases (TEST_ENV_NUMBER)
+
+Evilution follows the [`parallel_tests`](https://github.com/grosser/parallel_tests) convention: each worker receives a `TEST_ENV_NUMBER` environment variable (`""` for worker 1, `"2"` for worker 2, `"3"` for worker 3, …). Interpolate it into `config/database.yml` so each worker gets its own database:
 
 ```yaml
 test:
@@ -1229,9 +1253,9 @@ TEST_ENV_NUMBER=3 bin/rails db:test:prepare   # … up to the number of jobs
 
 Without `--preload`, a test helper that loads the schema when it boots (for example `ActiveRecord::Migration.maintain_test_schema!` in `rails_helper.rb`) can do this instead, because it runs inside each worker.
 
-Per-worker databases also work with `--preload`, which boots the app (and resolves `database.yml`) once in the parent before the workers fork: each worker re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when the result differs, re-establishes `ActiveRecord::Base`'s connection to it. Only the primary connection is switched, and only when it still matches `database.yml`; a connection your test helper set up by other means is left alone. Under `--preload` the preload's own schema setup runs once, in the parent, against the parent's database only, so prepare the worker databases with the commands above. A worker whose database is missing or lacks a table or migration of the parent's database goes back to the parent's database and prints which database to prepare; its mutations then share that database as they would without the switch. Connections other than `ActiveRecord::Base`'s (other databases set up with `connects_to`, replicas) keep using the parent's databases, and each worker says so in a warning.
+Per-worker databases also work with `--preload`, which boots the app (and resolves `database.yml`) once in the parent before the workers fork: each worker re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when the result differs, re-establishes `ActiveRecord::Base`'s connection to it. Only the primary connection is switched, and only when it still matches `database.yml`. Under `--preload` the preload's own schema setup runs once, in the parent, against the parent's database only, so prepare the worker databases with the commands above. A worker whose database is missing or lacks a table or migration of the parent's database goes back to the parent's database and prints which database to prepare; with [per-worker copies](#per-worker-database-copies) on, it then uses a copy of the parent's SQLite database, otherwise its mutations share the parent's database as they would without the switch. Worker 1's `TEST_ENV_NUMBER` is empty, so its database is the parent's; with copies on it uses a copy of it, like any worker left on the parent's database.
 
-When Evilution detects a parallel run against a SQLite test database whose path does not depend on `TEST_ENV_NUMBER`, it prints a one-time startup warning pointing to this section. An in-memory database (`:memory:`) is never shared between workers and does not trigger it.
+When Evilution detects a parallel run against a SQLite test database whose path does not depend on `TEST_ENV_NUMBER` and the per-worker copies do not cover it (they are off, or the app was not preloaded), it prints a one-time startup warning pointing to this section. An in-memory database (`:memory:`) is never shared between workers and does not trigger it.
 
 ## Development
 

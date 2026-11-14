@@ -157,6 +157,7 @@ class Evilution::Runner::MutationExecutor
   end
 
   def build_pool(item_timeout)
-    Evilution::Parallel::Pool.new(size: @config.jobs, hooks: @hooks, item_timeout: item_timeout)
+    Evilution::Parallel::Pool.new(size: @config.jobs, hooks: @hooks, item_timeout: item_timeout,
+                                  copy_worker_databases: @config.copy_worker_databases?)
   end
 end

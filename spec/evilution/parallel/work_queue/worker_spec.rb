@@ -5,6 +5,7 @@ require "timeout"
 require "evilution/parallel/work_queue/worker"
 require "evilution/parallel/work_queue/worker/loop"
 require "evilution/process_supervisor"
+require "evilution/worker_database/copies"
 require_relative "../../../support/fake_active_record"
 
 RSpec.describe Evilution::Parallel::WorkQueue::Worker do
@@ -181,6 +182,26 @@ RSpec.describe Evilution::Parallel::WorkQueue::Worker do
       worker.retire
 
       expect(msg[2]).to eq("db/test3.sqlite3")
+    end
+
+    it "connects a preloaded ActiveRecord to a copy of a shared database when given copies" do
+      FakeActiveRecord.install(self) { { "test" => { "adapter" => "sqlite3", "database" => "db/test.sqlite3" } } }
+      allow(Evilution::WorkerDatabase::SqliteCopy).to receive(:call)
+
+      Dir.mktmpdir do |dir|
+        copies = Evilution::WorkerDatabase::Copies.new(root: dir)
+        worker = described_class.spawn(worker_index: 1, hooks: nil, copies: copies) do |_|
+          ActiveRecord::Base.connection_db_config.configuration_hash[:database]
+        end
+        worker.send_item(0, nil)
+        msg = nil
+        Timeout.timeout(5) { msg = worker.read_result until msg }
+        worker.items_completed += 1
+        worker.pending -= 1
+        worker.retire
+
+        expect(msg[2]).to eq(File.join(dir, "worker-#{worker.pid}", "test.sqlite3"))
+      end
     end
 
     it "redirects stderr to per-pid file under ChildOutput.log_dir when set" do

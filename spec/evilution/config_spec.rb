@@ -526,6 +526,27 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#copy_worker_databases?" do
+      it "is on by default" do
+        expect(Evilution::Config.new(skip_config_file: true).copy_worker_databases?).to be true
+      end
+
+      it "is off when copy_worker_databases: false is given" do
+        config = Evilution::Config.new(copy_worker_databases: false, skip_config_file: true)
+
+        expect(config.copy_worker_databases?).to be false
+      end
+
+      it "loads copy_worker_databases from a strict YAML config" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\ncopy_worker_databases: false\n")
+            expect(Evilution::Config.new.copy_worker_databases?).to be false
+          end
+        end
+      end
+    end
+
     describe "#skip_sites" do
       it "skips no sites by default" do
         expect(Evilution::Config.new(skip_config_file: true).skip_sites).to eq([])

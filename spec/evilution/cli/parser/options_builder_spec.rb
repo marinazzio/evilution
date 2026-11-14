@@ -108,6 +108,19 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(parse(["--no-probe-first"]).first[:probe_first]).to be(false)
   end
 
+  it "parses --copy-worker-databases to true and --no-copy-worker-databases to false" do
+    expect(parse(["--copy-worker-databases"]).first[:copy_worker_databases]).to be(true)
+    expect(parse(["--no-copy-worker-databases"]).first[:copy_worker_databases]).to be(false)
+  end
+
+  it "describes --[no-]copy-worker-databases in the help" do
+    help = described_class.build({}).help
+
+    expect(help).to include("--[no-]copy-worker-databases")
+    expect(help).to include("give each worker its own copy of a SQLite")
+    expect(help).to include("test database the workers would otherwise share (default: enabled)")
+  end
+
   it "parses --stop-on-kill to true" do
     options, = parse(["--stop-on-kill"])
     expect(options[:stop_on_kill]).to be(true)

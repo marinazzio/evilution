@@ -4,8 +4,9 @@ require_relative "../parallel"
 require_relative "work_queue"
 
 class Evilution::Parallel::Pool
-  def initialize(size:, hooks: nil, item_timeout: nil)
-    @queue = Evilution::Parallel::WorkQueue.new(size: size, hooks: hooks, item_timeout: item_timeout)
+  def initialize(size:, hooks: nil, item_timeout: nil, copy_worker_databases: false)
+    @queue = Evilution::Parallel::WorkQueue.new(size: size, hooks: hooks, item_timeout: item_timeout,
+                                                copy_worker_databases: copy_worker_databases)
   end
 
   def map(items, on_result: nil, on_arrival: nil, &)
