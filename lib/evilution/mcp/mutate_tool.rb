@@ -6,6 +6,7 @@ require_relative "../config"
 require_relative "../runner"
 require_relative "../reporter/json"
 require_relative "../spec_resolver"
+require_relative "../ast/skip_sites/presets"
 
 require_relative "../mcp"
 
@@ -59,6 +60,14 @@ class Evilution::MCP::MutateTool < MCP::Tool
         type: "boolean",
         description: "Stop each mutation's test run at the first failure that decides the verdict " \
                      "(default: true). Pass false to run every selected example."
+      },
+      skip_sites: {
+        type: "array",
+        items: { type: "string", enum: Evilution::AST::SkipSites::Presets.names.map(&:to_s) },
+        description: "Presets of low-value code to leave unmutated (default: none, or the config file's " \
+                     "skip_sites): logging (log lines, deprecation warnings), debug_output (puts/print/warn/p/pp), " \
+                     "error_messages (the message of a raised error, not the raise or its class), requires " \
+                     "(load-time require/require_relative). Skips are counted per preset in summary.skipped_sites."
       },
       spec: {
         type: "array",

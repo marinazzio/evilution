@@ -40,8 +40,14 @@ class Evilution::CLI::Printers::Environment
     plain_lines.insert(10, setting_line(:fail_fast, @config.fail_fast || "(disabled)"))
     plain_lines.insert(11, setting_line(:stop_on_kill, @config.stop_on_kill))
     plain_lines.insert(15, setting_line(:target, @config.target || "(all files)"))
-    plain_lines << setting_line(:ignore_patterns, format_ignore_patterns(@config.ignore_patterns))
-    plain_lines
+    plain_lines.concat(skip_lines)
+  end
+
+  def skip_lines
+    [
+      setting_line(:ignore_patterns, format_ignore_patterns(@config.ignore_patterns)),
+      setting_line(:skip_sites, format_skip_sites(@config.skip_sites))
+    ]
   end
 
   def setting_line(key, value)
@@ -50,5 +56,9 @@ class Evilution::CLI::Printers::Environment
 
   def format_ignore_patterns(patterns)
     patterns.empty? ? "(none)" : patterns.inspect
+  end
+
+  def format_skip_sites(presets)
+    presets.empty? ? "(none)" : presets.join(", ")
   end
 end

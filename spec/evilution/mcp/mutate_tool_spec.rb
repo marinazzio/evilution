@@ -79,6 +79,7 @@ RSpec.describe Evilution::MCP::MutateTool do
       equivalent_results: [],
       peak_memory_mb: nil,
       skipped: 0,
+      skipped_sites: {},
       disabled_mutations: [],
       coverage_gaps: [],
       unresolved: 0,
@@ -318,6 +319,21 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "passes skip_sites option" do
+      described_class.call(files: ["lib/foo.rb"], skip_sites: %w[logging requires], server_context: nil)
+
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(skip_sites: %i[logging requires])
+      )
+    end
+
+    it "advertises every skip_sites preset in the JSON schema" do
+      schema = described_class.input_schema.to_h
+
+      expect(schema[:properties][:skip_sites][:items][:enum]).to eq(Evilution::AST::SkipSites::Presets.names.map(&:to_s))
+    end
+
     it "advertises test-unit in the JSON schema enum so MCP clients surface it as a valid choice" do
       schema = described_class.input_schema.to_h
 
@@ -537,6 +553,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,
@@ -612,6 +629,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,
@@ -689,6 +707,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,
@@ -774,6 +793,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,
@@ -863,6 +883,7 @@ RSpec.describe Evilution::MCP::MutateTool do
             equivalent_results: [],
             peak_memory_mb: nil,
             skipped: 0,
+            skipped_sites: {},
             disabled_mutations: [],
             coverage_gaps: [],
             unresolved: 0,
@@ -1143,6 +1164,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [equivalent_result],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,
@@ -1239,6 +1261,7 @@ RSpec.describe Evilution::MCP::MutateTool do
           equivalent_results: [],
           peak_memory_mb: nil,
           skipped: 0,
+          skipped_sites: {},
           disabled_mutations: [],
           coverage_gaps: [],
           unresolved: 0,

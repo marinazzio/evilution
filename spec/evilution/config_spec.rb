@@ -526,6 +526,32 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#skip_sites" do
+      it "skips no sites by default" do
+        expect(Evilution::Config.new(skip_config_file: true).skip_sites).to eq([])
+      end
+
+      it "takes the preset names given" do
+        config = Evilution::Config.new(skip_sites: %w[logging requires], skip_config_file: true)
+
+        expect(config.skip_sites).to eq(%i[logging requires])
+      end
+
+      it "rejects an unknown preset" do
+        expect { Evilution::Config.new(skip_sites: %w[logs], skip_config_file: true) }
+          .to raise_error(Evilution::ConfigError, /unknown preset "logs"/)
+      end
+
+      it "loads skip_sites from a strict YAML config" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nskip_sites: [logging, error_messages]\n")
+            expect(Evilution::Config.new.skip_sites).to eq(%i[logging error_messages])
+          end
+        end
+      end
+    end
+
     describe "#stop_on_kill?" do
       it "defaults to true" do
         expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true

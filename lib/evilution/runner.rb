@@ -128,7 +128,7 @@ class Evilution::Runner
   def build_summary(outcome:, duration:, plan:, execution:, baseline_result:, phases:)
     Evilution::Result::Summary.new(
       results: outcome.results, duration: duration, truncated: execution.truncated,
-      skipped: plan.skipped_count,
+      skipped: plan.skipped_count, skipped_sites: plan.skipped_sites,
       disabled_mutations: plan.disabled_mutations,
       unresolved_target_files: outcome.unresolved_target_files,
       target_file_count: outcome.target_file_count,

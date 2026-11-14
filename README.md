@@ -143,6 +143,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--no-preload`               | Boolean | _(enabled)_  | Disable parent-process preload.                     |
 | `--warmup NAME`              | String  | `none`       | After preload, warm lazily-initialised framework state once in the parent: `none` or `rails`. See [Warming up Rails before forking](#warming-up-rails-before-forking). |
 | `--skip-heredoc-literals`    | Boolean | false        | Skip all string literal mutations inside heredocs.  |
+| `--skip-sites PRESETS`       | List    | _(none)_     | Leave low-value code unmutated, comma-separated: `logging`, `debug_output`, `error_messages`, `requires`. `--no-skip-sites` overrides `skip_sites` from the config file. See [Skipping Low-Value Code](#skipping-low-value-code). |
 | `--show-disabled`            | Boolean | false        | Report mutations skipped by `# evilution:disable` comments. |
 | `--fallback-full-suite`      | Boolean | false        | When no matching spec/test resolves for a mutation, run the whole test suite instead of marking it `:unresolved` and skipping. |
 | `--related-specs-heuristic`  | Boolean | false        | When a mutation removes an `includes(...)` call, also run matching specs from `spec/{requests,integration,features,system}` (Rails-style domain match on the source file's basename). Trades extra spec runs for higher kill rate on ORM mutations. |
@@ -235,6 +236,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # show_disabled: false     # report mutations skipped by disable comments
 # baseline_session: null   # path to session file for HTML comparison
 # ignore_patterns: []      # AST patterns to exclude (see docs/ast_pattern_syntax.md)
+# skip_sites: []           # presets of low-value code to leave unmutated: logging, debug_output, error_messages, requires
 # progress: true           # TTY progress bar
 # example_targeting: true  # per-mutation example targeting via body-token scan
 # example_targeting_fallback: full_file  # full_file | unresolved
@@ -288,6 +290,7 @@ All keys recognised under `schema_version: 1`:
 | `line_ranges`                | Hash                          | `{}`                                   | Per-file line-range constraints. Typically set via CLI; rare in YAML.                                                                    |
 | `spec_files`                 | Array&lt;String&gt;           | `[]`                                   | Explicit spec files to run. Bypasses auto-detection when non-empty.                                                                      |
 | `ignore_patterns`            | Array&lt;String&gt;           | `[]`                                   | AST patterns to skip during mutation generation. See [docs/ast_pattern_syntax.md](docs/ast_pattern_syntax.md).                           |
+| `skip_sites`                 | Array&lt;String&gt;           | `[]`                                   | Presets of low-value code to leave unmutated: `logging`, `debug_output`, `error_messages`, `requires`. See [Skipping Low-Value Code](#skipping-low-value-code). |
 | `show_disabled`              | Boolean                       | `false`                                | Report mutations skipped by `# evilution:disable` comments.                                                                              |
 | `baseline_session`           | String / null                 | `null`                                 | Saved session file path for HTML report comparison.                                                                                      |
 | `skip_heredoc_literals`      | Boolean                       | `false`                                | Skip string literal mutations inside heredocs.                                                                                           |
@@ -359,6 +362,29 @@ configure_metrics
 
 Use `--show-disabled` to see which mutations were skipped.
 
+## Skipping Low-Value Code
+
+Some mutations cost a full test run and rarely say anything: a changed log message, a reworded error message, a dropped `require` that the preloaded process has already run. `skip_sites` (or `--skip-sites`) names presets of such code to leave unmutated:
+
+```yaml
+skip_sites: [logging, error_messages, requires]
+```
+
+Each preset is a structural rule over the parsed source, like [`ignore_patterns`](docs/ast_pattern_syntax.md), but a preset only skips what changes what the code *reports*. The raise, the class raised, the condition guarding a raise or a log line, and code that may change state are always mutated.
+
+| Preset | Sites | Skipped inside a site |
+|---|---|---|
+| `logging` | A log level (`debug info warn error fatal unknown add log`) sent to a receiver named `logger` or `LOGGER` (`logger`, `@logger`, `Rails.logger`, `config.logger`, `App::LOGGER`); `warn` / `deprecation_warning` sent to a deprecator (`ActiveSupport::Deprecation`, `ActiveSupport.deprecator`, `Rails.deprecator`, `deprecator`); `warn(..., category: :deprecated)`. Not `logger.debug?` or `logger.level = ...`. | Literal text of the message; anything inside an argument or block that only reads. The call itself (deleting the line) and its receiver, when every argument only reads. |
+| `debug_output` | `puts`, `print`, `printf`, `warn` sent to no receiver or to `Kernel`; `puts` / `print` / `printf` / `write` sent to `$stdout`, `$stderr`, `STDOUT`, `STDERR`; `p` / `pp` only as a statement followed by another one, where their return value is dropped (`p x` as the last statement returns `x`). | As for `logging`. Kept apart from `logging` because console output is a CLI's actual job. |
+| `error_messages` | `raise` / `fail` sent to no receiver or to `Kernel`. The message is the second positional argument (`raise Error, "msg"`), the only one when it is a string (`raise "msg"`), or the string arguments of an error built in place on a constant (`raise Error.new("msg")`, `.exception`). Keywords (`cause:`), the backtrace argument and any argument after a splat are not messages. | Literal text of the message; anything inside a message that only reads. Never the raise, its class, or a non-string argument of `Error.new(...)`, which the error may keep as data. |
+| `requires` | `require` / `require_relative` sent to no receiver or to `Kernel` that run while the file loads: at the top of the file or in a class or module body. Not inside a method, block or lambda (lazy loading). | Everything, the call included. |
+
+"Only reads" means: literals, variable and constant reads, interpolation, `&&` / `||` / ternaries, and calls that take no arguments and no block and whose name does not end in `!` or `=` (attribute readers, `inspect`, `class`), plus `[]`, operators, `format`, `sprintf`, `join`, `to_s`. A message such as `"left: #{queue.pop!}"` keeps the call mutated (only its literal text is skipped), since mutating it changes more than the message. Mutations whose node is the whole `raise` call (removing or `nil`-ing its message argument) are not skipped.
+
+A skipped mutation is not run and not scored. It is counted in `summary.skipped`, and per preset in `summary.skipped_sites` (JSON) and on a `Skipped sites:` line in the text report. A mutation an `ignore_patterns` pattern also matches is counted under the pattern. `skip_sites` changes no verdict, so it does not invalidate the [incremental cache](#incremental-cache).
+
+**Default: none.** Under the 1.x [compatibility policy](#schema-versioning) a new key's default preserves prior behaviour, and turning a preset on removes mutants, and with them points from the score, that existing users see today. Measured over the whole `lib/` of dry-monads, httparty, grape and i18n and Redmine's `app/` and `lib/redmine`, all four presets together skip 0.3-0.9% of the mutants (in Redmine mostly `logging`, elsewhere mostly `error_messages`), and some of the skipped error-message mutants are killed by specs that assert the message, so the speed-up a default would buy is small next to a changed mutant set and score. Turn on the presets that fit your code base.
+
 ## JSON Output Schema
 
 Use `--format json` for machine-readable output. The same shape is used for both stdout reports (`--format json`) and saved session files (`--save-session` → `.evilution/results/*.json`); session files add a small set of extra top-level fields described under [Session JSON files](#session-json-files) below.
@@ -388,7 +414,9 @@ Schema:
     "uncovered": "integer  — mutations whose changed lines no example executes, reported without a test run (coverage targeting only); scored as survivors",
     "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals; uncovered mutations stay in the denominator, as survivors",
     "duration": "float   — total wall-clock seconds of the run, from subject discovery through the audit of target files for unresolved specs (the phases in timings.phases add up to it), rounded to 4 decimals",
-    "peak_memory_mb": "float (optional) — peak RSS across all mutation child processes, in MB"
+    "peak_memory_mb": "float (optional) — peak RSS across all mutation child processes, in MB",
+    "skipped": "integer (optional) — mutations left out during generation (ignore_patterns, skip_sites, # evilution:disable, Sorbet sigs), never run or scored; present only when non-zero",
+    "skipped_sites": "object (optional) — the share of each skip_sites preset in skipped, e.g. { logging: 3, error_messages: 12 }; present only when a preset skipped something"
   },
   "survived": [
     {
@@ -470,7 +498,7 @@ Sessions saved by `--save-session` (under `.evilution/results/*.json`) and consu
 | `neutral_count`      | Integer | Mirrors `summary.neutral`.                                                                        |
 | `equivalent_count`   | Integer | Mirrors `summary.equivalent`.                                                                     |
 | `uncovered_count`    | Integer | Mirrors `summary.uncovered`.                                                                      |
-| `skipped_count`      | Integer | Mutations skipped by `# evilution:disable` (omitted from `summary` unless positive).              |
+| `skipped_count`      | Integer | Mutations left out during generation: `ignore_patterns`, `skip_sites`, `# evilution:disable`, Sorbet sigs (mirrors `summary.skipped`, omitted from `summary` unless positive; `summary.skipped_sites` carries the per-preset share). |
 
 Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent`, `unresolved`, `unparseable`, `timed_out`, `errors`) — only `survived`, `uncovered` and `coverage_gaps` are persisted. `evilution session diff` treats an `uncovered` mutation as a survivor, so one that survived before is not reported fixed. The score, totals, and timestamps are stable for diff/compare consumers.
 
@@ -861,6 +889,7 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 | `baseline` | `false` to skip the baseline suite check when you already know it's green |
 | `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
 | `stop_on_kill` | `false` to run every selected example instead of stopping at the first deciding failure (default `true`) |
+| `skip_sites` | Presets of low-value code to leave unmutated: `logging`, `debug_output`, `error_messages`, `requires` (see [Skipping Low-Value Code](#skipping-low-value-code)); skips are counted per preset in `summary.skipped_sites` |
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 

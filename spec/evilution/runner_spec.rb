@@ -3305,6 +3305,7 @@ RSpec.describe Evilution::Runner do
         enabled: [mutation],
         equivalent: [equivalent_mutation],
         skipped_count: 0,
+        skipped_sites: {},
         disabled_mutations: [],
         mutated_lines: {}
       )
@@ -3316,6 +3317,20 @@ RSpec.describe Evilution::Runner do
 
       expect(result.total).to eq(2)
       expect(result.equivalent).to eq(1)
+    end
+
+    it "reports the skips of the plan per preset" do
+      plan = Evilution::Runner::MutationPlanner::Plan.new(
+        enabled: [mutation], equivalent: [], skipped_count: 3, skipped_sites: { logging: 2 },
+        disabled_mutations: [], mutated_lines: {}
+      )
+      planner = instance_double(Evilution::Runner::MutationPlanner, call: plan)
+      allow(Evilution::Runner::MutationPlanner).to receive(:new).and_return(planner)
+
+      result = runner.call
+
+      expect(result.skipped).to eq(3)
+      expect(result.skipped_sites).to eq(logging: 2)
     end
   end
 

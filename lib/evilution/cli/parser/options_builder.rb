@@ -187,6 +187,11 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_mutation_behavior_options(opts)
     opts.on("--skip-heredoc-literals", "Skip all string literal mutations inside heredocs") { @options[:skip_heredoc_literals] = true }
+    opts.on("--[no-]skip-sites PRESETS", Array,
+            "Leave low-value code unmutated, comma-separated: logging, debug_output, error_messages,",
+            "requires (default: none). --no-skip-sites overrides skip_sites from the config file") do |presets|
+      @options[:skip_sites] = presets || []
+    end
     opts.on("--related-specs-heuristic", "Append related request/integration/feature/system specs for includes() mutations") do
       @options[:related_specs_heuristic] = true
     end

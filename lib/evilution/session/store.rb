@@ -100,8 +100,14 @@ class Evilution::Session::Store
       score: summary.score.round(4),
       duration: summary.duration.round(4)
     }
-    data[:skipped] = summary.skipped if summary.skipped.positive?
-    data
+    data.merge(skip_fields(summary))
+  end
+
+  def skip_fields(summary)
+    fields = {}
+    fields[:skipped] = summary.skipped if summary.skipped.positive?
+    fields[:skipped_sites] = summary.skipped_sites unless summary.skipped_sites.empty?
+    fields
   end
 
   def build_mutation_detail(result)

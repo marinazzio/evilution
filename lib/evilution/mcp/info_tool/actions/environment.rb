@@ -38,7 +38,8 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
         "save_session" => config.save_session,
         "target" => config.target,
         "skip_heredoc_literals" => config.skip_heredoc_literals,
-        "ignore_patterns" => config.ignore_patterns
+        "ignore_patterns" => config.ignore_patterns,
+        "skip_sites" => config.skip_sites
       }
     end
   end

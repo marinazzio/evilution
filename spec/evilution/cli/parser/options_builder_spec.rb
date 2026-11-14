@@ -148,6 +148,16 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:skip_heredoc_literals]).to be(true)
   end
 
+  it "parses --skip-sites into the list of presets" do
+    options, = parse(["--skip-sites", "logging,error_messages"])
+    expect(options[:skip_sites]).to eq(%w[logging error_messages])
+  end
+
+  it "parses --no-skip-sites to no presets" do
+    options, = parse(["--no-skip-sites"])
+    expect(options[:skip_sites]).to eq([])
+  end
+
   it "parses --results-dir" do
     options, = parse(["--results-dir", "/tmp/results"])
     expect(options[:results_dir]).to eq("/tmp/results")

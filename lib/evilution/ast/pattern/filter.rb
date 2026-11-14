@@ -1,19 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "../pattern"
-require_relative "../parent_index"
-require_relative "../parse_cache"
+require_relative "../ancestor_lookup"
 require_relative "parser"
 
 # Decides whether a mutation is ignored: it is when a pattern matches the
 # mutated node or any of its ancestors, up to the top of the source the node
 # was parsed from.
 class Evilution::AST::Pattern::Filter
-  NO_ANCESTORS = [].freeze
-  private_constant :NO_ANCESTORS
-
-  def initialize(patterns)
+  # ancestor_lookup: shared with other filters asking about the same nodes,
+  # so a file's parent index is built once.
+  def initialize(patterns, ancestor_lookup: Evilution::AST::AncestorLookup.new)
     @matchers = patterns.map { |p| Evilution::AST::Pattern::Parser.new(p).parse }
+    @ancestor_lookup = ancestor_lookup
     reset_count!
   end
 
@@ -27,7 +26,8 @@ class Evilution::AST::Pattern::Filter
   # match. Without one each skip counts.
   def skip?(node, file_path: nil, source: nil, mutated_source: nil)
     return false if @matchers.empty?
-    return false unless matches?(node) || ancestors(node, file_path, source).any? { |ancestor| matches?(ancestor) }
+    return false unless matches?(node) ||
+                        @ancestor_lookup.ancestors(node, file_path, source).any? { |ancestor| matches?(ancestor) }
 
     @skipped << (mutated_source ? skip_key(file_path, mutated_source) : Object.new)
     true
@@ -54,25 +54,5 @@ class Evilution::AST::Pattern::Filter
 
   def matches?(node)
     @matchers.any? { |m| m.match?(node) }
-  end
-
-  def ancestors(node, file_path, source)
-    return NO_ANCESTORS if source.nil?
-
-    parent_index(file_path, source).enum_for(:each_ancestor, node)
-  end
-
-  # Only the last source's index is kept: the mutations of a file are made one
-  # after the other, and an index per file would hold every file's tree for
-  # the whole run. The operators each read the file anew, so an equal source
-  # is taken over, and the next check against it compares no bytes.
-  def parent_index(file_path, source)
-    unless source.equal?(@indexed_source)
-      unless source == @indexed_source
-        @parent_index = Evilution::AST::ParentIndex.new(Evilution::AST::ParseCache.tree_for(file_path, source))
-      end
-      @indexed_source = source
-    end
-    @parent_index
   end
 end

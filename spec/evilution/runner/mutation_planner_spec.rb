@@ -160,6 +160,77 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       end
     end
 
+    context "with skip_sites" do
+      def plan_for(file, sites, **overrides)
+        described_class.new(config(skip_sites: sites, **overrides), registry: registry).call(subjects_for(file))
+      end
+
+      def planned(plan)
+        plan.enabled + plan.equivalent
+      end
+
+      def mutations_on(plan, line)
+        planned(plan).select { |m| m.line == line }
+      end
+
+      around do |example|
+        Dir.mktmpdir do |dir|
+          @file = File.join(dir, "shop.rb")
+          File.write(@file, <<~RUBY)
+            class Shop
+              def buy(qty)
+                logger.info("buying \#{qty}")
+                raise ArgumentError, "qty must be positive" if qty < 1
+                qty * 2
+              end
+            end
+          RUBY
+          example.run
+        end
+      end
+
+      it "plans every mutation and skips none when no preset is chosen" do
+        plan = plan_for(@file, [])
+
+        expect(mutations_on(plan, 3)).not_to be_empty
+        expect(plan.skipped_count).to eq(0)
+        expect(plan.skipped_sites).to eq({})
+      end
+
+      it "skips the mutations of the chosen presets' sites and counts them per preset" do
+        baseline = planned(plan_for(@file, []))
+        plan = plan_for(@file, %i[logging error_messages])
+        skipped = baseline.length - planned(plan).length
+
+        expect(mutations_on(plan, 3)).to be_empty
+        expect(plan.skipped_sites.keys).to contain_exactly(:logging, :error_messages)
+        expect(plan.skipped_sites.values.sum).to eq(skipped)
+        expect(plan.skipped_count).to eq(skipped)
+      end
+
+      it "keeps the raise, its class and its condition" do
+        mutated = mutations_on(plan_for(@file, [:error_messages]), 4).map { |m| m.mutated_slice.strip }
+
+        expect(mutated).to include(
+          "raise ArgumentError, \"qty must be positive\" if qty <= 1",
+          "raise nil, \"qty must be positive\" if qty < 1",
+          "raise if qty < 1"
+        )
+        expect(mutated).not_to include("raise ArgumentError, \"\" if qty < 1")
+      end
+
+      it "leaves the code outside every site mutated" do
+        expect(mutations_on(plan_for(@file, %i[logging error_messages]), 5)).not_to be_empty
+      end
+
+      it "adds the patterns' skips to the count but not to any preset" do
+        plan = plan_for(@file, [:logging], ignore_patterns: ["call{name=*}"])
+
+        expect(plan.skipped_sites).to eq({})
+        expect(plan.skipped_count).to eq(planned(plan_for(@file, [])).length - planned(plan).length)
+      end
+    end
+
     context "when ignore_patterns names a node enclosing the mutated one" do
       def plan_for(file, patterns, **overrides)
         described_class.new(config(ignore_patterns: patterns, **overrides), registry: registry).call(subjects_for(file))
