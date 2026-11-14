@@ -29,6 +29,17 @@ RSpec.describe Evilution::Subject do
     expect(subj.source).to include("@age >= 18")
   end
 
+  it "has no byte range unless one is given" do
+    expect(subj.byte_range).to be_nil
+  end
+
+  it "exposes the byte range its source spans in the file" do
+    ranged = described_class.new(name: "User#adult?", file_path: "lib/user.rb", line_number: 9,
+                                 source: "def adult?\n  @age >= 18\nend", node: node, byte_range: 120...148)
+
+    expect(ranged.byte_range).to eq(120...148)
+  end
+
   it "exposes node" do
     expect(subj.node).to eq(node)
   end

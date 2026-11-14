@@ -32,9 +32,24 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       expect(described_class.new(backend).fetch(mutation)).to be_nil
     end
 
-    it "returns nil when the cached entry status is not killed or timeout" do
-      backend = instance_double("Cache", fetch: { status: :survived, duration: 0.1 })
+    it "returns nil when the cached entry status is not a verdict the cache keeps" do
+      backend = instance_double("Cache", fetch: { status: :error, duration: 0.1 })
       expect(described_class.new(backend).fetch(mutation)).to be_nil
+    end
+
+    it "rebuilds a MutationResult when status is survived" do
+      mut = mutation
+      backend = instance_double("Cache", fetch: { status: :survived, duration: 0.2, killing_test: nil,
+                                                  test_command: "rspec spec/foo_spec.rb", time_limit: nil })
+      result = described_class.new(backend).fetch(mut)
+      expect(result.status).to eq(:survived)
+      expect(result.test_command).to eq("rspec spec/foo_spec.rb")
+    end
+
+    it "rebuilds a timeout with the time limit it ran under" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 5.0, killing_test: nil,
+                                                  test_command: "c", time_limit: 4.0 })
+      expect(described_class.new(backend).fetch(mutation).time_limit).to eq(4.0)
     end
 
     it "rebuilds a MutationResult when status is killed" do
@@ -43,6 +58,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       result = described_class.new(backend).fetch(mut)
       expect(result.status).to eq(:killed)
       expect(result.duration).to eq(0.2)
+      expect(result.killing_test).to eq("t")
+      expect(result.test_command).to eq("c")
       expect(result.mutation).to be(mut)
     end
 
@@ -66,10 +83,20 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       expect { described_class.new(nil).store(mutation, killed(mutation)) }.not_to raise_error
     end
 
-    it "is a no-op for non-killed/timeout results" do
+    it "is a no-op for results that are no verdict about the mutation" do
       backend = instance_double("Cache")
       expect(backend).not_to receive(:store)
-      described_class.new(backend).store(mutation, survived(mutation))
+      %i[error neutral equivalent unresolved unparseable].each do |status|
+        described_class.new(backend).store(mutation, Evilution::Result::MutationResult.new(mutation: mutation, status: status))
+      end
+    end
+
+    it "stores survived results" do
+      mut = mutation
+      backend = instance_double("Cache")
+      expect(backend).to receive(:store).with(mut, status: :survived, duration: 0.1, killing_test: nil,
+                                                   test_command: nil, time_limit: nil)
+      described_class.new(backend).store(mut, survived(mut))
     end
 
     # EV-j0bv / GH #1607: a kill that came from an infrastructure crash is not
@@ -117,7 +144,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
                                               status: :killed,
                                               duration: 0.1,
                                               killing_test: "t",
-                                              test_command: "c")
+                                              test_command: "c",
+                                              time_limit: nil)
       described_class.new(backend).store(mut, killed(mut))
     end
 
@@ -132,8 +160,21 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
                                               status: :timeout,
                                               duration: 5.0,
                                               killing_test: nil,
-                                              test_command: "c")
-      described_class.new(backend).store(mut, timed_out(mut))
+                                              test_command: "c",
+                                              time_limit: 4.0)
+      described_class.new(backend).store(mut, timed_out(mut).with_time_limit(4.0))
+    end
+  end
+
+  describe "#flush" do
+    it "is a no-op when the underlying cache is nil" do
+      expect { described_class.new(nil).flush }.not_to raise_error
+    end
+
+    it "writes out what the underlying cache holds" do
+      backend = instance_double(Evilution::Cache, flush: nil)
+      described_class.new(backend).flush
+      expect(backend).to have_received(:flush)
     end
   end
 

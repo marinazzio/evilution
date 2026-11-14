@@ -117,7 +117,7 @@ class Evilution::CLI::Parser::OptionsBuilder
                            "(default: disabled; if provided without N, uses 1; use --fail-fast=N)") { @options[:fail_fast] ||= 1 }
     opts.on("--no-baseline", "Skip baseline test suite check") { @options[:baseline] = false }
     opts.on("--[no-]incremental",
-            "Cache killed/timeout results; skip re-running them on unchanged files. " \
+            "Cache verdicts per method; skip re-running them until the method or its specs change. " \
             "Use --no-incremental to override `incremental: true` from the config file for one run.") do |v|
       @options[:incremental] = v
     end

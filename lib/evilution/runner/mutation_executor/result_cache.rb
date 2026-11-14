@@ -5,7 +5,10 @@ require_relative "../../result/mutation_result"
 require_relative "../../infra_crash"
 
 class Evilution::Runner::MutationExecutor::ResultCache
-  CACHEABLE_STATUSES = %i[killed timeout].freeze
+  # The verdicts about a mutation. A survivor is kept too: its key changes
+  # with the subject and its spec files, so a test that would now kill it
+  # re-runs it.
+  CACHEABLE_STATUSES = %i[killed survived timeout].freeze
   private_constant :CACHEABLE_STATUSES
 
   Partition = Data.define(:uncached_indices, :cached_results)
@@ -26,13 +29,14 @@ class Evilution::Runner::MutationExecutor::ResultCache
       status: data[:status],
       duration: data[:duration],
       killing_test: data[:killing_test],
-      test_command: data[:test_command]
+      test_command: data[:test_command],
+      time_limit: data[:time_limit]
     )
   end
 
   def store(mutation, result)
     return unless @backend
-    return unless result.killed? || result.timeout?
+    return unless CACHEABLE_STATUSES.include?(result.status)
     return if infra_crash?(result)
     # Nor is one where only already-failing examples failed: the baseline
     # that says so belongs to this run, and the cache keeps no trace of it.
@@ -42,7 +46,15 @@ class Evilution::Runner::MutationExecutor::ResultCache
                    status: result.status,
                    duration: result.duration,
                    killing_test: result.killing_test,
-                   test_command: result.test_command)
+                   test_command: result.test_command,
+                   time_limit: result.time_limit)
+  end
+
+  # Writes out what the run stored (see Evilution::Cache#flush).
+  def flush
+    return unless @backend
+
+    @backend.flush
   end
 
   # A kill that came from an infrastructure crash is not a verdict about the

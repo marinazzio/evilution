@@ -168,6 +168,26 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
     end
   end
 
+  describe "#parsed_subjects" do
+    it "is empty before #call" do
+      config = Evilution::Config.new(target_files: [], quiet: true, baseline: false, skip_config_file: true)
+
+      expect(described_class.new(config, parser: parser).parsed_subjects).to eq([])
+    end
+
+    it "lists the subjects of the target files before the target filters them" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", "class Foo\n  def bar = 1\n\n  def baz = 2\nend\n")
+        config = Evilution::Config.new(target_files: [file], target: "Foo#bar", quiet: true, baseline: false,
+                                       skip_config_file: true)
+        pipeline = described_class.new(config, parser: parser)
+
+        expect(pipeline.call.map(&:name)).to eq(["Foo#bar"])
+        expect(pipeline.parsed_subjects.map(&:name)).to contain_exactly("Foo#bar", "Foo#baz")
+      end
+    end
+  end
+
   describe "#call with method target" do
     let(:fixture) do
       <<~RUBY

@@ -131,7 +131,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `-q`, `--quiet`              | Boolean | false        | Suppress output.                                   |
 | `--stdin`                    | Boolean | false        | Read target file paths from stdin (one per line).  |
 | `--integration NAME`         | String  | `rspec`      | Test framework integration: `rspec`, `minitest`, or `test-unit`. See [docs/integrations.md](docs/integrations.md). |
-| `--[no-]incremental`         | Boolean | false        | Cache killed/timeout results; skip unchanged mutations on re-runs. Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
+| `--[no-]incremental`         | Boolean | false        | Cache each mutation's verdict (killed, survived, timeout) and skip it on re-runs until its subject, its spec files or the run's settings change — see [Incremental cache](#incremental-cache). Pass `--no-incremental` to override `incremental: true` from the config file for one invocation (e.g. cold-cache debugging). Last flag wins when both are given. |
 | `--save-session`             | Boolean | false        | Persist results as timestamped JSON under `.evilution/results/`. |
 | `--no-progress`              | Boolean | _(enabled)_  | Disable the TTY progress bar.                      |
 | `--quiet-children`           | Boolean | false        | Redirect each forked worker's stdout/stderr to per-pid files under `tmp/evilution_children/<pid>.{out,err}` so noisy app initializers (Datadog, Bullet, etc.) don't merge with parent output. Trade-off: live worker errors only appear in the side files, not the terminal — `tail -f tmp/evilution_children/*.err` to watch them. |
@@ -277,7 +277,7 @@ All keys recognised under `schema_version: 1`:
 | `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (a mutation failing only on those is `:neutral`).                                                          |
 | `stop_on_kill`               | Boolean                       | `true`                                 | Stop each mutation's test run at the first failure that decides the verdict. Set `false` to run every selected example. |
 | `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. Under `in_process` a mutation that takes the Ruby process down ends the run: see [What `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain). |
-| `incremental`                | Boolean                       | `false`                                | Cache killed/timeout results across runs.                                                                                                |
+| `incremental`                | Boolean                       | `false`                                | Cache verdicts across runs; see [Incremental cache](#incremental-cache).                                                                 |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
 | `progress`                   | Boolean                       | `true`                                 | TTY progress bar.                                                                                                                        |
 | `save_session`               | Boolean                       | `false`                                | Save session JSON under `.evilution/results/`.                                                                                           |
@@ -369,7 +369,7 @@ Schema:
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived only)",
-      "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; absent for results read from the --incremental cache",
+      "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; a result read from the --incremental cache carries the limit its run had",
       "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
       "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from the dispatcher sending it to a worker to that worker starting it; a worker is sent its next mutation as soon as it finishes one, so this is the cost of the hand-over, and for a worker's first mutation also of the worker starting up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
     }
@@ -508,6 +508,27 @@ With the defaults (factor 10, floor 10s, ceiling 60s) a mutant on a spec file th
 A mutation keeps the fixed 30s limit when the baseline cannot vouch for its spec files: no baseline ran (`--no-baseline`), no spec file resolves for its source (it falls back to the whole suite, or is reported unresolved), one of its spec files failed in the baseline, or `related_specs_heuristic` adds spec files the baseline never ran.
 
 `--timeout N` (or `timeout:` in the config file) gives every mutation the same N seconds, as before; pass `--timeout 30` for the previous behaviour. The limit a timed-out mutation ran under is in the JSON report as `time_limit`. Under `--jobs` the pool gives up on a worker that has not answered within twice the longest limit of the run.
+
+### Incremental cache
+
+`--incremental` (or `incremental: true`) keeps each mutation's verdict — killed, survived or timeout — in `tmp/evilution_cache/` and reuses it on the next run instead of running the mutation again. A reused verdict is reported and scored like a fresh one; it carries no `timings` and no memory figures, since nothing ran.
+
+Verdicts are kept per subject (a method, a constant, a declaration). A cached verdict is reused only while all of these are unchanged:
+
+- the subject's own source;
+- the rest of its file outside every subject: class and module lines, `include`s, `attr_*`s, other class-body code, and every constant of the file;
+- the contents of the spec files that resolve for the file (`--spec`, `spec_mappings`, or the resolver), and of the files the related-specs heuristic adds for the mutation when it is on;
+- the conventional helpers every spec file loads: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, `spec/support/**/*.rb`, `test/test_helper.rb`, `test/support/**/*.rb`, the `preload` file, and `Gemfile.lock` / `gems.locked`;
+- the evilution and Ruby versions;
+- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill` and `warmup`.
+
+So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a class-body line (comments between methods included) or a spec file re-runs every subject of the file.
+
+What the cache does **not** see: other methods the subject calls (in the same file or another), other source files, and files a spec loads beyond the helpers above (factories, fixtures, shared examples outside `spec/support`), as well as `hooks`. A change there keeps the cached verdicts, so a survivor can stay a survivor after a test it depends on indirectly was fixed, or the other way around. Run without `--incremental` (or delete `tmp/evilution_cache/`) for a result that owes nothing to earlier runs, e.g. in CI.
+
+Not cached: mutations whose source has no spec file that resolves (with or without `--fallback-full-suite`), errors, neutrals, kills from an infrastructure crash, and kills in which only examples already failing in the baseline failed.
+
+The cache holds one JSON file per source file under `tmp/evilution_cache/v2/`, read once per run and written once per source file, so its cost grows with the number of mutations, not with their square. A file keeps one version of each subject: writing it drops the verdicts of a subject's earlier source and of subjects the file no longer has. Cache files of the earlier format (directly in `tmp/evilution_cache/`, keyed by the whole file's content) are not read, and are deleted the first time the new cache is written.
 
 ### Neutral Mutations
 
@@ -796,7 +817,7 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 
 | Parameter | Purpose |
 |---|---|
-| `incremental` | Cache killed/timeout results across runs — set `true` when iterating on the same files |
+| `incremental` | Cache verdicts (killed, survived, timeout) across runs — set `true` when iterating on the same files; editing one method re-runs only that method's mutations |
 | `integration` | `rspec`, `minitest`, or `test_unit` |
 | `isolation` | `auto`, `fork`, or `in_process` |
 | `baseline` | `false` to skip the baseline suite check when you already know it's green |
