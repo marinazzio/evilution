@@ -112,4 +112,105 @@ RSpec.describe Evilution::Coverage::Recorder do
       expect(map.examples_for(target, 3)).to eq(["spec/calc_spec.rb:9"])
     end
   end
+
+  context "unexecuted-line tracking at the end of the build" do
+    let(:source) do
+      snapshots(
+        { target => [nil, 1, 0, 0, nil] }, # before: line 2 ran at load
+        { target => [nil, 1, 1, 0, nil] }, # after: line 3 ran in the example
+        { target => [nil, 1, 1, 0, nil] }  # the end of the build: line 4 never ran
+      )
+    end
+
+    it "records the executable lines that never ran in the files the build vouches for" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], vouched_files: [target], spec_files: ["/proj/spec/calc_spec.rb"])
+
+      expect(map.uncovered?(target, [4])).to be(true)
+      expect(map.uncovered?(target, [2])).to be(false)
+      expect(map.uncovered?(target, [5])).to be(false) # not executable
+      expect(map.to_h["missed_lines"]).to eq(target => [4])
+      expect(map.built_from?(["/proj/spec/calc_spec.rb"])).to be(true)
+    end
+
+    it "records none for a file the build does not vouch for" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], vouched_files: [])
+
+      expect(map.uncovered?(target, [4])).to be(false)
+    end
+  end
+
+  context "a line that first runs after the last example, as an after(:suite) hook can" do
+    let(:source) do
+      snapshots(
+        { target => [nil, 0, 0] },
+        { target => [nil, 1, 0] },
+        { target => [nil, 1, 1] } # the end of the build: line 3 ran after the example
+      )
+    end
+
+    it "counts it as executed" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], vouched_files: [target])
+
+      expect(map.executed?(target, 3)).to be(true)
+      expect(map.uncovered?(target, [3])).to be(false)
+    end
+  end
+
+  context "per-file counts in the { lines: [...] } shape, before and after the fork" do
+    subject(:recorder) do
+      described_class.new(target_files: [target], coverage_source: source,
+                          prior_counts: { target => { lines: [1, 0, 0] } })
+    end
+
+    let(:source) { snapshots({ target => { lines: [0, 0, 0] } }) }
+
+    it "reads the lines out of them" do
+      map = recorder.to_map(built_files: [target], vouched_files: [target])
+
+      expect(map.executed?(target, 1)).to be(true)
+      expect(map.to_h["missed_lines"]).to eq(target => [1, 2, 3])
+      expect(map.uncovered?(target, [2])).to be(true)
+    end
+  end
+
+  context "a vouched file the coverage never saw" do
+    let(:source) { snapshots({}, {}, {}) }
+
+    it "records nothing for it" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], vouched_files: [target])
+
+      expect(map.uncovered?(target, [1])).to be(false)
+    end
+  end
+
+  # A forked child starts its counts from zero, so what ran in the parent
+  # before the fork (a preload loading the file) arrives as prior counts.
+  context "counts from before the build's fork" do
+    subject(:recorder) do
+      described_class.new(target_files: [target], coverage_source: source,
+                          prior_counts: { target => { lines: [1, 1, 0, 0, nil] } })
+    end
+
+    let(:source) do
+      snapshots(
+        { target => [0, 0, 0, 0, nil] },
+        { target => [0, 0, 1, 0, nil] },
+        { target => [0, 0, 1, 0, nil] }
+      )
+    end
+
+    it "counts the lines that ran before the fork as executed, and never as unexecuted" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], vouched_files: [target])
+
+      expect(map.executed?(target, 1)).to be(true)
+      expect(map.uncovered?(target, [2])).to be(false)
+      expect(map.uncovered?(target, [3])).to be(false)
+      expect(map.uncovered?(target, [4])).to be(true)
+    end
+  end
 end

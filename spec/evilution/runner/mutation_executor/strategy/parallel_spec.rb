@@ -11,6 +11,7 @@ require "evilution/runner/mutation_executor/result_notifier"
 require "evilution/runner/mutation_executor/neutralization_pipeline"
 require "evilution/runner/mutation_executor/strategy/parallel"
 require "evilution/runner/mutation_executor/timeout_policy"
+require "evilution/runner/mutation_executor/runless_verdict"
 require "evilution/parallel/work_queue"
 require_relative "../../../../support/streaming_pool"
 
@@ -279,6 +280,34 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
 
       expect([pool.map_calls, execution.results.length, execution.truncated]).to eq([0, 1, true])
     end
+  end
+
+  it "runs only the mutations its runless verdict leaves, keeping every result in mutation order" do
+    m1 = mutation("m1")
+    m2 = mutation("m2")
+    coverage = double("Integration")
+    allow(coverage).to receive(:uncovered?) { |m| m.equal?(m1) }
+    isolator = double(:isolator)
+    allow(isolator).to receive(:call).and_return(killed(m2))
+    backend = instance_double("Cache", fetch: nil)
+    allow(backend).to receive(:store)
+    pool = fake_pool
+
+    strategy = described_class.new(
+      cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+      isolator: isolator,
+      packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+      pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+      notifier: notifier,
+      pool_factory: ->(_item_timeout) { pool },
+      config: cfg,
+      runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new(coverage: coverage)
+    )
+    execution = strategy.call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+
+    expect(execution.results.map(&:status)).to eq(%i[uncovered killed])
+    expect(isolator).to have_received(:call).once
+    expect(backend).to have_received(:store).once
   end
 
   it "calls isolator inside the pool for uncached mutations and rebuilds via packer" do

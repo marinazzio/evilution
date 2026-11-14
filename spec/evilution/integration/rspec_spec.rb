@@ -3,6 +3,7 @@
 require "tempfile"
 require "evilution/integration/rspec"
 require "evilution/example_filter"
+require "evilution/coverage_example_filter"
 
 RSpec.describe Evilution::Integration::RSpec do
   let(:source_file) { Tempfile.new(["mutation_target", ".rb"]) }
@@ -1215,6 +1216,34 @@ RSpec.describe Evilution::Integration::RSpec do
     it "does nothing without an example filter" do
       expect { described_class.new(spec_selector: selector).warm_targeting([mutation_in("lib/a.rb")]) }
         .not_to raise_error
+    end
+  end
+
+  describe "#uncovered?" do
+    let(:selector) { ->(path) { path == "lib/a.rb" ? ["spec/a_spec.rb"] : [] } }
+    let(:example_filter) { instance_double(Evilution::CoverageExampleFilter, uncovered?: true) }
+
+    def mutation_in(path)
+      double("Mutation", file_path: path, original_source: "source of #{path}")
+    end
+
+    it "asks the example filter about the spec files the mutation resolves to" do
+      integration = described_class.new(spec_selector: selector, example_filter: example_filter)
+      mutation = mutation_in("lib/a.rb")
+
+      expect(integration.uncovered?(mutation)).to be(true)
+      expect(example_filter).to have_received(:uncovered?).with(mutation, ["spec/a_spec.rb"])
+    end
+
+    it "is false for a mutation no spec file resolves to, without warning about it" do
+      expect(Evilution::Diagnostic).not_to receive(:warn)
+      integration = described_class.new(spec_selector: selector, example_filter: example_filter)
+
+      expect(integration.uncovered?(mutation_in("lib/unknown.rb"))).to be(false)
+    end
+
+    it "is false without an example filter" do
+      expect(described_class.new(spec_selector: selector).uncovered?(mutation_in("lib/a.rb"))).to be(false)
     end
   end
 

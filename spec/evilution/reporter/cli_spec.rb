@@ -19,9 +19,9 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(described_class::SEPARATOR).to eq("=" * 44)
     end
 
-    it "exposes DEFAULT_SECTIONS as a frozen array of 8 Section instances" do
+    it "exposes DEFAULT_SECTIONS as a frozen array of 9 Section instances" do
       expect(described_class::DEFAULT_SECTIONS).to be_frozen
-      expect(described_class::DEFAULT_SECTIONS.length).to eq(8)
+      expect(described_class::DEFAULT_SECTIONS.length).to eq(9)
       described_class::DEFAULT_SECTIONS.each do |section|
         expect(section).to be_a(described_class::Section)
       end
@@ -81,6 +81,7 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).not_to include("Equivalent mutations")
       expect(output).not_to include("Unresolved mutations")
       expect(output).not_to include("Unparseable mutations")
+      expect(output).not_to include("Uncovered mutations")
       expect(output).not_to include("Errored mutations")
       expect(output).not_to include("Disabled mutations")
     end
@@ -112,6 +113,18 @@ RSpec.describe Evilution::Reporter::CLI do
       expect(output).to include("Unparseable mutations")
       expect(output).to include("Errored mutations")
       expect(output).to include("Disabled mutations")
+    end
+  end
+
+  describe "uncovered mutations" do
+    it "lists them under their own heading" do
+      mutation = double("Mutation", operator_name: "comparison_replacement", file_path: "lib/a.rb", line: 7,
+                                    diff: "- a\n+ b", subject: double("Subject", name: "A#b"))
+      result = Evilution::Result::MutationResult.new(mutation: mutation, status: :uncovered)
+      output = described_class.new.call(Evilution::Result::Summary.new(results: [result]))
+
+      expect(output).to include("Uncovered mutations (no test executes their line, not run):\n  comparison_replacement: lib/a.rb:7")
+      expect(output).not_to include("Survived mutations")
     end
   end
 end

@@ -8,7 +8,7 @@ require_relative "diff_extractor/evilution"
 require_relative "diff_extractor/mutant"
 
 class Evilution::Compare::Normalizer
-  EVILUTION_BUCKETS = %w[killed survived timed_out errors neutral equivalent unresolved unparseable].freeze
+  EVILUTION_BUCKETS = %w[killed survived timed_out errors neutral equivalent unresolved unparseable uncovered].freeze
   EVILUTION_STATUS_MAP = {
     "killed" => :killed,
     "survived" => :survived,
@@ -17,7 +17,8 @@ class Evilution::Compare::Normalizer
     "neutral" => :neutral,
     "equivalent" => :equivalent,
     "unresolved" => :unresolved,
-    "unparseable" => :unparseable
+    "unparseable" => :unparseable,
+    "uncovered" => :uncovered
   }.freeze
 
   def initialize

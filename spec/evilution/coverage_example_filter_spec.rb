@@ -92,4 +92,52 @@ RSpec.describe Evilution::CoverageExampleFilter do
       expect(lexical).to have_received(:warm).with(m, ["spec/calc_spec.rb"])
     end
   end
+
+  describe "#uncovered?" do
+    # Line 5 is executable and never ran; line 2 ran at load; line 7 is not
+    # executable. The build ran spec/calc_spec.rb.
+    let(:map) do
+      Evilution::Coverage::Map.new(
+        index: { source_abs => { 3 => ["spec/calc_spec.rb:5"] } },
+        built_files: [source_abs],
+        executed_lines: { source_abs => [2, 3] },
+        missed_lines: { source_abs => [5] },
+        spec_files: ["/proj/spec/calc_spec.rb"]
+      )
+    end
+
+    def located(line:, lines: line..line)
+      instance_double(Evilution::Mutation, file_path: source_rel, line: line, changed_lines: lines)
+    end
+
+    it "is true for a mutation on a line no example and no load executed" do
+      expect(filter.uncovered?(located(line: 5), ["spec/calc_spec.rb"])).to be(true)
+    end
+
+    it "is false when a line the mutation changes ran" do
+      expect(filter.uncovered?(located(line: 5, lines: 2..5), ["spec/calc_spec.rb"])).to be(false)
+    end
+
+    # A method body's mutation is reported at its `def`, which ran while the
+    # file loaded; what it changes is the body, which never ran.
+    it "goes by the lines the mutation changes, not the line it is reported at" do
+      expect(filter.uncovered?(located(line: 2, lines: 5..5), ["spec/calc_spec.rb"])).to be(true)
+      expect(filter.uncovered?(located(line: 5, lines: 2..2), ["spec/calc_spec.rb"])).to be(false)
+    end
+
+    it "is false for a line that ran only while the file loaded" do
+      expect(filter.uncovered?(located(line: 2), ["spec/calc_spec.rb"])).to be(false)
+    end
+
+    it "is false when the mutation would run a spec file the map was not built from" do
+      expect(filter.uncovered?(located(line: 5), ["spec/calc_spec.rb", "spec/other_spec.rb"])).to be(false)
+      expect(filter.uncovered?(located(line: 5), ["spec"])).to be(false)
+    end
+
+    it "is false when the mutation has no spec file to run" do
+      expect(filter.uncovered?(located(line: 5), [])).to be(false)
+      expect(filter.uncovered?(located(line: 5), ["spec/calc_spec.rb"])).to be(true)
+      expect(filter.uncovered?(located(line: 5), nil)).to be(false)
+    end
+  end
 end

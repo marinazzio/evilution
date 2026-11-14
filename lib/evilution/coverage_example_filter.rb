@@ -39,6 +39,22 @@ class Evilution::CoverageExampleFilter
     @lexical.call(mutation, spec_paths)
   end
 
+  # Whether no example of these spec files, and no file load, executes any
+  # line the mutation changes -- so running it could only end in a survivor.
+  # The lines it changes, not the line it is reported at: a method body's
+  # mutation is reported at its `def`, which runs while the file loads. Only a map built from every one of the spec files can say so;
+  # anything else (a spec file the build did not run, the whole spec dir, a
+  # file the map cannot vouch for) answers no and the mutation runs.
+  def uncovered?(mutation, spec_paths)
+    return false if spec_paths.nil?
+
+    specs = spec_paths.map { |path| File.expand_path(path, @project_root) }
+    return false unless @map.built_from?(specs)
+
+    file = File.expand_path(mutation.file_path, @project_root)
+    @map.uncovered?(file, mutation.changed_lines)
+  end
+
   # The map is built before this filter is; the lexical filter it falls back
   # on parses lazily, and is what a forked child would otherwise fill.
   def warm(mutation, spec_paths)

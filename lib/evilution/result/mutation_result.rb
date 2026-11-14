@@ -6,7 +6,7 @@ require_relative "memory_stats"
 require_relative "mutation_timings"
 
 class Evilution::Result::MutationResult
-  STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
+  STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable uncovered].freeze
 
   attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason,
               :time_limit
@@ -114,5 +114,11 @@ class Evilution::Result::MutationResult
 
   def unparseable?
     status == :unparseable
+  end
+
+  # No test executes a line the mutation sits on, so it was never run: it
+  # could only have survived. Scored as a survivor, but kept apart from them.
+  def uncovered?
+    status == :uncovered
   end
 end

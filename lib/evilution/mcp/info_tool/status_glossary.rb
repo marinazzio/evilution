@@ -61,6 +61,14 @@ module Evilution::MCP::InfoTool::StatusGlossary
       "counted_in_score" => false
     },
     {
+      "status" => "uncovered",
+      "meaning" => "No example executes a line the mutation sits on, so it was never run: with " \
+                   "coverage targeting, the coverage map shows the line never ran, neither in an example " \
+                   "nor while the files loaded. Untested code. Counted in the score as a survivor, and " \
+                   "listed apart from the survivors that did run.",
+      "counted_in_score" => true
+    },
+    {
       "status" => "unparseable",
       "meaning" => "Mutated source failed to parse (e.g. dangling heredoc after method_body_replacement). " \
                    "Short-circuited before execution; no test run was attempted.",

@@ -121,6 +121,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--no-example-targeting`     | Boolean | _(enabled)_  | Disable per-mutation example targeting (always run every example in the resolved spec file). Example targeting scans each example body for symbols from the mutated method and runs only the matching subset. |
 | `--example-targeting MODE`   | String  | `lexical`    | How targeting picks examples: `lexical` (name-grep example bodies for the mutated method/class), `coverage` (run only the examples that actually execute the mutated line, from a cached line-coverage map), or `full_file` (run all resolved examples). |
 | `--example-targeting-fallback MODE` | String | `full_file` | Behavior when no example matches: `full_file` (run the whole spec file) or `unresolved` (skip the mutation as `:unresolved`). |
+| `--[no-]skip-uncovered`      | Boolean | _(enabled)_  | With `--example-targeting coverage`: report a mutation whose changed lines no example executes as `uncovered`, without running it. See [Uncovered mutations](#uncovered-mutations). |
 | `-j`, `--jobs N`             | Integer | 1            | Number of parallel workers. Uses demand-driven work distribution with pipe-based IPC. |
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures, so that a mutation whose tests fail only on those is recorded `neutral` rather than killed. |
 | `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
@@ -225,6 +226,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems, in_process otherwise; in_process cannot contain a mutation that takes the Ruby process down, see docs/isolation.md)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
 # stop_on_kill: true       # stop each mutation's test run at the first deciding failure (false runs every selected example)
+# skip_uncovered: true     # with coverage targeting, report mutations no example executes as uncovered without running them
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
 # warmup: none            # rails: warm I18n, routes, assets and templates once after preload (fork isolation)
 # skip_heredoc_literals: false  # skip string literal mutations inside heredocs (recommended for Rails: heredoc SQL/templates rarely have test coverage)
@@ -297,6 +299,7 @@ All keys recognised under `schema_version: 1`:
 | `example_targeting_strategy` | String                        | `lexical`                              | How targeting picks examples: `lexical` (name-grep) or `coverage` (examples that execute the mutated line, from a cached coverage map).  |
 | `example_targeting_fallback` | String                        | `full_file`                            | When targeting finds no example: `full_file` or `unresolved`.                                                                            |
 | `example_targeting_cache`    | Hash                          | `{ max_files: 50, max_blocks: 10000 }` | LRU cache bounds for the example-targeting AST parser.                                                                                   |
+| `skip_uncovered`             | Boolean                       | `true`                                 | With `example_targeting_strategy: coverage`, report a mutation no example executes as `uncovered` without running it. No effect otherwise. |
 | `quiet_children`             | Boolean                       | `false`                                | Redirect each worker's stdout/stderr to per-pid files under `quiet_children_dir`.                                                        |
 | `quiet_children_dir`         | String                        | `tmp/evilution_children`               | Directory for `--quiet-children` per-pid log files.                                                                                      |
 | `profile`                    | String                        | `default`                              | Operator profile: `default` or `strict`.                                                                                                 |
@@ -305,6 +308,22 @@ All keys recognised under `schema_version: 1`:
 #### Stopping at the first kill (`stop_on_kill`)
 
 By default each mutation's test run stops at the first failing example that decides the verdict, so the remaining selected examples are not run. Failures that were already failing in the baseline run do not stop it (the mutation is still recorded `neutral` if only those fail), and neither do infrastructure crashes (the mutation is still recorded `neutral` if only those occur). A mutant whose first failure is followed by a hang or a dead test process is now reported `killed`; a `--no-stop-on-kill` run may report the same mutant as `timeout` or `error`, so its score can be slightly lower. Pass `--no-stop-on-kill` (or `stop_on_kill: false`) to run every selected example. Minitest classes that call `parallelize_me!` are not stopped early: their tests all run, as they would with `--no-stop-on-kill`.
+
+#### Uncovered mutations
+
+With coverage targeting (`--example-targeting coverage`), evilution records which lines each example of the resolved spec files executes, and which executable lines nothing executed at all. A mutation whose changed lines nothing executes could only survive: no test reaches the code. Running it would cost the most of any verdict — the whole resolved spec file, then the [survivor confirmation](#survivor-confirmation) run — and say nothing new. Such a mutation is reported `uncovered` instead, without a test run.
+
+**Score**: an uncovered mutation counts as a survivor. It stays in the score's denominator, so the score, `--min-score` / `min_score` and the exit status are the same as running it would have given; the report lists it in its own `uncovered` bucket (text, JSON, HTML, MCP and saved sessions) rather than with the survivors that ran, and `--fail-fast` counts it as a survivor.
+
+A mutation is reported `uncovered` only when the coverage map can vouch for it, and runs as before otherwise:
+
+- Only the lines the mutation changes count. A line that runs only while files load — a class body, a constant, `attr_reader`, a `def` line — counts as executed, so a mutation of it runs. A mutation that replaces a method body is reported at the `def` line but changes only the body, so it is uncovered when no example calls the method.
+- At least one changed line is executable and never ran; none of them ran.
+- The map was built from every spec file the mutation would run. A mutation that runs a spec file the build did not (the related-specs heuristic, the full-suite fallback) runs.
+- Every example of those spec files ran in the build. A spec file that failed to load, or a build cut short (`fail_fast` in `.rspec`, an interrupt), makes the map vouch for no line.
+- The file was loaded while lines were counted. When coverage targeting is on, evilution counts from before the `preload` runs, so a preloaded file is covered too; a file loaded while counting was off is never vouched for.
+
+The coverage map is cached under `.evilution/coverage/` and rebuilt when a target file, a resolved spec file or one of the helpers every spec file loads (`.rspec`, `spec/spec_helper.rb`, `spec/support/**/*.rb`, ... — the same list as the [incremental cache](#incremental-cache)) changes. It is RSpec only, like coverage targeting. Pass `--no-skip-uncovered` (or `skip_uncovered: false`) to run these mutations anyway.
 
 ## Disable Comments
 
@@ -355,7 +374,8 @@ Schema:
     "baseline_neutralized": "integer (optional) — kills not counted because only examples already failing in the baseline failed; those mutations are recorded neutral; present only when non-zero",
     "baseline_failures": "array (optional) — one entry per spec file that was red in the baseline: { spec_file, error: string|null — what stopped the file outside any example (load error, runner exception, timeout, a baseline process that died), failing_examples: integer — every failing example, examples: [{ id, description, message }] — the first few of them }; present only when non-empty",
     "unparseable": "integer — mutations whose mutated source did not parse (short-circuited, never executed)",
-    "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals",
+    "uncovered": "integer  — mutations whose changed lines no example executes, reported without a test run (coverage targeting only); scored as survivors",
+    "score": "float      — killed / (total - errors - neutral - equivalent - unresolved - unparseable), range 0.0-1.0, rounded to 4 decimals; uncovered mutations stay in the denominator, as survivors",
     "duration": "float   — total wall-clock seconds of the run, from subject discovery through the audit of target files for unresolved specs (the phases in timings.phases add up to it), rounded to 4 decimals",
     "peak_memory_mb": "float (optional) — peak RSS across all mutation child processes, in MB"
   },
@@ -364,11 +384,11 @@ Schema:
       "operator": "string — mutation operator name (see Operators table)",
       "file": "string    — relative path to mutated file",
       "line": "integer   — line number of the mutation",
-      "status": "string  — result status: 'survived', 'killed', 'timeout', 'error', 'neutral', 'equivalent', 'unresolved', or 'unparseable'",
+      "status": "string  — result status: 'survived', 'killed', 'timeout', 'error', 'neutral', 'equivalent', 'unresolved', 'unparseable', or 'uncovered'",
       "duration": "float — seconds this mutation took, rounded to 4 decimals",
       "diff": "string    — legacy +/- diff snippet",
-      "unified_diff": "string (optional, survived only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
-      "suggestion": "string — actionable hint for surviving mutants (survived only)",
+      "unified_diff": "string (optional, survived and uncovered only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
+      "suggestion": "string — actionable hint for surviving mutants (survived and uncovered only)",
       "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; a result read from the --incremental cache carries the limit its run had",
       "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
       "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from the dispatcher sending it to a worker to that worker starting it; a worker is sent its next mutation as soon as it finishes one, so this is the cost of the hand-over, and for a worker's first mutation also of the worker starting up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
@@ -386,8 +406,9 @@ Schema:
       "file": "string      — relative path to source file",
       "total": "integer    — mutations generated for this subject",
       "killed": "integer   — mutations detected",
-      "verified": "integer — mutations that got a verdict (killed + survived + timed out)",
+      "verified": "integer — mutations that got a verdict (killed + survived + timed out + uncovered)",
       "survived": "integer — mutations that went undetected",
+      "uncovered": "integer — mutations no example executes, reported without a test run; counted in verified",
       "score": "float      — killed / verified, 0.0 when nothing was verified, rounded to 4 decimals",
       "reached": "boolean  — false when no mutation of this subject got a verdict at all"
     }
@@ -407,6 +428,7 @@ Schema:
   "equivalent": ["... same shape as survived entries ..."],
   "unresolved": ["... same shape as survived entries — coverage gap: no spec file resolved for these mutations"],
   "unparseable": ["... same shape as survived entries — mutated source failed to parse and was never executed"],
+  "uncovered": ["... same shape as survived entries — no example executes the lines the mutation changes; never executed, scored as survived"],
   "timed_out": ["... same shape as survived entries ..."],
   "errors": [
     {
@@ -433,9 +455,10 @@ Sessions saved by `--save-session` (under `.evilution/results/*.json`) and consu
 | `error_count`        | Integer | Mirrors `summary.errors`.                                                                         |
 | `neutral_count`      | Integer | Mirrors `summary.neutral`.                                                                        |
 | `equivalent_count`   | Integer | Mirrors `summary.equivalent`.                                                                     |
+| `uncovered_count`    | Integer | Mirrors `summary.uncovered`.                                                                      |
 | `skipped_count`      | Integer | Mutations skipped by `# evilution:disable` (omitted from `summary` unless positive).              |
 
-Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent`, `unresolved`, `unparseable`, `timed_out`, `errors`) — only `survived` and `coverage_gaps` are persisted. The score, totals, and timestamps are stable for diff/compare consumers.
+Saved sessions also omit the per-status arrays (`killed`, `neutral`, `equivalent`, `unresolved`, `unparseable`, `timed_out`, `errors`) — only `survived`, `uncovered` and `coverage_gaps` are persisted. `evilution session diff` treats an `uncovered` mutation as a survivor, so one that survived before is not reported fixed. The score, totals, and timestamps are stable for diff/compare consumers.
 
 #### stdout in JSON mode
 
@@ -467,6 +490,7 @@ Compatibility policy for the `1.x` gem line:
 | `equivalent` | Mutation is provably identical to the original (e.g. no-op replacement) | excluded          |
 | `unresolved` | No spec file resolved for the mutated source — **coverage gap, not a failure**. Use `--fallback-full-suite` to run the full suite instead. | excluded |
 | `unparseable` | Mutated source failed to parse (e.g. dangling heredoc opener after `method_body_replacement`). Short-circuited — never executed. | excluded |
+| `uncovered`  | No example executes the lines the mutation changes (coverage targeting only, see [Uncovered mutations](#uncovered-mutations)). Never executed — it could only have survived. | denominator only, as survived |
 
 Unresolved mutations indicate a missing test mapping — the file has no corresponding test file that the resolver could find (for example, an RSpec `_spec.rb` file or a Minitest `_test.rb` file, depending on configuration). The resolver searches the `lib/`-mirrored path, common non-mirrored buckets (`spec/unit`, `spec/lib`, `test/unit`, `test/lib`), and the flat `test_`-prefixed Minitest/Test::Unit convention (`test/test_connection_pool_timed_stack.rb`), so a high unresolved rate usually means a genuinely missing or unconventionally-placed test; a run that leaves many mutations unresolved prints an unresolved-rate warning with a best-guess spec path per source file. They are reported separately so you can act on them (add a test, adjust test naming, pass `--spec`, or opt in to the full-suite fallback) without inflating the error count.
 
@@ -520,13 +544,13 @@ Verdicts are kept per subject (a method, a constant, a declaration). A cached ve
 - the contents of the spec files that resolve for the file (`--spec`, `spec_mappings`, or the resolver), and of the files the related-specs heuristic adds for the mutation when it is on;
 - the conventional helpers every spec file loads: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, `spec/support/**/*.rb`, `test/test_helper.rb`, `test/support/**/*.rb`, the `preload` file, and `Gemfile.lock` / `gems.locked`;
 - the evilution and Ruby versions;
-- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill` and `warmup`.
+- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill`, `warmup` and whether uncovered mutations are skipped (`skip_uncovered` with coverage targeting).
 
 So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a class-body line (comments between methods included) or a spec file re-runs every subject of the file.
 
 What the cache does **not** see: other methods the subject calls (in the same file or another), other source files, and files a spec loads beyond the helpers above (factories, fixtures, shared examples outside `spec/support`), as well as `hooks`. A change there keeps the cached verdicts, so a survivor can stay a survivor after a test it depends on indirectly was fixed, or the other way around. Run without `--incremental` (or delete `tmp/evilution_cache/`) for a result that owes nothing to earlier runs, e.g. in CI.
 
-Not cached: mutations whose source has no spec file that resolves (with or without `--fallback-full-suite`), errors, neutrals, kills from an infrastructure crash, and kills in which only examples already failing in the baseline failed.
+Not cached: `uncovered` mutations, which are worked out again from the coverage map on every run (it has a cache of its own); mutations whose source has no spec file that resolves (with or without `--fallback-full-suite`), errors, neutrals, kills from an infrastructure crash, and kills in which only examples already failing in the baseline failed.
 
 The cache holds one JSON file per source file under `tmp/evilution_cache/v2/`, read once per run and written once per source file, so its cost grows with the number of mutations, not with their square. A file keeps one version of each subject: writing it drops the verdicts of a subject's earlier source and of subjects the file no longer has. Cache files of the earlier format (directly in `tmp/evilution_cache/`, keyed by the whole file's content) are not read, and are deleted the first time the new cache is written.
 
@@ -775,7 +799,7 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
-| `summary`   | Yes     | `summary` + `survived` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
+| `summary`   | Yes     | `summary` + `survived` + `uncovered` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
 | `full`      |         | All entries (killed/neutral/equivalent diffs stripped), including `timings` |
 | `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 

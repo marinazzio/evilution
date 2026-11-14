@@ -8,7 +8,7 @@ RSpec.describe Evilution::MCP::InfoTool::StatusGlossary do
     it "returns the full list of documented statuses" do
       statuses = described_class.entries.map { |e| e["status"] }
       expect(statuses).to match_array(
-        %w[killed survived timeout error neutral equivalent unresolved unparseable]
+        %w[killed survived timeout error neutral equivalent unresolved unparseable uncovered]
       )
     end
 
@@ -32,7 +32,7 @@ RSpec.describe Evilution::MCP::InfoTool::StatusGlossary do
     it "reports statuses documented but no longer defined as missing" do
       stub_const("Evilution::Result::MutationResult::STATUSES", %i[killed survived timeout])
       expect { described_class.entries }.to raise_error(
-        Evilution::Error, /\["equivalent", "error", "neutral", "unparseable", "unresolved"\]/
+        Evilution::Error, /\["equivalent", "error", "neutral", "uncovered", "unparseable", "unresolved"\]/
       )
     end
 

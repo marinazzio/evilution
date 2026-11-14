@@ -39,6 +39,15 @@ module CliGoldenSummary
       []
     end
 
+    # It predates mutations no test executes too, and has none of them.
+    def uncovered
+      0
+    end
+
+    def uncovered_results
+      []
+    end
+
     def target_file_count
       nil
     end

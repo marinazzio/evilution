@@ -18,6 +18,9 @@ require_relative "digest"
 class Evilution::Coverage::MapStore
   DEFAULT_ROOT = ".evilution/coverage"
   CACHE_FILE = "map.json"
+  # Bumped when the map gains something an older cache cannot hold (the
+  # unexecuted lines and spec files): such a cache is rebuilt, not read.
+  FORMAT = 2
 
   def initialize(root: DEFAULT_ROOT, digest: Evilution::Coverage::Digest.new)
     @root = root
@@ -25,7 +28,7 @@ class Evilution::Coverage::MapStore
   end
 
   def save(map, source_files)
-    payload = { "digests" => digests_for(source_files), "map" => map.to_h }
+    payload = { "format" => FORMAT, "digests" => digests_for(source_files), "map" => map.to_h }
     FileUtils.mkdir_p(@root)
     File.write(cache_path, JSON.generate(payload))
   end
@@ -61,8 +64,10 @@ class Evilution::Coverage::MapStore
     index = (raw_map["index"] || {}).slice(*fresh_files)
     built = (raw_map["built_files"] || []) & fresh_files
     executed = (raw_map["executed_lines"] || {}).slice(*fresh_files)
+    missed = raw_map["missed_lines"].slice(*fresh_files)
     Evilution::Coverage::Map.from_h(
-      "index" => index, "built_files" => built, "executed_lines" => executed
+      "index" => index, "built_files" => built, "executed_lines" => executed,
+      "missed_lines" => missed, "spec_files" => raw_map["spec_files"]
     )
   end
 
@@ -76,7 +81,8 @@ class Evilution::Coverage::MapStore
   def read_payload
     return nil unless File.file?(cache_path)
 
-    JSON.parse(File.read(cache_path))
+    payload = JSON.parse(File.read(cache_path))
+    payload.is_a?(Hash) && payload["format"] == FORMAT ? payload : nil
   rescue JSON::ParserError, Errno::ENOENT
     nil
   end

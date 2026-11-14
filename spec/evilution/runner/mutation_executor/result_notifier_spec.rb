@@ -63,6 +63,14 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultNotifier do
     expect(nf.notify(survived, 2)).to eq(:truncate)
   end
 
+  # A mutation no test executes would have survived had it run.
+  it "counts an uncovered result toward fail-fast as a survivor" do
+    nf = described_class.new(cfg(fail_fast: 1), diagnostics: diagnostics, on_result: nil)
+    nf.start(2)
+    uncovered = Evilution::Result::MutationResult.new(mutation: mutation, status: :uncovered)
+    expect(nf.notify(uncovered, 1)).to eq(:truncate)
+  end
+
   it "does not count killed results toward survived" do
     nf = described_class.new(cfg(fail_fast: 1), diagnostics: diagnostics, on_result: nil)
     nf.start(3)

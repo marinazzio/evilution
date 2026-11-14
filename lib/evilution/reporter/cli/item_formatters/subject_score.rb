@@ -36,7 +36,11 @@ class Evilution::Reporter::CLI::ItemFormatters::SubjectScore
     "(#{score.killed}/#{score.verified})"
   end
 
+  # Mutations no test executes were never run: the row says how many of the
+  # misses those are, so a low score is not read as tests that ran and missed.
   def note(score)
-    score.reached? ? "" : "  #{UNREACHED_NOTE}"
+    return "  #{UNREACHED_NOTE}" unless score.reached?
+
+    score.uncovered.positive? ? "  #{score.uncovered} uncovered" : ""
   end
 end

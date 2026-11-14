@@ -3,6 +3,7 @@
 require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
 require_relative "../../infra_crash"
+require_relative "runless_verdict"
 
 class Evilution::Runner::MutationExecutor::ResultCache
   # The verdicts about a mutation. A survivor is kept too: its key changes
@@ -66,13 +67,16 @@ class Evilution::Runner::MutationExecutor::ResultCache
     Evilution::InfraCrash.class_name?(result.error_class)
   end
 
-  def partition(batch, packer:)
+  # A mutation the runless verdict answers goes in with the cached results:
+  # it needs no worker, and its verdict is not stored.
+  def partition(batch, packer:, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
     uncached_indices = []
     cached_results = {}
 
     batch.each_with_index do |mutation, i|
-      if mutation.unparseable?
-        cached_results[i] = packer.compact(unparseable_result(mutation))
+      verdict = runless.call(mutation)
+      if verdict
+        cached_results[i] = packer.compact(verdict)
         next
       end
 
@@ -85,11 +89,5 @@ class Evilution::Runner::MutationExecutor::ResultCache
     end
 
     Partition.new(uncached_indices: uncached_indices, cached_results: cached_results)
-  end
-
-  private
-
-  def unparseable_result(mutation)
-    Evilution::Result::MutationResult.new(mutation: mutation, status: :unparseable)
   end
 end

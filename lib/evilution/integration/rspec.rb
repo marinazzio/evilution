@@ -62,6 +62,16 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     end
   end
 
+  # Whether no example of the spec files this mutation would run executes the
+  # line it sits on (see Evilution::CoverageExampleFilter#uncovered?). Asked in
+  # the parent, ahead of the run, like #warm_targeting.
+  def uncovered?(mutation)
+    files = @test_file_resolver.call(mutation, warn: false)
+    return false if files.nil?
+
+    @example_filter_applier.uncovered?(mutation, files)
+  end
+
   private
 
   def build_example_filter_applier(example_filter)

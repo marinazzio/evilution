@@ -24,7 +24,7 @@ class Evilution::Runner::MutationExecutor::ResultNotifier
     @progress_bar.tick(status: result.status) if @progress_bar
     @diagnostics.log_progress(index, result.status)
     @diagnostics.log_mutation_diagnostics(result)
-    @survived_count += 1 if result.survived?
+    @survived_count += 1 if result.survived? || result.uncovered?
     truncate? ? :truncate : :continue
   end
 

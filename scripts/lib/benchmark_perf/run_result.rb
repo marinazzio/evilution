@@ -7,8 +7,8 @@ module BenchmarkPerf
   # JSON report buckets (keys) vs the per-mutation "status" field (values):
   # timeouts sit under "timed_out" with status "timeout", errors under
   # "errors" with status "error".
-  CATEGORIES = %w[killed survived neutral equivalent unresolved unparseable timed_out errors].freeze
-  STATUSES = %w[killed survived timeout error neutral equivalent unresolved unparseable].freeze
+  CATEGORIES = %w[killed survived neutral equivalent unresolved unparseable uncovered timed_out errors].freeze
+  STATUSES = %w[killed survived timeout error neutral equivalent unresolved unparseable uncovered].freeze
   KEY_FIELDS = %w[file line operator].freeze
 
   class ParseError < StandardError; end

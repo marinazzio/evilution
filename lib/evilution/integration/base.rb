@@ -24,6 +24,12 @@ class Evilution::Integration::Base
     nil
   end
 
+  # Whether no test executes the line the mutation sits on, so it need not
+  # run. Only an integration backed by line coverage can tell.
+  def uncovered?(_mutation)
+    false
+  end
+
   # Fills what loading a mutated file looks up on the heap (see
   # Loading::MutationApplier#warm). Called in the parent before any mutation
   # runs, for the same reason as #warm_targeting.

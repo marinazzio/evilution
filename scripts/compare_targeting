@@ -55,7 +55,7 @@ module CompareTargeting
 
   # One mode's run, indexed by mutation key.
   class ModeResult
-    CATEGORIES = %w[killed survived neutral equivalent unresolved unparseable timed_out errors].freeze
+    CATEGORIES = %w[killed survived neutral equivalent unresolved unparseable uncovered timed_out errors].freeze
 
     def self.from_json(data)
       by_key = {}
@@ -92,10 +92,11 @@ module CompareTargeting
       @by_key.count { |_, value| value[:status] == "killed" }
     end
 
-    # Measurable = the run actually observed a verdict: killed or survived.
+    # Measurable = what the score counts: killed or survived, and uncovered,
+    # which scores as the survivor it would be.
     # unresolved/equivalent/errors/unparseable are excluded from the score.
     def measurable_count
-      @by_key.count { |_, value| %w[killed survived].include?(value[:status]) }
+      @by_key.count { |_, value| %w[killed survived uncovered].include?(value[:status]) }
     end
 
     def total_duration

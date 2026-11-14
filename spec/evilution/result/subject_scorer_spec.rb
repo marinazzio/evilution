@@ -27,6 +27,14 @@ RSpec.describe Evilution::Result::SubjectScorer do
       expect(scorer.call(results).map(&:score)).to eq([0.25])
     end
 
+    it "scores uncovered mutations as the survivors they would be, and counts them apart" do
+      results = [result(:killed, "Helper#label_for"), result(:uncovered, "Helper#label_for")]
+      score = scorer.call(results).first
+
+      expect([score.killed, score.verified, score.survived, score.uncovered, score.score]).to eq([1, 2, 0, 1, 0.5])
+      expect(score).not_to be_fully_verified
+    end
+
     it "keeps subjects apart" do
       results = [result(:killed, "Helper#a"), result(:survived, "Helper#b")]
 

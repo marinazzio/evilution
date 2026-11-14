@@ -44,6 +44,11 @@ RSpec.describe Evilution::Cache::RunFingerprint do
     end
   end
 
+  it "changes with whether mutations no test executes are skipped" do
+    expect(fingerprint(example_targeting_strategy: :coverage))
+      .not_to eq(fingerprint(example_targeting_strategy: :coverage, skip_uncovered: false))
+  end
+
   it "changes with the adaptive timeout's settings" do
     expect(fingerprint(timeout_factor: 10)).not_to eq(fingerprint(timeout_factor: 5))
   end

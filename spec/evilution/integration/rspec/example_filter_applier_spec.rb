@@ -3,6 +3,7 @@
 require "spec_helper"
 require "evilution/integration/rspec/example_filter_applier"
 require "evilution/example_filter"
+require "evilution/coverage_example_filter"
 
 RSpec.describe Evilution::Integration::RSpec::ExampleFilterApplier do
   let(:mutation) { Object.new }
@@ -43,6 +44,23 @@ RSpec.describe Evilution::Integration::RSpec::ExampleFilterApplier do
       filter = ->(_, _) { nil } # rubocop:disable Style/NilLambda
       applier = described_class.new(filter)
       expect(applier.call(mutation, ["a"])).to be_nil
+    end
+  end
+
+  describe "#uncovered?" do
+    it "is false without a filter" do
+      expect(described_class::Identity.new.uncovered?(mutation, ["a"])).to be(false)
+    end
+
+    it "asks a filter that knows which lines no example executes" do
+      filter = instance_double(Evilution::CoverageExampleFilter, uncovered?: true)
+
+      expect(described_class::Custom.new(filter).uncovered?(mutation, ["a"])).to be(true)
+      expect(filter).to have_received(:uncovered?).with(mutation, ["a"])
+    end
+
+    it "is false for a filter that does not know" do
+      expect(described_class::Custom.new(->(_, files) { files }).uncovered?(mutation, ["a"])).to be(false)
     end
   end
 end

@@ -7,6 +7,7 @@ require_relative "error_details"
 require_relative "neutral_details"
 require_relative "unresolved_details"
 require_relative "unparseable_details"
+require_relative "uncovered_details"
 
 class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HTML::Section
   template "file_section"
@@ -28,6 +29,10 @@ class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HT
     @results.count(&:survived?)
   end
 
+  def uncovered_count
+    @results.count(&:uncovered?)
+  end
+
   def total
     @results.length
   end
@@ -42,6 +47,10 @@ class Evilution::Reporter::HTML::Sections::FileSection < Evilution::Reporter::HT
       suggestion: @suggestion,
       baseline_keys: @baseline_keys
     )
+  end
+
+  def uncovered_html
+    Evilution::Reporter::HTML::Sections::UncoveredDetails.render_if(@results.select(&:uncovered?))
   end
 
   def error_html

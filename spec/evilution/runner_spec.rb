@@ -2979,6 +2979,34 @@ RSpec.describe Evilution::Runner do
 
         expect(resolver).to have_received(:perform_preload)
       end
+
+      # The coverage map is built in a child forked after the preload; it needs
+      # the preloaded files counted, and what ran while they loaded.
+      it "counts the lines the preload runs when coverage targeting is on, and pauses after" do
+        resolver = instance_double(Evilution::Runner::IsolationResolver)
+        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
+        order = []
+        allow(resolver).to receive(:perform_preload) { order << :preload }
+        tracker = instance_double(Evilution::Coverage::LoadTracker)
+        allow(tracker).to receive(:start) { order << :start }
+        allow(tracker).to receive(:pause) { order << :pause }
+        allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
+        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+
+        described_class.new(config: cfg).send(:perform_preload)
+
+        expect(order).to eq(%i[start preload pause])
+      end
+
+      it "counts nothing without coverage targeting" do
+        resolver = instance_double(Evilution::Runner::IsolationResolver, perform_preload: nil)
+        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
+        tracker = instance_double(Evilution::Coverage::LoadTracker, pause: nil)
+        allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
+        expect(tracker).not_to receive(:start)
+
+        described_class.new(config: Evilution::Config.new(skip_config_file: true, quiet: true)).send(:perform_preload)
+      end
     end
 
     describe "#clear_operator_caches" do

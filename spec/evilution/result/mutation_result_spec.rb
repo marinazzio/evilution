@@ -63,6 +63,14 @@ RSpec.describe Evilution::Result::MutationResult do
       expect(result).not_to be_killed
       expect(result).not_to be_survived
     end
+
+    it "identifies uncovered mutations, which are not survivors" do
+      result = described_class.new(mutation: mutation, status: :uncovered)
+
+      expect(result).to be_uncovered
+      expect(result).not_to be_survived
+      expect(result).not_to be_killed
+    end
   end
 
   describe "status predicates return strict booleans" do
@@ -71,7 +79,8 @@ RSpec.describe Evilution::Result::MutationResult do
       neutral?: :neutral,
       equivalent?: :equivalent,
       unresolved?: :unresolved,
-      unparseable?: :unparseable
+      unparseable?: :unparseable,
+      uncovered?: :uncovered
     }.each do |predicate, matching_status|
       it "returns exactly true from ##{predicate} for a #{matching_status} result" do
         result = described_class.new(mutation: mutation, status: matching_status)

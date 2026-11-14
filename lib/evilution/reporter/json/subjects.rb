@@ -22,6 +22,7 @@ class Evilution::Reporter::JSON::Subjects
       killed: score.killed,
       verified: score.verified,
       survived: score.survived,
+      uncovered: score.uncovered,
       score: score.score.round(4),
       reached: score.reached?
     }

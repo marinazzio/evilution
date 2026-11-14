@@ -264,7 +264,8 @@ RSpec.describe Evilution::Reporter::JSON do
         "neutral" => 0,
         "equivalent" => 0,
         "unresolved" => 0,
-        "unparseable" => 0
+        "unparseable" => 0,
+        "uncovered" => 0
       )
     end
 
@@ -548,6 +549,44 @@ RSpec.describe Evilution::Reporter::JSON do
         parsed = JSON.parse(reporter.call(unresolved_summary))
 
         expect(parsed["summary"]["score"]).to eq(1.0)
+      end
+    end
+
+    context "with uncovered mutations" do
+      let(:uncovered_mutation) do
+        double(
+          "Mutation",
+          operator_name: "comparison_replacement",
+          file_path: "lib/user.rb",
+          line: 12,
+          diff: "- x <= 5\n+ x < 5",
+          unified_diff: "--- a/lib/user.rb",
+          subject: double("Subject", name: "U#x")
+        )
+      end
+
+      let(:uncovered_summary) do
+        uncovered = Evilution::Result::MutationResult.new(mutation: uncovered_mutation, status: :uncovered)
+        Evilution::Result::Summary.new(results: [killed_result, uncovered], duration: 0.6)
+      end
+
+      it "counts them in the summary, apart from the survivors" do
+        parsed = JSON.parse(reporter.call(uncovered_summary))
+
+        expect(parsed["summary"]).to include("uncovered" => 1, "survived" => 0)
+      end
+
+      it "lists them with a suggestion, as a survivor is" do
+        entry = JSON.parse(reporter.call(uncovered_summary))["uncovered"].first
+
+        expect(entry).to include("status" => "uncovered", "line" => 12, "unified_diff" => "--- a/lib/user.rb")
+        expect(entry["suggestion"]).to be_a(String)
+      end
+
+      it "scores them as survivors" do
+        parsed = JSON.parse(reporter.call(uncovered_summary))
+
+        expect(parsed["summary"]["score"]).to eq(0.5)
       end
     end
 

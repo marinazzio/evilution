@@ -58,6 +58,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimeoutPolicy do
       expect(described_class.build(cfg, baseline(durations: durations)).call(mutation)).to eq(15.0)
     end
   end
+
   # A project that turns warnings into exceptions (dry-monads does) loads
   # this lazily, after its spec helper ran, so a warning here fails the run.
   it "loads lazily without a warning" do
