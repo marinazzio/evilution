@@ -40,13 +40,29 @@ class Evilution::AST::ClassBody
   # first. A method anchors its own scope, and with it any enclosing scope
   # that borrows from it.
   def self.anchored_at(tree, line)
-    scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line == line }
+    bodies_in(tree).select { |body| body.anchor_line == line }
   end
 
   # The bodies with no anchor, outermost first: no method of their own, and
   # none to borrow.
   def self.unanchored_in(tree)
-    scopes_in(tree).map { |scope| new(scope) }.select { |body| body.anchor_line.nil? }
+    bodies_in(tree).select { |body| body.anchor_line.nil? }
+  end
+
+  # Every body of the tree, outermost first. The operators ask this of a
+  # file's tree once for each of its subjects, so the bodies of the last tree
+  # walked are kept until another is asked about or .clear! is called.
+  def self.bodies_in(tree)
+    return @bodies if @tree.equal?(tree)
+
+    @bodies = scopes_in(tree).map { |scope| new(scope) }.freeze
+    @tree = tree
+    @bodies
+  end
+
+  def self.clear!
+    @tree = nil
+    @bodies = nil
   end
 
   def self.scopes_in(node)
@@ -67,18 +83,16 @@ class Evilution::AST::ClassBody
     child.is_a?(Prism::DefNode) || scope?(node, child)
   end
 
-  private_class_method :scopes_in
+  private_class_method :scopes_in, :bodies_in
 
   def initialize(node)
     @node = node
   end
 
   def anchor_line
-    first_method = contents.find { |child| child.is_a?(Prism::DefNode) }
-    return first_method.location.start_line if first_method
+    return @anchor_line if defined?(@anchor_line)
 
-    singleton_classes = contents.grep(Prism::SingletonClassNode)
-    singleton_classes.filter_map { |scope| self.class.new(scope).anchor_line }.first
+    @anchor_line = find_anchor_line
   end
 
   # The statements of the body the block selects, each one removable: cut
@@ -93,6 +107,14 @@ class Evilution::AST::ClassBody
   end
 
   private
+
+  def find_anchor_line
+    first_method = contents.find { |child| child.is_a?(Prism::DefNode) }
+    return first_method.location.start_line if first_method
+
+    singleton_classes = contents.grep(Prism::SingletonClassNode)
+    singleton_classes.filter_map { |scope| self.class.new(scope).anchor_line }.first
+  end
 
   # Every node written in the scope, in source order, down to the methods and
   # nested scopes, which are listed but not entered. The scope's own header

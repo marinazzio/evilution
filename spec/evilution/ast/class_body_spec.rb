@@ -132,6 +132,47 @@ RSpec.describe Evilution::AST::ClassBody do
     end
   end
 
+  describe "walking a tree" do
+    let(:tree) { Prism.parse("class C\n  def a = 1\nend\nmodule M\n  X = 1\nend\n").value }
+
+    after { described_class.clear! }
+
+    it "walks a tree once for all the lines and scopes asked about" do
+      allow(described_class).to receive(:scopes_in).and_call_original
+
+      described_class.anchored_at(tree, 2)
+      described_class.anchored_at(tree, 5)
+      described_class.unanchored_in(tree)
+
+      expect(described_class).to have_received(:scopes_in).with(tree).once
+    end
+
+    it "walks another tree anew" do
+      other = Prism.parse("class D\n  def d = 1\nend\n").value
+      described_class.anchored_at(tree, 2)
+
+      expect(described_class.anchored_at(other, 2).map { |body| body.node.constant_path.name }).to eq([:D])
+    end
+
+    it "lets go of the tree and its bodies once cleared" do
+      described_class.anchored_at(tree, 2)
+      described_class.clear!
+
+      expect([described_class.instance_variable_get(:@tree), described_class.instance_variable_get(:@bodies)])
+        .to eq([nil, nil])
+    end
+
+    it "walks the tree again once cleared" do
+      allow(described_class).to receive(:scopes_in).and_call_original
+      described_class.anchored_at(tree, 2)
+      described_class.clear!
+
+      described_class.anchored_at(tree, 2)
+
+      expect(described_class).to have_received(:scopes_in).with(tree).twice
+    end
+  end
+
   describe ".unanchored_in" do
     def unanchored(source)
       described_class.unanchored_in(Prism.parse(source).value).map { |body| body.node.slice.lines.first.chomp }

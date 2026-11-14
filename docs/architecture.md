@@ -140,14 +140,26 @@ class that owns it.
    that already fail *before* any mutation, so their mutations aren't miscounted.
    An optional `Runner::Canary` proves the pipeline can observe a known mutation.
 4. **Mutations** — `Runner::MutationPlanner#call` flat-maps subjects through
-   `Mutator::Registry#mutations_for`. The registry instantiates each operator whose
+   `Mutator::Registry#mutations_for`. The planner reads each file once and hands
+   that one source to every operator of every subject in it. The registry
+   instantiates each operator whose
    `subject_kinds` include the subject's kind (`:method`, `:scope`, `:aasm` and `:callback` by default) and
-   runs `operator.call(subject, filter:)`; each operator subclasses
+   runs `operator.call(subject, filter:, file_source:)`; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
    builds an immutable `Evilution::Mutation`. Whether the mutated source parses
    is `AST::SyntaxCheck`'s call: Prism first and, on an interpreter that
    compiles with parse.y (Ruby 3.3, or `--parser=parse.y`), parse.y as well,
-   since the two disagree on a few constructs. The planner then **deduplicates**
+   since the two disagree on a few constructs. A mutation inside a method
+   subject's `def ... end` is checked on the def alone (`AST::DefRegion`) when
+   that settles it, and its eval source is then the file's cached
+   neutralization with the mutation spliced in (`Mutator::LoadSources`,
+   `Integration::Loading::Neutralization#carry`); anything the def alone
+   cannot settle -- it does not parse alone, an endless def, an encoding
+   comment, a class-body call holding the def -- parses and neutralizes the
+   whole mutated file as before, so no verdict depends on the shortcut. A
+   mutation's `diff` hands Diff::LCS only the lines around the change
+   (`Mutation::LineDiff`), with the same output as over the whole file. The
+   planner then **deduplicates**
    (by `file_path` + mutated source), and filters **disabled** (`DisableComment`),
    **Sorbet `sig`** (`AST::SorbetSigDetector`), and **equivalent**
    (`Equivalent::Detector`) mutations. Equivalent ones become `:equivalent`
@@ -283,7 +295,7 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      would fail on its behalf. A fork child skips it: it exits right after
      reporting, so nothing would run against the restored file. For a subject with no declaration to keep it
      is one string per file, built once and shared
-     (`Mutator::Base.original_restore_source`).
+     (`Mutator::RestoreSourceCache`).
    - A scope in a concern's `included` block has two audiences. The kept
      `included` call registers the mutated block for classes that include the
      concern later (`ConcernStateCleaner` clears the old one first, on apply

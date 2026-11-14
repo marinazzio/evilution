@@ -5,6 +5,9 @@ require "evilution/runner"
 require_relative "../support/streaming_pool"
 
 RSpec.describe Evilution::Runner do
+  # What the planner hands the registry with each subject.
+  let(:planning_options) { { filter: anything, operator_options: anything, file_sources: anything } }
+
   let(:config) do
     Evilution::Config.new(
       target_files: ["lib/example.rb"],
@@ -65,7 +68,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -146,7 +149,7 @@ RSpec.describe Evilution::Runner do
 
     it "generates mutations for each subject" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      expect(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       runner.call
     end
@@ -203,8 +206,7 @@ RSpec.describe Evilution::Runner do
 
       before do
         registry = Evilution::Mutator::Registry.default
-        allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
-                                                                     operator_options: anything).and_return([mutation, mutation2])
+        allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation, mutation2])
 
         isolator = Evilution::Isolation::Fork.new
         allow(isolator).to receive(:call).and_return(mutation_result, mutation_result2)
@@ -288,23 +290,21 @@ RSpec.describe Evilution::Runner do
 
     it "includes subjects overlapping with the line range" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(subject_in_range, filter: anything,
-                                                                         operator_options: anything).and_return([mutation])
+      expect(registry).to receive(:mutations_for).with(subject_in_range, **planning_options).and_return([mutation])
 
       runner.call
     end
 
     it "excludes subjects outside the line range" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).not_to receive(:mutations_for).with(subject_outside_range, filter: anything, operator_options: anything)
+      expect(registry).not_to receive(:mutations_for).with(subject_outside_range, **planning_options)
 
       runner.call
     end
 
     it "includes all subjects from files without a line range constraint" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(subject_other_file, filter: anything,
-                                                                           operator_options: anything).and_return([mutation])
+      expect(registry).to receive(:mutations_for).with(subject_other_file, **planning_options).and_return([mutation])
 
       runner.call
     end
@@ -356,15 +356,14 @@ RSpec.describe Evilution::Runner do
 
     it "includes subjects matching the target" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(matching_subject, filter: anything,
-                                                                         operator_options: anything).and_return([mutation])
+      expect(registry).to receive(:mutations_for).with(matching_subject, **planning_options).and_return([mutation])
 
       runner.call
     end
 
     it "excludes subjects not matching the target" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).not_to receive(:mutations_for).with(non_matching_subject, filter: anything, operator_options: anything)
+      expect(registry).not_to receive(:mutations_for).with(non_matching_subject, **planning_options)
 
       runner.call
     end
@@ -439,9 +438,9 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(foo_subject, filter: anything, operator_options: anything).and_return([mutation])
-      expect(registry).to receive(:mutations_for).with(bar_subject, filter: anything, operator_options: anything).and_return([mutation])
-      expect(registry).not_to receive(:mutations_for).with(other_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(foo_subject, **planning_options).and_return([mutation])
+      expect(registry).to receive(:mutations_for).with(bar_subject, **planning_options).and_return([mutation])
+      expect(registry).not_to receive(:mutations_for).with(other_subject, **planning_options)
 
       runner.call
     end
@@ -469,9 +468,8 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(namespaced_subject, filter: anything,
-                                                                           operator_options: anything).and_return([mutation])
-      expect(registry).not_to receive(:mutations_for).with(other_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(namespaced_subject, **planning_options).and_return([mutation])
+      expect(registry).not_to receive(:mutations_for).with(other_subject, **planning_options)
 
       runner.call
     end
@@ -546,9 +544,9 @@ RSpec.describe Evilution::Runner do
 
     it "includes subjects from the base class and its descendants" do
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(base_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(child_subject, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(base_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(child_subject, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, **planning_options)
 
       runner.call
     end
@@ -561,10 +559,10 @@ RSpec.describe Evilution::Runner do
       allow(parser).to receive(:call).with("lib/base.rb").and_return([base_subject, class_method_subject])
 
       registry = Evilution::Mutator::Registry.default
-      expect(registry).to receive(:mutations_for).with(base_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(class_method_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(child_subject, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(base_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(class_method_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(child_subject, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, **planning_options)
 
       runner.call
     end
@@ -826,11 +824,11 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(bar_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(bar_baz_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(bar_nested_subject, filter: anything, operator_options: anything)
-      expect(registry).to receive(:mutations_for).with(bar_class_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(bar_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(bar_baz_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(bar_nested_subject, **planning_options)
+      expect(registry).to receive(:mutations_for).with(bar_class_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(unrelated_subject, **planning_options)
 
       runner.call
     end
@@ -898,9 +896,9 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(instance_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(class_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(other_subject, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(instance_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(class_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(other_subject, **planning_options)
 
       runner.call
     end
@@ -952,9 +950,9 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(class_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(instance_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(other_class_method, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(class_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(instance_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(other_class_method, **planning_options)
 
       runner.call
     end
@@ -973,9 +971,9 @@ RSpec.describe Evilution::Runner do
       runner = described_class.new(config: config)
       registry = Evilution::Mutator::Registry.default
 
-      expect(registry).to receive(:mutations_for).with(class_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(instance_method, filter: anything, operator_options: anything)
-      expect(registry).not_to receive(:mutations_for).with(other_class_method, filter: anything, operator_options: anything)
+      expect(registry).to receive(:mutations_for).with(class_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(instance_method, **planning_options)
+      expect(registry).not_to receive(:mutations_for).with(other_class_method, **planning_options)
 
       runner.call
     end
@@ -1002,7 +1000,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1062,7 +1060,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1119,7 +1117,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1369,7 +1367,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1448,7 +1446,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1786,7 +1784,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -1888,8 +1886,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
-                                                                   operator_options: anything).and_return([mutation, mutation2])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation, mutation2])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -2021,8 +2018,7 @@ RSpec.describe Evilution::Runner do
       )
 
       registry = Evilution::Mutator::Registry.default
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
-                                                                   operator_options: anything).and_return([mutation, mutation2, mutation3])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation, mutation2, mutation3])
 
       ff_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],
@@ -2058,7 +2054,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
     end
 
     # The :auto path picks :fork for Rails apps and packaged gems;
@@ -2293,7 +2289,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -2361,7 +2357,7 @@ RSpec.describe Evilution::Runner do
       )
       survived_result = Evilution::Result::MutationResult.new(mutation: sibling, status: :survived, duration: 0.1)
       registry = Evilution::Mutator::Registry.default
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything)
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options)
                                                 .and_return([mutation, sibling])
       isolator = Evilution::Isolation::Fork.new
       allow(isolator).to receive(:call).with(hash_including(mutation: mutation)).and_return(mutation_result)
@@ -2428,7 +2424,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -2580,7 +2576,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything)
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options)
                                                 .and_return([disabled_mutation, enabled_mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
@@ -2698,7 +2694,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything)
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options)
                                                 .and_return([sig_mutation, normal_mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
@@ -2751,7 +2747,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -2786,7 +2782,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
     end
 
     it "passes hooks to Isolation::Fork" do
@@ -2844,8 +2840,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything,
-                                                                   operator_options: anything).and_return([mutation, mutation2])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation, mutation2])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
@@ -3137,7 +3132,7 @@ RSpec.describe Evilution::Runner do
 
       registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
       allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
-      allow(registry).to receive(:mutations_for).with(subject_obj, filter: anything, operator_options: anything).and_return([mutation])
+      allow(registry).to receive(:mutations_for).with(subject_obj, **planning_options).and_return([mutation])
 
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)

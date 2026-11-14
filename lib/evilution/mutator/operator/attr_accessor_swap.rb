@@ -25,11 +25,8 @@ class Evilution::Mutator::Operator::AttrAccessorSwap < Evilution::Mutator::Base
   NARROW = %i[attr_reader attr_writer].freeze
   DECLARATIONS = [*NARROW, :attr_accessor].freeze
 
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     declarations_for(subject).each do |declaration|
       widen(declaration) if NARROW.include?(declaration.name)

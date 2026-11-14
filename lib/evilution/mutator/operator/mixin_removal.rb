@@ -15,11 +15,8 @@ require_relative "../../ast/class_body"
 class Evilution::Mutator::Operator::MixinRemoval < Evilution::Mutator::Base
   MIXIN_METHODS = %i[include extend prepend].freeze
 
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     mixin_calls_for(subject).each { |call_node| emit_mixin_removal(call_node) }
     @mutations

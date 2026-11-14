@@ -6,7 +6,7 @@ require_relative "../../ast/round_half_mode"
 class Evilution::Mutator::Operator::SymbolLiteral < Evilution::Mutator::Base
   extend Evilution::Mutator::ConstantValueSubjects
 
-  def call(subject, filter: nil)
+  def call(subject, **)
     @round_half_modes = []
     super
   end
