@@ -20,6 +20,8 @@ class Evilution::Runner::MutationExecutor
   autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
   autoload :RunlessVerdict, File.expand_path("mutation_executor/runless_verdict", __dir__)
   autoload :KillHistory, File.expand_path("mutation_executor/kill_history", __dir__)
+  autoload :ProbeFirst, File.expand_path("mutation_executor/probe_first", __dir__)
+  autoload :ProbeFirstRun, File.expand_path("mutation_executor/probe_first_run", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config
@@ -38,12 +40,12 @@ class Evilution::Runner::MutationExecutor
     spec_resolver = baseline_failed?(baseline_result) ? @baseline_runner.neutralization_resolver : nil
     notifier = build_notifier
     pipeline = build_pipeline(spec_resolver)
-    @timeout_policy = TimeoutPolicy.build(@config, baseline_result)
-    @runless = RunlessVerdict.new(coverage: uncovered_lines(integration))
-    @kill_history = KillHistory.new
-    return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
+    prepare_run(baseline_result, integration)
+    return run_batch(notifier, pipeline, mutations, baseline_result, integration) unless @config.probe_first?
 
-    parallel_run(notifier, pipeline, mutations, baseline_result, integration)
+    ProbeFirstRun.new(probe: @probe, notifier: notifier).call(mutations) do |batch, batch_notifier|
+      run_batch(batch_notifier, pipeline, batch, baseline_result, integration)
+    end
   ensure
     # The cache holds the verdicts stored since it last wrote a file; a run
     # that stops early keeps the ones it reached.
@@ -51,6 +53,15 @@ class Evilution::Runner::MutationExecutor
   end
 
   private
+
+  # What the run decides once, before any mutation: each one's time limit,
+  # the verdicts given without a run, and the kills remembered along the way.
+  def prepare_run(baseline_result, integration)
+    @timeout_policy = TimeoutPolicy.build(@config, baseline_result)
+    @probe = @config.probe_first? ? ProbeFirst.new : ProbeFirst::NONE
+    @runless = RunlessVerdict.new(coverage: uncovered_lines(integration), probe: @probe)
+    @kill_history = KillHistory.new
+  end
 
   # Here, before the first mutation child or pool worker is forked, so every
   # one of them inherits the filled caches rather than parsing the same source
@@ -60,6 +71,12 @@ class Evilution::Runner::MutationExecutor
   def warm(integration, mutations)
     integration.warm_targeting(mutations) if integration.respond_to?(:warm_targeting)
     integration.warm_loading if integration.respond_to?(:warm_loading)
+  end
+
+  def run_batch(notifier, pipeline, mutations, baseline_result, integration)
+    return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
+
+    parallel_run(notifier, pipeline, mutations, baseline_result, integration)
   end
 
   def sequential_run(notifier, pipeline, mutations, baseline_result, integration)

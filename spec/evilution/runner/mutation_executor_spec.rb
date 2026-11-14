@@ -326,6 +326,104 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       build(cfg, isolator: isolator).call(mutations, nil)
     end
 
+    it "reports a mutation the coverage-backed integration finds unexecuted as uncovered, without a run" do
+      integration = double("Integration", call: nil, uncovered?: true)
+      baseline_runner = instance_double(
+        Evilution::Runner::BaselineRunner, build_integration: integration, neutralization_fallback_dir: "spec"
+      )
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+      cfg = config(jobs: 1, example_targeting_strategy: :coverage)
+      execution = build(cfg, isolator: isolator, baseline_runner: baseline_runner).call([mutation], nil)
+
+      expect(execution.results.map(&:status)).to eq([:uncovered])
+      expect(isolator).not_to have_received(:call)
+    end
+
+    context "with probe_first" do
+      let(:state) { instance_double(Evilution::Subject, name: "Gate#state", line_number: 3) }
+
+      def subject_mutation(operator: "integer_literal", line: 4)
+        instance_double(Evilution::Mutation, file_path: "lib/gate.rb", operator_name: operator, line: line,
+                                             subject: state, to_s: "#{operator}:#{line}", strip_sources!: nil,
+                                             unparseable?: false)
+      end
+
+      let(:sentinel) { subject_mutation(operator: "method_body_to_raise", line: 3) }
+      let(:siblings) { [subject_mutation(line: 4), subject_mutation(line: 5)] }
+
+      def isolator_giving(sentinel_status, order: [])
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call) do |mutation:, **|
+          order << mutation
+          status = mutation.equal?(sentinel) ? sentinel_status : :killed
+          Evilution::Result::MutationResult.new(mutation: mutation, status: status, duration: 0.01)
+        end
+        isolator
+      end
+
+      it "reports the other mutations of a subject whose sentinel survived without running them" do
+        isolator = isolator_giving(:survived)
+
+        execution = build(config(jobs: 1, probe_first: true), isolator: isolator).call([*siblings, sentinel], nil)
+
+        expect(isolator).to have_received(:call).once
+        expect(execution.results.map { |r| [r.mutation, r.status, r.implied_by] })
+          .to eq([[siblings[0], :survived, "method_body_to_raise"], [siblings[1], :survived, "method_body_to_raise"],
+                  [sentinel, :survived, nil]])
+      end
+
+      it "runs the other mutations of a subject whose sentinel was killed" do
+        isolator = isolator_giving(:killed)
+
+        execution = build(config(jobs: 1, probe_first: true), isolator: isolator).call([*siblings, sentinel], nil)
+
+        expect(execution.results.map(&:status)).to eq(%i[killed killed killed])
+        expect(isolator).to have_received(:call).exactly(3).times
+      end
+
+      it "runs the sentinel before the other mutations" do
+        order = []
+        isolator = isolator_giving(:killed, order: order)
+
+        build(config(jobs: 1, probe_first: true), isolator: isolator).call([*siblings, sentinel], nil)
+
+        expect(order).to eq([sentinel, *siblings])
+      end
+
+      it "runs every mutation, in order, without probe_first" do
+        order = []
+        isolator = isolator_giving(:survived, order: order)
+
+        execution = build(config(jobs: 1), isolator: isolator).call([*siblings, sentinel], nil)
+
+        expect(order).to eq([*siblings, sentinel])
+        expect(execution.results.map(&:implied_by)).to eq([nil, nil, nil])
+      end
+
+      it "hands a parallel run its sentinels and then the rest, as two batches, with the baseline and integration" do
+        integration = ->(_m) { "cmd" }
+        baseline = double("BaselineResult", failed?: false, failed_spec_files: Set.new, spec_file_durations: {})
+        baseline_runner = instance_double(
+          Evilution::Runner::BaselineRunner, build_integration: integration, neutralization_fallback_dir: "spec"
+        )
+        parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+        batches = []
+        allow(parallel_strategy).to receive(:call) do |batch, baseline_result:, integration:|
+          batches << [batch, baseline_result, integration]
+          Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
+        end
+        allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+        build(config(jobs: 2, probe_first: true), isolator: instance_double(Evilution::Isolation::Fork),
+                                                  baseline_runner: baseline_runner)
+          .call([*siblings, sentinel], baseline)
+
+        expect(batches).to eq([[[sentinel], baseline, integration], [siblings, baseline, integration]])
+      end
+    end
+
     it "invokes on_result for each mutation result" do
       cfg = config(jobs: 1)
       mutations = [mutation, mutation]

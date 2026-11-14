@@ -102,6 +102,23 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["killed"].first).to include("killing_test" => "/p/a_spec.rb[1:2]", "examples_run" => 3)
     end
 
+    it "names the sentinel that implied a survivor reported without a run" do
+      implied = Evilution::Result::MutationResult.new(mutation: survived_mutation, status: :survived,
+                                                      implied_by: "method_body_to_raise")
+
+      parsed = JSON.parse(reporter.call(Evilution::Result::Summary.new(results: [implied])))
+
+      expect(parsed["survived"].first).to include("status" => "survived", "implied_by" => "method_body_to_raise")
+    end
+
+    it "leaves implied_by off a survivor that ran" do
+      ran = Evilution::Result::MutationResult.new(mutation: survived_mutation, status: :survived)
+
+      parsed = JSON.parse(reporter.call(Evilution::Result::Summary.new(results: [ran])))
+
+      expect(parsed["survived"].first.keys).not_to include("implied_by")
+    end
+
     it "leaves the killing test and the count off a mutation whose run gave neither" do
       parsed = JSON.parse(reporter.call(summary))
 

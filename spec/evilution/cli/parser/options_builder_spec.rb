@@ -103,6 +103,11 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(parse(["--no-skip-uncovered"]).first[:skip_uncovered]).to be(false)
   end
 
+  it "parses --probe-first to true and --no-probe-first to false" do
+    expect(parse(["--probe-first"]).first[:probe_first]).to be(true)
+    expect(parse(["--no-probe-first"]).first[:probe_first]).to be(false)
+  end
+
   it "parses --stop-on-kill to true" do
     options, = parse(["--stop-on-kill"])
     expect(options[:stop_on_kill]).to be(true)

@@ -9,7 +9,7 @@ class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable uncovered].freeze
 
   attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason,
-              :time_limit, :examples_run
+              :time_limit, :examples_run, :implied_by
 
   # known_failures_only: the tests failed, but every example that did was
   # already failing before any mutation ran, so the failure says nothing
@@ -21,9 +21,13 @@ class Evilution::Result::MutationResult
   # killing_test: the id of the test whose failure killed the mutation, where
   # the integration names it. examples_run: how many tests ran against the
   # mutation, where the integration counts them.
+  #
+  # implied_by: the operator of the sentinel mutation whose survival implied
+  # this verdict, given without a run (see
+  # Runner::MutationExecutor::ProbeFirst); nil for a verdict of its own.
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
                  test_command: nil, memory: nil, error: nil, neutral_reason: nil, known_failures_only: false,
-                 timings: nil, time_limit: nil, examples_run: nil)
+                 timings: nil, time_limit: nil, examples_run: nil, implied_by: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -38,6 +42,7 @@ class Evilution::Result::MutationResult
     @timings = timings
     @time_limit = time_limit
     @examples_run = examples_run
+    @implied_by = implied_by
     freeze
   end
 
@@ -45,7 +50,8 @@ class Evilution::Result::MutationResult
     self.class.new(
       mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
       test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
-      known_failures_only: @known_failures_only, timings: @timings, time_limit: seconds, examples_run: @examples_run
+      known_failures_only: @known_failures_only, timings: @timings, time_limit: seconds, examples_run: @examples_run,
+      implied_by: @implied_by
     )
   end
 

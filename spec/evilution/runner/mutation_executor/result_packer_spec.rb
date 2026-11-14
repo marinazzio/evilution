@@ -45,8 +45,17 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
         known_failures_only: false,
         timings: { apply: 0.1, test_run: 0.3 },
         time_limit: nil,
-        examples_run: 4
+        examples_run: 4,
+        implied_by: nil
       )
+    end
+  end
+
+  describe "#compact without timings" do
+    it "packs no timings for a result that measured none" do
+      bare = Evilution::Result::MutationResult.new(mutation: mutation, status: :error)
+
+      expect(packer.compact(bare)[:timings]).to be_nil
     end
   end
 
@@ -59,6 +68,9 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       expect(rebuilt.status).to eq(:killed)
       expect(rebuilt.duration).to eq(0.5)
       expect(rebuilt.killing_test).to eq("spec/foo_spec.rb:10")
+      expect(rebuilt.test_command).to eq("rspec spec/foo_spec.rb")
+      expect([rebuilt.child_rss_kb, rebuilt.memory_delta_kb, rebuilt.parent_rss_kb]).to eq([1024, 256, 2048])
+      expect(rebuilt.error_message).to eq("msg")
       expect(rebuilt.examples_run).to eq(4)
       expect(rebuilt.error_class).to eq("RuntimeError")
       expect(rebuilt.error_backtrace).to eq(["a.rb:1"])
@@ -99,6 +111,13 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       bare = Evilution::Result::MutationResult.new(mutation: mutation, status: :error)
 
       expect(packer.rebuild(mutation, packer.compact(bare)).timings).to be_nil
+    end
+
+    it "carries the sentinel that implied a survivor" do
+      implied = Evilution::Result::MutationResult.new(mutation: mutation, status: :survived,
+                                                      implied_by: "method_body_to_raise")
+
+      expect(packer.rebuild(mutation, packer.compact(implied)).implied_by).to eq("method_body_to_raise")
     end
 
     it "carries the known-failures flag across" do

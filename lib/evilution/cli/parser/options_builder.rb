@@ -107,6 +107,11 @@ class Evilution::CLI::Parser::OptionsBuilder
             "as uncovered without running it (default: enabled)") do |v|
       @options[:skip_uncovered] = v
     end
+    opts.on("--[no-]probe-first",
+            "Experimental: run each method's body-to-raise mutant first; when it survives, report the",
+            "method's other mutants as survivors implied by it, without running them (default: disabled)") do |v|
+      @options[:probe_first] = v
+    end
   end
 
   # Map the single --example-targeting flag onto the two underlying config axes:
