@@ -8,16 +8,20 @@ require_relative "run_timings"
 require_relative "mutation_timings"
 
 class Evilution::Result::Summary
-  attr_reader :results, :duration, :skipped, :disabled_mutations, :unresolved_target_files,
+  attr_reader :results, :duration, :skipped, :skipped_sites, :disabled_mutations, :unresolved_target_files,
               :target_file_count, :infra_retried, :uncovered_code, :baseline_failures, :timings
 
-  def initialize(results:, duration: 0.0, truncated: false, skipped: 0, disabled_mutations: [],
+  # skipped: every mutation left out during generation (ignore_patterns,
+  # skip_sites, disable comments, Sorbet sigs); skipped_sites: the share of
+  # each skip_sites preset, e.g. { logging: 3 }.
+  def initialize(results:, duration: 0.0, truncated: false, skipped: 0, skipped_sites: {}, disabled_mutations: [],
                  unresolved_target_files: [], target_file_count: nil, infra_retried: 0, uncovered_code: [],
                  baseline_failures: [], timings: Evilution::Result::RunTimings.new)
     @results = results
     @duration = duration
     @truncated = truncated
     @skipped = skipped
+    @skipped_sites = skipped_sites.dup.freeze
     @disabled_mutations = disabled_mutations
     @unresolved_target_files = unresolved_target_files.freeze
     @target_file_count = target_file_count

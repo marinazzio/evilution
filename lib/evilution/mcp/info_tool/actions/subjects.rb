@@ -5,7 +5,7 @@ require_relative "base"
 require_relative "../config_factory"
 require_relative "../../../runner"
 require_relative "../../../mutator/registry"
-require_relative "../../../ast/pattern/filter"
+require_relative "../../../ast/skip_filter"
 
 class Evilution::MCP::InfoTool::Actions::Subjects < Evilution::MCP::InfoTool::Actions::Base
   def self.call(files: nil, line_ranges: nil, target: nil, integration: nil, skip_config: nil, **)
@@ -49,9 +49,7 @@ class Evilution::MCP::InfoTool::Actions::Subjects < Evilution::MCP::InfoTool::Ac
     end
 
     def build_subject_filter(config)
-      return nil if config.ignore_patterns.empty?
-
-      Evilution::AST::Pattern::Filter.new(config.ignore_patterns)
+      Evilution::AST::SkipFilter.for(config)
     end
   end
 end

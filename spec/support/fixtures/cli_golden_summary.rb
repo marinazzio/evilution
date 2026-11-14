@@ -48,6 +48,12 @@ module CliGoldenSummary
       []
     end
 
+    # Its skip predates the skip_sites presets: it comes from a disable
+    # comment, so no preset is named.
+    def skipped_sites
+      {}
+    end
+
     def target_file_count
       nil
     end

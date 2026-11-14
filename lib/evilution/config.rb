@@ -23,7 +23,7 @@ class Evilution::Config
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
     profile: :default, canary: true, warmup: :none, stop_on_kill: true,
     timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60, skip_uncovered: true,
-    probe_first: false
+    probe_first: false, skip_sites: []
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -37,7 +37,7 @@ class Evilution::Config
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
               :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
-              :probe_first
+              :probe_first, :skip_sites
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -264,6 +264,15 @@ class Evilution::Config
       #   - "call{name=info, receiver=call{name=logger}}"
       #   - "call{name=debug|warn}"
 
+      # Presets of low-value code to leave unmutated (default: none). Each
+      # skips only mutations that change what the code reports, never the
+      # raise, the raised class or the condition around it:
+      # logging        - log lines and deprecation warnings
+      # debug_output   - puts/print/warn/p/pp and writes to $stdout/$stderr
+      # error_messages - the message of a raised error
+      # requires       - require/require_relative run while the file loads
+      # skip_sites: [logging, error_messages, requires]
+
       # Operator profile: default or strict (default: default).
       # strict adds aggressive mutators (e.g. replaces `x.predicate?` with
       # `nil`, or appends `rescue nil` to a raising call) intended for
@@ -327,7 +336,7 @@ class Evilution::Config
   end
 
   VALIDATED_ATTRS = %i[
-    integration jobs fail_fast isolation ignore_patterns
+    integration jobs fail_fast isolation ignore_patterns skip_sites
     hooks preload spec_mappings spec_pattern profile warmup
     timeout_factor timeout_floor timeout_ceiling
   ].freeze
@@ -368,6 +377,7 @@ require_relative "config/validators/fail_fast"
 require_relative "config/validators/preload"
 require_relative "config/validators/hooks"
 require_relative "config/validators/ignore_patterns"
+require_relative "config/validators/skip_sites"
 require_relative "config/validators/spec_pattern"
 require_relative "config/validators/spec_mappings"
 require_relative "config/validators/example_targeting_fallback"

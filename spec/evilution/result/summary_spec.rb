@@ -537,6 +537,19 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#skipped_sites" do
+    it "defaults to none" do
+      expect(summary.skipped_sites).to eq({})
+    end
+
+    it "returns the skips per preset, frozen" do
+      s = described_class.new(results: results, duration: 1.0, skipped: 5, skipped_sites: { logging: 2 })
+
+      expect(s.skipped_sites).to eq(logging: 2)
+      expect(s.skipped_sites).to be_frozen
+    end
+  end
+
   describe "#killtime" do
     it "sums individual mutation durations" do
       r1 = Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, duration: 1.5)

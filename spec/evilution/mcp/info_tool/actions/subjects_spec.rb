@@ -10,7 +10,8 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
   end
 
   let(:config) do
-    instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: [], line_ranges: {})
+    instance_double(Evilution::Config, skip_heredoc_literals?: false, ignore_patterns: [], skip_sites: [],
+                                       line_ranges: {})
   end
   let(:subject_stub) do
     instance_double(
@@ -70,16 +71,25 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Subjects do
       )
     end
 
-    it "builds AST Pattern::Filter when ignore_patterns is non-empty" do
+    it "builds the skip filter when ignore_patterns is non-empty" do
       allow(config).to receive(:ignore_patterns).and_return(["call{name=info}"])
-      expect(Evilution::AST::Pattern::Filter).to receive(:new).with(["call{name=info}"]).and_call_original
+      expect(Evilution::AST::SkipFilter).to receive(:new)
+        .with(patterns: ["call{name=info}"], sites: []).and_call_original
       described_class.call(
         files: ["lib/foo.rb"], line_ranges: nil, target: nil, integration: nil, skip_config: nil
       )
     end
 
-    it "does not build filter when ignore_patterns is empty" do
-      expect(Evilution::AST::Pattern::Filter).not_to receive(:new)
+    it "builds the skip filter when skip_sites is non-empty" do
+      allow(config).to receive(:skip_sites).and_return([:requires])
+      expect(Evilution::AST::SkipFilter).to receive(:new).with(patterns: [], sites: [:requires]).and_call_original
+      described_class.call(
+        files: ["lib/foo.rb"], line_ranges: nil, target: nil, integration: nil, skip_config: nil
+      )
+    end
+
+    it "does not build filter when ignore_patterns and skip_sites are empty" do
+      expect(Evilution::AST::SkipFilter).not_to receive(:new)
       described_class.call(
         files: ["lib/foo.rb"], line_ranges: nil, target: nil, integration: nil, skip_config: nil
       )

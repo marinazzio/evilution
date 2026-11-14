@@ -280,6 +280,22 @@ RSpec.describe Evilution::Session::Store do
       expect(read_saved_session["summary"]["skipped"]).to eq(3)
     end
 
+    it "includes the skips per preset in the summary" do
+      summary = Evilution::Result::Summary.new(results: [], duration: 1.0, skipped: 3, skipped_sites: { requires: 3 })
+
+      store.save(summary)
+
+      expect(read_saved_session["summary"]["skipped_sites"]).to eq("requires" => 3)
+    end
+
+    it "omits skipped_sites from the summary when no preset skipped anything" do
+      summary = Evilution::Result::Summary.new(results: [], duration: 1.0, skipped: 3)
+
+      store.save(summary)
+
+      expect(read_saved_session["summary"]).not_to have_key("skipped_sites")
+    end
+
     it "omits skipped from the summary when nothing was skipped" do
       summary = Evilution::Result::Summary.new(results: [], duration: 1.0, skipped: 0)
 

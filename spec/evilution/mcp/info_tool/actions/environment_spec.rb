@@ -22,7 +22,7 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Environment do
       expect(settings.keys).to include(
         "timeout", "format", "integration", "jobs", "isolation", "baseline",
         "incremental", "fail_fast", "stop_on_kill", "skip_uncovered", "min_score", "suggest_tests", "save_session",
-        "target", "skip_heredoc_literals", "ignore_patterns"
+        "target", "skip_heredoc_literals", "ignore_patterns", "skip_sites"
       )
     end
 
