@@ -4,6 +4,9 @@ require "evilution/runner"
 require_relative "../support/streaming_pool"
 
 RSpec.describe Evilution::Runner, "memory instrumentation" do
+  # What the planner hands the registry with each subject.
+  let(:planning_options) { { filter: anything, operator_options: anything, file_sources: anything } }
+
   let(:subject_obj) { double("Subject", name: "Example#foo", file_path: "lib/example.rb", line_number: 3, release_node!: nil) }
 
   let(:mutation) do
@@ -49,7 +52,7 @@ RSpec.describe Evilution::Runner, "memory instrumentation" do
     registry = instance_double(Evilution::Mutator::Registry, accepts?: true)
     allow(Evilution::Mutator::Registry).to receive(:default).and_return(registry)
     allow(registry).to receive(:mutations_for)
-      .with(subject_obj, filter: anything, operator_options: anything)
+      .with(subject_obj, **planning_options)
       .and_return([mutation])
 
     isolator = instance_double(Evilution::Isolation::Fork)

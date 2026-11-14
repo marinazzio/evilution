@@ -10,8 +10,11 @@ require_relative "../integration/loading/body_call_neutralizer"
 require_relative "../ast/heredoc_span"
 require_relative "../ast/parse_cache"
 require_relative "../ast/source_surgeon"
+require_relative "../ast/def_region"
+require_relative "../ast/class_body"
 require_relative "line_range_filter"
 require_relative "restore_source_cache"
+require_relative "load_sources"
 
 class Evilution::Mutator::Base < Prism::Visitor
   include Evilution::Mutator::Primitives
@@ -42,16 +45,24 @@ class Evilution::Mutator::Base < Prism::Visitor
     @body_call_neutralizer = Evilution::Integration::Loading::BodyCallNeutralizer.new
   end
 
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  # file_source: the subject's file as read for every operator of the run;
+  # read here when not handed over.
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
     visit(subject.node)
     @mutations
   end
 
   private
+
+  def prepare(subject, filter:, file_source:)
+    @subject = subject
+    @file_source = file_source || File.read(subject.file_path)
+    @mutations = []
+    @filter = filter
+    @def_region = nil
+    @load_sources = nil
+  end
 
   # `skip_unparseable` makes the mutation vanish rather than be recorded when
   # the surgery does not parse. Off by default: the point operators rely on
@@ -68,7 +79,8 @@ class Evilution::Mutator::Base < Prism::Visitor
     return unless @line_range_filter.cover?(@subject.file_path, lines)
 
     mutated = Evilution::AST::SourceSurgeon.splice(@file_source, offset: offset, length: length, replacement: replacement)
-    surgery = checked_unless_ignored(node, mutated, skip_unparseable)
+    surgery = checked_unless_ignored(node, mutated, { offset: offset, length: length, replacement: replacement },
+                                     skip_unparseable)
     return unless surgery
 
     slices = slice_affected_lines(
@@ -110,12 +122,23 @@ class Evilution::Mutator::Base < Prism::Visitor
   # has to be -- so the ignored ones counted are ones the run would have made.
   # The check, a parse, is left until the filter has passed the mutation
   # unless the mutation hangs on it.
-  def checked_unless_ignored(node, mutated, skip_unparseable)
-    surgery = Evilution::AST::SourceSurgeon.check(mutated) if skip_unparseable
+  def checked_unless_ignored(node, mutated, edit, skip_unparseable)
+    surgery = check(mutated, edit) if skip_unparseable
     return if skip_unparseable && surgery.unparseable?
     return if ignored?(node, mutated)
 
-    surgery || Evilution::AST::SourceSurgeon.check(mutated)
+    surgery || check(mutated, edit)
+  end
+
+  # A mutation inside the subject's method is checked by parsing the method
+  # alone when that settles it (see AST::DefRegion); the whole file is
+  # parsed otherwise.
+  def check(mutated, edit)
+    Evilution::AST::SourceSurgeon.check(mutated) { def_region.parse(**edit) }
+  end
+
+  def def_region
+    @def_region ||= Evilution::AST::DefRegion.new(@file_source, @subject.node)
   end
 
   def ignored?(node, mutated_source)
@@ -164,57 +187,18 @@ class Evilution::Mutator::Base < Prism::Visitor
     @file_source.byteslice(offset, length).b.count("\n")
   end
 
-  # Pre-compute the worker's eval target so per-iter Prism re-parse cost
-  # stays out of the hot path. For parseable mutations we strip class/module
-  # body calls that are known to be non-idempotent (registries etc.); for
-  # unparseable bytes we fall through so the syntax validator can reject
-  # them at apply time. Passing the subject's file path lets the neutralizer
-  # skip files the parent never preloaded — those are lazy plugin files whose
-  # DSL calls are still needed for the child fork's first-time load.
-  # A scope or aasm subject's mutation sits inside a class-body declaration,
-  # which must run again for the mutated body to replace the loaded one, so
-  # that one declaration is kept.
+  # The source a worker evaluates for the mutation, and the one it evaluates
+  # afterwards to put the file back (see LoadSources).
   def build_eval_source(surgery, offset)
-    return surgery.source unless surgery.ok?
-
-    @body_call_neutralizer.call(surgery.source, file_path: @subject.file_path, **redeclaration(offset))
+    load_sources.eval_source(surgery, offset)
   end
 
-  # The original file, evaluated after a mutation's tests to put back what
-  # the mutation changed. Without it an in-process run would leave the last
-  # mutation of a file applied while the files after it are mutated, failing
-  # their tests for them. Its class-body calls are neutralized like the eval
-  # source's; a scope, aasm or callback subject keeps its own declaration, so
-  # the mutated callable is declared over again as written.
   def build_restore_source(offset)
-    unless redeclared_subject?
-      return Evilution::Mutator::RestoreSourceCache.source_for(@subject.file_path, @file_source, @body_call_neutralizer)
-    end
-
-    @body_call_neutralizer.call(@file_source, file_path: @subject.file_path, **redeclaration(offset))
+    load_sources.restore_source(offset)
   end
 
-  # Subjects whose body is written inside a class-body declaration and only
-  # takes effect when that declaration runs again.
-  REDECLARED_KINDS = %i[scope aasm callback].freeze
-  private_constant :REDECLARED_KINDS
-
-  # So is anything written in a concern's hook block, a method included: the
-  # block has to run again on the classes that took the concern already.
-  def redeclared_subject?
-    REDECLARED_KINDS.include?(@subject.kind) || @subject.concern_hook?
-  end
-
-  # What the neutralizer needs to keep a redeclared subject's declaration:
-  # where the mutation is, the lines the declaration takes up in the file as
-  # it was loaded -- which is where the callbacks it registered then say they
-  # come from, whatever the mutation does to its length -- and the
-  # declaration as written there.
-  def redeclaration(offset)
-    return {} unless redeclared_subject?
-
-    first = @subject.line_number
-    { keep_offset: offset, keep_lines: first..(first + @subject.source.count("\n")), keep_source: @subject.source }
+  def load_sources
+    @load_sources ||= Evilution::Mutator::LoadSources.new(@subject, @file_source, @body_call_neutralizer)
   end
 
   NEWLINE_BYTE = 10
@@ -271,6 +255,7 @@ class Evilution::Mutator::Base < Prism::Visitor
 
   def self.clear_parse_cache!
     Evilution::AST::ParseCache.clear!
+    Evilution::AST::ClassBody.clear!
     Evilution::Mutator::RestoreSourceCache.clear!
   end
 end

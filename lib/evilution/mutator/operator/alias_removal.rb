@@ -19,11 +19,8 @@ require_relative "../../ast/class_body"
 # generic call operators, and global-variable aliases (`alias $new $old`)
 # are not method surface.
 class Evilution::Mutator::Operator::AliasRemoval < Evilution::Mutator::Base
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     declarations_for(subject).each { |declaration| remove(declaration) }
     @mutations

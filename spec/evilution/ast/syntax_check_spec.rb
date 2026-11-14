@@ -26,6 +26,14 @@ RSpec.describe Evilution::AST::SyntaxCheck do
         expect(described_class.valid?(prism_only_source, prism_interpreter: true)).to be(true)
       end
 
+      it "builds no syntax tree to answer" do
+        allow(Prism).to receive(:parse).and_call_original
+
+        described_class.valid?(valid_source, prism_interpreter: true)
+
+        expect(Prism).not_to have_received(:parse)
+      end
+
       it "does not ask parse.y" do
         allow(RubyVM::AbstractSyntaxTree).to receive(:parse)
 

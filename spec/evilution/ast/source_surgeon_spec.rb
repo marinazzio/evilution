@@ -36,6 +36,29 @@ RSpec.describe Evilution::AST::SourceSurgeon do
     it "is unparseable for a source that does not parse" do
       expect(described_class.check("x > ")).to be_unparseable
     end
+
+    it "has no region when it parsed the whole source" do
+      expect(described_class.check("x > y").region).to be_nil
+    end
+
+    context "with a region that proves the source parses" do
+      it "is ok, keeping the region, without parsing the source" do
+        allow(Evilution::AST::SyntaxCheck).to receive(:valid?)
+
+        result = described_class.check("x > y") { :region }
+
+        expect(result).to have_attributes(source: "x > y", status: :ok, region: :region)
+        expect(result).to be_frozen
+        expect(Evilution::AST::SyntaxCheck).not_to have_received(:valid?)
+      end
+    end
+
+    context "with a region that proves nothing" do
+      it "parses the whole source" do
+        expect(described_class.check("x > ") { nil }).to have_attributes(status: :unparseable, region: nil)
+        expect(described_class.check("x > y") { nil }).to have_attributes(status: :ok, region: nil)
+      end
+    end
   end
 
   describe ".apply" do

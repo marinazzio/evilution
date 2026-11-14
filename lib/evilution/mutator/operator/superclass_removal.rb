@@ -11,11 +11,8 @@ require_relative "../../ast/class_body"
 # The definition line belongs to no method, so the mutant is attributed to
 # the method anchoring the class body (see Evilution::AST::ClassBody).
 class Evilution::Mutator::Operator::SuperclassRemoval < Evilution::Mutator::Base
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     classes_with_superclass_for(subject).each do |class_node|
       offset, length = superclass_range(class_node)

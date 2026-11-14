@@ -31,6 +31,61 @@ RSpec.describe Evilution::Equivalent::Heuristic::CommentMarking do
     expect(heuristic.match?(mutation)).to be false
   end
 
+  it "does not split a file that holds no marker into lines" do
+    source = +"def foo\n  x > 0\nend\n"
+    allow(source).to receive(:lines).and_call_original
+    mutation = double("Mutation", original_source: source, line: 2)
+
+    expect(heuristic.match?(mutation)).to be false
+    expect(source).not_to have_received(:lines)
+  end
+
+  it "scans a file for the marker once for all its mutations" do
+    source = +"def foo\n  x > 0\nend\n"
+    allow(source).to receive(:match?).and_call_original
+
+    heuristic.match?(double("Mutation", original_source: source, line: 2))
+    heuristic.match?(double("Mutation", original_source: source, line: 1))
+
+    expect(source).to have_received(:match?).once
+  end
+
+  it "keeps its answer for a marked file asked about again" do
+    source = "def foo\n  x > 0 # evilution:equivalent\nend\n"
+
+    expect(heuristic.match?(double("Mutation", original_source: source, line: 2))).to be true
+    expect(heuristic.match?(double("Mutation", original_source: source, line: 2))).to be true
+  end
+
+  it "does not match a line past the end of a marked file" do
+    source = "x = 1 # evilution:equivalent\n"
+
+    expect(heuristic.match?(double("Mutation", original_source: source, line: 2))).to be false
+  end
+
+  it "matches a marker on the line right above, deep in the file" do
+    source = "def foo\n  a = 1\n  # evilution:equivalent\n  x > 0\nend\n"
+
+    expect(heuristic.match?(double("Mutation", original_source: source, line: 4))).to be true
+  end
+
+  it "does not match a mutation whose sources were released" do
+    expect(heuristic.match?(double("Mutation", original_source: nil, line: 1))).to be false
+  end
+
+  it "scans another file anew" do
+    heuristic.match?(double("Mutation", original_source: "x = 1\n", line: 1))
+
+    expect(heuristic.match?(double("Mutation", original_source: "x = 1 # evilution:equivalent\n", line: 1))).to be true
+  end
+
+  it "does not match a marker that runs across a line break" do
+    source = "def foo\n  x > 0 #\nevilution:equivalent\nend\n"
+    mutation = double("Mutation", original_source: source, line: 2)
+
+    expect(heuristic.match?(mutation)).to be false
+  end
+
   it "does not match when no comment is present" do
     source = "def foo\n  x > 0\nend\n"
     mutation = double("Mutation", original_source: source, line: 2)

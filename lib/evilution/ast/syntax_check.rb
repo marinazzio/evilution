@@ -21,8 +21,10 @@ module Evilution::AST::SyntaxCheck
   # How the interpreter says it compiles: `ruby 3.4.1 (...) +PRISM [...]`.
   PRISM_INTERPRETER = RUBY_DESCRIPTION.include?("+PRISM")
 
+  # Prism is only asked whether the source parses, which builds no syntax
+  # tree: the answer is the same, without the tree a mutant has no use for.
   def self.valid?(source, prism_interpreter: PRISM_INTERPRETER)
-    return false unless Prism.parse(source).success?
+    return false unless Prism.parse_success?(source)
 
     prism_interpreter || parse_y_accepts?(source)
   end
@@ -52,5 +54,5 @@ module Evilution::AST::SyntaxCheck
     $VERBOSE = verbose
   end
 
-  private_class_method :parse_y_accepts?, :without_warnings
+  private_class_method :without_warnings
 end

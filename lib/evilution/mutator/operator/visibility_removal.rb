@@ -26,11 +26,8 @@ class Evilution::Mutator::Operator::VisibilityRemoval < Evilution::Mutator::Base
   # runs with or without the declaration, so it stays.
   WRAPPED = [Prism::DefNode, Prism::CallNode].freeze
 
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     declarations_for(subject).each { |declaration| remove(declaration) }
     @mutations
