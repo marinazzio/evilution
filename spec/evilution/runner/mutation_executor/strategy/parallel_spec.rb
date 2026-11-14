@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "open3"
 require "evilution/config"
 require "evilution/mutation"
 require "evilution/result/mutation_result"
@@ -804,5 +805,20 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
 
     expect(call_order).to eq(%i[store strip])
+  end
+
+  # A project that turns warnings into exceptions (dry-monads does) loads
+  # this lazily, after its spec helper ran, so a warning here fails the run.
+  it "loads lazily without a warning" do
+    script = <<~RUBY
+      require "evilution"
+      require "evilution/runner"
+      $VERBOSE = true
+      Evilution::Runner::MutationExecutor::Strategy::Parallel::OrderedDelivery
+    RUBY
+    _out, err, status = Open3.capture3(RbConfig.ruby, "-I", File.expand_path("../../../../../lib", __dir__), "-e", script)
+
+    expect(status).to be_success
+    expect(err).not_to include("warning")
   end
 end
