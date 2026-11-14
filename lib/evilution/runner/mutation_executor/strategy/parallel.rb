@@ -5,6 +5,12 @@ require_relative "../../../parallel/work_queue"
 require_relative "../timeout_policy"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
+  # Autoloaded rather than required at the bottom: ordered_delivery requires
+  # this file, and requiring it while it is still loading is a circular
+  # require, which Ruby warns about -- and a project that turns warnings into
+  # exceptions loads this after its spec helper did so.
+  autoload :OrderedDelivery, File.expand_path("parallel/ordered_delivery", __dir__)
+
   # Compact result for a worker that exited unexpectedly (:error is not cached,
   # so the 0.0 duration is never persisted).
   DIED_COMPACT = {
@@ -120,5 +126,3 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     { status: :timeout, duration: item_timeout, timings: { test_run: item_timeout }, time_limit: item_timeout }
   end
 end
-
-require_relative "parallel/ordered_delivery"
