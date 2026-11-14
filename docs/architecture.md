@@ -158,7 +158,12 @@ class that owns it.
    mutated token (`ExampleFilter` / `CoverageExampleFilter`). Separately,
    `Runner::TargetSpecAudit` asks the same selector once per target file in the
    parent, so a file that resolves to no spec at all is a fact the summary
-   carries rather than a handful of `unresolved` mutations.
+   carries rather than a handful of `unresolved` mutations. Before any mutation
+   runs, `MutationExecutor` calls `Integration::Base#warm_targeting`: the RSpec
+   integration parses each source file and its resolved spec files once in the
+   parent (`ExampleFilter#warm` fills `SourceAstCache` / `SpecAstCache`), so
+   every forked child inherits the parses instead of repeating them and losing
+   them on exit.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
@@ -174,6 +179,11 @@ class that owns it.
    grace → KILL ladder, sandbox reap), applies the mutation
    (`Integration::Loading::MutationApplier`), and runs `Integration::Base#call` →
    `run_tests`. The child's result is marshaled back over a length-prefixed pipe.
+   After reading it the parent waits on that pipe for the child to close it,
+   in slices bounded by `REAP_DEADLINE`, and reaps the child as soon as it has
+   exited; a reaped child is never signalled again (its pid may be reused).
+   A fork child does not evaluate the original file again after its tests
+   (`Evilution.single_mutation_process?`): it exits right after reporting.
    `Isolation::InProcess` is the lighter path for plain-Ruby projects.
 8. **Status** — outcome flags come from the integration
    (`Integration::RSpec::ResultBuilder`: passed / test_crashed / examples-loaded
@@ -270,7 +280,8 @@ A mutator is a `Prism::Visitor` subclass that emits byte-range edits.
      evaluates after the tests: the original file, class-body calls
      neutralized. An in-process run would otherwise leave the last mutation
      of a file applied while the next file is mutated, and that file's tests
-     would fail on its behalf. For a subject with no declaration to keep it
+     would fail on its behalf. A fork child skips it: it exits right after
+     reporting, so nothing would run against the restored file. For a subject with no declaration to keep it
      is one string per file, built once and shared
      (`Mutator::Base.original_restore_source`).
    - A scope in a concern's `included` block has two audiences. The kept

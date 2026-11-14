@@ -17,6 +17,13 @@ class Evilution::Integration::Base
     @mutation_applier = mutation_applier
   end
 
+  # Fills whatever the integration caches per source or test file for the
+  # given mutations. Called in the parent before any mutation runs, so forked
+  # children inherit the caches instead of each filling its own and losing it.
+  def warm_targeting(_mutations)
+    nil
+  end
+
   # The timing methods are taken as method objects before the mutation is
   # applied. When the file under mutation is this one, applying it replaces
   # them, and a mutant of the code that builds the result would otherwise
@@ -34,10 +41,19 @@ class Evilution::Integration::Base
     result, tests = timed.call { Evilution.while_running_tests { run_tests(mutation) } }
     attach_timings.call(result, apply: apply, tests: tests)
   ensure
-    @mutation_applier.restore(mutation) unless restored_by_applier?(load_error)
+    @mutation_applier.restore(mutation) if restore_needed?(load_error)
   end
 
   private
+
+  # A process that ends with its mutation exits right after reporting it, so
+  # nothing would run against the restored file; evaluating it again would
+  # only delay the report.
+  def restore_needed?(load_error)
+    return false if Evilution.single_mutation_process?
+
+    !restored_by_applier?(load_error)
+  end
 
   # An integration that re-runs a survivor reports that run's time as
   # `timings: { confirmation: }`; the rest of the test time is the first run.

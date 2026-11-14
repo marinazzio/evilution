@@ -1172,6 +1172,52 @@ RSpec.describe Evilution::Integration::RSpec do
     end
   end
 
+  # Each mutation runs in a forked child that keeps what the parent cached
+  # and loses what it adds itself, so the targeting caches are filled in the
+  # parent, once, before any child is forked.
+  describe "#warm_targeting" do
+    let(:example_filter) { instance_double(Evilution::ExampleFilter, warm: nil) }
+    let(:selector) { ->(path) { path == "lib/a.rb" ? ["spec/a_spec.rb"] : [] } }
+
+    def mutation_in(path)
+      double("Mutation", file_path: path, original_source: "source of #{path}")
+    end
+
+    def warming(**options)
+      described_class.new(spec_selector: selector, example_filter: example_filter, **options)
+    end
+
+    it "warms the filter with the spec files each source file resolves to, once per file" do
+      first = mutation_in("lib/a.rb")
+
+      warming.warm_targeting([first, mutation_in("lib/a.rb")])
+
+      expect(example_filter).to have_received(:warm).once
+      expect(example_filter).to have_received(:warm).with(first, ["spec/a_spec.rb"])
+    end
+
+    it "skips a source file no spec file resolves to, without warning about it" do
+      expect(Evilution::Diagnostic).not_to receive(:warn)
+
+      warming.warm_targeting([mutation_in("lib/unknown.rb")])
+
+      expect(example_filter).not_to have_received(:warm)
+    end
+
+    it "warns about an unresolved file when its mutation runs, as before" do
+      integration = warming
+      integration.warm_targeting([mutation_in("lib/unknown.rb")])
+      expect(Evilution::Diagnostic).to receive(:warn).with(%r{No matching spec found for lib/unknown\.rb})
+
+      integration.send(:run_tests, mutation_in("lib/unknown.rb"))
+    end
+
+    it "does nothing without an example filter" do
+      expect { described_class.new(spec_selector: selector).warm_targeting([mutation_in("lib/a.rb")]) }
+        .not_to raise_error
+    end
+  end
+
   describe "spec load path" do
     let(:spec_dir) { File.expand_path("spec") }
     let(:original_load_path) { $LOAD_PATH.dup }

@@ -13,12 +13,14 @@ class Evilution::Integration::RSpec::TestFileResolver
     @warner = warner
   end
 
-  def call(mutation)
+  # warn: false resolves without telling the user about a file nothing
+  # resolves for, as when the files are only looked up ahead of the run.
+  def call(mutation, warn: true)
     return @test_files if @test_files
 
     resolved = Array(@spec_selector.call(mutation.file_path))
     if resolved.empty?
-      @warner.call(mutation.file_path, fallback_to_full_suite: @fallback_to_full_suite)
+      @warner.call(mutation.file_path, fallback_to_full_suite: @fallback_to_full_suite) if warn
       return @fallback_to_full_suite ? ["spec"] : nil
     end
 

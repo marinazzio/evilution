@@ -44,6 +44,20 @@ RSpec.describe Evilution::Integration::RSpec::TestFileResolver do
     expect(warner).to have_received(:call).with("lib/foo.rb", fallback_to_full_suite: false)
   end
 
+  it "does not warn about an unresolved file when asked not to" do
+    resolver = build(spec_selector_result: [], fallback_to_full_suite: false)
+
+    expect(resolver.call(mutation, warn: false)).to be_nil
+    expect(warner).not_to have_received(:call)
+  end
+
+  it "still falls back to the full suite without warning when asked not to" do
+    resolver = build(spec_selector_result: [], fallback_to_full_suite: true)
+
+    expect(resolver.call(mutation, warn: false)).to eq(["spec"])
+    expect(warner).not_to have_received(:call)
+  end
+
   it "unions related_spec_heuristic results with selector results when heuristic enabled, deduped" do
     allow(related_heuristic).to receive(:call).with(mutation).and_return(["spec/related_spec.rb", "spec/foo_spec.rb"])
     resolver = build(spec_selector_result: ["spec/foo_spec.rb"], related_specs_heuristic_enabled: true)
