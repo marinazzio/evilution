@@ -200,7 +200,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
 
     it "hands the baseline result and the built integration to the parallel strategy" do
       mutations = [mutation, mutation]
-      baseline_result = double("BaselineResult", failed?: false)
+      baseline_result = double("BaselineResult", failed?: false, failed_spec_files: Set.new, spec_file_durations: {})
       integration = ->(_m) { "cmd" }
       baseline_runner = instance_double(
         Evilution::Runner::BaselineRunner, build_integration: integration, neutralization_fallback_dir: "spec"
@@ -341,7 +341,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
           discounted_kill(baseline_mut)
         end
       end
-      baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"])
+      baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"], spec_file_durations: {})
 
       execution = build(cfg, isolator: isolator).call([infra_mut, baseline_mut], baseline)
 
@@ -354,7 +354,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       mut = mutation(file: "lib/foo.rb")
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(isolator).to receive(:call) { |mutation:, **| survived_result(mutation) }
-      baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"])
+      baseline = instance_double(Evilution::Baseline::Result, failed?: true, failed_spec_files: ["spec"], spec_file_durations: {})
 
       execution = build(cfg, isolator: isolator).call([mut], baseline)
 
@@ -374,7 +374,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       end
       isolator = instance_double(Evilution::Isolation::Fork)
       allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
-      baseline = instance_double(Evilution::Baseline::Result, failed?: false, failed_spec_files: [])
+      baseline = instance_double(Evilution::Baseline::Result, failed?: false, failed_spec_files: [], spec_file_durations: {})
 
       build(cfg, isolator: isolator, baseline_runner: baseline_runner).call([mutation], baseline)
 
@@ -409,7 +409,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       allow(isolator).to receive(:call) { |mutation:, **| discounted_kill(mutation) }
       baseline = instance_double(
         Evilution::Baseline::Result, failed?: true,
-                                     failed_spec_files: ["spec/resolved_spec.rb"]
+                                     failed_spec_files: ["spec/resolved_spec.rb"], spec_file_durations: {}
       )
 
       execution = build(cfg, isolator: isolator, baseline_runner: baseline_runner)
@@ -421,19 +421,19 @@ RSpec.describe Evilution::Runner::MutationExecutor do
   end
 
   describe "parallel pool construction" do
-    def capture_pool_factory(cfg, hooks:)
+    def capture_parallel_kwargs(cfg, hooks:, baseline: nil)
       isolator = instance_double(Evilution::Isolation::Fork)
       parallel = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
       allow(parallel).to receive(:call).and_return(
         Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
       )
-      factory = nil
+      captured = nil
       allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new) do |**kwargs|
-        factory = kwargs[:pool_factory]
+        captured = kwargs
         parallel
       end
-      build(cfg, isolator: isolator, hooks: hooks).call([mutation], nil)
-      factory
+      build(cfg, isolator: isolator, hooks: hooks).call([mutation], baseline)
+      captured
     end
 
     it "passes the configured hooks through to the pool" do
@@ -441,27 +441,61 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
 
-      capture_pool_factory(config(jobs: 2), hooks: hooks).call
+      capture_parallel_kwargs(config(jobs: 2), hooks: hooks)[:pool_factory].call(18)
 
       expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(hooks: hooks))
     end
 
-    it "sets the pool item timeout to double the configured timeout" do
+    it "builds the pool with the item timeout the strategy asks for" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
 
-      capture_pool_factory(config(jobs: 2, timeout: 9), hooks: nil).call
+      capture_parallel_kwargs(config(jobs: 2, timeout: 9), hooks: nil)[:pool_factory].call(18)
 
-      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(item_timeout: 18))
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(size: 2, item_timeout: 18))
     end
 
-    it "leaves the pool item timeout nil when no timeout is configured" do
-      pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+    it "hands the strategy a timeout policy built from the baseline" do
+      cfg = config(jobs: 2, spec_files: ["spec/foo_spec.rb"])
+      baseline = Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 2.0,
+                                                 spec_file_durations: { "spec/foo_spec.rb" => 2.0 })
 
-      capture_pool_factory(config(jobs: 2, timeout: nil), hooks: nil).call
+      policy = capture_parallel_kwargs(cfg, hooks: nil, baseline: baseline)[:timeout_policy]
 
-      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(item_timeout: nil))
+      expect(policy.call(mutation)).to eq(20.0)
+    end
+  end
+
+  describe "per-mutation timeout" do
+    def baseline_with(durations)
+      Evilution::Baseline::Result.new(failed_spec_files: Set.new, duration: 1.0, spec_file_durations: durations)
+    end
+
+    def timeouts_given(cfg, baseline)
+      isolator = instance_double(Evilution::Isolation::Fork)
+      given = []
+      allow(isolator).to receive(:call) do |mutation:, timeout:, **|
+        given << timeout
+        killed_result(mutation)
+      end
+      build(cfg, isolator: isolator).call([mutation], baseline)
+      given
+    end
+
+    it "scales the baseline time of the mutation's spec files when no timeout was given" do
+      cfg = config(spec_files: ["spec/foo_spec.rb"])
+
+      expect(timeouts_given(cfg, baseline_with("spec/foo_spec.rb" => 2.0))).to eq([20.0])
+    end
+
+    it "keeps a given timeout" do
+      cfg = config(spec_files: ["spec/foo_spec.rb"], timeout: 45)
+
+      expect(timeouts_given(cfg, baseline_with("spec/foo_spec.rb" => 2.0))).to eq([45])
+    end
+
+    it "keeps the default timeout without a baseline" do
+      expect(timeouts_given(config(spec_files: ["spec/foo_spec.rb"]), nil)).to eq([30])
     end
   end
 end

@@ -221,6 +221,18 @@ RSpec.describe Evilution::Reporter::JSON do
       expect(parsed["errors"].map { |m| m["line"] }).to eq([3])
     end
 
+    it "gives a timed-out mutation the limit it ran under, and no other mutation one" do
+      timed_out_mut = double("Mutation", operator_name: "loop_flip", file_path: "lib/a.rb", line: 2,
+                                         diff: "- a\n+ b", unified_diff: nil, subject: double("Subject", name: "A#y"))
+      timed_out = Evilution::Result::MutationResult.new(mutation: timed_out_mut, status: :timeout, duration: 10.2)
+                                                   .with_time_limit(10.123456)
+      parsed = JSON.parse(reporter.call(Evilution::Result::Summary.new(results: [timed_out, killed_result],
+                                                                       duration: 11.0)))
+
+      expect(parsed["timed_out"].first["time_limit"]).to eq(10.1235)
+      expect(parsed["killed"].first).not_to have_key("time_limit")
+    end
+
     # Kills EV-t1qg / GH #1192 integer_literal on the per-result
     # `.round(4)` precision in base_mutation_fields (duration).
     it "rounds per-mutation duration to exactly 4 decimal places" do
