@@ -25,7 +25,7 @@ class Evilution::Mutation
 
   # restore_source: the original file, evaluated after the mutation's tests
   # to put back what applying it changed (see
-  # Mutator::Base#build_restore_source). nil when a mutation was built
+  # Mutator::LoadSources#restore_source). nil when a mutation was built
   # without one.
   attr_reader :subject, :operator_name, :parse_status, :location, :restore_source
 
@@ -110,17 +110,7 @@ class Evilution::Mutation
   private
 
   def compute_diff
-    diffs = ::Diff::LCS.diff(original_source.lines, mutated_source.lines)
-    return "" if diffs.empty?
-
-    diffs.flatten(1).filter_map { |change| format_diff_change(change) }.join("\n")
-  end
-
-  def format_diff_change(change)
-    case change.action
-    when "-" then "- #{change.element.chomp}"
-    when "+" then "+ #{change.element.chomp}"
-    end
+    LineDiff.call(original_source, mutated_source)
   end
 
   def compute_unified_diff
@@ -149,3 +139,5 @@ class Evilution::Mutation
     end
   end
 end
+
+require_relative "mutation/line_diff"

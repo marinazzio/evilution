@@ -10,6 +10,83 @@ RSpec.describe Evilution::Integration::Loading::BodyCallNeutralizer do
     neutralizer.call(src)
   end
 
+  describe "#neutralization" do
+    let(:source) { "class A\n  foo 1\n  def x\n    1\n  end\n  bar(<<~TXT)\n    body\n  TXT\nend\n" }
+
+    after { described_class.reset_preload_snapshot! }
+
+    it "is the source #call makes, with the edits that make it, in order" do
+      result = neutralizer.neutralization(source)
+
+      expect(result.source).to eq(neutralizer.call(source))
+      expect(result.edits).to eq([[10, 15, "()"], [38, 64, "()\n\n"]])
+    end
+
+    it "lists the edits in source order, nested class bodies among them, frozen" do
+      nested = "class A\n  class B\n    foo\n  end\n  bar\nend\n"
+      result = neutralizer.neutralization(nested)
+
+      expect(result.edits.map(&:first)).to eq([nested.index("foo"), nested.index("bar")])
+      expect(result.edits).to be_frozen
+    end
+
+    it "neutralizes a file the parent loaded" do
+      described_class.preloaded_features = Set["/app/order.rb"]
+
+      expect(neutralizer.neutralization(source, file_path: "/app/order.rb").edits.length).to eq(2)
+    end
+
+    it "has no edits when there is nothing to neutralize, and the source itself" do
+      plain = "class A\n  def x; end\nend\n"
+      result = neutralizer.neutralization(plain)
+
+      expect(result.edits).to eq([])
+      expect(result.source).to equal(plain)
+    end
+
+    it "has no edits for a file the parent never loaded" do
+      described_class.preloaded_features = Set.new
+      result = neutralizer.neutralization(source, file_path: "/lazy/plugin.rb")
+
+      expect(result.edits).to eq([])
+      expect(result.source).to equal(source)
+    end
+
+    it "has no edits to carry for a source that does not parse" do
+      result = neutralizer.neutralization("class A\n  foo(\nend\n")
+
+      expect(result.edits).to be_nil
+      expect(result.source).to eq("class A\n  foo(\nend\n")
+    end
+  end
+
+  describe "#blanks_nothing_in?" do
+    def def_node(code)
+      Prism.parse(code).value.statements.body.first
+    end
+
+    it "is true for a node with no class, module or singleton class in it" do
+      expect(neutralizer.blanks_nothing_in?(def_node("def x\n  foo 1\nend\n"))).to be(true)
+    end
+
+    it "is false for a node with a singleton class in it, whose body calls are blanked" do
+      expect(neutralizer.blanks_nothing_in?(def_node("def x\n  class << self\n    foo 1\n  end\nend\n")))
+        .to be(false)
+    end
+
+    it "is true for a node that only calls a method named class" do
+      expect(neutralizer.blanks_nothing_in?(def_node("def x\n  self.class.new\nend\n"))).to be(true)
+    end
+
+    it "is false for a node with a class in it" do
+      expect(neutralizer.blanks_nothing_in?(def_node("[class C; foo; end]"))).to be(false)
+    end
+
+    it "is false for a node with a module in it" do
+      expect(neutralizer.blanks_nothing_in?(def_node("[module M; foo; end]"))).to be(false)
+    end
+  end
+
   describe ".preloaded_features" do
     after { described_class.reset_preload_snapshot! }
 

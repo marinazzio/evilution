@@ -7,6 +7,7 @@ require_relative "../../ast/included_block"
 require_relative "../../ast/callback_declaration"
 require_relative "callback_redeclaration"
 require_relative "concern_redeclaration"
+require_relative "neutralization"
 
 # Strip non-idempotent class/module-body side-effect calls from a mutated
 # source before re-eval. Such calls (e.g. dry-monads `register_mixin`, plugin
@@ -110,7 +111,34 @@ class Evilution::Integration::Loading::BodyCallNeutralizer
     apply_edits(source, edits)
   end
 
+  # The source neutralized as #call neutralizes it, keeping nothing, with
+  # the edits that make it: a mutation made away from them is then carried
+  # into it (see Neutralization#carry) rather than its file neutralized anew.
+  def neutralization(source, file_path: nil)
+    return Evilution::Integration::Loading::Neutralization.new(source: source, edits: []) if file_path && !preloaded?(file_path)
+
+    result = Prism.parse(source)
+    return Evilution::Integration::Loading::Neutralization.new(source: source, edits: nil) if result.failure?
+
+    edits = collect_edits(source, result.value, Kept.new(nil, nil, nil)).sort_by!(&:first)
+    neutralized = edits.empty? ? source : apply_edits(source, edits)
+    Evilution::Integration::Loading::Neutralization.new(source: neutralized, edits: edits.freeze)
+  end
+
+  # Whether the node holds nothing this neutralizes: only the bodies of
+  # classes, modules and singleton classes are looked into. Each opens with
+  # its keyword, so text without either keyword needs no walk.
+  def blanks_nothing_in?(node)
+    return true unless node.slice.match?(SCOPE_KEYWORD)
+
+    node.breadth_first_search { |child| SCOPES.any? { |scope| child.is_a?(scope) } }.nil?
+  end
+
   private
+
+  SCOPES = [Prism::ClassNode, Prism::ModuleNode, Prism::SingletonClassNode].freeze
+  SCOPE_KEYWORD = /class|module/
+  private_constant :SCOPES, :SCOPE_KEYWORD
 
   def preloaded?(file_path)
     self.class.preloaded_features.include?(File.expand_path(file_path))

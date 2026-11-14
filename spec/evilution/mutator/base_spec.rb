@@ -100,6 +100,24 @@ RSpec.describe Evilution::Mutator::Base do
       end
     end
 
+    it "mutates the file source it is handed rather than the file" do
+      path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      handed = File.read(path).sub("@age >= 18", "@age >= 21")
+      node = Evilution::AST::Parser.new.call(path).find { |s| s.name == "User#adult?" }.node
+      operator_class = Class.new(described_class) do
+        def visit_integer_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0", node: node)
+        end
+      end
+      subject_obj = double("Subject", name: "User#adult?", file_path: path, node: node, kind: :method,
+                                      concern_hook?: false)
+
+      mutation = operator_class.new.call(subject_obj, file_source: handed).first
+
+      expect(mutation.original_source).to equal(handed)
+      expect(mutation.mutated_slice).to eq("    @age >= 0\n")
+    end
+
     context "with a filter, checking the mutated source" do
       def operator_class(skip_unparseable:, times: 1)
         Class.new(described_class) do
@@ -497,7 +515,8 @@ RSpec.describe Evilution::Mutator::Base do
       operator = described_class.new
       operator.instance_variable_set(:@file_source, file_source)
       operator.instance_variable_set(:@filter, nil)
-      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method, concern_hook?: false))
+      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", node: nil, kind: :method,
+                                                                  concern_hook?: false))
       operator
     end
 
@@ -544,7 +563,8 @@ RSpec.describe Evilution::Mutator::Base do
       operator = described_class.new
       operator.instance_variable_set(:@file_source, source)
       operator.instance_variable_set(:@filter, nil)
-      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", kind: :method, concern_hook?: false))
+      operator.instance_variable_set(:@subject, double("Subject", file_path: "x.rb", node: node, kind: :method,
+                                                                  concern_hook?: false))
       operator
     end
 
@@ -615,6 +635,122 @@ RSpec.describe Evilution::Mutator::Base do
       expect(result).to eq("a = 2\n")
     end
 
+    context "with a preloaded file of methods" do
+      let(:source) do
+        <<~RUBY
+          class Order
+            has_many :lines
+            memoize def tax
+              1
+            end
+
+            def total(items)
+              items.sum { |item| item * 2 }
+            end
+
+            def report
+              class << self
+                helper 4
+              end
+              3
+            end
+
+            def self.label = 5
+            validates :total, message: <<~TXT
+              6
+            TXT
+          end
+        RUBY
+      end
+      let(:tmpfile) do
+        file = Tempfile.new(["methods", ".rb"])
+        file.write(source)
+        file.close
+        file
+      end
+      let(:operator_class) do
+        Class.new(described_class) do
+          def visit_integer_node(node)
+            add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0",
+                         node: node)
+            add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0)",
+                         node: node)
+            super
+          end
+        end
+      end
+      let(:subjects) { Evilution::AST::Parser.new.call(tmpfile.path) }
+      let(:mutations) { subjects.flat_map { |subject| operator_class.new.call(subject) } }
+      let(:neutralizer) { Evilution::Integration::Loading::BodyCallNeutralizer.new }
+
+      before do
+        Evilution::Integration::Loading::BodyCallNeutralizer.preloaded_features = Set[File.expand_path(tmpfile.path)]
+        described_class.clear_parse_cache!
+      end
+
+      after do
+        Evilution::Integration::Loading::BodyCallNeutralizer.reset_preload_snapshot!
+        described_class.clear_parse_cache!
+        tmpfile.unlink
+      end
+
+      it "gives every mutation the status and eval source the whole mutated file gives" do
+        expect(mutations.length).to eq(10)
+        mutations.each do |mutation|
+          parses = Evilution::AST::SyntaxCheck.valid?(mutation.mutated_source)
+          expected = parses ? neutralizer.call(mutation.mutated_source, file_path: tmpfile.path) : mutation.mutated_source
+
+          expect([mutation.parse_status, mutation.eval_source]).to eq([parses ? :ok : :unparseable, expected]),
+                                                                   "#{mutation.subject.name}: #{mutation.mutated_slice}"
+        end
+      end
+
+      it "parses neither the mutated file nor its neutralization for a mutation inside a method" do
+        subject = subjects.find { |s| s.name == "Order#total" }
+        allow(Evilution::AST::SyntaxCheck).to receive(:valid?).and_call_original
+        allow(Evilution::Integration::Loading::BodyCallNeutralizer).to receive(:new).and_return(neutralizer)
+        allow(neutralizer).to receive(:call).and_call_original
+
+        mutation = operator_class.new.call(subject).first
+
+        expect(mutation.eval_source).to include("items.sum { |item| item * 0 }")
+        expect(Evilution::AST::SyntaxCheck).not_to have_received(:valid?).with(mutation.mutated_source)
+        expect(neutralizer).not_to have_received(:call)
+      end
+
+      it "parses the whole mutated file when the method does not parse alone" do
+        subject = subjects.find { |s| s.name == "Order#total" }
+        allow(Evilution::AST::SyntaxCheck).to receive(:valid?).and_call_original
+
+        unparseable = operator_class.new.call(subject).find(&:unparseable?)
+
+        expect(unparseable.mutated_slice).to include("item * 0)")
+        expect(Evilution::AST::SyntaxCheck).to have_received(:valid?).with(unparseable.mutated_source)
+      end
+
+      it "neutralizes the mutated file when a class-body call holds the method" do
+        subject = subjects.find { |s| s.name == "Order#tax" }
+        allow(Evilution::Integration::Loading::BodyCallNeutralizer).to receive(:new).and_return(neutralizer)
+        allow(neutralizer).to receive(:call).and_call_original
+
+        mutation = operator_class.new.call(subject).first
+
+        expect(mutation).to have_attributes(parse_status: :ok)
+        expect(neutralizer).to have_received(:call).with(mutation.mutated_source, file_path: tmpfile.path)
+      end
+
+      it "neutralizes the mutated file when the method holds a class body" do
+        subject = subjects.find { |s| s.name == "Order#report" }
+        allow(Evilution::Integration::Loading::BodyCallNeutralizer).to receive(:new).and_return(neutralizer)
+        allow(neutralizer).to receive(:call).and_call_original
+
+        mutation = operator_class.new.call(subject).first
+
+        expect(neutralizer).to have_received(:call).with(mutation.mutated_source, file_path: tmpfile.path)
+        expect(mutation.eval_source).to include("    ()\n")
+      end
+    end
+
     context "with a preloaded file of scope declarations" do
       let(:source) do
         <<~RUBY
@@ -658,6 +794,17 @@ RSpec.describe Evilution::Mutator::Base do
 
       def eval_source_for(kind)
         mutation_for(kind).eval_source
+      end
+
+      it "builds each subject's sources for that subject when one operator mutates several" do
+        operator = operator_class.new
+        subject_of = lambda do |kind|
+          Evilution::Subject.new(name: "Order.open", file_path: tmpfile.path, line_number: 3,
+                                 source: "", node: lambda_node, kind: kind)
+        end
+        operator.call(subject_of.call(:method))
+
+        expect(operator.call(subject_of.call(:scope)).first.eval_source).to eq(eval_source_for(:scope))
       end
 
       it "keeps the scope declaration a scope subject's mutation is in" do
@@ -962,6 +1109,14 @@ RSpec.describe Evilution::Mutator::Base do
       second = described_class.parsed_tree_for("a.rb", "x = 1\n")
 
       expect(second).not_to equal(first)
+    end
+
+    it "forgets the class bodies walked, so no tree is kept past the run" do
+      allow(Evilution::AST::ClassBody).to receive(:clear!).and_call_original
+
+      described_class.clear_parse_cache!
+
+      expect(Evilution::AST::ClassBody).to have_received(:clear!)
     end
   end
 end

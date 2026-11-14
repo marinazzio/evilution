@@ -88,11 +88,14 @@ class Evilution::Runner::MutationPlanner
     seen.values
   end
 
+  # Each file is read once, and its every subject is mutated from that one
+  # source: the mutations of a file then share it as their original source.
   def generate(subjects)
     filter = build_ignore_filter
     operator_options = build_operator_options
+    file_sources = Hash.new { |sources, path| sources[path] = File.read(path) }
     mutations = subjects.flat_map do |subject|
-      registry.mutations_for(subject, filter: filter, operator_options: operator_options)
+      registry.mutations_for(subject, filter: filter, operator_options: operator_options, file_sources: file_sources)
     end
     skipped = filter ? filter.skipped_count(made: mutations) : 0
     GenerationResult.new(mutations: mutations, skipped: skipped)
