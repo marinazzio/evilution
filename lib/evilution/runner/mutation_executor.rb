@@ -40,6 +40,10 @@ class Evilution::Runner::MutationExecutor
     return sequential_run(notifier, pipeline, mutations, baseline_result, integration) if @config.jobs <= 1
 
     parallel_run(notifier, pipeline, mutations, baseline_result, integration)
+  ensure
+    # The cache holds the verdicts stored since it last wrote a file; a run
+    # that stops early keeps the ones it reached.
+    @cache.flush
   end
 
   private

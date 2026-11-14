@@ -13,7 +13,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
   tool_name "evilution-mutate"
   description "Run mutation testing on Ruby source files and return structured JSON — not parsed CLI text. " \
               "Built for iterative TDD: " \
-              "'incremental: true' caches killed/timeout results so rerunning on unchanged files is fast; " \
+              "'incremental: true' caches verdicts per method so a rerun only runs the mutations of edited methods; " \
               "'save_session: true' persists results for later diffing via evilution-session; " \
               "'suggest_tests: true' streams concrete RSpec/Minitest code for each survivor as progress " \
               "events so you can drop fixes straight into a test file. " \
@@ -72,7 +72,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
       },
       incremental: {
         type: "boolean",
-        description: "Cache killed/timeout results and skip re-running them on unchanged files. " \
+        description: "Cache killed/survived/timeout verdicts and skip re-running them until the method, " \
+                     "its spec files or the run's settings change. " \
                      "Set true when iterating on the same files to speed up repeat runs."
       },
       integration: {

@@ -83,6 +83,41 @@ RSpec.describe Evilution::Runner::MutationExecutor do
   end
 
   describe "#call" do
+    # The cache holds what the run stored in memory and writes it out a file
+    # at a time; what it still holds when the run ends is written then.
+    context "with a cache" do
+      let(:cache) { instance_double(Evilution::Cache, fetch: nil, store: nil, flush: nil) }
+
+      it "flushes the cache once the mutations have run (sequential)" do
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call) { |mutation:, **| killed_result(mutation) }
+
+        build(config(jobs: 1), isolator: isolator, cache: cache).call([mutation], nil)
+
+        expect(cache).to have_received(:flush).once
+      end
+
+      it "flushes the cache once the mutations have run (parallel)" do
+        parallel_strategy = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
+        allow(parallel_strategy).to receive(:call)
+          .and_return(Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false))
+        allow(Evilution::Runner::MutationExecutor::Strategy::Parallel).to receive(:new).and_return(parallel_strategy)
+
+        build(config(jobs: 2), isolator: instance_double(Evilution::Isolation::Fork), cache: cache).call([mutation], nil)
+
+        expect(cache).to have_received(:flush).once
+      end
+
+      it "flushes the cache when the run stops on an error" do
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call).and_raise(Evilution::Error, "boom")
+
+        expect { build(config(jobs: 1), isolator: isolator, cache: cache).call([mutation], nil) }
+          .to raise_error(Evilution::Error)
+        expect(cache).to have_received(:flush).once
+      end
+    end
+
     it "returns ExecutionResult in sequential mode (jobs == 1)" do
       cfg = config(jobs: 1)
       mutations = [mutation, mutation]

@@ -2273,6 +2273,7 @@ RSpec.describe Evilution::Runner do
         baseline: false,
         isolation: :fork,
         incremental: true,
+        spec_files: ["spec/spec_helper.rb"],
         skip_config_file: true
       )
     end
@@ -2280,8 +2281,11 @@ RSpec.describe Evilution::Runner do
     let(:incremental_runner) { described_class.new(config: incremental_config) }
 
     before do
-      allow(Evilution::Cache).to receive(:new).and_call_original
-      allow(Evilution::Cache).to receive(:new).with(no_args).and_return(Evilution::Cache.new(cache_dir: cache_dir))
+      allow(Evilution::Cache).to receive(:new).and_wrap_original do |original, **kwargs|
+        original.call(cache_dir: cache_dir, **kwargs)
+      end
+      allow(subject_obj).to receive_messages(source: "def foo\n  a >= b\nend", byte_range: nil, kind: :method)
+      allow(mutation).to receive_messages(original_slice: "  a >= b\n", mutated_slice: "  a > b\n")
 
       parser = instance_double(Evilution::AST::Parser)
       allow(Evilution::AST::Parser).to receive(:new).and_return(parser)
@@ -2321,7 +2325,7 @@ RSpec.describe Evilution::Runner do
       second_runner.call
     end
 
-    it "does not cache survived results" do
+    it "caches survived results and reports them as survivors" do
       survived_result = Evilution::Result::MutationResult.new(
         mutation: mutation,
         status: :survived,
@@ -2332,11 +2336,34 @@ RSpec.describe Evilution::Runner do
 
       incremental_runner.call
 
-      # Second run: isolator should still be called (survived not cached)
       second_runner = described_class.new(config: incremental_config)
       allow(Evilution::Isolation::Fork).to receive(:new).and_return(isolator)
-      expect(isolator).to receive(:call).and_return(survived_result)
-      second_runner.call
+      expect(isolator).not_to receive(:call)
+      summary = second_runner.call
+
+      expect(summary.results.map(&:status)).to eq([:survived])
+      expect(summary.score).to eq(0.0)
+    end
+
+    it "re-runs a cached verdict once the spec files change" do
+      isolator = Evilution::Isolation::Fork.new
+      incremental_runner.call
+
+      changed = Evilution::Config.new(
+        target_files: ["lib/example.rb"], format: :json, timeout: 5, quiet: true, baseline: false,
+        isolation: :fork, incremental: true, spec_files: ["spec/evilution/cache_spec.rb"], skip_config_file: true
+      )
+      expect(isolator).to receive(:call).and_return(mutation_result)
+      described_class.new(config: changed).call
+    end
+
+    it "keys the subjects of every target file, including those the target filters out" do
+      cache = instance_double(Evilution::Cache, index: nil, fetch: nil, store: nil, flush: nil)
+      allow(Evilution::Cache).to receive(:new).and_return(cache)
+
+      incremental_runner.call
+
+      expect(cache).to have_received(:index).with([subject_obj])
     end
 
     it "runs a survivor that shares operator, line and column with a killed sibling on an empty cache" do
@@ -2351,6 +2378,8 @@ RSpec.describe Evilution::Runner do
         changed_lines: mutation.changed_lines,
         column: mutation.column,
         diff: "- a >= b\n+ a < b",
+        original_slice: "  a >= b\n",
+        mutated_slice: "  a < b\n",
         strip_sources!: nil,
         unparseable?: false,
         unified_diff: nil
@@ -2389,6 +2418,7 @@ RSpec.describe Evilution::Runner do
           isolation: :fork,
           incremental: true,
           jobs: 2,
+          spec_files: ["spec/spec_helper.rb"],
           skip_config_file: true
         )
       end
@@ -2408,7 +2438,7 @@ RSpec.describe Evilution::Runner do
         runner = described_class.new(config: parallel_incremental_config)
         expect { runner.call }.not_to raise_error
 
-        cache_files = Dir.glob(File.join(cache_dir, "*.json"))
+        cache_files = Dir.glob(File.join(cache_dir, "**", "*.json"))
         expect(cache_files).not_to be_empty
       end
     end
