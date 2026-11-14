@@ -113,6 +113,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--timeout-ceiling N`        | Float   | 60           | Without `--timeout`: the longest such limit, in seconds. |
 | `-f`, `--format FORMAT`      | String  | `text`       | Output format: `text`, `json`, or `html`.         |
 | `--target EXPR`              | String  | _(none)_     | Only mutate matching subjects. Supports method name (`Foo::Bar#calculate`), class (`Foo`, which also matches a value-object constant named `Foo`), namespace wildcards (`Foo::Bar*`), method-type selectors (`Foo#`, `Foo.`), descendants (`descendants:Foo`), and source globs (`source:lib/**/*.rb`). |
+| `--since REF`                | String  | _(none)_     | Only mutate the lines changed since git `REF` (a branch, tag or commit), diffed from its merge base with `HEAD`, uncommitted and untracked changes included. Without file arguments: every changed `.rb` file under `lib/` and `app/`. With them: only those that changed, line ranges narrowed to their changed lines. Also accepted by `subjects`. See [Mutating only what changed](#mutating-only-what-changed---since). |
 | `--output FILE`              | String  | _(stdout)_   | Write the report to FILE instead of stdout. Useful when a preloaded spec helper writes to stdout on exit. |
 | `--min-score FLOAT`          | Float   | 0.0          | Minimum mutation score (0.0–1.0) to pass.         |
 | `--spec FILES`               | Array   | _(none)_     | Spec files to run (comma-separated). Defaults to auto-detection via `SpecResolver`, which also resolves non-mirrored (`spec/unit`, `test/unit`), dir-grouped (`test/unit/<class>/*_test.rb`), and flat `test_`-prefixed (`test/test_connection_pool_timed_stack.rb`) layouts. |
@@ -159,7 +160,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 |---------------------|---------|----------------------|----------------------------------------------------------------------------------------------|
 | `--results-dir DIR` | String  | `.evilution/results` | Directory containing session result JSON files. Honored by `session list` and `session gc`.  |
 | `--limit N`         | Integer | _(none)_             | (`session list`) Show only the N most recent sessions.                                       |
-| `--since DATE`      | String  | _(none)_             | (`session list`) Show only sessions created on or after `DATE` (`YYYY-MM-DD`).               |
+| `--since DATE`      | String  | _(none)_             | (`session list`) Show only sessions created on or after `DATE` (`YYYY-MM-DD`). For `run` and `subjects`, `--since` takes a git ref instead. |
 | `--older-than D`    | String  | _(required)_         | (`session gc`) Delete sessions older than `D` (e.g. `30d`, `24h`, `1w`).                     |
 
 ### Options (for `compare` command)
@@ -189,7 +190,7 @@ Set via `--profile=strict`, the `--strict` shortcut, or `profile: strict` in `.e
 
 | Code | Meaning                                       | Agent action                          |
 |------|-----------------------------------------------|---------------------------------------|
-| 0    | Mutation score meets or exceeds `--min-score` | Success. No action needed.            |
+| 0    | Mutation score meets or exceeds `--min-score`, or a `--since` run found nothing to mutate | Success. No action needed.            |
 | 1    | Mutation score below `--min-score`, or a target file resolved to no spec | Parse output, fix surviving mutants.  |
 | 2    | Tool error (bad config, parse failure, a run under `--isolation in_process` that a mutation took down, etc.) | Check stderr, fix invocation.         |
 
@@ -208,6 +209,35 @@ A run under `--isolation in_process` can end without a report: a mutation that t
 Evilution owns the exit status: `--preload` loads the project's own spec helper into the parent process, and an at-exit hook it installs (SimpleCov calls `exit` with its own status when coverage is below the minimum) would otherwise replace the status evilution computed (GH #1608).
 
 The printed verdict and the exit code always use the same threshold. Previously the line was printed against a hard-coded 80% that the exit code did not share, so a failing-looking run still exited 0 (GH #1604).
+
+### Mutating only what changed (`--since`)
+
+`--since REF` limits a run to the lines changed since a git ref, which is what a pull request needs checked:
+
+```bash
+bundle exec evilution run --since origin/main                 # every changed .rb file under lib/ and app/
+bundle exec evilution run lib/billing.rb --since origin/main  # only this file, if it changed
+bundle exec evilution subjects --since origin/main            # preview the subjects and mutation counts
+```
+
+What counts as changed:
+
+- **The branch's own changes.** The diff runs from the merge base of `REF` and `HEAD` (what `git diff REF...HEAD` compares), so commits `REF` gained after the branch left it do not count, to the working tree, so uncommitted changes, staged or not, do.
+- **Added and modified lines.** A mutation is run when any line it changes is one of them; a subject (method, constant) is mutated when any of its lines is. Lines that were only deleted leave no line behind: the lines either side of the gap count instead, so a method whose only change is a removed line is still mutated there.
+- **New files** count whole, untracked ones included (those `.gitignore` leaves out do not). **Renamed files** count only their edited lines, under the new name. Deleted files, binary files and files outside the current directory do not count.
+- **Which files.** Without file arguments, the changed `.rb` files under `lib/` and `app/`, as a run without arguments takes. File arguments narrow that: a file that did not change drops out, and `lib/foo.rb:15-30` keeps only the changed lines from 15 to 30. A method `--target` is looked for in the changed files; `--target source:GLOB` cannot be combined with `--since` (pass the files instead).
+- **Nothing to mutate passes.** A run whose changed lines hold nothing to mutate (a docs-only pull request) reports zero mutations and exits 0, whatever `--min-score` says.
+
+`REF` must be known to the clone, and the history back to the merge base must be there: a shallow CI checkout fails with a message saying so. In GitHub Actions:
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0          # the merge base with the target branch must be fetched
+- run: bundle exec evilution run --since origin/${{ github.base_ref }} --format json --min-score 0.8 --output evilution.json
+```
+
+`--since` is not a config file key: a ref in `.evilution.yml` would scope every run, explicit file lists included. The MCP `evilution-mutate` tool takes the same as its `since` parameter.
 
 ## Configuration
 
@@ -893,6 +923,7 @@ Pass `skip_config: true` to ignore the project config file. This skips loading `
 | `save_session` | Persist results to `.evilution/results/` for inspection via `evilution-session` |
 | `stop_on_kill` | `false` to run every selected example instead of stopping at the first deciding failure (default `true`) |
 | `skip_sites` | Presets of low-value code to leave unmutated: `logging`, `debug_output`, `error_messages`, `requires` (see [Skipping Low-Value Code](#skipping-low-value-code)); skips are counted per preset in `summary.skipped_sites` |
+| `since` | A git ref: mutate only the lines changed since it, as `--since REF` does (see [Mutating only what changed](#mutating-only-what-changed---since)) |
 
 > **Note**: `.mcp.json` is gitignored by default since it is a local editor/agent configuration file.
 
@@ -983,6 +1014,12 @@ bundle exec evilution run lib/foo.rb:15-30 lib/bar.rb:5-20 --format json --min-s
 ```
 
 Target the exact lines you changed for fast, focused mutation testing. See line-range syntax below.
+
+Or let git find the lines: `--since REF` mutates only what changed since `REF` (see [Mutating only what changed](#mutating-only-what-changed---since)):
+
+```bash
+bundle exec evilution run --since origin/main --format json --min-score 0.9
+```
 
 ### 3. Line-range targeted scan (fastest)
 

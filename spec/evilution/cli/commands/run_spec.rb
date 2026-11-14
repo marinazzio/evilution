@@ -37,6 +37,74 @@ RSpec.describe Evilution::CLI::Commands::Run do
     end
   end
 
+  describe "with --since" do
+    let(:line_set) { Evilution::LineSet.new([3..4]) }
+    let(:parsed) do
+      Evilution::CLI::ParsedArgs.new(command: :run, files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 1..9 },
+                                     options: { since: "main", skip_config_file: true })
+    end
+
+    before do
+      allow(Evilution::Git::SinceScope).to receive(:apply).and_return(
+        Evilution::Git::SinceScope::Paths.new(files: ["lib/a.rb"], ranges: { "lib/a.rb" => line_set })
+      )
+      allow(summary).to receive_messages(total: 2, unresolved_targets?: false)
+    end
+
+    it "runs the files and lines changed since the ref" do
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply)
+        .with("main", files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 1..9 })
+      expect(Evilution::Runner).to have_received(:new) { |config:, **|
+        expect(config.target_files).to eq(["lib/a.rb"])
+        expect(config.line_ranges).to eq("lib/a.rb" => line_set)
+        expect(config.since).to eq("main")
+      }
+    end
+
+    it "succeeds when no changed line holds anything to mutate, whatever the minimum score" do
+      allow(summary).to receive(:success?).with(min_score: anything).and_return(false)
+      allow(summary).to receive(:total).and_return(0)
+
+      expect(described_class.new(parsed, stdout: out, stderr: err).call.exit_code).to eq(0)
+    end
+
+    it "still fails a run with nothing to mutate when a target file resolved to no spec" do
+      allow(summary).to receive(:success?).with(min_score: anything).and_return(false)
+      allow(summary).to receive_messages(total: 0, unresolved_targets?: true)
+
+      expect(described_class.new(parsed, stdout: out, stderr: err).call.exit_code).to eq(1)
+    end
+
+    it "fails as any run does when mutations ran and missed the minimum score" do
+      allow(summary).to receive(:success?).with(min_score: anything).and_return(true)
+      allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
+      parsed = Evilution::CLI::ParsedArgs.new(command: :run, files: ["lib/a.rb"],
+                                              options: { since: "main", min_score: 0.8, skip_config_file: true })
+
+      expect(described_class.new(parsed, stdout: out, stderr: err).call.exit_code).to eq(1)
+    end
+
+    it "reports a git error as a config error, exit 2" do
+      allow(Evilution::Git::SinceScope).to receive(:apply).and_raise(Evilution::ConfigError, "--since: unknown git ref 'x'")
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.exit_code).to eq(2)
+      expect(result.error.message).to include("unknown git ref 'x'")
+    end
+  end
+
+  describe "with no mutations and no --since" do
+    it "keeps failing a minimum score it does not meet" do
+      allow(summary).to receive(:success?).with(min_score: anything).and_return(false)
+      allow(summary).to receive(:total).and_return(0)
+
+      expect(described_class.new(parsed, stdout: out, stderr: err).call.exit_code).to eq(1)
+    end
+  end
+
   describe "stdin error" do
     it "raises ConfigError → Result exit 2 with error set, not rendered" do
       parsed_with_err = Evilution::CLI::ParsedArgs.new(
@@ -155,7 +223,7 @@ RSpec.describe Evilution::CLI::Commands::Run do
 
     before do
       allow(Evilution::Config).to receive(:new).and_return(config)
-      allow(config).to receive(:min_score).and_return(0.0)
+      allow(config).to receive_messages(min_score: 0.0, since?: false)
     end
 
     it "builds a hook registry and passes it to the Runner when config.hooks is non-empty" do

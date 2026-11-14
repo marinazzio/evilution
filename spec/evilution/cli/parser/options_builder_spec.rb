@@ -459,6 +459,22 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:since]).to eq("2026-01-01")
   end
 
+  it "parses --since as a git ref for run" do
+    options, = parse(["--since", "origin/main"])
+    expect(options[:since]).to eq("origin/main")
+  end
+
+  it "describes --since for run and subjects as well as for session list" do
+    help = described_class.build({}).help
+
+    lines = help.lines.map(&:strip)
+    start = lines.index { |line| line.start_with?("--since REF|DATE") }
+
+    expect(lines[start]).to end_with("run, subjects: mutate only the lines changed since git REF")
+    expect(lines[start + 1]).to eq("(from its merge base with HEAD, uncommitted changes included);")
+    expect(lines[start + 2]).to eq("session list: sessions since DATE (YYYY-MM-DD)")
+  end
+
   it "omits :since when --since is absent" do
     options, = parse([])
     expect(options).not_to have_key(:since)

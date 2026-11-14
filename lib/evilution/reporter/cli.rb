@@ -7,11 +7,12 @@ class Evilution::Reporter::CLI
 
   def initialize(
     min_score: nil,
+    since: nil,
     header: LineFormatters::Header.new,
     metrics_block: MetricsBlock.new,
     section_renderer: SectionRenderer.new,
     sections: DEFAULT_SECTIONS,
-    trailer: Trailer.new(min_score: min_score)
+    trailer: Trailer.new(min_score: min_score, since: since)
   )
     @header = header
     @metrics_block = metrics_block

@@ -4,6 +4,7 @@ require "tmpdir"
 require "evilution/config"
 require "evilution/ast/parser"
 require "evilution/runner/subject_pipeline"
+require "evilution/line_set"
 
 RSpec.describe Evilution::Runner::SubjectPipeline do
   let(:parser) { Evilution::AST::Parser.new }
@@ -700,6 +701,85 @@ RSpec.describe Evilution::Runner::SubjectPipeline do
         pipeline.call
 
         expect { pipeline.report_uncovered_code }.not_to output.to_stderr
+      end
+    end
+  end
+
+  describe "#call with the lines changed since a git ref" do
+    let(:source) do
+      <<~RUBY
+        class Foo
+          def a
+            1
+          end
+
+          def b
+            2
+          end
+
+          def c
+            3
+          end
+        end
+      RUBY
+    end
+
+    it "keeps the subjects that hold a changed line of any hunk" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", source)
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => Evilution::LineSet.new([3..3, 11..11]) }, since: "main",
+          quiet: true, baseline: false, skip_config_file: true
+        )
+
+        expect(described_class.new(config, parser: parser).call.map(&:name)).to eq(%w[Foo#a Foo#c])
+      end
+    end
+
+    it "keeps a subject whose only changed line is its last" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", source)
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => Evilution::LineSet.new([4..4]) }, since: "main",
+          quiet: true, baseline: false, skip_config_file: true
+        )
+
+        expect(described_class.new(config, parser: parser).call.map(&:name)).to eq(%w[Foo#a])
+      end
+    end
+
+    it "mutates nothing, rather than the git-changed files, when no file changed" do
+      allow(Evilution::Git::ChangedFiles).to receive(:new)
+      config = Evilution::Config.new(since: "main", quiet: true, baseline: false, skip_config_file: true)
+      pipeline = described_class.new(config, parser: parser)
+
+      expect(pipeline.call).to eq([])
+      expect(pipeline.target_files).to eq([])
+      expect(Evilution::Git::ChangedFiles).not_to have_received(:new)
+    end
+
+    it "says the target was looked for in the changed files when it matches no subject of them" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", source)
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => Evilution::LineSet.new([3..3]) }, since: "main",
+          target: "Bar#a", quiet: true, baseline: false, skip_config_file: true
+        )
+
+        expect { described_class.new(config, parser: parser).call }
+          .to raise_error(Evilution::Error, /no subject matched 'Bar#a' in the files changed since main/)
+      end
+    end
+
+    it "mutates nothing when the target is a method none of whose lines changed" do
+      Dir.mktmpdir do |dir|
+        file = write(dir, "lib/foo.rb", source)
+        config = Evilution::Config.new(
+          target_files: [file], line_ranges: { file => Evilution::LineSet.new([3..3]) }, since: "main",
+          target: "Foo#b", quiet: true, baseline: false, skip_config_file: true
+        )
+
+        expect(described_class.new(config, parser: parser).call).to eq([])
       end
     end
   end

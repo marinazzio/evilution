@@ -6,7 +6,7 @@ module Evilution::MCP::MutateTool::OptionParser
   VALID_VERBOSITIES = %w[full summary minimal].freeze
   PASSTHROUGH_KEYS = %i[target timeout jobs fail_fast suggest_tests incremental integration
                         isolation baseline save_session preload stop_on_kill skip_sites].freeze
-  ALLOWED_OPT_KEYS = (PASSTHROUGH_KEYS + %i[spec skip_config]).freeze
+  ALLOWED_OPT_KEYS = (PASSTHROUGH_KEYS + %i[spec skip_config since]).freeze
 
   ParsedPaths = Data.define(:files, :ranges)
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../mutator"
+require_relative "../line_set"
 
 # Whether a mutation changes a line of the range asked for in its file.
 # Subjects are selected when they overlap a range, but a subject can carry
@@ -10,7 +11,8 @@ require_relative "../mutator"
 #
 # A mutation is covered when any line it changes falls in the range, so one
 # that starts above the range and reaches into it still counts. Files without
-# a range cover every mutation.
+# a range cover every mutation. A file's range is a Range or an
+# Evilution::LineSet of several, such as the hunks changed since a git ref.
 class Evilution::Mutator::LineRangeFilter
   def initialize(line_ranges)
     @line_ranges = line_ranges
@@ -20,6 +22,6 @@ class Evilution::Mutator::LineRangeFilter
     range = @line_ranges[file_path]
     return true unless range
 
-    lines.first <= range.last && lines.last >= range.first
+    Evilution::LineSet.wrap(range).overlap?(lines.first, lines.last)
   end
 end

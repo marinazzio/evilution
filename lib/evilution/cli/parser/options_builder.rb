@@ -225,7 +225,13 @@ class Evilution::CLI::Parser::OptionsBuilder
   def add_session_options(opts)
     opts.on("--results-dir DIR", "Session results directory") { |d| @options[:results_dir] = d }
     opts.on("--limit N", Integer, "Show only the N most recent sessions") { |n| @options[:limit] = n }
-    opts.on("--since DATE", "Show sessions since DATE (YYYY-MM-DD)") { |d| @options[:since] = d }
+    # One flag read per command: a git ref where files are mutated, a date
+    # where sessions are listed.
+    opts.on("--since REF|DATE", "run, subjects: mutate only the lines changed since git REF",
+            "(from its merge base with HEAD, uncommitted changes included);",
+            "session list: sessions since DATE (YYYY-MM-DD)") do |value|
+      @options[:since] = value
+    end
     opts.on("--older-than DURATION", "Delete sessions older than DURATION (e.g., 30d, 24h, 1w)") do |d|
       @options[:older_than] = d
     end

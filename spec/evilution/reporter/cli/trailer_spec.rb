@@ -34,6 +34,13 @@ RSpec.describe Evilution::Reporter::CLI::Trailer do
         .to eq("Result: FAIL (score 50.00% < 80.00%)")
     end
 
+    it "hands the --since ref to the result line it builds" do
+      summary = double("s", score: 0.0, total: 0, unresolved_targets?: false)
+
+      expect(result_line_for(described_class.new(min_score: 0.8, since: "main")).format(summary))
+        .to eq("Result: PASS (nothing to mutate in the lines changed since main)")
+    end
+
     it "builds a result line without a threshold when none is given" do
       summary = double("s", score: 0.5, unresolved_targets?: false)
 

@@ -2,6 +2,7 @@
 
 require_relative "../cli"
 require_relative "result"
+require_relative "../git/since_scope"
 
 class Evilution::CLI::Command
   def initialize(parsed_args, stdout: $stdout, stderr: $stderr)
@@ -23,6 +24,12 @@ class Evilution::CLI::Command
 
   def perform
     raise NotImplementedError
+  end
+
+  # The file arguments and their line ranges, limited with --since REF to the
+  # lines changed since that ref.
+  def scoped_paths
+    Evilution::Git::SinceScope.apply(@options[:since], files: @files, line_ranges: @line_ranges)
   end
 
   def build_operator_options(config)

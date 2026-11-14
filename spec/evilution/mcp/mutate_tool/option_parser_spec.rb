@@ -83,7 +83,7 @@ RSpec.describe Evilution::MCP::MutateTool::OptionParser do
         :target, :timeout, :jobs, :fail_fast, :suggest_tests,
         :incremental, :integration, :isolation, :baseline, :save_session, :stop_on_kill, :skip_sites
       )
-      expect(described_class::ALLOWED_OPT_KEYS).to include(:spec, :skip_config)
+      expect(described_class::ALLOWED_OPT_KEYS).to include(:spec, :skip_config, :since)
       expect(described_class::VALID_VERBOSITIES).to eq(%w[full summary minimal])
     end
   end

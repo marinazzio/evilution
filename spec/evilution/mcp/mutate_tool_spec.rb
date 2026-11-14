@@ -328,6 +328,28 @@ RSpec.describe Evilution::MCP::MutateTool do
       )
     end
 
+    it "limits the files to the lines changed since the ref given as since" do
+      line_set = Evilution::LineSet.new([2..3])
+      allow(Evilution::Git::SinceScope).to receive(:apply).and_return(
+        Evilution::Git::SinceScope::Paths.new(files: ["lib/foo.rb"], ranges: { "lib/foo.rb" => line_set })
+      )
+
+      described_class.call(files: ["lib/foo.rb:1-9"], since: "main", server_context: nil)
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply)
+        .with("main", files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => 1..9 })
+      expect(Evilution::Runner).to have_received(:new).with(
+        on_result: anything,
+        config: have_attributes(target_files: ["lib/foo.rb"], line_ranges: { "lib/foo.rb" => line_set }, since: "main")
+      )
+    end
+
+    it "advertises since in the JSON schema" do
+      schema = described_class.input_schema.to_h
+
+      expect(schema[:properties][:since][:type]).to eq("string")
+    end
+
     it "advertises every skip_sites preset in the JSON schema" do
       schema = described_class.input_schema.to_h
 

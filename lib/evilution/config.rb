@@ -37,12 +37,17 @@ class Evilution::Config
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
               :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
-              :probe_first, :skip_sites, :copy_worker_databases
+              :probe_first, :skip_sites, :copy_worker_databases, :since
 
+  # since: the git ref whose changed lines alone the run mutates. Taken only
+  # from the caller, like the target files it stands in for: a config file
+  # naming one would scope every run, an explicit file list included.
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
+    since = options.delete(:since)
     merged = Sources.merge(explicit: options, skip_file: skip_file)
     assign_attributes(merged)
+    assign_since(since)
     freeze
   end
 
@@ -64,6 +69,10 @@ class Evilution::Config
 
   def target?
     !target.nil?
+  end
+
+  def since?
+    !since.nil?
   end
 
   def fail_fast?
@@ -367,6 +376,18 @@ class Evilution::Config
     @example_targeting_fallback = Validators::ExampleTargetingFallback.call(merged[:example_targeting_fallback])
     @example_targeting_strategy = Validators::ExampleTargetingStrategy.call(merged[:example_targeting_strategy])
     @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
+  end
+
+  def assign_since(since)
+    return if since.nil?
+
+    @since = since.to_s.strip
+    raise Evilution::ConfigError, "--since needs a git ref, such as main or origin/main" if @since.empty?
+    return unless target.to_s.start_with?("source:")
+
+    raise Evilution::ConfigError,
+          "--since picks the changed files itself and cannot be combined with --target source:GLOB; " \
+          "pass the files to limit it to instead"
   end
 
   def assign_adaptive_timeout(merged)

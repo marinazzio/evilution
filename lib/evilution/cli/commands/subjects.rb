@@ -17,7 +17,8 @@ class Evilution::CLI::Commands::Subjects < Evilution::CLI::Command
   def perform
     raise Evilution::ConfigError, @stdin_error if @stdin_error
 
-    config = Evilution::Config.new(target_files: @files, line_ranges: @line_ranges, **@options)
+    paths = scoped_paths
+    config = Evilution::Config.new(**@options, target_files: paths.files, line_ranges: paths.ranges)
     runner = Evilution::Runner.new(config: config)
     subjects = runner.parse_and_filter_subjects
 

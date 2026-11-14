@@ -35,6 +35,27 @@ RSpec.describe Evilution::MCP::MutateTool::ConfigBuilder do
       expect(config.timeout).to eq(99)
     end
 
+    it "takes the files and lines changed since the ref given as since" do
+      line_set = Evilution::LineSet.new([4..4])
+      allow(Evilution::Git::SinceScope).to receive(:apply).and_return(
+        Evilution::Git::SinceScope::Paths.new(files: ["lib/b.rb"], ranges: { "lib/b.rb" => line_set })
+      )
+
+      config = described_class.build(files: [], line_ranges: {}, params: { since: "main", skip_config: true })
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply).with("main", files: [], line_ranges: {})
+      expect(config.target_files).to eq(["lib/b.rb"])
+      expect(config.line_ranges).to eq("lib/b.rb" => line_set)
+      expect(config.since).to eq("main")
+    end
+
+    it "leaves files and line ranges as given without since" do
+      config = described_class.build(files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 1..2 }, params: { skip_config: true })
+
+      expect(config.line_ranges).to eq("lib/a.rb" => 1..2)
+      expect(config.since).to be_nil
+    end
+
     it "copies spec overrides to spec_files" do
       config = described_class.build(files: [], line_ranges: {}, params: { spec: ["spec/a_spec.rb"] })
       expect(config.spec_files).to eq(["spec/a_spec.rb"])

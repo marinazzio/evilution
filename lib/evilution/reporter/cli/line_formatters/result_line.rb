@@ -8,13 +8,17 @@ require_relative "../pct"
 # `FAIL` and exit 0 (EV-39t1 / GH #1604); with no minimum configured the line
 # states the score and says so, rather than implying a gate that is not armed.
 class Evilution::Reporter::CLI::LineFormatters::ResultLine
-  def initialize(pct: Evilution::Reporter::CLI::Pct.new, min_score: nil)
+  # since: the git ref a --since run was limited to the changes since. Such a
+  # run that mutated nothing passes: its changes hold nothing to score.
+  def initialize(pct: Evilution::Reporter::CLI::Pct.new, min_score: nil, since: nil)
     @pct = pct
     @min_score = min_score
+    @since = since
   end
 
   def format(summary)
     return unresolved_targets_line(summary) if summary.unresolved_targets?
+    return "Result: PASS (nothing to mutate in the lines changed since #{@since})" if nothing_changed?(summary)
     return no_threshold_line(summary) unless gate?
 
     pass_fail = summary.success?(min_score: @min_score) ? "PASS" : "FAIL"
@@ -24,6 +28,10 @@ class Evilution::Reporter::CLI::LineFormatters::ResultLine
   end
 
   private
+
+  def nothing_changed?(summary)
+    !@since.nil? && summary.total.zero?
+  end
 
   # A minimum of zero passes every score, so it is not a gate either.
   def gate?
