@@ -149,10 +149,15 @@ class Evilution::ProcessSupervisor
   end
 
   # Bounded TERM -> grace -> KILL ladder, then reap. Always ends with the child
-  # reaped and its resources released, whichever rung it dies on. A child
-  # already reaped was released along with it and is past signalling.
+  # reaped and its resources released, whichever rung it dies on.
+  #
+  # A child already reaped was released along with it, and its pid may now
+  # belong to another process, so neither the pid is signalled nor waited on.
+  # Its group is still swept once: processes the child left behind keep the
+  # group alive, and a group id is not handed out again while any member
+  # remains (an empty group is a harmless ESRCH).
   def terminate(handle, grace: GRACE_PERIOD)
-    return if handle.reaped
+    return safe_kill("TERM", -handle.pgid) if handle.reaped
 
     signal_group("TERM", handle)
     unless exited?(handle.pid)

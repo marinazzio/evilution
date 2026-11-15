@@ -10,7 +10,9 @@ require_relative "../loading"
 # run evaluates every file twice per mutation (the mutation, then the
 # restore). Here Module#initialize is hooked instead, once for the process,
 # when the first block is run: `Module.new` passes through it, with or
-# without a body. Nothing is recorded while no block runs.
+# without a body. A copy made by `dup` or `clone` never runs initialize, so
+# Module#initialize_copy is hooked as well. Nothing is recorded while no
+# block runs.
 #
 # Every module whose initialize runs is added, whatever its class, and
 # whether or not its body raised; telling them apart is the caller's
@@ -40,6 +42,13 @@ module Evilution::Integration::Loading::CreatedModules
     # Recorded before the body runs, so that a module whose body raises is
     # recorded all the same.
     def initialize(*, **, &)
+      Evilution::Integration::Loading::CreatedModules.record(self)
+      super
+    end
+
+    # A copy holds the methods of its original, written in the original's
+    # file, and is a module of its own to empty like any other.
+    def initialize_copy(original)
       Evilution::Integration::Loading::CreatedModules.record(self)
       super
     end
