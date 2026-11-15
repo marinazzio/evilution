@@ -13,6 +13,9 @@ end
 # Each example after the first notes that it ran, and whether it saw the
 # original code or a mutant. The baseline runs the original.
 def record_run
+  # Longer than the examples before it take, so a run that tries its
+  # cheapest examples first still comes to this one last.
+  sleep 0.02
   state = begin
     yield
   rescue StandardError

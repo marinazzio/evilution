@@ -101,6 +101,84 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     end
   end
 
+  describe "killer-first hints" do
+    let(:history) { instance_double(Evilution::Runner::MutationExecutor::KillHistory, record: nil) }
+
+    def strategy_with(pool, isolator, backend: nil)
+      backend ||= instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }
+      described_class.new(
+        cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+        isolator: isolator,
+        packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+        pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+        notifier: notifier,
+        pool_factory: ->(_item_timeout) { pool },
+        config: cfg,
+        kill_history: history
+      )
+    end
+
+    def ordering_integration
+      Class.new do
+        attr_reader :given
+
+        def prioritize(ids)
+          (@given ||= []) << ids
+        end
+
+        def call(_mutation)
+          "cmd"
+        end
+      end.new
+    end
+
+    it "sends each mutation with the killers known when it is sent, and tells the worker's integration" do
+      m1 = mutation("m1")
+      m2 = mutation("m2")
+      known = []
+      allow(history).to receive(:killers_for) { |_m| known.dup }
+      allow(history).to receive(:record) { |_m, killing_test:, **| known << killing_test }
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+      integration = ordering_integration
+
+      strategy_with(fake_pool, isolator).call([m1, m2], baseline_result: nil, integration: integration)
+
+      expect(integration.given).to eq([[], ["t"]])
+    end
+
+    it "records the kill each worker reports" do
+      m1 = mutation("m1")
+      allow(history).to receive(:killers_for).and_return([])
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+
+      strategy_with(fake_pool, isolator).call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :killed, killing_test: "t")
+    end
+
+    it "records a cached kill" do
+      m1 = mutation("m1")
+      backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, killing_test: "a[1:3]" })
+
+      strategy_with(fake_pool, double(:isolator), backend: backend)
+        .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :killed, killing_test: "a[1:3]")
+    end
+
+    it "tells the history of a worker that died, which names no killer" do
+      m1 = mutation("m1")
+      allow(history).to receive(:killers_for).and_return([])
+
+      strategy_with(fake_pool(results: [Evilution::Parallel::WorkQueue::DIED]), double(:isolator))
+        .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(history).to have_received(:record).with(m1, status: :error, killing_test: nil)
+    end
+  end
+
   describe "streaming" do
     def strategy_for(pool, isolator, config: cfg, notifier: nil, backend: nil, timeout_policy: nil, pool_factory: nil)
       backend ||= instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }
@@ -232,6 +310,85 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
 
       expect(given).to eq(24)
+    end
+
+    # A run that times out in the killer-first order is run again in the
+    # defined order, in the same worker, so the pool waits for both.
+    it "gives each mutation room for a second run when examples run killer-first" do
+      config = Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, jobs: 2, timeout: 30,
+                                     killer_first: true)
+      policy = Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(12)
+      given = nil
+      factory = lambda do |item_timeout|
+        given = item_timeout
+        fake_pool
+      end
+      strategy = strategy_for(nil, echo_isolator, config: config, timeout_policy: policy, pool_factory: factory)
+
+      strategy.call([mutation("m1")], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(given).to eq(48)
+    end
+
+    # Killer-first, a mutation may run reordered and then in the defined order
+    # under its adaptive limit, and both ways again under the fixed one.
+    it "gives each mutation room for both orders under both limits when examples run killer-first" do
+      config = Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, jobs: 2, timeout: 30,
+                                     killer_first: true)
+      policy = Class.new(Evilution::Runner::MutationExecutor::TimeoutPolicy::Base) do
+        define_method(:call) { |_mut| 10 }
+        define_method(:confirmation_limit) { |_mut| 30 }
+      end.new
+      given = nil
+      factory = lambda do |item_timeout|
+        given = item_timeout
+        fake_pool
+      end
+      strategy = strategy_for(nil, echo_isolator, config: config, timeout_policy: policy, pool_factory: factory)
+
+      strategy.call([mutation("m1")], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(given).to eq((10 + 30) * 2 * 2)
+    end
+
+    it "builds the pool without an item timeout when the mutations run without a limit, killer-first or not" do
+      config = Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, jobs: 2, timeout: 30,
+                                     killer_first: true)
+      policy = Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(nil)
+      given = :unset
+      factory = lambda do |item_timeout|
+        given = item_timeout
+        fake_pool
+      end
+      strategy = strategy_for(nil, echo_isolator, config: config, timeout_policy: policy, pool_factory: factory)
+
+      strategy.call([mutation("m1")], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(given).to be_nil
+    end
+
+    it "runs a reordered run that timed out again in the defined order, in the worker" do
+      isolator = double(:isolator)
+      statuses = %i[timeout killed]
+      allow(isolator).to receive(:call) do |mutation:, **|
+        Evilution::Result::MutationResult.new(mutation: mutation, status: statuses.shift, duration: 0.1)
+      end
+      integration = Class.new do
+        def reorders? = !@defined
+
+        def in_defined_order
+          @defined = true
+          yield
+        ensure
+          @defined = false
+        end
+
+        def call(_mutation) = "cmd"
+      end.new
+
+      execution = strategy_for(fake_pool, isolator).call([mutation("m1")], baseline_result: nil, integration: integration)
+
+      expect(execution.results.first.status).to eq(:killed)
     end
 
     it "records the limit a timed-out mutation ran under" do

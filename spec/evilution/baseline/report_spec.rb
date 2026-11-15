@@ -6,7 +6,7 @@ RSpec.describe Evilution::Baseline::Report do
   describe ".build" do
     it "reports a passing run with no failures" do
       expect(described_class.build(passed: true))
-        .to eq(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [])
+        .to eq(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [], example_durations: {})
     end
 
     it "coerces a truthy pass flag to true" do
@@ -117,6 +117,26 @@ RSpec.describe Evilution::Baseline::Report do
 
       expect(report[:failed_ids]).to eq(ids.first(described_class::MAX_IDS))
       expect(described_class::MAX_IDS).to be > described_class::MAX_EXAMPLES
+    end
+
+    it "carries how long each example took, passing or not" do
+      report = described_class.build(passed: true, example_durations: { "/p/a_spec.rb[1:1]" => 0.25 })
+
+      expect(report[:example_durations]).to eq("/p/a_spec.rb[1:1]" => 0.25)
+    end
+
+    it "keeps the durations of no more examples than it keeps ids" do
+      durations = Array.new(described_class::MAX_IDS + 5) { |i| [i.to_s, 0.1] }.to_h
+
+      report = described_class.build(passed: true, example_durations: durations)
+
+      expect(report[:example_durations].keys).to eq(durations.keys.first(described_class::MAX_IDS))
+    end
+
+    it "drops a duration that is not a number" do
+      report = described_class.build(passed: true, example_durations: { "a" => nil, "b" => 0.5, "c" => "1.0" })
+
+      expect(report[:example_durations]).to eq("b" => 0.5)
     end
 
     it "drops an error that is only whitespace" do

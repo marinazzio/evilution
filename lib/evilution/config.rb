@@ -21,7 +21,7 @@ class Evilution::Config
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default, canary: true, warmup: :none, stop_on_kill: true,
+    profile: :default, canary: true, warmup: :none, stop_on_kill: true, killer_first: false,
     timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60, skip_uncovered: true
   }.freeze
 
@@ -35,7 +35,7 @@ class Evilution::Config
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
-              :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered
+              :stop_on_kill, :killer_first, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -78,6 +78,12 @@ class Evilution::Config
 
   def stop_on_kill?
     stop_on_kill
+  end
+
+  # Whether a run that stops at its first kill tries the examples most likely
+  # to kill first. Only such a run gains anything from the order.
+  def killer_first?
+    killer_first && stop_on_kill?
   end
 
   # Whether each mutation's limit follows the baseline time of its spec files.
@@ -171,6 +177,12 @@ class Evilution::Config
       # Stop each mutation's test run at the first failure that decides the
       # verdict (default: true). Set false to run every selected example.
       # stop_on_kill: true
+
+      # With RSpec and stop_on_kill, run first the examples that killed other
+      # mutations nearby, then the cheapest (default: false). Only for a suite
+      # whose examples pass in any order: one that leans on the order they are
+      # defined in reports kills that a run in that order would not.
+      # killer_first: false
 
       # Test integration: rspec, minitest, test_unit (default: rspec)
       # integration: rspec
@@ -300,6 +312,7 @@ class Evilution::Config
     quiet_children_dir: nil,
     canary: nil,
     stop_on_kill: nil,
+    killer_first: nil,
     skip_uncovered: nil
   }.freeze
   private_constant :SIMPLE_ATTR_TRANSFORMS

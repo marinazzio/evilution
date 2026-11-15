@@ -18,7 +18,8 @@ class Evilution::Runner::MutationExecutor::ResultPacker
       error_backtrace: result.error_backtrace,
       known_failures_only: result.known_failures_only?,
       timings: result.timings ? result.timings.to_h : nil,
-      time_limit: result.time_limit
+      time_limit: result.time_limit,
+      examples_run: result.examples_run
     }
   end
 
@@ -41,7 +42,8 @@ class Evilution::Runner::MutationExecutor::ResultPacker
       ),
       known_failures_only: data[:known_failures_only],
       timings: rebuild_timings(data),
-      time_limit: data[:time_limit]
+      time_limit: data[:time_limit],
+      examples_run: data[:examples_run]
     )
   end
 

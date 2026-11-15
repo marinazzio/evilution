@@ -20,15 +20,24 @@ module Evilution::Baseline::Report
   # failed_ids: every failing example, named so a mutation run can recognise
   # it again (see Integration::RSpec::ExampleIds); empty where the framework
   # does not provide such names.
-  def self.build(passed:, failures: [], error: nil, failed_ids: [])
+  #
+  # example_durations: the seconds each example took, by the same ids, so a
+  # mutation run can try its cheapest examples first.
+  def self.build(passed:, failures: [], error: nil, failed_ids: [], example_durations: {})
     {
       passed: passed ? true : false,
       failure_count: failures.length,
       failures: failures.first(MAX_EXAMPLES).map { |failure| example(failure) },
       error: error_excerpt(error),
-      failed_ids: failed_ids.first(MAX_IDS)
+      failed_ids: failed_ids.first(MAX_IDS),
+      example_durations: timed(example_durations)
     }
   end
+
+  def self.timed(durations)
+    durations.select { |_, seconds| seconds.is_a?(Numeric) }.first(MAX_IDS).to_h
+  end
+  private_class_method :timed
 
   # A runner may still answer with a bare pass/fail.
   def self.from(outcome)

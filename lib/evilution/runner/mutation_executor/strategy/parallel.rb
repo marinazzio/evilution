@@ -4,6 +4,7 @@ require_relative "../strategy"
 require_relative "../../../parallel/work_queue"
 require_relative "../timeout_policy"
 require_relative "../runless_verdict"
+require_relative "../kill_history"
 require_relative "../timed_run"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
@@ -12,6 +13,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # require, which Ruby warns about -- and a project that turns warnings into
   # exceptions loads this after its spec helper did so.
   autoload :OrderedDelivery, File.expand_path("parallel/ordered_delivery", __dir__)
+  autoload :HintedItems, File.expand_path("parallel/hinted_items", __dir__)
 
   # Compact result for a worker that exited unexpectedly (:error is not cached,
   # so the 0.0 duration is never persisted).
@@ -35,8 +37,12 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # worker that stops answering. timeout_policy: the limit each mutation runs
   # under; the configured timeout for every one of them when not given.
   # runless: the verdict a mutation gets without a run, when it has one.
+  # kill_history: the tests that killed earlier mutations of the run (see
+  # KillHistory); each mutation goes to its worker with those of its
+  # neighbours, and each kill that comes back is added.
   def initialize(cache:, isolator:, packer:, pipeline:, notifier:, pool_factory:, config:, diagnostics: nil,
-                 timeout_policy: nil, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
+                 timeout_policy: nil, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new,
+                 kill_history: Evilution::Runner::MutationExecutor::KillHistory::NONE)
     @cache = cache
     @isolator = isolator
     @packer = packer
@@ -47,6 +53,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @config = config
     @timeout_policy = timeout_policy || Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(config.timeout)
     @runless = runless
+    @kill_history = kill_history
     @timed_run = Evilution::Runner::MutationExecutor::TimedRun.new(isolator: isolator, timeout_policy: @timeout_policy)
   end
 
@@ -78,7 +85,10 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   def run(mutations, delivery, integration)
     partition = @cache.partition(mutations, packer: @packer, runless: @runless,
                                             time_limit_for: @timeout_policy.method(:final_limit))
-    partition.cached_results.each { |index, compact| delivery.accept(index, compact, fresh: false) }
+    partition.cached_results.each do |index, compact|
+      remember(mutations[index], compact)
+      delivery.accept(index, compact, fresh: false)
+    end
     return [] if delivery.truncated? || partition.uncached_indices.empty?
 
     run_uncached(mutations, partition.uncached_indices, delivery, integration)
@@ -87,16 +97,43 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Returns the pool's worker figures once every worker has been wound down.
   def run_uncached(mutations, uncached_indices, delivery, integration)
     uncached = uncached_indices.map { |i| mutations[i] }
-    item_timeout = @timeout_policy.item_timeout(uncached)
+    item_timeout = pool_deadline(uncached)
     pool = @pool_factory.call(item_timeout)
     on_result = lambda do |position, raw|
       delivery.accept(uncached_indices[position], unpack_unfinished(raw, item_timeout, uncached[position]), fresh: true)
       :stop if delivery.truncated?
     end
-    pool.map(uncached, on_result: on_result) do |mutation, waited|
-      run_in_worker(mutation, integration, waited)
+    run_pool(pool, uncached, on_result, arrival(uncached, item_timeout), integration)
+  end
+
+  def run_pool(pool, uncached, on_result, on_arrival, integration)
+    items = HintedItems.new(uncached, @kill_history)
+    pool.map(items, on_result: on_result, on_arrival: on_arrival) do |(mutation, killers), waited|
+      run_in_worker(mutation, killers, integration, waited)
     end
     pool.worker_stats
+  end
+
+  # A kill is remembered the moment it is read, before its worker is sent the
+  # next mutation, which then goes out with it.
+  def arrival(uncached, item_timeout)
+    ->(position, raw) { remember(uncached[position], unpack_unfinished(raw, item_timeout, uncached[position])) }
+  end
+
+  def remember(mutation, compact)
+    @kill_history.record(mutation, status: compact[:status], killing_test: compact[:killing_test])
+  end
+
+  # How long the pool waits on a worker for one mutation. The policy's item
+  # timeout covers a run under the adaptive limit and its confirmation under
+  # the fixed one (see TimedRun). A run that timed out in the killer-first
+  # order runs again in the defined order under the same limit (see
+  # IsolatedRun), in the same worker, so the wait covers both of each.
+  def pool_deadline(uncached)
+    deadline = @timeout_policy.item_timeout(uncached)
+    return deadline unless deadline && @config.killer_first?
+
+    deadline * 2
   end
 
   def log_worker_diagnostics(worker_stats)
@@ -107,9 +144,11 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
 
   # Runs in the worker. `waited` is how long the mutation sat between the
   # dispatcher sending it and this worker starting it, nil when not measured.
-  def run_in_worker(mutation, integration, waited)
-    test_command = ->(m) { integration.call(m) }
-    result = @timed_run.call(mutation, test_command)
+  # The integration is told the killers before the isolator runs, so a forked
+  # child inherits what it was told.
+  def run_in_worker(mutation, killers, integration, waited)
+    integration.prioritize(killers) if integration.respond_to?(:prioritize)
+    result = @timed_run.call(mutation, integration)
     @packer.compact(result).merge(queue_wait: waited)
   end
 

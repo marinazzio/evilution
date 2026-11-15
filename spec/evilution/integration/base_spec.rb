@@ -41,6 +41,18 @@ RSpec.describe Evilution::Integration::Base do
     end
   end
 
+  describe "#reorders?" do
+    it "is false by default" do
+      expect(described_class.new.reorders?).to be(false)
+    end
+  end
+
+  describe "#in_defined_order" do
+    it "runs the block by default" do
+      expect(described_class.new.in_defined_order { :ran }).to eq(:ran)
+    end
+  end
+
   describe "#warm_loading" do
     it "warms the mutation applier" do
       applier = instance_double(Evilution::Integration::Loading::MutationApplier, warm: nil)

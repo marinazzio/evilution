@@ -16,6 +16,7 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
     allow(RSpec).to receive(:clear_examples)
     allow(RSpec).to receive(:reset)
     allow(RSpec::Core::Runner).to receive(:run).and_return(0)
+    allow(Evilution::Integration::RSpec::ExampleIds).to receive(:durations).and_return({})
   end
 
   it "calls RSpec::Core::Runner.run with --format progress --no-color --order defined args + spec file" do
@@ -28,6 +29,13 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
   it "reports a pass when status is 0" do
     allow(RSpec::Core::Runner).to receive(:run).and_return(0)
     expect(runner.call("spec/foo_spec.rb")).to eq(Evilution::Baseline::Report.build(passed: true))
+  end
+
+  it "reports how long each example took, passing or not" do
+    allow(Evilution::Integration::RSpec::ExampleIds).to receive(:durations).with(RSpec.world)
+                                                                           .and_return("/p/a_spec.rb[1:1]" => 0.5)
+
+    expect(runner.call("spec/foo_spec.rb")[:example_durations]).to eq("/p/a_spec.rb[1:1]" => 0.5)
   end
 
   it "reports a failure when status is non-zero" do
@@ -148,7 +156,25 @@ RSpec.describe Evilution::Integration::RSpec::BaselineRunner do
         end
       RUBY
 
-      expect(run_baseline(@dir)).to eq(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [])
+      spec_path = File.realpath(File.join(@dir, "spec/x_spec.rb"))
+      expect(run_baseline(@dir)).to include(passed: true, failure_count: 0, failures: [], error: nil, failed_ids: [])
+      expect(run_baseline(@dir)[:example_durations].keys).to eq([:"#{spec_path}[1:1]"])
+    end
+
+    it "times every example of the file, failing ones included" do
+      write(@dir, "spec/x_spec.rb", <<~RUBY)
+        require "spec_helper"
+        RSpec.describe "x" do
+          it("sleeps") { sleep 0.05 }
+          it("fails") { expect(1).to eq(2) }
+        end
+      RUBY
+
+      durations = run_baseline(@dir)[:example_durations]
+
+      spec_path = File.realpath(File.join(@dir, "spec/x_spec.rb"))
+      expect(durations.keys).to eq([:"#{spec_path}[1:1]", :"#{spec_path}[1:2]"])
+      expect(durations[:"#{spec_path}[1:1]"]).to be >= 0.05
     end
 
     it "reports each failing example with its id, description and first error line" do

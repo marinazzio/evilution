@@ -7,9 +7,17 @@ require "evilution/runner/mutation_executor/timeout_policy"
 
 RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   let(:mutation) { instance_double(Evilution::Mutation, file_path: "lib/foo.rb") }
-  # A plain object, not a lambda: argument matching compares with ===, which a
-  # lambda answers by being called, so it would match any test command.
-  let(:test_command) { Object.new }
+  # What runs the tests: the isolator is handed a test command that asks it.
+  let(:integration) { ->(_m) { "cmd" } }
+
+  # Matches a test command that runs through the integration. A plain value
+  # would not do: argument matching compares with ===, which a lambda answers
+  # by being called, so it would match any test command.
+  def test_command
+    satisfy("a test command that runs through the integration") do |command|
+      command.respond_to?(:call) && command.call(mutation) == "cmd"
+    end
+  end
 
   # A policy that gives `limit` to this mutation and confirms its timeout with
   # `confirm`, and something else entirely to any other.
@@ -36,7 +44,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   it "runs the mutation once under the policy's limit and hands back what finished in time" do
     iso = isolator(result(:killed, 0.4, killing_test: "t"))
 
-    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, test_command)
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, integration)
 
     expect([out.status, out.duration, out.time_limit, out.timings]).to eq([:killed, 0.4, nil, nil])
     expect(iso).to have_received(:call).once
@@ -46,7 +54,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   it "records the limit on a timeout the policy does not confirm" do
     iso = isolator(result(:timeout, 30.1))
 
-    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 30)).call(mutation, test_command)
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 30)).call(mutation, integration)
 
     expect([out.status, out.duration, out.time_limit]).to eq([:timeout, 30.1, 30])
     expect(iso).to have_received(:call).once
@@ -57,7 +65,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   it "runs a timed-out mutation again under the confirmation limit and reports that run" do
     iso = isolator(result(:timeout, 10.25), result(:killed, 15.5, killing_test: "t"))
 
-    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, test_command)
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, integration)
 
     expect([out.status, out.killing_test, out.time_limit]).to eq([:killed, "t", nil])
     expect(iso).to have_received(:call).with(mutation: mutation, test_command: test_command, timeout: 10).ordered
@@ -67,7 +75,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   it "counts both runs in the duration and names the first among the timings" do
     iso = isolator(result(:timeout, 10.25), result(:killed, 15.5))
 
-    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, test_command)
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, integration)
 
     expect([out.duration, out.timings.to_h]).to eq([25.75, { adaptive_timeout: 10.25 }])
   end
@@ -75,8 +83,40 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimedRun do
   it "reports a timeout that the confirmation run used up too, with the confirmation limit" do
     iso = isolator(result(:timeout, 10.25), result(:timeout, 30.5))
 
-    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, test_command)
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, integration)
 
     expect([out.status, out.duration, out.time_limit]).to eq([:timeout, 40.75, 30])
+  end
+
+  # A reordered run that times out under the adaptive limit is run again in
+  # the defined order under it, then confirmed under the fixed limit the same
+  # way, so the verdict that stands is that of a run in the defined order
+  # under the fixed limit.
+  it "confirms a reordered timeout under the fixed limit in the defined order" do
+    runs = []
+    statuses = %i[timeout timeout timeout killed]
+    iso = double(:isolator)
+    allow(iso).to receive(:call) do |mutation:, test_command:, timeout:|
+      runs << [test_command.call(mutation), timeout]
+      result(statuses.shift, 1.0)
+    end
+    reordering = Class.new do
+      def initialize = @defined = false
+      def reorders? = !@defined
+
+      def in_defined_order
+        @defined = true
+        yield
+      ensure
+        @defined = false
+      end
+
+      def call(_mutation) = @defined ? :defined : :reordered
+    end.new
+
+    out = described_class.new(isolator: iso, timeout_policy: policy(limit: 10, confirm: 30)).call(mutation, reordering)
+
+    expect(runs).to eq([[:reordered, 10], [:defined, 10], [:reordered, 30], [:defined, 30]])
+    expect(out.status).to eq(:killed)
   end
 end

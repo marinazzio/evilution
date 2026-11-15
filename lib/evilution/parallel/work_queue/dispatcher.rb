@@ -8,8 +8,10 @@ class Evilution::Parallel::WorkQueue::Dispatcher
 
   attr_reader :first_error
 
+  # on_arrival: told of each finished item as soon as it is read, ahead of
+  # on_result, which waits until the round's workers have their next item.
   def initialize(workers:, items:, prefetch:, item_timeout:, worker_max_items:, recycle_factory:,
-                 on_result: nil)
+                 on_result: nil, on_arrival: nil)
     @workers = workers
     @items = items
     @prefetch = prefetch
@@ -18,7 +20,7 @@ class Evilution::Parallel::WorkQueue::Dispatcher
     @state = Evilution::Parallel::WorkQueue.send(:const_get, :CollectionState).new(items.length)
     @retired = []
     @deadlines = DeadlineTracker.new(item_timeout:, workers: @workers)
-    @stream = ResultStream.new(on_result)
+    @stream = ResultStream.new(on_result, on_arrival)
   end
 
   def run

@@ -12,8 +12,8 @@ class Evilution::Parallel::Pool
     )
   end
 
-  def map(items, on_result: nil, &)
-    @queue.map(items, on_result: on_result, &)
+  def map(items, on_result: nil, on_arrival: nil, &)
+    @queue.map(items, on_result: on_result, on_arrival: on_arrival, &)
   end
 
   def worker_stats

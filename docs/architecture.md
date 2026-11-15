@@ -214,6 +214,26 @@ class that owns it.
    (`Coverage::MapStore`) is keyed on every project file the build loaded and
    every file under the spec directories as well as on the targets, specs and
    helpers. These results are never cached and are scored as survivors.
+   Each mutation also goes to the integration with the tests that killed its
+   neighbours earlier in the run (`MutationExecutor::KillHistory`: same line,
+   then same subject, latest first), through `Integration::Base#prioritize`
+   before the isolator runs, so a forked child inherits it. A parallel run
+   looks them up when the pool sends the mutation (`Strategy::Parallel::
+   HintedItems`) and records each kill the moment its result is read
+   (`WorkQueue#map(on_arrival:)`), ahead of the ordered delivery. The RSpec
+   integration (`Integration::RSpec::KillerFirst` / `ExampleOrder`) runs those
+   killers first, then the cheapest examples by their baseline time
+   (`Baseline::Result#example_durations`), when the run stops at its first kill
+   and `killer_first` is set (off by default: a suite whose examples depend on
+   their defined order would report kills that order does not produce); it
+   sends back the killing example's id (`killing_test`) and the number of
+   examples that ran (`examples_run`) either way. A reordered run that times
+   out is run again in the defined order (`MutationExecutor::IsolatedRun`, via
+   `Integration::Base#reorders?` / `#in_defined_order`), and that run decides.
+   `MutationExecutor::TimedRun` runs an `IsolatedRun` under each limit: under
+   the adaptive limit first, then, when that times out in the defined order
+   too, under the fixed one, so a mutation that times out every way is judged
+   by a run in the defined order under the fixed limit.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

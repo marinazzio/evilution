@@ -107,6 +107,16 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.mutation).to be(mutation)
   end
 
+  describe "#examples_run" do
+    it "is nil unless the run counted them" do
+      expect(described_class.new(mutation: mutation, status: :killed).examples_run).to be_nil
+    end
+
+    it "is the count the run gave" do
+      expect(described_class.new(mutation: mutation, status: :killed, examples_run: 2).examples_run).to eq(2)
+    end
+  end
+
   describe "#time_limit" do
     it "is nil unless one was recorded" do
       expect(described_class.new(mutation: mutation, status: :timeout).time_limit).to be_nil
@@ -118,15 +128,16 @@ RSpec.describe Evilution::Result::MutationResult do
       timings = Evilution::Result::MutationTimings.new(test_run: 4.1)
       original = described_class.new(
         mutation: mutation, status: :timeout, duration: 4.1, killing_test: "t", test_command: "c",
-        memory: memory, error: error, neutral_reason: :reason, known_failures_only: true, timings: timings
+        memory: memory, error: error, neutral_reason: :reason, known_failures_only: true, timings: timings,
+        examples_run: 7
       )
 
       copy = original.with_time_limit(4.0)
 
       expect(copy.time_limit).to eq(4.0)
       expect([copy.mutation, copy.status, copy.duration, copy.killing_test, copy.test_command, copy.memory,
-              copy.error, copy.neutral_reason, copy.known_failures_only?, copy.timings])
-        .to eq([mutation, :timeout, 4.1, "t", "c", memory, error, :reason, true, timings])
+              copy.error, copy.neutral_reason, copy.known_failures_only?, copy.timings, copy.examples_run])
+        .to eq([mutation, :timeout, 4.1, "t", "c", memory, error, :reason, true, timings, 7])
       expect(copy).to be_frozen
       expect(original.time_limit).to be_nil
     end

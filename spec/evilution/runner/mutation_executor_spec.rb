@@ -431,6 +431,30 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(captured).to eq("cmd")
     end
 
+    # The kills of one mutation reach the next through the history the
+    # executor keeps for the run.
+    it "hands the integration the test that killed a mutation on the same line, for the next one" do
+      subject_double = instance_double(Evilution::Subject, name: "Foo#bar")
+      first, second = Array.new(2) do |i|
+        instance_double(Evilution::Mutation, file_path: "lib/foo.rb", line: 3, subject: subject_double,
+                                             to_s: "m#{i}", strip_sources!: nil, unparseable?: false)
+      end
+      given = []
+      integration = Object.new
+      integration.define_singleton_method(:prioritize) { |ids| given << ids }
+      integration.define_singleton_method(:call) { |_m| "cmd" }
+      baseline_runner = instance_double(Evilution::Runner::BaselineRunner, build_integration: integration,
+                                                                           neutralization_fallback_dir: "spec")
+      isolator = instance_double(Evilution::Isolation::Fork)
+      allow(isolator).to receive(:call) do |mutation:, **|
+        Evilution::Result::MutationResult.new(mutation: mutation, status: :killed, killing_test: "a[1:2]")
+      end
+
+      build(config(jobs: 1), isolator: isolator, baseline_runner: baseline_runner).call([first, second], nil)
+
+      expect(given).to eq([[], ["a[1:2]"]])
+    end
+
     it "uses the baseline neutralization resolver only when the baseline failed" do
       cfg = config(jobs: 1)
       mut = mutation(file: "lib/foo.rb")
