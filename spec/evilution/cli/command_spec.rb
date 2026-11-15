@@ -95,11 +95,12 @@ RSpec.describe Evilution::CLI::Command do
 
     let(:command) { helper_subclass.new(parsed, stdout: stdout, stderr: stderr) }
 
-    def config_double(skip_heredoc: false, ignore_patterns: [])
+    def config_double(skip_heredoc: false, ignore_patterns: [], skip_sites: [])
       instance_double(
         Evilution::Config,
         skip_heredoc_literals?: skip_heredoc,
-        ignore_patterns: ignore_patterns
+        ignore_patterns: ignore_patterns,
+        skip_sites: skip_sites
       )
     end
 
@@ -116,14 +117,18 @@ RSpec.describe Evilution::CLI::Command do
     end
 
     describe "#build_subject_filter" do
-      it "returns nil when the config has no ignore patterns" do
+      it "returns nil when the config has no ignore patterns and no skip sites" do
         expect(command.build_subject_filter(config_double(ignore_patterns: []))).to be_nil
       end
 
-      it "returns a Pattern::Filter instance when ignore patterns are present" do
-        require "evilution/ast/pattern/filter"
+      it "returns a SkipFilter when ignore patterns are present" do
         filter = command.build_subject_filter(config_double(ignore_patterns: ["call{name=log}"]))
-        expect(filter).to be_an_instance_of(Evilution::AST::Pattern::Filter)
+        expect(filter).to be_an_instance_of(Evilution::AST::SkipFilter)
+      end
+
+      it "returns a SkipFilter when skip sites are chosen" do
+        filter = command.build_subject_filter(config_double(skip_sites: [:logging]))
+        expect(filter).to be_an_instance_of(Evilution::AST::SkipFilter)
       end
     end
   end

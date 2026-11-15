@@ -105,6 +105,7 @@ class Evilution::Reporter::JSON
     append_diagnostic_summary_fields(data, summary)
     data[:truncated] = true if summary.truncated?
     data[:skipped] = summary.skipped if summary.skipped.positive?
+    data[:skipped_sites] = summary.skipped_sites unless summary.skipped_sites.empty?
     peak = summary.peak_memory_mb
     data[:peak_memory_mb] = peak.round(1) if peak
   end

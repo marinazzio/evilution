@@ -23,7 +23,7 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Environment do
         "timeout", "format", "integration", "jobs", "isolation", "baseline",
         "incremental", "fail_fast", "stop_on_kill", "killer_first", "skip_uncovered", "probe_first", "min_score",
         "suggest_tests", "save_session",
-        "target", "skip_heredoc_literals", "ignore_patterns"
+        "target", "skip_heredoc_literals", "ignore_patterns", "skip_sites"
       )
     end
 

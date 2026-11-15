@@ -907,6 +907,19 @@ RSpec.describe Evilution::Reporter::JSON do
 
         expect(parsed["summary"]).not_to have_key("skipped")
       end
+
+      it "includes the skips per preset" do
+        sites_summary = Evilution::Result::Summary.new(
+          results: [killed_result], duration: 0.5, skipped: 4, skipped_sites: { logging: 1, error_messages: 2 }
+        )
+
+        expect(JSON.parse(reporter.call(sites_summary))["summary"]["skipped_sites"])
+          .to eq("logging" => 1, "error_messages" => 2)
+      end
+
+      it "omits skipped_sites when no preset skipped anything" do
+        expect(JSON.parse(reporter.call(skipped_summary))["summary"]).not_to have_key("skipped_sites")
+      end
     end
 
     context "with disabled mutations" do

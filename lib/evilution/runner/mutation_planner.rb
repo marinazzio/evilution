@@ -3,13 +3,14 @@
 require_relative "../runner"
 require_relative "../disable_comment"
 require_relative "../ast/sorbet_sig_detector"
-require_relative "../ast/pattern/filter"
+require_relative "../ast/skip_filter"
 require_relative "../equivalent/detector"
 
 class Evilution::Runner::MutationPlanner
-  Plan = Struct.new(:enabled, :equivalent, :skipped_count, :disabled_mutations, :mutated_lines, keyword_init: true)
+  Plan = Struct.new(:enabled, :equivalent, :skipped_count, :skipped_sites, :disabled_mutations, :mutated_lines,
+                    keyword_init: true)
 
-  GenerationResult = Data.define(:mutations, :skipped)
+  GenerationResult = Data.define(:mutations, :skipped, :skipped_sites)
   DisabledFilterResult = Data.define(:enabled, :disabled)
   SigFilterResult = Data.define(:enabled, :skipped)
   EquivalentFilterResult = Data.define(:equivalent, :enabled)
@@ -33,7 +34,8 @@ class Evilution::Runner::MutationPlanner
     sig_filter = filter_sig_blocks(disabled_filter.enabled)
     equivalent_filter = filter_equivalent(sig_filter.enabled)
 
-    plan = build_plan(equivalent_filter, disabled_mutations, total_skipped(generation, disabled_filter, sig_filter))
+    plan = build_plan(equivalent_filter, disabled_mutations, total_skipped(generation, disabled_filter, sig_filter),
+                      generation.skipped_sites)
     plan.mutated_lines = mutated_lines(deduped)
     plan
   end
@@ -63,11 +65,12 @@ class Evilution::Runner::MutationPlanner
     generation.skipped + disabled_filter.disabled.length + sig_filter.skipped
   end
 
-  def build_plan(equivalent_filter, disabled_mutations, skipped_count)
+  def build_plan(equivalent_filter, disabled_mutations, skipped_count, skipped_sites)
     Plan.new(
       enabled: equivalent_filter.enabled,
       equivalent: equivalent_filter.equivalent,
       skipped_count: skipped_count,
+      skipped_sites: skipped_sites,
       disabled_mutations: disabled_mutations
     )
   end
@@ -91,14 +94,16 @@ class Evilution::Runner::MutationPlanner
   # Each file is read once, and its every subject is mutated from that one
   # source: the mutations of a file then share it as their original source.
   def generate(subjects)
-    filter = build_ignore_filter
+    filter = Evilution::AST::SkipFilter.for(config)
     operator_options = build_operator_options
     file_sources = Hash.new { |sources, path| sources[path] = File.read(path) }
     mutations = subjects.flat_map do |subject|
       registry.mutations_for(subject, filter: filter, operator_options: operator_options, file_sources: file_sources)
     end
-    skipped = filter ? filter.skipped_count(made: mutations) : 0
-    GenerationResult.new(mutations: mutations, skipped: skipped)
+    return GenerationResult.new(mutations: mutations, skipped: 0, skipped_sites: {}) unless filter
+
+    GenerationResult.new(mutations: mutations, skipped: filter.skipped_count(made: mutations),
+                         skipped_sites: filter.skipped_by_site(made: mutations))
   end
 
   # The operators build no mutation of lines outside a requested line range:
@@ -107,13 +112,6 @@ class Evilution::Runner::MutationPlanner
   # as mutated lines.
   def build_operator_options
     { skip_heredoc_literals: config.skip_heredoc_literals?, line_ranges: config.line_ranges }
-  end
-
-  def build_ignore_filter
-    patterns = config.ignore_patterns
-    return nil if patterns.nil? || patterns.empty?
-
-    Evilution::AST::Pattern::Filter.new(patterns)
   end
 
   def filter_disabled(mutations)

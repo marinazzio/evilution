@@ -147,7 +147,10 @@ class that owns it.
    that one source to every operator of every subject in it. The registry
    instantiates each operator whose
    `subject_kinds` include the subject's kind (`:method`, `:scope`, `:aasm` and `:callback` by default) and
-   runs `operator.call(subject, filter:, file_source:)`; each operator subclasses
+   runs `operator.call(subject, filter:, file_source:)`; the filter
+   (`AST::SkipFilter`) skips a mutation an `ignore_patterns` pattern matches
+   (`AST::Pattern::Filter`) or that lies in a site of a `skip_sites` preset
+   (`AST::SkipSites::Presets`), counting skips per preset; each operator subclasses
    `Mutator::Base` and calls `add_mutation`, which runs `AST::SourceSurgeon` and
    builds an immutable `Evilution::Mutation`. Whether the mutated source parses
    is `AST::SyntaxCheck`'s call: Prism first and, on an interpreter that

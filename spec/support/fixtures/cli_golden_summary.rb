@@ -58,6 +58,12 @@ module CliGoldenSummary
       []
     end
 
+    # Its skip predates the skip_sites presets: it comes from a disable
+    # comment, so no preset is named.
+    def skipped_sites
+      {}
+    end
+
     # Nor was any of its survivors implied by a probe-first sentinel.
     def implied
       0

@@ -10,6 +10,7 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
   SETTINGS = %w[
     timeout format integration jobs isolation baseline incremental fail_fast stop_on_kill killer_first
     skip_uncovered probe_first min_score suggest_tests save_session target skip_heredoc_literals ignore_patterns
+    skip_sites
   ].freeze
   private_constant :SETTINGS
 

@@ -8,6 +8,12 @@ The AST pattern language allows precise, semantic exclusion of mutations. Instea
 file/line targeting, patterns match Prism AST node structures so that mutations on
 logging, debugging, or infrastructure code can be suppressed declaratively.
 
+For the common cases -- log lines, debug output, error messages, load-time
+requires -- the `skip_sites` presets (see README, "Skipping Low-Value Code")
+are more precise than a pattern can be: they skip only what changes what the
+code reports, and keep the raise, the class raised and any code that may
+change state mutated. Patterns are for everything else.
+
 Patterns are specified in `.evilution.yml` under the `ignore_patterns` key:
 
 ```yaml

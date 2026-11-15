@@ -203,6 +203,10 @@ RSpec.describe Evilution::Runner::ReportPublisher do
           []
         end
 
+        def skipped_sites
+          {}
+        end
+
         def success?(min_score:)
           score >= min_score
         end

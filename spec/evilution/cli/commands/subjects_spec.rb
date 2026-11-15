@@ -65,7 +65,7 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
 
       expect(registry).to have_received(:mutations_for).with(
         subject_a,
-        filter: an_instance_of(Evilution::AST::Pattern::Filter),
+        filter: an_instance_of(Evilution::AST::SkipFilter),
         operator_options: { skip_heredoc_literals: true, line_ranges: {} }
       )
     end

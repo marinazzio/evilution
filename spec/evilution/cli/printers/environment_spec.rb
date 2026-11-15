@@ -13,7 +13,7 @@ RSpec.describe Evilution::CLI::Printers::Environment do
       verbose: false, quiet: false, progress: true,
       fail_fast: nil, min_score: 0.0, suggest_tests: false,
       save_session: false, target: nil, stop_on_kill: true,
-      skip_heredoc_literals: false, ignore_patterns: []
+      skip_heredoc_literals: false, ignore_patterns: [], skip_sites: []
     )
   end
   let(:io) { StringIO.new }
@@ -70,6 +70,17 @@ RSpec.describe Evilution::CLI::Printers::Environment do
     allow(config).to receive(:ignore_patterns).and_return(["Foo*"])
     described_class.new(config, config_file: nil).render(io)
     expect(io.string).to include('ignore_patterns: ["Foo*"]')
+  end
+
+  it "prints (none) when skip_sites is empty" do
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string).to include("skip_sites: (none)")
+  end
+
+  it "prints the skip_sites presets when some are chosen" do
+    allow(config).to receive(:skip_sites).and_return(%i[logging requires])
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string).to include("skip_sites: logging, requires")
   end
 
   it "underlines the header with a 30-character rule" do

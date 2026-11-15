@@ -30,9 +30,7 @@ class Evilution::CLI::Command
   end
 
   def build_subject_filter(config)
-    return nil if config.ignore_patterns.empty?
-
-    require_relative "../ast/pattern/filter"
-    Evilution::AST::Pattern::Filter.new(config.ignore_patterns)
+    require_relative "../ast/skip_filter"
+    Evilution::AST::SkipFilter.for(config)
   end
 end
