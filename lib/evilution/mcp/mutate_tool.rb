@@ -44,6 +44,13 @@ class Evilution::MCP::MutateTool < MCP::Tool
         type: "string",
         description: "Only mutate the named method (e.g. Foo#bar)"
       },
+      since: {
+        type: "string",
+        description: "Only mutate the lines changed since this git ref (e.g. 'main', 'origin/main', a commit), " \
+                     "diffed from its merge base with HEAD, uncommitted and untracked changes included. " \
+                     "Without files: every changed .rb file under lib/ and app/; with files: only those of " \
+                     "them that changed, line ranges narrowed to their changed lines. CLI: `--since REF`."
+      },
       timeout: {
         type: "integer",
         description: "Per-mutation timeout in seconds, the same for every mutation " \

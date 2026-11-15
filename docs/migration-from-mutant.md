@@ -81,13 +81,17 @@ bundle exec evilution run lib/ --target 'MyApp::Calculator*'
 | JSON report | session JSON (always written) | `--format json` (`--save-session` to persist) |
 | Inline opt-out | `# mutant:disable` | `# evilution:disable` |
 | Aggressive operators | _(always on)_ | `--profile strict` (or `--strict`) |
+| Changed code only | `--since <git-ref>` | `--since <git-ref>` (lines changed since the ref's merge base with `HEAD`, uncommitted changes included) |
 
-### Things mutant has that Evilution does not (yet)
+### `--since` differences
 
-- **`--since <git-ref>`** — mutant can restrict subjects to lines changed since a git
-  ref. Evilution has no diff-aware selection. The closest tools are `--incremental`
-  (caches `killed`/`timeout` results and skips unchanged mutations on re-runs — a
-  different model) and `--target source:<glob>` / explicit file args to scope a run.
+- mutant selects the **subjects** whose source changed and runs all their
+  mutations; Evilution runs only the mutations that change a changed line (a
+  subject is picked when any of its lines changed, then its unchanged lines are left
+  alone). Expect fewer mutations for the same diff.
+- Evilution diffs to the working tree, so uncommitted and untracked files count.
+- Without file arguments Evilution takes the changed `.rb` files under `lib/` and
+  `app/`; `--target source:<glob>` cannot be combined with `--since`.
 
 ### Things Evilution adds
 
@@ -213,8 +217,8 @@ operator.
 - **Different mutations.** Evilution ships its own operator registry (`--profile
   default` / `strict`); it is not mutant's AST-handler set. Counts and specific
   survivors will differ. Use `compare` to quantify.
-- **No diff-based selection** (`--since <ref>`). Use file args, `--target source:`,
-  or `--incremental`.
+- **Diff-based selection is line-based** (`--since <ref>`): see the `--since`
+  differences above.
 - **File-driven, not subject-driven.** Always pass paths; narrow with `--target`.
 - **100%-coverage culture.** Evilution does not assume a 100% gate; choose `min_score`
   deliberately, and note that `:unresolved` mutations are excluded from the score

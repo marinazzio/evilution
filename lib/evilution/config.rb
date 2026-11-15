@@ -37,12 +37,17 @@ class Evilution::Config
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
               :stop_on_kill, :killer_first, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
-              :probe_first, :skip_sites, :copy_worker_databases
+              :probe_first, :skip_sites, :copy_worker_databases, :since
 
+  # since: the git ref whose changed lines alone the run mutates. Taken only
+  # from the caller, like the target files it stands in for: a config file
+  # naming one would scope every run, an explicit file list included.
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
+    since = options.delete(:since)
     merged = Sources.merge(explicit: options, skip_file: skip_file)
     assign_attributes(merged)
+    assign_since(since)
     freeze
   end
 
@@ -64,6 +69,10 @@ class Evilution::Config
 
   def target?
     !target.nil?
+  end
+
+  def since?
+    !since.nil?
   end
 
   def fail_fast?
@@ -383,6 +392,10 @@ class Evilution::Config
     @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
   end
 
+  def assign_since(since)
+    @since = Validators::Since.call(since, target: target)
+  end
+
   def assign_adaptive_timeout(merged)
     @adaptive_timeout = !merged[:timeout_given]
     return if @timeout_floor <= @timeout_ceiling
@@ -412,6 +425,7 @@ require_relative "config/validators/example_targeting_strategy"
 require_relative "config/validators/example_targeting_cache"
 require_relative "config/validators/profile"
 require_relative "config/validators/warmup"
+require_relative "config/validators/since"
 require_relative "config/validators/timeout_factor"
 require_relative "config/validators/timeout_floor"
 require_relative "config/validators/timeout_ceiling"

@@ -5,6 +5,7 @@ require_relative "../ast/inheritance_scanner"
 require_relative "../ast/uncovered_code"
 require_relative "../diagnostic"
 require_relative "../git/changed_files"
+require_relative "../mutator/line_range_filter"
 
 class Evilution::Runner::SubjectPipeline
   autoload :Target, File.expand_path("subject_pipeline/target", __dir__)
@@ -133,9 +134,12 @@ class Evilution::Runner::SubjectPipeline
     matched
   end
 
+  # With --since the target files are the changed ones, and none having
+  # changed means there is nothing to mutate, not that the git-changed files
+  # stand in.
   def resolve_target_files
     return resolve_source_glob if target.source_glob?
-    return config.target_files unless config.target_files.empty?
+    return config.target_files unless config.target_files.empty? && !config.since?
 
     @used_git_fallback = true
     Evilution::Git::ChangedFiles.new.call
@@ -143,6 +147,7 @@ class Evilution::Runner::SubjectPipeline
 
   def build_no_match_error
     base = "no subject matched '#{target}'"
+    return "#{base} in the files changed since #{config.since}" if config.since?
     return base unless @used_git_fallback
 
     "#{base}; scanned git-changed files only. Pass file paths or " \
@@ -150,13 +155,10 @@ class Evilution::Runner::SubjectPipeline
   end
 
   def filter_by_line_ranges(subjects)
+    filter = Evilution::Mutator::LineRangeFilter.new(config.line_ranges)
     subjects.select do |subject|
-      range = config.line_ranges[subject.file_path]
-      next true unless range
-
       subject_start = subject.line_number
-      subject_end = subject_start + subject.source.count("\n")
-      subject_start <= range.last && subject_end >= range.first
+      filter.cover?(subject.file_path, subject_start..(subject_start + subject.source.count("\n")))
     end
   end
 end

@@ -38,7 +38,17 @@ RSpec.describe Evilution::Runner::ReportPublisher do
 
       described_class.new(cfg).publish(summary)
 
-      expect(Evilution::Reporter::CLI).to have_received(:new).with(min_score: 0.9)
+      expect(Evilution::Reporter::CLI).to have_received(:new).with(min_score: 0.9, since: nil)
+    end
+
+    it "builds the text reporter with the --since ref" do
+      cfg = config(format: :text, since: "main")
+      reporter = instance_double(Evilution::Reporter::CLI, call: "txt-output")
+      allow(Evilution::Reporter::CLI).to receive(:new).and_return(reporter)
+
+      described_class.new(cfg).publish(summary)
+
+      expect(Evilution::Reporter::CLI).to have_received(:new).with(min_score: 0.0, since: "main")
     end
 
     # EV-g8ya / GH #1608: a preloaded spec helper's at_exit hook (SimpleCov's

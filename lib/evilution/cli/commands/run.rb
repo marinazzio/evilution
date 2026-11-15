@@ -18,17 +18,26 @@ class Evilution::CLI::Commands::Run < Evilution::CLI::Command
     config = nil
     raise Evilution::ConfigError, @stdin_error if @stdin_error
 
-    config = Evilution::Config.new(**@options, target_files: @files, line_ranges: @line_ranges)
+    paths = scoped_paths
+    config = Evilution::Config.new(**@options, target_files: paths.files, line_ranges: paths.ranges)
     hooks = build_hooks(config)
     runner = Evilution::Runner.new(config: config, hooks: hooks)
     summary = runner.call
-    exit_code = summary.success?(min_score: config.min_score) ? 0 : 1
-    Evilution::CLI::Result.new(exit_code: exit_code)
+    Evilution::CLI::Result.new(exit_code: passed?(summary, config) ? 0 : 1)
   rescue Evilution::Error => e
     handle_error(e, config, file_options)
   end
 
   private
+
+  # A --since run whose changed lines hold nothing to mutate has nothing to
+  # score: a pull request that touches no Ruby code passes. A target file that
+  # resolved to no spec still fails it, as the result line says.
+  def passed?(summary, config)
+    return true if config.since? && summary.total.zero? && !summary.unresolved_targets?
+
+    summary.success?(min_score: config.min_score)
+  end
 
   def handle_error(error, config, file_options)
     if json_format?(config, file_options)

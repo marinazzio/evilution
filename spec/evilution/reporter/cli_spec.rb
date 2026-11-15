@@ -33,6 +33,19 @@ RSpec.describe Evilution::Reporter::CLI do
       expect { described_class.new }.not_to raise_error
     end
 
+    it "judges an empty run against the threshold without --since" do
+      output = described_class.new(min_score: 0.9).call(empty_summary)
+
+      expect(output).to include("Result: FAIL (score 0.00% < 90.00%)")
+      expect(output).not_to include("nothing to mutate")
+    end
+
+    it "ends the report of a --since run that mutated nothing with a pass" do
+      output = described_class.new(min_score: 0.9, since: "main").call(empty_summary)
+
+      expect(output).to include("Result: PASS (nothing to mutate in the lines changed since main)")
+    end
+
     it "accepts header, metrics_block, section_renderer, sections, trailer kwargs" do
       expect do
         described_class.new(

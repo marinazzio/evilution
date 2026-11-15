@@ -113,7 +113,10 @@ class that owns it.
    subjects are found, every parsed subject is handed to `Cache#index`, so the cache
    can key a subject apart from the rest of its file.
 2. **Subjects** — `Runner::SubjectPipeline#call` resolves target files (explicit,
-   `source:<glob>`, or `Git::ChangedFiles`), then `AST::Parser#call` runs
+   `source:<glob>`, or `Git::ChangedFiles`; with `--since REF` the command layer has
+   already replaced the file arguments and line ranges by `Git::SinceScope`, which
+   reads `Git::ChangedLines` into one `LineSet` of changed lines per file, and the
+   same line-range filtering then applies), then `AST::Parser#call` runs
    `Prism.parse` and `AST::SubjectFinder` (a `Prism::Visitor`) emits one
    `Evilution::Subject` per `def` node (kind `:method`), plus one per
    `Data.define` / `Struct.new` assigned to a constant or used as a superclass

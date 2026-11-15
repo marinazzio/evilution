@@ -64,6 +64,37 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::ResultLine do
       )
     end
 
+    context "with --since" do
+      it "passes a run with nothing to mutate in the changed lines, whatever the threshold" do
+        summary = double("s", score: 0.0, total: 0, unresolved_targets?: false)
+
+        expect(described_class.new(min_score: 0.8, since: "main").format(summary))
+          .to eq("Result: PASS (nothing to mutate in the lines changed since main)")
+      end
+
+      it "says so without a threshold too" do
+        summary = double("s", score: 0.0, total: 0, unresolved_targets?: false)
+
+        expect(described_class.new(since: "main").format(summary))
+          .to eq("Result: PASS (nothing to mutate in the lines changed since main)")
+      end
+
+      it "judges a run that mutated something against the threshold" do
+        summary = double("s", score: 0.5, total: 4, unresolved_targets?: false)
+        allow(summary).to receive(:success?).with(min_score: 0.8).and_return(false)
+
+        expect(described_class.new(min_score: 0.8, since: "main").format(summary))
+          .to eq("Result: FAIL (score 50.00% < 80.00%)")
+      end
+
+      it "still fails a target file that resolved to no spec" do
+        summary = double("s", score: 0.0, total: 0, unresolved_targets?: true, unresolved_target_files: ["a.rb"])
+
+        expect(described_class.new(since: "main").format(summary))
+          .to eq("Result: FAIL (1 target file has no resolvable spec)")
+      end
+    end
+
     it "uses injected Pct" do
       pct = double("pct")
       allow(pct).to receive(:format).with(0.85).and_return("Spct")

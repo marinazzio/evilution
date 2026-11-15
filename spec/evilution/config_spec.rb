@@ -547,6 +547,61 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#since" do
+      it "is unset by default" do
+        config = Evilution::Config.new(skip_config_file: true)
+
+        expect(config.since).to be_nil
+        expect(config.since?).to be false
+      end
+
+      it "takes the git ref given" do
+        config = Evilution::Config.new(since: "main", skip_config_file: true)
+
+        expect(config.since).to eq("main")
+        expect(config.since?).to be true
+      end
+
+      it "takes the ref without surrounding blanks, as a string" do
+        expect(Evilution::Config.new(since: " main ", skip_config_file: true).since).to eq("main")
+        expect(Evilution::Config.new(since: :main, skip_config_file: true).since).to eq("main")
+      end
+
+      it "rejects a blank ref" do
+        expect { Evilution::Config.new(since: "  ", skip_config_file: true) }
+          .to raise_error(Evilution::ConfigError, /--since needs a git ref/)
+      end
+
+      it "rejects a source glob target, which picks the files itself" do
+        expect { Evilution::Config.new(since: "main", target: "source:lib/**/*.rb", skip_config_file: true) }
+          .to raise_error(Evilution::ConfigError, /--since.*source:/)
+      end
+
+      it "takes a method target" do
+        config = Evilution::Config.new(since: "main", target: "Foo#bar", skip_config_file: true)
+
+        expect(config.target).to eq("Foo#bar")
+      end
+
+      it "is not a config file key" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nsince: main\n")
+            expect { Evilution::Config.new }.to raise_error(Evilution::ConfigError, /unknown key.*:since/)
+          end
+        end
+      end
+
+      it "is not taken from a lenient config file" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "since: main\n")
+            expect(Evilution::Config.new.since).to be_nil
+          end
+        end
+      end
+    end
+
     describe "#skip_sites" do
       it "skips no sites by default" do
         expect(Evilution::Config.new(skip_config_file: true).skip_sites).to eq([])

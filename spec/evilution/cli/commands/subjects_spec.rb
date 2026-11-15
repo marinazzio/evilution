@@ -31,6 +31,37 @@ RSpec.describe Evilution::CLI::Commands::Subjects do
     end
   end
 
+  describe "with --since" do
+    it "lists the subjects of the lines changed since the ref" do
+      line_set = Evilution::LineSet.new([3..4])
+      allow(Evilution::Git::SinceScope).to receive(:apply).and_return(
+        Evilution::Git::SinceScope::Paths.new(files: ["lib/a.rb"], ranges: { "lib/a.rb" => line_set })
+      )
+      runner = instance_double(Evilution::Runner, parse_and_filter_subjects: [])
+      allow(Evilution::Runner).to receive(:new).and_return(runner)
+      parsed = Evilution::CLI::ParsedArgs.new(command: :subjects, options: { since: "main", skip_config_file: true })
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply).with("main", files: [], line_ranges: {})
+      expect(Evilution::Runner).to have_received(:new) { |config:|
+        expect(config.target_files).to eq(["lib/a.rb"])
+        expect(config.line_ranges).to eq("lib/a.rb" => line_set)
+      }
+    end
+
+    it "rejects an empty ref before git is asked about it" do
+      allow(Evilution::Git::SinceScope).to receive(:apply)
+      parsed = Evilution::CLI::ParsedArgs.new(command: :subjects, options: { since: " ", skip_config_file: true })
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.exit_code).to eq(2)
+      expect(result.error.message).to eq("--since needs a git ref, such as main or origin/main")
+      expect(Evilution::Git::SinceScope).not_to have_received(:apply)
+    end
+  end
+
   describe "with subjects" do
     let(:subject_a) do
       instance_double("Subject", name: "Foo#bar", file_path: "lib/a.rb", line_number: 10, release_node!: nil)
