@@ -7,8 +7,8 @@ require_relative "../result"
 # - apply:        parsing and evaluating the mutated source
 # - test_run:     the first test run against it
 # - confirmation: the re-run of a survivor against its whole spec files
-# - queue_wait:   in a parallel run, the time from its batch being handed to the
-#                 pool to a worker picking it up
+# - queue_wait:   in a parallel run, the time from the dispatcher sending it to a
+#                 worker to that worker starting it
 #
 # A phase that did not happen is nil. What the mutation's duration holds beyond
 # these is the cost of the isolation around it: fork, sandbox, reap.

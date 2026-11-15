@@ -433,4 +433,98 @@ RSpec.describe Evilution::Parallel::WorkQueue::Dispatcher do
       replacement.reap if replacement
     end
   end
+
+  describe "#run streaming results through on_result" do
+    def shut(workers)
+      workers.each do |w|
+        w.shutdown
+        w.close_pipes
+        w.reap
+      end
+    end
+
+    it "hands every result to on_result as it arrives, with its item index" do
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { |x| x * 2 }
+      streamed = []
+      dispatcher = described_class.new(
+        workers: [worker], items: [1, 2, 3], prefetch: 1,
+        item_timeout: 5, worker_max_items: nil,
+        recycle_factory: ->(_) { raise "no recycle" },
+        on_result: ->(index, value) { streamed << [index, value] }
+      )
+      run_result = dispatcher.run
+
+      expect(streamed).to eq([[0, 2], [1, 4], [2, 6]])
+      expect(run_result.results).to eq([2, 4, 6])
+      shut([worker])
+    end
+
+    it "hands an unfinished item's sentinel to on_result" do
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { sleep 30 }
+      streamed = []
+      dispatcher = described_class.new(
+        workers: [worker], items: [1], prefetch: 1,
+        item_timeout: 0.2, worker_max_items: nil,
+        recycle_factory: ->(_) { raise "no recycle" },
+        on_result: ->(index, value) { streamed << [index, value] }
+      )
+      Timeout.timeout(5) { dispatcher.run }
+
+      expect(streamed).to eq([[0, Evilution::Parallel::WorkQueue::TIMED_OUT]])
+      worker.close_pipes
+    end
+
+    it "sends no further items once on_result answers :stop, and finishes the ones in flight" do
+      workers = Array.new(2) { |i| Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: i, hooks: nil) { |x| x } }
+      streamed = []
+      dispatcher = described_class.new(
+        workers: workers, items: (0...10).to_a, prefetch: 1,
+        item_timeout: 5, worker_max_items: nil,
+        recycle_factory: ->(_) { raise "no recycle" },
+        on_result: lambda do |index, value|
+          streamed << [index, value]
+          :stop
+        end
+      )
+      run_result = Timeout.timeout(5) { dispatcher.run }
+
+      expect(streamed.length).to be_between(1, 4)
+      expect(run_result.results.compact.length).to eq(streamed.length)
+      expect(run_result.results.last(6)).to all(be_nil)
+      expect(dispatcher.first_error).to be_nil
+      shut(workers)
+    end
+
+    it "stops replacing dead workers once on_result answered :stop" do
+      spawn_dying = -> { Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { exit!(1) } }
+      replacements = 0
+      dispatcher = described_class.new(
+        workers: [spawn_dying.call], items: [1, 2, 3, 4], prefetch: 1,
+        item_timeout: 5, worker_max_items: nil,
+        recycle_factory: lambda do |_old|
+          replacements += 1
+          spawn_dying.call
+        end,
+        on_result: ->(_index, _value) { :stop }
+      )
+      run_result = Timeout.timeout(5) { dispatcher.run }
+
+      died = Evilution::Parallel::WorkQueue::DIED
+      expect([replacements, run_result.results]).to eq([1, [died, died, nil, nil]])
+    end
+
+    it "keeps one worker serving items across the whole run" do
+      worker = Evilution::Parallel::WorkQueue::Worker.spawn(worker_index: 0, hooks: nil) { |_x| Process.pid }
+      dispatcher = described_class.new(
+        workers: [worker], items: [1, 2, 3, 4], prefetch: 1,
+        item_timeout: 5, worker_max_items: nil,
+        recycle_factory: ->(_) { raise "no recycle" },
+        on_result: ->(_index, _value) {}
+      )
+      run_result = dispatcher.run
+
+      expect(run_result.results.uniq).to eq([worker.pid])
+      shut([worker])
+    end
+  end
 end

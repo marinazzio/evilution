@@ -334,8 +334,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
   end
 
   describe "parallel pool construction" do
-    def capture_pool_factory(cfg, hooks:)
-      isolator = instance_double(Evilution::Isolation::Fork)
+    def capture_pool_factory(cfg, hooks:, isolator: instance_double(Evilution::Isolation::Fork))
       parallel = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
       allow(parallel).to receive(:call).and_return(
         Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
@@ -366,6 +365,33 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       capture_pool_factory(config(jobs: 2, timeout: 9), hooks: nil).call
 
       expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(item_timeout: 18))
+    end
+
+    it "sizes the pool to --jobs" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 3), hooks: nil).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(size: 3))
+    end
+
+    it "gives every mutation a fresh worker under in-process isolation" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 2), hooks: nil, isolator: Evilution::Isolation::InProcess.new).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(worker_max_items: 1))
+    end
+
+    it "keeps each worker for the whole run under fork isolation" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_pool_factory(config(jobs: 2), hooks: nil, isolator: Evilution::Isolation::Fork.new).call
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(worker_max_items: nil))
     end
 
     it "leaves the pool item timeout nil when no timeout is configured" do

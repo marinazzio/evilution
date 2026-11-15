@@ -34,11 +34,16 @@ module Evilution::Parallel::WorkQueue::Worker::Loop
     exit!
   end
 
+  # The block gets the item and how long it waited between the dispatcher
+  # sending it and this worker starting it (nil when the command carries no
+  # send time). CLOCK_MONOTONIC is system-wide, so the parent's stamp and this
+  # reading are on the same clock.
   def run_one(res_io, data, &block)
-    index, item = data
+    index, item, sent_at = data
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    waited = sent_at.is_a?(Numeric) ? t0 - sent_at : nil
     begin
-      result = block.call(item)
+      result = block.call(item, waited)
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Evilution::Parallel::WorkQueue::Channel.write(res_io, [index, :ok, result])
     rescue StandardError, ScriptError, SystemStackError, NoMemoryError, SecurityError => e

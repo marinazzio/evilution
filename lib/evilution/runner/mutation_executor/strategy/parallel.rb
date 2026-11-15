@@ -2,9 +2,14 @@
 
 require_relative "../strategy"
 require_relative "../../../parallel/work_queue"
-require_relative "../../../infra_crash"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
+  # Autoloaded rather than required at the bottom: ordered_delivery requires
+  # this file, and requiring it while it is still loading is a circular
+  # require, which Ruby warns about -- and a project that turns warnings into
+  # exceptions loads this after its spec helper did so.
+  autoload :OrderedDelivery, File.expand_path("parallel/ordered_delivery", __dir__)
+
   # Compact result for a worker that exited unexpectedly (:error is not cached,
   # so the 0.0 duration is never persisted).
   DIED_COMPACT = {
@@ -36,29 +41,47 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
 
   def call(mutations, baseline_result:, integration:)
     @notifier.start(mutations.length)
-    pool = @pool_factory.call
-    state = { results: [], truncated: false, completed: 0 }
-    worker_stats = Evilution::Parallel::WorkQueue::WorkerStat.aggregate(
-      run_batches(mutations, pool, baseline_result, integration, state)
-    )
+    delivery = build_delivery(mutations, baseline_result)
+    worker_stats = Evilution::Parallel::WorkQueue::WorkerStat.aggregate(run(mutations, delivery, integration))
 
     log_worker_diagnostics(worker_stats)
     @notifier.finish
-    build_result(state, worker_stats)
+    Evilution::Runner::MutationExecutor::ExecutionResult.new(
+      results: delivery.results, truncated: delivery.truncated?, worker_stats: worker_stats
+    )
   end
 
   private
 
-  def run_batches(mutations, pool, baseline_result, integration, state)
-    all_worker_stats = []
-    mutations.each_slice(@config.jobs) do |batch|
-      break if state[:truncated]
+  def build_delivery(mutations, baseline_result)
+    OrderedDelivery.new(
+      mutations: mutations, packer: @packer, cache: @cache, pipeline: @pipeline, notifier: @notifier,
+      baseline_result: baseline_result, diagnostics: @diagnostics, log_every: @config.jobs
+    )
+  end
 
-      batch_results = run_batch(batch, pool, integration)
-      all_worker_stats.concat(pool.worker_stats)
-      process_batch(batch_results, baseline_result, state)
+  # The cached results go in first; the rest run on one pool whose workers
+  # live for the whole run and take the next mutation as soon as they are done
+  # with the last, so a slow mutation holds up only its own worker.
+  def run(mutations, delivery, integration)
+    partition = @cache.partition(mutations, packer: @packer)
+    partition.cached_results.each { |index, compact| delivery.accept(index, compact, fresh: false) }
+    return [] if delivery.truncated? || partition.uncached_indices.empty?
+
+    run_uncached(mutations, partition.uncached_indices, delivery, integration)
+  end
+
+  # Returns the pool's worker figures once every worker has been wound down.
+  def run_uncached(mutations, uncached_indices, delivery, integration)
+    pool = @pool_factory.call
+    on_result = lambda do |position, raw|
+      delivery.accept(uncached_indices[position], unpack_unfinished(raw), fresh: true)
+      :stop if delivery.truncated?
     end
-    all_worker_stats
+    pool.map(uncached_indices.map { |i| mutations[i] }, on_result: on_result) do |mutation, waited|
+      run_in_worker(mutation, integration, waited)
+    end
+    pool.worker_stats
   end
 
   def log_worker_diagnostics(worker_stats)
@@ -67,68 +90,12 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @diagnostics.log_worker_stats(worker_stats)
   end
 
-  def build_result(state, worker_stats)
-    Evilution::Runner::MutationExecutor::ExecutionResult.new(
-      results: state[:results], truncated: state[:truncated], worker_stats: worker_stats
-    )
-  end
-
-  def run_batch(batch, pool, integration)
-    partition = @cache.partition(batch, packer: @packer)
-    worker_results = run_uncached(batch, partition.uncached_indices, pool, integration)
-    compact_results = merge(batch, partition.uncached_indices, partition.cached_results, worker_results)
-    batch_results = rebuild_results(batch, compact_results)
-    cache_results(batch_results, partition.uncached_indices)
-    release_sources(batch, batch_results)
-    batch_results
-  end
-
-  # Sources are dropped as soon as a mutation has been judged, to keep a long
-  # run's memory flat. A mutation the workers could not judge because of
-  # infrastructure contention is re-run serially once the pool is done
-  # (InfraRetry), which needs its sources, so it keeps them until then. The
-  # neutralisation pipeline has not run yet here, so the crash is still a kill.
-  def release_sources(batch, batch_results)
-    batch.each_with_index do |mutation, index|
-      result = batch_results[index]
-      next if result && infra_crash?(result)
-
-      mutation.strip_sources!
-    end
-  end
-
-  def infra_crash?(result)
-    Evilution::InfraCrash.class_name?(result.error_class)
-  end
-
-  def rebuild_results(batch, compact_results)
-    batch.zip(compact_results).map { |m, h| @packer.rebuild(m, h) }
-  end
-
-  def cache_results(batch_results, uncached_indices)
-    uncached_indices.each { |i| @cache.store(batch_results[i].mutation, batch_results[i]) }
-  end
-
-  def run_uncached(batch, uncached_indices, pool, integration)
-    return [] if uncached_indices.empty?
-
-    uncached = uncached_indices.map { |i| batch[i] }
-    dispatched_at = monotonic_now
-    worker_results = pool.map(uncached) { |mutation| run_in_worker(mutation, integration, dispatched_at) }
-    worker_results.map { |r| unpack_unfinished(r) }
-  end
-
-  # Runs in the worker. CLOCK_MONOTONIC is system-wide, so the parent's reading
-  # at dispatch and the worker's here are on the same clock.
-  def run_in_worker(mutation, integration, dispatched_at)
-    queue_wait = monotonic_now - dispatched_at
+  # Runs in the worker. `waited` is how long the mutation sat between the
+  # dispatcher sending it and this worker starting it, nil when not measured.
+  def run_in_worker(mutation, integration, waited)
     test_command = ->(m) { integration.call(m) }
     result = @isolator.call(mutation: mutation, test_command: test_command, timeout: @config.timeout)
-    @packer.compact(result).merge(queue_wait: queue_wait)
-  end
-
-  def monotonic_now
-    Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    @packer.compact(result).merge(queue_wait: waited)
   end
 
   def unpack_unfinished(result)
@@ -147,25 +114,5 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   def timeout_compact
     duration = @config.timeout * 2.0
     { status: :timeout, duration: duration, timings: { test_run: duration } }
-  end
-
-  def merge(batch, uncached_indices, cached_results, worker_results)
-    result_map = cached_results.dup
-    uncached_indices.each_with_index { |batch_idx, worker_idx| result_map[batch_idx] = worker_results[worker_idx] }
-    batch.each_index.map { |i| result_map[i] }
-  end
-
-  def process_batch(batch_results, baseline_result, state)
-    batch_results.each do |result|
-      result = @pipeline.call(result, baseline_result: baseline_result)
-      state[:results] << result
-      state[:completed] += 1
-      if @notifier.notify(result, state[:completed]) == :truncate
-        state[:truncated] = true
-        break
-      end
-    end
-
-    @diagnostics.log_memory("after batch", "#{state[:completed]} complete") if @diagnostics
   end
 end

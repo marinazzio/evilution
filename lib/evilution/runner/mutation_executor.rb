@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../runner"
+require_relative "../isolation/in_process"
 
 class Evilution::Runner::MutationExecutor
   ExecutionResult = Data.define(:results, :truncated, :infra_retried, :worker_stats) do
@@ -110,7 +111,18 @@ class Evilution::Runner::MutationExecutor
     Evilution::Parallel::Pool.new(
       size: @config.jobs,
       hooks: @hooks,
-      item_timeout: @config.timeout ? @config.timeout * 2 : nil
+      item_timeout: @config.timeout ? @config.timeout * 2 : nil,
+      worker_max_items: worker_max_items
     )
+  end
+
+  # Fork isolation runs each mutation in a child of the worker, so the worker
+  # itself stays clean and can serve the whole run. In-process isolation runs
+  # the mutation in the worker: whatever it leaves behind (global state,
+  # redefined constants, memory) would carry over to the next mutation that
+  # worker takes, and which mutations share a worker depends on timing. Each
+  # one therefore gets a fresh worker forked from the clean parent.
+  def worker_max_items
+    @isolator.is_a?(Evilution::Isolation::InProcess) ? 1 : nil
   end
 end
