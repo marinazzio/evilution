@@ -144,6 +144,37 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       end
     end
 
+    # What loading a mutated file looks up on the heap is found once here, so
+    # no forked mutation process walks its copy of the parent's heap for it.
+    context "with an integration that has loading state to warm" do
+      let(:events) { [] }
+      let(:integration) do
+        recorded = events
+        Class.new do
+          define_method(:warm_loading) { recorded << :warm_loading }
+          define_method(:call) { |_m| { passed: false } }
+        end.new
+      end
+      let(:baseline_runner) do
+        instance_double(
+          Evilution::Runner::BaselineRunner,
+          build_integration: integration, neutralization_resolver: ->(_f) {}, neutralization_fallback_dir: "spec"
+        )
+      end
+
+      it "warms it once before the first mutation runs" do
+        isolator = instance_double(Evilution::Isolation::Fork)
+        allow(isolator).to receive(:call) do |mutation:, **|
+          events << :run
+          killed_result(mutation)
+        end
+
+        build(config(jobs: 1), isolator: isolator, baseline_runner: baseline_runner).call([mutation, mutation], nil)
+
+        expect(events).to eq(%i[warm_loading run run])
+      end
+    end
+
     it "runs an integration that has no targeting to warm" do
       execution = build(config(jobs: 1), isolator: instance_double(Evilution::Isolation::Fork).tap do |iso|
         allow(iso).to receive(:call) { |mutation:, **| killed_result(mutation) }

@@ -197,6 +197,24 @@ RSpec.describe Evilution::Integration::Loading::SupersededModules do
       end
     end
 
+    # The modules an evaluation creates are seen being created, not found by
+    # walking the heap before and after it, twice for every evaluation.
+    it "does not walk the heap" do
+      allow(ObjectSpace).to receive(:each_object).and_call_original
+
+      install(:first)
+      install(:second)
+
+      expect(ObjectSpace).to have_received(:each_object).exactly(0).times
+    end
+
+    it "leaves an instance of a Module subclass alone" do
+      evaluate("host.extend(Class.new(Module).new { def odd = :first })")
+      evaluate("nil")
+
+      expect(host.odd).to eq(:first)
+    end
+
     it "does not empty a module twice" do
       install(:first)
       install(:second)
