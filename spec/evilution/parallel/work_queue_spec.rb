@@ -112,6 +112,23 @@ RSpec.describe Evilution::Parallel::WorkQueue do
       end
     end
 
+    it "kills the workers instead of waiting for their items when on_result raises" do
+      queue = described_class.new(size: 2, item_timeout: 30)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      expect do
+        queue.map([0, 1, 2, 3], on_result: ->(index, _value) { raise "boom" if index.zero? }) do |n|
+          sleep(n.zero? ? 0 : 10)
+          n
+        end
+      end.to raise_error(RuntimeError, "boom")
+
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 5
+      queue.worker_stats.each do |stat|
+        expect { Process.wait(stat.pid) }.to raise_error(Errno::ECHILD)
+      end
+    end
+
     it "propagates exceptions raised by the user block" do
       queue = described_class.new(size: 2)
 

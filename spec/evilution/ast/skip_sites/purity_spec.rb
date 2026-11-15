@@ -4,8 +4,11 @@ require "spec_helper"
 require "evilution/ast/skip_sites/purity"
 
 RSpec.describe Evilution::AST::SkipSites::Purity do
+  # Parsed where these names are local variables; any other bare name is a
+  # method call.
   def expression(code)
-    Prism.parse(code).value.statements.body.first
+    locals = %i[a b c x y z n k record list opts error path items queue io enum counter sink]
+    Prism.parse(code, scopes: [locals]).value.statements.body.first
   end
 
   [
@@ -14,7 +17,7 @@ RSpec.describe Evilution::AST::SkipSites::Purity do
     "record.id", "record.name.inspect", "opts[:key]", 'format("%s", a)', 'sprintf("%s", a)', "list.join(', ')",
     "n.to_s(16)", "a == b", "a != b", "a - b", "a * b", "a / b", "a % b", "a ** b", "a < b", "a > b", "a <= b",
     "a >= b", "a <=> b", "!a", "-a", "defined?(Foo)", "(a)", "__FILE__", "__LINE__", "__ENCODING__", "$1", "$&",
-    "1..n"
+    "1..n", "error.message", "list.empty?", "~a", "+a", "path.basename", "name", "valid?"
   ].each do |code|
     it "treats #{code} as only reading" do
       expect(described_class.pure?(expression(code))).to be true
@@ -23,10 +26,21 @@ RSpec.describe Evilution::AST::SkipSites::Purity do
 
   [
     "queue.pop!", "record.name = 1", "save(record)", "items.map { |i| i }", "items.each(&:save)",
-    "@last = 1", "`ls`", "yield", "super", "->(x) { x }", "a.b(c)"
+    "@last = 1", "`ls`", "yield", "super", "->(x) { x }", "a.b(c)",
+    "queue.pop", "list.shift", "io.read", "enum.next", "counter.increment", "next_id",
+    'name("checkout")', "list.count { |i| i }", "list.any?(&:save)"
   ].each do |code|
     it "treats #{code} as possibly changing state" do
       expect(described_class.pure?(expression(code))).to be false
+    end
+  end
+
+  %w[
+    class name message full_message inspect to_s to_str to_sym to_i to_f to_a to_h id object_id hash size length
+    count first last keys values key value path basename dirname extname upcase downcase strip itself
+  ].each do |reader|
+    it "treats the reader record.#{reader} as only reading" do
+      expect(described_class.pure?(expression("record.#{reader}"))).to be true
     end
   end
 

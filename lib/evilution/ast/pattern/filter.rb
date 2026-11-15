@@ -24,13 +24,22 @@ class Evilution::AST::Pattern::Filter
   # the same change, which the run makes once, so an ignored mutation is
   # counted once per file and mutated source, however many of its nodes
   # match. Without one each skip counts.
-  def skip?(node, file_path: nil, source: nil, mutated_source: nil)
-    return false if @matchers.empty?
-    return false unless matches?(node) ||
-                        @ancestor_lookup.ancestors(node, file_path, source).any? { |ancestor| matches?(ancestor) }
+  #
+  # replacement: the code the mutation puts in; a pattern skips whatever it
+  # is, and it is taken only so this filter can stand in for SkipFilter.
+  def skip?(node, file_path: nil, source: nil, mutated_source: nil, replacement: nil)
+    return false unless match?(node, file_path: file_path, source: source)
 
     @skipped << (mutated_source ? skip_key(file_path, mutated_source) : Object.new)
     true
+  end
+
+  # Whether a pattern matches the node or an ancestor, as #skip? decides it,
+  # without counting a skip.
+  def match?(node, file_path: nil, source: nil)
+    return false if @matchers.empty?
+
+    matches?(node) || @ancestor_lookup.ancestors(node, file_path, source).any? { |ancestor| matches?(ancestor) }
   end
 
   # made: the mutations the run makes. One of them can be an ignored mutation

@@ -22,6 +22,32 @@ RSpec.describe Evilution::AST::SkipSites::Logging do
     expect(covered?("def f\n  logger.info(\"saved\")\n  1\nend\n", "logger.info(\"saved\")", Prism::CallNode)).to be true
   end
 
+  context "when the value of the log line is used" do
+    it "leaves the call and its receiver, whose value would change" do
+      source = "logger.info(\"a\") && x.save\nnil\n"
+
+      expect(covered?(source, "logger.info(\"a\")", Prism::CallNode)).to be false
+      expect(covered?(source, "logger", Prism::CallNode)).to be false
+      expect(covered?("ok = logger.info(\"m\")\nok\n", "logger.info(\"m\")", Prism::CallNode)).to be false
+    end
+
+    it "leaves the last statement of a method, whose value is returned" do
+      source = "def f\n  work\n  logger.info(\"done\")\nend\n"
+
+      expect(covered?(source, "logger.info(\"done\")", Prism::CallNode)).to be false
+    end
+
+    it "still covers the literal text of the message" do
+      expect(covered?("logger.info(\"a\") && x.save\nnil\n", "\"a\"", Prism::StringNode)).to be true
+    end
+  end
+
+  it "covers a log line guarded by a condition, as a statement followed by another" do
+    source = "def f\n  logger.info(\"x\") if verbose?\n  1\nend\n"
+
+    expect(covered?(source, "logger.info(\"x\")", Prism::CallNode)).to be true
+  end
+
   it "covers a message built in a block" do
     expect(covered?("logger.debug { \"saved \#{id}\" }\n", "id", Prism::CallNode)).to be true
   end
@@ -88,10 +114,10 @@ RSpec.describe Evilution::AST::SkipSites::Logging do
   end
 
   context "when the message calls a method that may change state" do
-    let(:source) { "logger.info(\"left: \#{queue.pop!}\")\n" }
+    let(:source) { "logger.info(\"left: \#{queue.pop}\")\n" }
 
     it "leaves the call" do
-      expect(covered?(source, "queue.pop!", Prism::CallNode)).to be false
+      expect(covered?(source, "queue.pop", Prism::CallNode)).to be false
     end
 
     it "leaves the log line as a whole, so deleting it is not skipped" do
@@ -104,9 +130,9 @@ RSpec.describe Evilution::AST::SkipSites::Logging do
   end
 
   it "covers a read-only argument next to one that may change state" do
-    source = "logger.add(level, \"x\", sink.flush!)\n"
+    source = "logger.add(@level, \"x\", sink.flush!)\n"
 
-    expect(covered?(source, "level", Prism::CallNode)).to be true
+    expect(covered?(source, "@level", Prism::InstanceVariableReadNode)).to be true
     expect(covered?(source, "sink.flush!", Prism::CallNode)).to be false
   end
 
@@ -116,6 +142,12 @@ RSpec.describe Evilution::AST::SkipSites::Logging do
 
   it "leaves the log line as a whole when one argument may change state and another only reads" do
     source = "logger.add(level, sink.flush!)\n"
+
+    expect(covered?(source, source.chomp, Prism::CallNode)).to be false
+  end
+
+  it "leaves the log line as a whole when an argument calls a method not known to only read" do
+    source = "logger.info(q.shift)\n"
 
     expect(covered?(source, source.chomp, Prism::CallNode)).to be false
   end

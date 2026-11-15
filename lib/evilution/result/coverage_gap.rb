@@ -25,6 +25,11 @@ class Evilution::Result::CoverageGap
     mutation_results.first.mutation.diff
   end
 
+  # The survivors a probe-first sentinel implied, which did not run.
+  def implied_results
+    mutation_results.select(&:implied_by)
+  end
+
   def count
     mutation_results.length
   end

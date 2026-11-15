@@ -75,7 +75,7 @@ class Evilution::Parallel::WorkQueue
 
     retired = []
     begin
-      run_result = dispatcher.run
+      run_result = run_dispatcher(dispatcher, workers)
       retired = run_result.retired
       raise dispatcher.first_error if dispatcher.first_error
 
@@ -92,6 +92,18 @@ class Evilution::Parallel::WorkQueue
 
   def spawn_one(worker_index, copies, &)
     Worker.spawn(worker_index: worker_index, hooks: @hooks, copies: copies, &)
+  end
+
+  # A worker's own failure comes back as first_error, not as a raise. When the
+  # dispatcher itself raises (on_result failing, an interrupt, a worker that
+  # could not be spawned), no one will take the results of the items in
+  # flight, so the workers are killed rather than shut down: a shutdown would
+  # wait for each to finish what it holds, up to the item timeout.
+  def run_dispatcher(dispatcher, workers)
+    dispatcher.run
+  rescue Exception # rubocop:disable Lint/RescueException
+    workers.each(&:kill)
+    raise
   end
 
   # The dispatcher retires (and reaps) a worker before asking for its

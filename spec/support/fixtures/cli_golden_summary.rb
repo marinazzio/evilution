@@ -20,7 +20,12 @@ module CliGoldenSummary
   CoverageGap = Struct.new(
     :file_path, :line, :subject_name, :single?, :primary_operator,
     :operator_names, :count, :mutation_results, :primary_diff
-  )
+  ) do
+    # It predates probe-first, so no survivor of it was implied.
+    def implied_results
+      []
+    end
+  end
   # rubocop:enable Lint/StructNewOverride
   Summary = Struct.new(
     :total, :killed, :survived, :timed_out, :neutral, :equivalent,
@@ -39,6 +44,11 @@ module CliGoldenSummary
       []
     end
 
+    # Every gap of the golden summary is a survivor's.
+    def survived_gaps
+      coverage_gaps
+    end
+
     # It predates mutations no test executes too, and has none of them.
     def uncovered
       0
@@ -52,6 +62,11 @@ module CliGoldenSummary
     # comment, so no preset is named.
     def skipped_sites
       {}
+    end
+
+    # Nor was any of its survivors implied by a probe-first sentinel.
+    def implied
+      0
     end
 
     def target_file_count

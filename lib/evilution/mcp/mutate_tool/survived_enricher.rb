@@ -4,19 +4,24 @@ require_relative "../mutate_tool"
 require_relative "../../runner"
 require_relative "../../spec_resolver"
 
+# Survived and uncovered entries alike: an uncovered mutation is a survivor no
+# test executes, and wants the same test written.
 module Evilution::MCP::MutateTool::SurvivedEnricher
-  def self.call(data, survived_results, config)
-    entries = data["survived"]
-    return unless entries.is_a?(Array)
+  def self.call(data, survived_results, config, uncovered_results: [])
+    buckets = { "survived" => survived_results, "uncovered" => uncovered_results }
+              .select { |key, _| data[key].is_a?(Array) }
+    return if buckets.empty?
 
     explicit_spec, resolver = build_resolver(config)
     cache = {}
 
-    entries.each_with_index do |entry, index|
-      result = survived_results[index]
-      next unless result
+    buckets.each do |key, results|
+      data[key].each_with_index do |entry, index|
+        result = results[index]
+        next unless result
 
-      enrich_entry(entry, result.mutation, explicit_spec, resolver, cache)
+        enrich_entry(entry, result.mutation, explicit_spec, resolver, cache)
+      end
     end
   end
 

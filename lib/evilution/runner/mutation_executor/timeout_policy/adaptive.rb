@@ -6,11 +6,17 @@ require_relative "base"
 # runs, kept between `floor` and `ceiling`.
 #
 # The baseline ran each spec file in a forked process of its own, so its time
-# already holds the fork and the loading of the file. The factor leaves room
-# for what the baseline did not see: a mutant that legitimately slows the code
-# down, the re-run of a survivor against its whole spec files, and workers
-# competing for the CPU under --jobs. The floor covers spec files so fast that
-# scheduling noise outweighs them.
+# holds the fork and the loading of the file, but none of the hooks a mutation
+# run fires (the policy is not used when those are configured). The factor
+# leaves room for the re-run of a survivor against its whole spec files and
+# for workers competing for the CPU under --jobs. The floor covers spec files
+# so fast that scheduling noise outweighs them.
+#
+# None of that bounds a mutant that slows the code down and still fails its
+# test: such a kill can come after any limit derived from the baseline. A
+# timeout under a limit shorter than the fallback is therefore confirmed by
+# running the mutation again under the fallback limit, so a timeout is only
+# reported where the fallback limit would have reported one too.
 #
 # A mutation keeps the fallback limit when the baseline cannot vouch for its
 # spec files: none resolve (the run would fall back to the whole suite, or
@@ -29,13 +35,25 @@ class Evilution::Runner::MutationExecutor::TimeoutPolicy::Adaptive < Evilution::
   end
 
   def call(mutation)
-    seconds = baseline_seconds(Array(@spec_selector.call(mutation.file_path)))
-    return @fallback.call(mutation) if seconds.nil?
+    adaptive_limit(mutation) || @fallback.call(mutation)
+  end
 
-    (seconds * @factor).clamp(@floor, @ceiling)
+  def confirmation_limit(mutation)
+    limit = adaptive_limit(mutation)
+    return nil if limit.nil?
+
+    fallback = @fallback.call(mutation)
+    fallback if fallback && limit < fallback
   end
 
   private
+
+  def adaptive_limit(mutation)
+    seconds = baseline_seconds(Array(@spec_selector.call(mutation.file_path)))
+    return nil if seconds.nil?
+
+    (seconds * @factor).clamp(@floor, @ceiling)
+  end
 
   def baseline_seconds(spec_files)
     return nil if spec_files.empty?

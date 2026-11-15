@@ -248,4 +248,90 @@ RSpec.describe Evilution::SpecAstCache do
       expect(total_blocks).to be <= 5
     end
   end
+
+  # Filling the cache ahead of a run is only worth it for entries that are
+  # still there when they are needed: an entry that pushed out an earlier one
+  # would cost the parse it was meant to save.
+  describe "#preload" do
+    let(:small_spec) do
+      <<~RUBY
+        RSpec.describe Foo do
+          it "x" do
+            true
+          end
+        end
+      RUBY
+    end
+
+    it "parses and keeps a file there is room for" do
+      path = write_spec(small_spec)
+
+      cache.preload(path)
+
+      expect(cache.cached?(path)).to be true
+    end
+
+    it "keeps the blocks fetch would return" do
+      path = write_spec(small_spec)
+
+      cache.preload(path)
+
+      expect(cache.fetch(path).map(&:kind)).to eq(%i[describe it])
+    end
+
+    it "does not parse a file it already holds" do
+      path = write_spec(small_spec)
+      cache.fetch(path)
+      expect(Prism).not_to receive(:parse)
+
+      cache.preload(path)
+    end
+
+    it "does not evict a file to make room once max_files are held" do
+      c = described_class.new(max_files: 2)
+      paths = 3.times.map { write_spec(small_spec) }
+
+      paths.each { |path| c.preload(path) }
+
+      expect(paths.map { |path| c.cached?(path) }).to eq([true, true, false])
+    end
+
+    it "does not parse a file once max_files are held" do
+      c = described_class.new(max_files: 1)
+      c.preload(write_spec(small_spec))
+      expect(Prism).not_to receive(:parse)
+
+      c.preload(write_spec(small_spec))
+    end
+
+    it "does not keep a file whose blocks would push out another" do
+      c = described_class.new(max_files: 100, max_blocks: 3)
+      paths = 2.times.map { write_spec(small_spec) }
+
+      paths.each { |path| c.preload(path) }
+
+      expect(paths.map { |path| c.cached?(path) }).to eq([true, false])
+    end
+
+    it "keeps a file whose blocks fill the cache exactly" do
+      c = described_class.new(max_files: 2, max_blocks: 4)
+      paths = 2.times.map { write_spec(small_spec) }
+
+      paths.each { |path| c.preload(path) }
+
+      expect(paths.map { |path| c.cached?(path) }).to eq([true, true])
+    end
+
+    it "does not parse a file once max_blocks are held" do
+      c = described_class.new(max_files: 100, max_blocks: 2)
+      c.preload(write_spec(small_spec))
+      expect(Prism).not_to receive(:parse)
+
+      c.preload(write_spec(small_spec))
+    end
+
+    it "raises the parse error fetch would" do
+      expect { cache.preload("no/such_spec.rb") }.to raise_error(Evilution::ParseError)
+    end
+  end
 end

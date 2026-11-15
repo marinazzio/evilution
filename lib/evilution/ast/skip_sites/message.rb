@@ -24,13 +24,15 @@ module Evilution::AST::SkipSites::Message
 
   # For a site whose call does nothing but report: a mutation outside every
   # part -- of the call itself, say, deleting it, or of its receiver -- is
-  # covered when every part only reads, since dropping the call then drops
-  # nothing but the report.
+  # covered when every part only reads and the call's value goes unused
+  # (see Nodes.value_dropped?), since dropping the call then drops nothing
+  # but the report.
   def covered_in_call(chain, site_index, parts)
     covered = covered_in(chain, site_index, parts)
     return covered unless covered.nil?
 
-    parts.all? { |part| Evilution::AST::SkipSites::Purity.pure?(part) }
+    Evilution::AST::SkipSites::Nodes.value_dropped?(chain, site_index) &&
+      parts.all? { |part| Evilution::AST::SkipSites::Purity.pure?(part) }
   end
 
   # The text of a string, or of a string between interpolations: a mutation

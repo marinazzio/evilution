@@ -161,9 +161,10 @@ class that owns it.
    that settles it, and its eval source is then the file's cached
    neutralization with the mutation spliced in (`Mutator::LoadSources`,
    `Integration::Loading::Neutralization#carry`); anything the def alone
-   cannot settle -- it does not parse alone, an endless def, an encoding
-   comment, a class-body call holding the def -- parses and neutralizes the
-   whole mutated file as before, so no verdict depends on the shortcut. A
+   cannot settle -- the original or the mutated def does not parse alone, an
+   endless def, an encoding comment, a class-body call holding the def --
+   parses and neutralizes the whole mutated file as before, so no verdict
+   depends on the shortcut. A
    mutation's `diff` hands Diff::LCS only the lines around the change
    (`Mutation::LineDiff`), with the same output as over the whole file. The
    planner then **deduplicates**
@@ -182,7 +183,8 @@ class that owns it.
    integration parses each source file and its resolved spec files once in the
    parent (`ExampleFilter#warm` fills `SourceAstCache` / `SpecAstCache`), so
    every forked child inherits the parses instead of repeating them and losing
-   them on exit.
+   them on exit. Warming stops where the bounded caches are full rather than
+   evicting what it warmed first; later files are parsed by their children.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
@@ -194,7 +196,10 @@ class that owns it.
    back through `Strategy::Parallel::OrderedDelivery`, which puts them in
    mutation order before the notifier (progress, `--fail-fast`) and the reports
    see them. On fail-fast the pool sends nothing more, lets the mutations in
-   flight finish and shuts its workers down.
+   flight finish and shuts its workers down; their results are not reported
+   but still go to the `--incremental` cache. Under in-process isolation each
+   worker runs a single mutation and is replaced, since the mutation runs in
+   the worker itself.
    Before either strategy runs a mutation, `MutationExecutor::RunlessVerdict`
    gives the verdicts that need no run: `:unparseable` for a mutated source that
    does not parse, and — with coverage targeting and `skip_uncovered` —
@@ -202,14 +207,22 @@ class that owns it.
    (`Integration::RSpec#uncovered?` → `CoverageExampleFilter#uncovered?` →
    `Coverage::Map#uncovered?`). The map knows the executable lines nothing ran
    (`missed_lines`) only for files the build vouches for: every example of the
-   spec files ran, and the file loaded while lines were counted — the runner
-   counts from before the preload (`Coverage::LoadTracker`) and `MapBuilder`
-   hands the parent's counts to its forked child, whose own start at zero.
-   These results are never cached and are scored as survivors.
+   spec files ran, none forked (a forked process counts apart), and the file
+   loaded while lines were counted — under fork isolation the runner counts
+   from before the preload (`Coverage::LoadTracker`) and `MapBuilder` hands the
+   parent's counts to its forked child, whose own start at zero. Every other
+   child forked to run tests (`ProcessSupervisor#spawn`, the baseline) stops
+   that counting first (`LoadTracker.release_inherited`), so a spec helper can
+   start coverage itself. A mutation that adds or removes a local variable
+   assignment runs regardless (`AST::LocalDeclaration`). The cached map
+   (`Coverage::MapStore`) is keyed on every project file the build loaded and
+   every file under the spec directories as well as on the targets, specs and
+   helpers. These results are never cached and are scored as survivors.
    With `probe_first`, `MutationExecutor::ProbeFirstRun` runs the batch in two:
    first each subject's sentinel (`method_body_to_raise` at the subject's
-   line, see `MutationExecutor::ProbeFirst`), then the rest, each batch through
-   the same strategy and one notifier. A sentinel that survived (or is
+   line, see `MutationExecutor::ProbeFirst`; none for a method with its own
+   `rescue` or `ensure`, which can swallow the raise), then the rest, each
+   batch through the same strategy and one notifier. A sentinel that survived (or is
    uncovered) makes `RunlessVerdict` report the subject's other mutations
    `:survived` with `implied_by` set, without a run; they are not cached either.
    Each mutation also goes to the integration with the tests that killed its
@@ -221,17 +234,28 @@ class that owns it.
    (`WorkQueue#map(on_arrival:)`), ahead of the ordered delivery. The RSpec
    integration (`Integration::RSpec::KillerFirst` / `ExampleOrder`) runs those
    killers first, then the cheapest examples by their baseline time
-   (`Baseline::Result#example_durations`), when the run stops at its first kill;
-   it sends back the killing example's id (`killing_test`) and the number of
-   examples that ran (`examples_run`).
+   (`Baseline::Result#example_durations`), when the run stops at its first kill
+   and `killer_first` is set (off by default: a suite whose examples depend on
+   their defined order would report kills that order does not produce); it
+   sends back the killing example's id (`killing_test`) and the number of
+   examples that ran (`examples_run`) either way. A reordered run that times
+   out is run again in the defined order (`MutationExecutor::IsolatedRun`, via
+   `Integration::Base#reorders?` / `#in_defined_order`), and that run decides.
+   `MutationExecutor::TimedRun` runs an `IsolatedRun` under each limit: under
+   the adaptive limit first, then, when that times out in the defined order
+   too, under the fixed one, so a mutation that times out every way is judged
+   by a run in the defined order under the fixed limit.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation
    (`Integration::Loading::MutationApplier`), and runs `Integration::Base#call` →
    `run_tests`. The child's result is marshaled back over a length-prefixed pipe.
    After reading it the parent waits on that pipe for the child to close it,
-   in slices bounded by `REAP_DEADLINE`, and reaps the child as soon as it has
-   exited; a reaped child is never signalled again (its pid may be reused).
+   then polls for the child's exit with a short backoff (1 ms doubling up to
+   50 ms), all bounded by `REAP_DEADLINE`. A reaped child's pid is never
+   signalled or waited on again (it may be reused), but its process group is
+   still sent one TERM, so grandchildren the tests left behind do not outlive
+   the mutation.
    A fork child does not evaluate the original file again after its tests
    (`Evilution.single_mutation_process?`): it exits right after reporting.
    `Isolation::InProcess` is the lighter path for plain-Ruby projects.

@@ -23,6 +23,9 @@ require_relative "syntax_check"
 # - a def whose line holds anything but names before it (`private def`),
 #   which could open a heredoc whose body runs through the def;
 # - a file that names its encoding, which changes what its strings may hold;
+# - an original def that does not parse alone, such as one opening a heredoc
+#   whose body comes after its `end`: a mutation can drop the opener and
+#   parse alone while the body left behind breaks the file;
 # - a mutation that reaches outside the def.
 class Evilution::AST::DefRegion
   # node: the mutated def; source: the text it was parsed from, the def's
@@ -47,13 +50,10 @@ class Evilution::AST::DefRegion
     return unless covers?(offset, length) && checkable?
 
     text = mutated_text(offset, length, replacement)
-    result = Prism.parse(text)
-    return unless result.success?
+    node = lone_def(text)
+    return unless node
 
-    statements = result.value.statements.body
-    return unless statements.length == 1 && whole_def?(statements.first, text)
-
-    Region.new(node: statements.first, source: text, span: @node.start_offset..@node.end_offset,
+    Region.new(node: node, source: text, span: @node.start_offset..@node.end_offset,
                offset: offset, length: length, replacement: replacement)
   end
 
@@ -66,7 +66,18 @@ class Evilution::AST::DefRegion
   def checkable?
     return @checkable if defined?(@checkable)
 
-    @checkable = closed_def?(@node) && in_place? && names_before? && !names_encoding?
+    @checkable = closed_def?(@node) && in_place? && names_before? && !names_encoding? &&
+                 !lone_def(mutated_text(@node.start_offset, 0, "")).nil?
+  end
+
+  # The def that text holds as its one statement, spanning all of it; nil
+  # when text does not parse or holds anything else.
+  def lone_def(text)
+    result = Prism.parse(text)
+    return unless result.success?
+
+    statements = result.value.statements.body
+    statements.first if statements.length == 1 && whole_def?(statements.first, text)
   end
 
   def closed_def?(node)

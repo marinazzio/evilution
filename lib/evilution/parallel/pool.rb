@@ -4,9 +4,15 @@ require_relative "../parallel"
 require_relative "work_queue"
 
 class Evilution::Parallel::Pool
-  def initialize(size:, hooks: nil, item_timeout: nil, copy_worker_databases: false)
-    @queue = Evilution::Parallel::WorkQueue.new(size: size, hooks: hooks, item_timeout: item_timeout,
-                                                copy_worker_databases: copy_worker_databases)
+  # `worker_max_items` is how many items a worker runs before it is replaced by
+  # a fresh one; nil keeps every worker for the whole run.
+  # `copy_worker_databases` gives each worker its own copy of the preloaded
+  # SQLite test database (see WorkQueue).
+  def initialize(size:, hooks: nil, item_timeout: nil, worker_max_items: nil, copy_worker_databases: false)
+    @queue = Evilution::Parallel::WorkQueue.new(
+      size: size, hooks: hooks, item_timeout: item_timeout, worker_max_items: worker_max_items,
+      copy_worker_databases: copy_worker_databases
+    )
   end
 
   def map(items, on_result: nil, on_arrival: nil, &)

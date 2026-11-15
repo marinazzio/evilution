@@ -20,8 +20,11 @@ require_relative "message"
 # literal text of the message, or anything inside an argument (or the block)
 # that only reads. A mutation of the call itself, its receiver, or code
 # between the two -- deleting the line, say -- is skipped when every
-# argument only reads; were one to change state (`logger.info(queue.pop!)`),
-# deleting the line would change more than the log.
+# argument only reads and the call's value goes unused (see
+# Nodes.value_dropped?); were an argument to change state
+# (`logger.info(queue.pop)`), deleting the line would change more than the
+# log, and were the value used (`logger.info(msg) && save`), so would
+# replacing the call.
 class Evilution::AST::SkipSites::Logging
   LEVELS = %i[debug info warn error fatal unknown add log].freeze
   DEPRECATION_WARNINGS = %i[warn deprecation_warning].freeze

@@ -5,7 +5,7 @@ require_relative "../../result/mutation_result"
 require_relative "probe_first"
 
 # The verdict a mutation gets without a test run, when one can be given:
-# its mutated source does not parse, no test executes a line it sits on
+# its mutated source does not parse, no test executes any line it changes
 # (asked of `coverage`, an integration backed by a coverage map), or its
 # subject's sentinel survived (asked of `probe`, see ProbeFirst), which
 # implies it survives too. nil for every other mutation, which runs.

@@ -1011,7 +1011,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       runner.call
@@ -1032,7 +1033,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       empty_runner.call
@@ -1895,7 +1897,7 @@ RSpec.describe Evilution::Runner do
 
     it "returns all results when using parallel execution" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10,
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
                                                              copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
@@ -1944,7 +1946,7 @@ RSpec.describe Evilution::Runner do
 
     it "uses Parallel::Pool when jobs > 1" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10,
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
                                                              copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
@@ -1956,12 +1958,13 @@ RSpec.describe Evilution::Runner do
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
 
-      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10, copy_worker_databases: true)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                                    copy_worker_databases: true)
     end
 
     it "strips source strings from mutations in parallel path" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10,
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
                                                              copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
@@ -1979,7 +1982,7 @@ RSpec.describe Evilution::Runner do
 
     it "sends compact hashes through the pool instead of full MutationResults" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10,
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
                                                              copy_worker_databases: true).and_return(pool)
 
       captured_block = nil
@@ -2837,7 +2840,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       hooked_runner = described_class.new(
@@ -2888,7 +2892,7 @@ RSpec.describe Evilution::Runner do
       allow(pool).to receive(:map) { |_items, on_result: nil, **| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
-      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks, item_timeout: 10,
+      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks, item_timeout: 10, worker_max_items: nil,
                                                               copy_worker_databases: true).and_return(pool)
 
       parallel_config = Evilution::Config.new(
@@ -2987,30 +2991,48 @@ RSpec.describe Evilution::Runner do
 
       # The coverage map is built in a child forked after the preload; it needs
       # the preloaded files counted, and what ran while they loaded.
-      it "counts the lines the preload runs when coverage targeting is on, and pauses after" do
-        resolver = instance_double(Evilution::Runner::IsolationResolver)
+      # The resolver yields just before it requires the preload file.
+      define_method(:stub_preloading_resolver) do |order, fork_isolation|
+        resolver = instance_double(Evilution::Runner::IsolationResolver, fork_isolation?: fork_isolation)
         allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
-        order = []
-        allow(resolver).to receive(:perform_preload) { order << :preload }
+        allow(resolver).to receive(:perform_preload) do |&before_load|
+          before_load.call
+          order << :preload
+        end
+      end
+
+      define_method(:stub_tracker) do |order|
         tracker = instance_double(Evilution::Coverage::LoadTracker)
         allow(tracker).to receive(:start) { order << :start }
         allow(tracker).to receive(:pause) { order << :pause }
         allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
-        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+      end
+
+      define_method(:preload_with) do |cfg, fork_isolation: true|
+        order = []
+        stub_preloading_resolver(order, fork_isolation)
+        stub_tracker(order)
 
         described_class.new(config: cfg).send(:perform_preload)
+        order
+      end
 
-        expect(order).to eq(%i[start preload pause])
+      it "counts the lines the preload runs when coverage targeting is on, and pauses after" do
+        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+
+        expect(preload_with(cfg)).to eq(%i[start preload pause])
       end
 
       it "counts nothing without coverage targeting" do
-        resolver = instance_double(Evilution::Runner::IsolationResolver, perform_preload: nil)
-        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
-        tracker = instance_double(Evilution::Coverage::LoadTracker, pause: nil)
-        allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
-        expect(tracker).not_to receive(:start)
+        expect(preload_with(Evilution::Config.new(skip_config_file: true, quiet: true))).to eq(%i[preload pause])
+      end
 
-        described_class.new(config: Evilution::Config.new(skip_config_file: true, quiet: true)).send(:perform_preload)
+      # The counting is handed back in every forked child that runs tests; a
+      # test run in this process would find it paused and could not start it.
+      it "counts nothing when the tests run in this process" do
+        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+
+        expect(preload_with(cfg, fork_isolation: false)).to eq(%i[preload pause])
       end
     end
 
