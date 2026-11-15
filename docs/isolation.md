@@ -146,12 +146,14 @@ classes, and only the methods written in that file.
 
 To see those modules being created without walking the heap (which touches
 every object in the process, twice per evaluation), an `in_process` run
-prepends a hook to `Module#initialize` the first time it evaluates a file. It
+prepends a hook to `Module#initialize` and `Module#initialize_copy` (for
+copies made with `dup` or `clone`) the first time it evaluates a file. It
 records nothing outside an evaluation. Likewise, a run that loads
 `ActiveSupport::Concern` modules prepends a hook to the concern module's
 `extended`, so the concerns it must clear before each evaluation are listed
-as they are defined; the heap is walked once per run, in the parent, for the
-ones that already existed.
+as they are defined. The heap is walked once per process for the ones that
+already existed: in the parent when ActiveSupport is already loaded there
+(by a preload, for instance), otherwise once in each mutation process.
 
 Other things a file can add to at load time are not undone: an `at_exit`
 hook, a `Signal.trap`, a `TracePoint`, a callback pushed into a registry of
