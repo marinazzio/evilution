@@ -146,4 +146,76 @@ RSpec.describe Evilution::SourceAstCache do
       expect { Timeout.timeout(1) { c.fetch("a = 1\n") } }.not_to raise_error
     end
   end
+
+  # Filling the cache ahead of a run is only worth it for entries that are
+  # still there when they are needed.
+  describe "#preload" do
+    def counting_parses
+      count = 0
+      original = Prism.method(:parse)
+      allow(Prism).to receive(:parse) do |arg|
+        count += 1
+        original.call(arg)
+      end
+      -> { count }
+    end
+
+    it "keeps a source there is room for, so fetch does not parse it again" do
+      cache.preload("a = 1\n")
+      parses = counting_parses
+
+      expect(cache.fetch("a = 1\n").failure?).to be false
+      expect(parses.call).to eq(0)
+    end
+
+    it "does not parse a source it already holds" do
+      cache.fetch("a = 1\n")
+      parses = counting_parses
+
+      cache.preload("a = 1\n")
+
+      expect(parses.call).to eq(0)
+    end
+
+    it "neither parses nor evicts once max_entries are held" do
+      c = described_class.new(max_entries: 1)
+      c.preload("a = 1\n")
+      parses = counting_parses
+
+      c.preload("b = 2\n")
+      c.fetch("a = 1\n")
+
+      expect(parses.call).to eq(0)
+    end
+
+    it "fills the cache up to max_entries" do
+      c = described_class.new(max_entries: 2)
+      c.preload("a = 1\n")
+      c.preload("b = 2\n")
+      parses = counting_parses
+
+      c.fetch("a = 1\n")
+      c.fetch("b = 2\n")
+
+      expect(parses.call).to eq(0)
+    end
+
+    it "does nothing when the cache keeps no entries" do
+      c = described_class.new(max_entries: 0)
+      parses = counting_parses
+
+      c.preload("a = 1\n")
+
+      expect(parses.call).to eq(0)
+    end
+
+    it "does nothing for a negative max_entries" do
+      c = described_class.new(max_entries: -1)
+      parses = counting_parses
+
+      c.preload("a = 1\n")
+
+      expect(parses.call).to eq(0)
+    end
+  end
 end

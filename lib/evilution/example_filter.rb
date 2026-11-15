@@ -33,20 +33,22 @@ class Evilution::ExampleFilter
 
   # Parses what #call would for this mutation and spec files, so the caches
   # hold it before any per-mutation process is forked: a forked child keeps
-  # what its parent cached, and loses what it adds itself. A file that does
-  # not parse is left for #call to report when a mutation needs it.
+  # what its parent cached, and loses what it adds itself. Only what the
+  # bounded caches hold without evicting is parsed; the rest is left for the
+  # child that needs it. A file that does not parse is left for #call to
+  # report when a mutation needs it.
   def warm(mutation, spec_paths)
     source = mutation.original_source
     return if source.nil?
 
-    @source_cache.fetch(source) unless @source_cache.nil?
+    @source_cache.preload(source) unless @source_cache.nil?
     spec_paths.each { |path| warm_spec(path) }
   end
 
   private
 
   def warm_spec(path)
-    @cache.fetch(path)
+    @cache.preload(path)
   rescue Evilution::ParseError
     nil
   end
