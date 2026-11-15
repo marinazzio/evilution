@@ -3,6 +3,7 @@
 require_relative "spec_resolver"
 require_relative "process_cleanup"
 require_relative "diagnostic"
+require_relative "coverage/load_tracker"
 
 class Evilution::Baseline
   # spec_file_durations: seconds each spec file took, in the order they ran.
@@ -83,6 +84,8 @@ class Evilution::Baseline
     runner = @runner
     Process.fork do
       read_io.close
+      # The spec file may start line coverage itself (see LoadTracker).
+      Evilution::Coverage::LoadTracker.release_inherited
       $stdout.reopen(File::NULL, "w")
       $stderr.reopen(File::NULL, "w")
 

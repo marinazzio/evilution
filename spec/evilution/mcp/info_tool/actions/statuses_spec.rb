@@ -13,7 +13,7 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Statuses do
     it "returns the full glossary under 'statuses'" do
       body = parse_body(described_class.call)
       expect(body["statuses"].map { |s| s["status"] }).to match_array(
-        %w[killed survived timeout error neutral equivalent unresolved unparseable]
+        %w[killed survived timeout error neutral equivalent unresolved unparseable uncovered]
       )
     end
 

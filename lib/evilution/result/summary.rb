@@ -135,6 +135,12 @@ class Evilution::Result::Summary
     results.count(&:unparseable?)
   end
 
+  def uncovered
+    results.count(&:uncovered?)
+  end
+
+  # An uncovered mutation stays in: it is untested code, scored as the
+  # survivor running it would have produced.
   def score_denominator
     total - errors - neutral - equivalent - unresolved - unparseable
   end
@@ -178,7 +184,19 @@ class Evilution::Result::Summary
     results.select(&:unparseable?)
   end
 
+  def uncovered_results
+    results.select(&:uncovered?)
+  end
+
+  # The survivors, and the mutations no test executes: survivors that were
+  # not run.
   def coverage_gaps
+    Evilution::Result::CoverageGapGrouper.new.call(survived_results + uncovered_results)
+  end
+
+  # The survivors' gaps alone, for a report that lists the uncovered
+  # mutations apart.
+  def survived_gaps
     Evilution::Result::CoverageGapGrouper.new.call(survived_results)
   end
 
@@ -199,14 +217,7 @@ class Evilution::Result::Summary
   end
 
   def peak_memory_mb
-    max_rss = nil
-    results.each do |result|
-      kb = result.child_rss_kb
-      next unless kb
-
-      max_rss = kb if max_rss.nil? || kb > max_rss
-    end
-
+    max_rss = results.filter_map(&:child_rss_kb).max
     max_rss && (max_rss / 1024.0)
   end
 

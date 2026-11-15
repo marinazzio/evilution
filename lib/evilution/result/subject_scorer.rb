@@ -8,9 +8,10 @@ require_relative "subject_score"
 # Same denominator as the run's own score: statuses that carry no verdict
 # (unresolved, neutral, equivalent, errored, unparseable) are left out of it, so
 # a subject those account for entirely reports as unreached rather than as a
-# perfect score over nothing.
+# perfect score over nothing. An uncovered mutation stays in, as the survivor
+# it would have been.
 class Evilution::Result::SubjectScorer
-  VERDICT_STATUSES = %i[killed survived timeout].freeze
+  VERDICT_STATUSES = %i[killed survived timeout uncovered].freeze
   private_constant :VERDICT_STATUSES
 
   def call(results)
@@ -32,7 +33,8 @@ class Evilution::Result::SubjectScorer
       total: results.length,
       killed: results.count(&:killed?),
       verified: verdicts,
-      survived: results.count(&:survived?)
+      survived: results.count(&:survived?),
+      uncovered: results.count(&:uncovered?)
     )
   end
 end

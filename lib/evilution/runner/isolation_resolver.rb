@@ -39,15 +39,20 @@ class Evilution::Runner::IsolationResolver
     @rails_root_detected = !detected_rails_root.nil?
   end
 
-  def perform_preload
-    return if config.preload == false
-    return unless should_preload?
+  # Whether the tests run in children forked from this process.
+  def fork_isolation?
+    resolve_isolation == :fork
+  end
 
-    path = resolve_preload_path
+  # Yields just before the preload file is required, and only when there is
+  # one, so a caller can count what the preload runs.
+  def perform_preload
+    path = preload_path
     return unless path
 
     prepare_load_path_for_preload(path)
     prepare_integration_for_preload
+    yield if block_given?
     require File.expand_path(path)
     warm_up_rails
   rescue Evilution::ConfigError
@@ -62,6 +67,13 @@ class Evilution::Runner::IsolationResolver
   private
 
   attr_reader :config, :hooks
+
+  def preload_path
+    return nil if config.preload == false
+    return nil unless should_preload?
+
+    resolve_preload_path
+  end
 
   # Runs only after a preload (which is what loads Rails). This is primarily an
   # optimisation for :fork isolation, where children inherit the warmed state.

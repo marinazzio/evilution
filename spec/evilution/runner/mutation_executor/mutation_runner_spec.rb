@@ -6,6 +6,7 @@ require "evilution/result/mutation_result"
 require "evilution/runner/mutation_executor/result_cache"
 require "evilution/runner/mutation_executor/mutation_runner"
 require "evilution/runner/mutation_executor/timeout_policy"
+require "evilution/runner/mutation_executor/runless_verdict"
 
 RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
   let(:fixed_policy) { Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(30) }
@@ -34,6 +35,18 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
     runner = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy)
     out = runner.call(mut, integration: ->(_) { "cmd" })
     expect(out.status).to eq(:unparseable)
+  end
+
+  it "returns the runless verdict it is given, without the cache or the isolator" do
+    mut = mutation
+    isolator = double(:isolator)
+    expect(isolator).not_to receive(:call)
+    backend = double("Cache")
+    expect(backend).not_to receive(:fetch)
+    runless = Evilution::Runner::MutationExecutor::RunlessVerdict.new(coverage: double(uncovered?: true))
+
+    runner = described_class.new(cache: cache_with(backend), isolator: isolator, timeout_policy: fixed_policy, runless: runless)
+    expect(runner.call(mut, integration: ->(_) { "cmd" }).status).to eq(:uncovered)
   end
 
   it "returns the cached result without calling isolator when cache hit" do

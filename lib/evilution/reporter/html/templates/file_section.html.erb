@@ -1,10 +1,11 @@
 <section class="file-section">
   <h2 class="file-header">
     <span class="file-path"><%= h(@path) %></span>
-    <span class="file-stats"><%= killed_count %> killed / <%= survived_count %> survived / <%= total %> total</span>
+    <span class="file-stats"><%= killed_count %> killed / <%= survived_count %> survived / <%- if uncovered_count.positive? -%><%= uncovered_count %> uncovered / <%- end -%><%= total %> total</span>
   </h2>
   <div class="mutation-map"><%= map_html %></div>
   <%= survived_html %>
+  <%= uncovered_html %>
   <%= error_html %>
   <%= neutral_html %>
   <%= unresolved_html %>

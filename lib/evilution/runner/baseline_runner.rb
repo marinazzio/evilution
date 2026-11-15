@@ -8,6 +8,7 @@ require_relative "../integration/minitest"
 require_relative "../coverage_example_filter"
 require_relative "../coverage/map_store"
 require_relative "../coverage/map_builder"
+require_relative "../cache/run_fingerprint"
 require_relative "../integration/test_unit"
 require_relative "../example_filter"
 require_relative "../spec_ast_cache"
@@ -136,13 +137,49 @@ class Evilution::Runner::BaselineRunner
     specs = resolved_spec_files
     return nil if specs.empty? # nothing resolves -> no coverage to capture, lexical handles it
 
+    load_or_build_coverage_map(targets, specs)
+  end
+
+  def load_or_build_coverage_map(targets, specs)
     store = Evilution::Coverage::MapStore.new
-    cache_inputs = targets + specs
+    cache_inputs = (targets + specs + coverage_helper_files + spec_tree_files(specs)).uniq
     return store.load(targets) if store.stale_files(cache_inputs).empty?
 
     map = Evilution::Coverage::MapBuilder.new(spec_files: specs, target_files: targets).call
     store.save(map, cache_inputs)
     map
+  end
+
+  # What every spec file loads (the same helpers the incremental cache keys
+  # on): a support file that starts or stops calling the code changes which
+  # lines run, and the map says which lines no example executes.
+  def coverage_helper_files
+    paths = Evilution::Cache::RunFingerprint::HELPERS + Array(config.preload).map(&:to_s)
+    paths.flat_map { |path| helper_files_at(File.expand_path(path, Evilution::PROJECT_ROOT)) }.uniq
+  end
+
+  # Every file under the directories the spec files sit in (spec/, test/):
+  # shared examples, factories and fixtures data can change which lines run,
+  # and not all of them are loaded as Ruby files the build would record.
+  def spec_tree_files(specs)
+    roots = specs.filter_map { |spec| spec_root(spec) }.uniq
+    roots.flat_map { |root| Dir.glob(File.join(root, "**", "*")).select { |path| File.file?(path) } }
+  end
+
+  # The top directory of the project a spec file sits under; nil for one
+  # outside the project or at its top.
+  def spec_root(spec)
+    relative = spec.delete_prefix("#{Evilution::PROJECT_ROOT}/")
+    top, rest = relative.split("/", 2)
+    return nil if relative == spec || rest.nil?
+
+    File.join(Evilution::PROJECT_ROOT, top)
+  end
+
+  def helper_files_at(path)
+    return Dir.glob(File.join(path, "**", "*.rb")) if File.directory?(path)
+
+    File.file?(path) ? [path] : []
   end
 
   # The RESOLVED spec files for the target sources -- the same lib-mirrored specs

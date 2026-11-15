@@ -25,6 +25,17 @@ RSpec.describe Evilution::Compare::Categorizer do
       expect(result[:shared_dead]).to be_empty
     end
 
+    # Uncovered is a survivor that was not run: still alive.
+    it "treats an uncovered mutation as alive" do
+      against = [record(fp: "fp1", status: :survived)]
+      current = [record(fp: "fp1", status: :uncovered)]
+
+      result = described_class.call(against, current)
+
+      expect(result[:shared_alive].size).to eq(1)
+      expect(result[:excluded_current]).to eq(0)
+    end
+
     it "collapses all dead statuses into shared_dead" do
       against = [record(fp: "fp1", status: :killed)]
       current = [record(fp: "fp1", status: :timeout)]

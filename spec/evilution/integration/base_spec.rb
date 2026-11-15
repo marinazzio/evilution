@@ -34,6 +34,13 @@ RSpec.describe Evilution::Integration::Base do
     end
   end
 
+  # Only an integration that can tell which lines no test executes answers yes.
+  describe "#uncovered?" do
+    it "is false by default" do
+      expect(described_class.new.uncovered?(mutation)).to be(false)
+    end
+  end
+
   describe "#warm_loading" do
     it "warms the mutation applier" do
       applier = instance_double(Evilution::Integration::Loading::MutationApplier, warm: nil)

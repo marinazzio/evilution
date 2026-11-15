@@ -39,6 +39,20 @@ module CliGoldenSummary
       []
     end
 
+    # Every gap of the golden summary is a survivor's.
+    def survived_gaps
+      coverage_gaps
+    end
+
+    # It predates mutations no test executes too, and has none of them.
+    def uncovered
+      0
+    end
+
+    def uncovered_results
+      []
+    end
+
     def target_file_count
       nil
     end

@@ -113,6 +113,15 @@ RSpec.describe Evilution::Session::Store do
       expect(data["equivalent_count"]).to eq(1)
     end
 
+    it "keeps the mutations no test executes, apart from the survivors" do
+      uncovered = build_result(build_mutation(line: 12), status: :uncovered)
+      store.save(build_summary(results: [uncovered]))
+
+      data = read_saved_session
+      expect([data["uncovered_count"], data["summary"]["uncovered"], data["survived"]]).to eq([1, 1, []])
+      expect(data["uncovered"].first).to include("line" => 12, "subject" => "Foo#bar")
+    end
+
     it "includes survived mutation details with subject and diff" do
       mutation = build_mutation(operator: "comparison_replacement", file: "lib/bar.rb", line: 10)
       result = build_result(mutation, status: :survived)

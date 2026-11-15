@@ -9,7 +9,14 @@ require_relative "../result"
 # the number ever describes (EV-nlx1 / GH #1605). Per subject the picture
 # separates: a method whose mutations were never reached scores nothing and says
 # so, instead of disappearing into the file's total.
-Evilution::Result::SubjectScore = Data.define(:name, :file_path, :total, :killed, :verified, :survived) do
+#
+# uncovered: the mutations no test executes, counted in verified as the
+# survivors they would have been.
+Evilution::Result::SubjectScore = Data.define(:name, :file_path, :total, :killed, :verified, :survived, :uncovered) do
+  def initialize(name:, file_path:, total:, killed:, verified:, survived:, uncovered: 0)
+    super
+  end
+
   # Killed over what actually got a verdict, the same denominator the run uses.
   def score
     return 0.0 if verified.zero?

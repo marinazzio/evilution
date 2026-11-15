@@ -478,6 +478,35 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#skip_uncovered?" do
+      it "is true when coverage targeting is on" do
+        config = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true)
+        expect(config.skip_uncovered?).to be true
+      end
+
+      it "is false without coverage targeting, which has no coverage map to tell" do
+        expect(Evilution::Config.new(skip_config_file: true).skip_uncovered?).to be false
+        config = Evilution::Config.new(example_targeting: false, example_targeting_strategy: :coverage,
+                                       skip_config_file: true)
+        expect(config.skip_uncovered?).to be false
+      end
+
+      it "is false when skip_uncovered: false is given" do
+        config = Evilution::Config.new(example_targeting_strategy: :coverage, skip_uncovered: false,
+                                       skip_config_file: true)
+        expect(config.skip_uncovered?).to be false
+      end
+
+      it "loads skip_uncovered from a strict YAML config" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nexample_targeting_strategy: coverage\nskip_uncovered: false\n")
+            expect(Evilution::Config.new.skip_uncovered?).to be false
+          end
+        end
+      end
+    end
+
     describe "#stop_on_kill?" do
       it "defaults to true" do
         expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true

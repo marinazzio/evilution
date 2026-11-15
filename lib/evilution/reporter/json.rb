@@ -9,7 +9,8 @@ require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
   def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new, timings: Timings.new)
-    @suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
+    suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
+    @mutation_detail = MutationDetail.new(suggestion: suggestion, timings: timings)
     @subjects = subjects
     @baseline = baseline
     @timings = timings
@@ -47,7 +48,8 @@ class Evilution::Reporter::JSON
       neutral: map_details(summary.neutral_results),
       equivalent: map_details(summary.equivalent_results),
       unresolved: map_details(summary.unresolved_results),
-      unparseable: map_details(summary.unparseable_results)
+      unparseable: map_details(summary.unparseable_results),
+      uncovered: map_details(summary.uncovered_results)
     }
   end
 
@@ -84,7 +86,8 @@ class Evilution::Reporter::JSON
       neutral: summary.neutral,
       equivalent: summary.equivalent,
       unresolved: summary.unresolved,
-      unparseable: summary.unparseable
+      unparseable: summary.unparseable,
+      uncovered: summary.uncovered
     }
   end
 
@@ -117,52 +120,7 @@ class Evilution::Reporter::JSON
   end
 
   def build_mutation_detail(result)
-    mutation = result.mutation
-    detail = base_mutation_fields(mutation, result)
-    append_survived_fields(detail, mutation) if result.status == :survived
-    detail[:test_command] = result.test_command if result.test_command
-    append_memory_fields(detail, result)
-    append_error_fields(detail, result)
-    append_neutral_reason(detail, result)
-    detail.merge!(@timings.mutation_fields(result))
-  end
-
-  # Why a neutral was recorded — a red baseline and an infrastructure crash want
-  # opposite responses, and both land in the same bucket (EV-5pob / GH #1606).
-  def append_neutral_reason(detail, result)
-    reason = result.neutral_reason
-    return unless reason
-
-    detail[:neutral_reason] = { kind: reason.kind.to_s, detail: reason.detail }
-  end
-
-  def base_mutation_fields(mutation, result)
-    {
-      operator: mutation.operator_name,
-      file: mutation.file_path,
-      line: mutation.line,
-      status: result.status.to_s,
-      duration: result.duration.round(4),
-      diff: mutation.diff
-    }
-  end
-
-  def append_survived_fields(detail, mutation)
-    detail[:suggestion] = @suggestion.suggestion_for(mutation)
-    unified = mutation.unified_diff
-    detail[:unified_diff] = unified if unified
-  end
-
-  def append_memory_fields(detail, result)
-    detail[:parent_rss_kb] = result.parent_rss_kb if result.parent_rss_kb
-    detail[:child_rss_kb] = result.child_rss_kb if result.child_rss_kb
-    detail[:memory_delta_kb] = result.memory_delta_kb if result.memory_delta_kb
-  end
-
-  def append_error_fields(detail, result)
-    detail[:error_message] = result.error_message if result.error_message
-    detail[:error_class] = result.error_class if result.error_class
-    detail[:error_backtrace] = result.error_backtrace if result.error_backtrace
+    @mutation_detail.call(result)
   end
 
   def build_coverage_gaps(summary)
@@ -191,3 +149,4 @@ end
 require_relative "json/subjects"
 require_relative "json/baseline"
 require_relative "json/timings"
+require_relative "json/mutation_detail"

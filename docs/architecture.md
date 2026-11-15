@@ -196,6 +196,24 @@ class that owns it.
    but still go to the `--incremental` cache. Under in-process isolation each
    worker runs a single mutation and is replaced, since the mutation runs in
    the worker itself.
+   Before either strategy runs a mutation, `MutationExecutor::RunlessVerdict`
+   gives the verdicts that need no run: `:unparseable` for a mutated source that
+   does not parse, and — with coverage targeting and `skip_uncovered` —
+   `:uncovered` for a mutation whose changed lines no example executes
+   (`Integration::RSpec#uncovered?` → `CoverageExampleFilter#uncovered?` →
+   `Coverage::Map#uncovered?`). The map knows the executable lines nothing ran
+   (`missed_lines`) only for files the build vouches for: every example of the
+   spec files ran, none forked (a forked process counts apart), and the file
+   loaded while lines were counted — under fork isolation the runner counts
+   from before the preload (`Coverage::LoadTracker`) and `MapBuilder` hands the
+   parent's counts to its forked child, whose own start at zero. Every other
+   child forked to run tests (`ProcessSupervisor#spawn`, the baseline) stops
+   that counting first (`LoadTracker.release_inherited`), so a spec helper can
+   start coverage itself. A mutation that adds or removes a local variable
+   assignment runs regardless (`AST::LocalDeclaration`). The cached map
+   (`Coverage::MapStore`) is keyed on every project file the build loaded and
+   every file under the spec directories as well as on the targets, specs and
+   helpers. These results are never cached and are scored as survivors.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation
@@ -239,7 +257,7 @@ class that owns it.
    mutations serially, once the contention that caused them is gone.
 9. **Aggregate + report** — `Result::Summary` counts each status and computes
    `score = killed / score_denominator` (total minus error/neutral/equivalent/
-   unresolved/unparseable). `Runner::ReportPublisher#publish` selects a reporter by
+   unresolved/unparseable; `uncovered` stays in, as a survivor). `Runner::ReportPublisher#publish` selects a reporter by
    `config.format` and writes it; `Session::Store` optionally persists the run.
    `Summary#success?` is also false when a target file resolved to no spec, whatever
    the score. `Commands::Run` maps `summary.success?(min_score:)` to exit code
@@ -398,7 +416,7 @@ A reporter is `.new(**opts)` + `#call(summary) -> String`. It consumes a frozen
 
    The `Summary` API a reporter reads includes: counts (`total`, `killed`,
    `survived`, `errors`, `neutral`, `equivalent`, `unresolved`, `unparseable`,
-   `timed_out`), metrics (`score`, `score_denominator`, `success?(min_score:)`,
+   `uncovered`, `timed_out`), metrics (`score`, `score_denominator`, `success?(min_score:)`,
    `efficiency`, `peak_memory_mb`), the raw `results`, and filtered lists
    (`survived_results`, `killed_results`, …). Each result exposes `mutation`
    (`operator_name`, `file_path`, `line`, `diff`), `status`, `duration`, and

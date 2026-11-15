@@ -14,7 +14,7 @@ module Evilution::MCP::MutateTool::ProgressStreamer
     disabled = false
 
     proc do |result|
-      next unless result.survived?
+      next unless result.survived? || result.uncovered?
       next if disabled
 
       begin

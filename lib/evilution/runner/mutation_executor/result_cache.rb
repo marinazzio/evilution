@@ -3,6 +3,7 @@
 require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
 require_relative "../../infra_crash"
+require_relative "runless_verdict"
 
 class Evilution::Runner::MutationExecutor::ResultCache
   # The verdicts about a mutation. A survivor is kept too: its key changes
@@ -69,14 +70,16 @@ class Evilution::Runner::MutationExecutor::ResultCache
   end
 
   # time_limit_for: answers the time limit #fetch is to compare against for
-  # each mutation.
-  def partition(batch, packer:, time_limit_for:)
+  # each mutation. A mutation the runless verdict answers goes in with the
+  # cached results: it needs no worker, and its verdict is not stored.
+  def partition(batch, packer:, time_limit_for:, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
     uncached_indices = []
     cached_results = {}
 
     batch.each_with_index do |mutation, i|
-      if mutation.unparseable?
-        cached_results[i] = packer.compact(unparseable_result(mutation))
+      verdict = runless.call(mutation)
+      if verdict
+        cached_results[i] = packer.compact(verdict)
         next
       end
 
@@ -107,9 +110,5 @@ class Evilution::Runner::MutationExecutor::ResultCache
 
   def timeout_reusable?(cached_limit, time_limit)
     cached_limit.is_a?(Numeric) && time_limit.is_a?(Numeric) && time_limit <= cached_limit
-  end
-
-  def unparseable_result(mutation)
-    Evilution::Result::MutationResult.new(mutation: mutation, status: :unparseable)
   end
 end

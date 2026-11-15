@@ -60,8 +60,13 @@ Evilution::Reporter::CLI.const_set(
   [
     Evilution::Reporter::CLI::Section.new(
       title: ->(gaps) { "Survived mutations (#{gaps.length} coverage gap#{"s" unless gaps.length == 1}):" },
-      fetcher: lambda(&:coverage_gaps),
+      fetcher: lambda(&:survived_gaps),
       formatter: Evilution::Reporter::CLI::ItemFormatters::CoverageGap.new
+    ),
+    Evilution::Reporter::CLI::Section.new(
+      title: "Uncovered mutations (no test executes the lines they change, not run):",
+      fetcher: lambda(&:uncovered_results),
+      formatter: Evilution::Reporter::CLI::ItemFormatters::ResultLocation.new
     ),
     Evilution::Reporter::CLI::Section.new(
       title: lambda { |groups|

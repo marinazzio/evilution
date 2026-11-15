@@ -4,6 +4,7 @@ require "fileutils"
 require_relative "version"
 require_relative "temp_dir_tracker"
 require_relative "diagnostic"
+require_relative "coverage/load_tracker"
 
 # Single owner of the process-lifecycle invariant: every pid spawned here is
 # group-isolated, tracked in a signal-safe registry, group-signalled through a
@@ -126,6 +127,9 @@ class Evilution::ProcessSupervisor
   def spawn(sandbox_dir: nil, fds: [], isolate_in_child: true)
     pid = ::Process.fork do
       self.class.reset_for_child!
+      # The child runs tests (or forks the children that do), which may start
+      # line coverage themselves.
+      Evilution::Coverage::LoadTracker.release_inherited
       isolate_self if isolate_in_child
       yield
     end

@@ -69,12 +69,20 @@ class Evilution::Session::Store
       git: git_context,
       summary: build_summary(summary),
       survived: summary.survived_results.map { |r| build_mutation_detail(r) },
+      uncovered: summary.uncovered_results.map { |r| build_mutation_detail(r) },
       coverage_gaps: build_coverage_gaps(summary),
+      **status_counts(summary)
+    }
+  end
+
+  def status_counts(summary)
+    {
       killed_count: summary.killed,
       timed_out_count: summary.timed_out,
       error_count: summary.errors,
       neutral_count: summary.neutral,
       equivalent_count: summary.equivalent,
+      uncovered_count: summary.uncovered,
       skipped_count: summary.skipped
     }
   end
@@ -88,6 +96,7 @@ class Evilution::Session::Store
       errors: summary.errors,
       neutral: summary.neutral,
       equivalent: summary.equivalent,
+      uncovered: summary.uncovered,
       score: summary.score.round(4),
       duration: summary.duration.round(4)
     }

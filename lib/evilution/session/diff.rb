@@ -36,8 +36,8 @@ class Evilution::Session::Diff
   end
 
   def call(base_data, head_data)
-    base_survivors = base_data["survived"] || []
-    head_survivors = head_data["survived"] || []
+    base_survivors = untested(base_data)
+    head_survivors = untested(head_data)
     fixed, new_survivors, persistent = partition_survivors(base_survivors, head_survivors)
 
     Result.new(
@@ -49,6 +49,13 @@ class Evilution::Session::Diff
   end
 
   private
+
+  # A mutation no test executes is a survivor that was not run, so it sits with
+  # the survivors here: one that survived before is not fixed by now being
+  # reported uncovered.
+  def untested(data)
+    (data["survived"] || []) + (data["uncovered"] || [])
+  end
 
   def partition_survivors(base_survivors, head_survivors)
     base_keys = base_survivors.to_set { |m| mutation_key(m) }

@@ -98,6 +98,11 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options).not_to have_key(:timeout)
   end
 
+  it "parses --skip-uncovered to true and --no-skip-uncovered to false" do
+    expect(parse(["--skip-uncovered"]).first[:skip_uncovered]).to be(true)
+    expect(parse(["--no-skip-uncovered"]).first[:skip_uncovered]).to be(false)
+  end
+
   it "parses --stop-on-kill to true" do
     options, = parse(["--stop-on-kill"])
     expect(options[:stop_on_kill]).to be(true)

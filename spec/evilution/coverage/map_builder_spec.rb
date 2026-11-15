@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "spec_helper"
+require "open3"
 require "evilution/coverage/map_builder"
 
 RSpec.describe Evilution::Coverage::MapBuilder do
@@ -38,6 +39,35 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     end
   end
 
+  # The cached map is keyed on them: a change to any of them can change which
+  # lines run.
+  it "records the project files the build loaded, and none from outside the project" do
+    ledger = File.join(fixture_dir, "ledger.rb")
+    ledger_spec = File.join(fixture_dir, "ledger_examples.rb")
+    map = described_class.new(spec_files: [ledger_spec], target_files: [target], project_root: fixture_dir).call
+
+    expect(map.loaded_files).to include(ledger, ledger_spec)
+    expect(map.loaded_files).to all(start_with("#{fixture_dir}/"))
+    expect(map.loaded_files).to eq(map.loaded_files.uniq)
+  end
+
+  # Loaded before the build counted any line, as the code under test often is.
+  it "records a project file required before the build, too" do
+    root = File.expand_path("../../..", __dir__)
+    map = described_class.new(spec_files: [spec], target_files: [target], project_root: root).call
+
+    expect(map.loaded_files).to include(File.join(root, "lib/evilution/coverage/map_builder.rb"))
+  end
+
+  # A gem installed inside the project (vendor/bundle) changes with the lockfile.
+  it "leaves out the files of installed gems inside the project" do
+    allow(Gem).to receive(:path).and_return([fixture_dir])
+    map = described_class.new(spec_files: [spec], target_files: [target],
+                              project_root: File.dirname(fixture_dir)).call
+
+    expect(map.loaded_files).not_to include(start_with("#{fixture_dir}/"))
+  end
+
   describe ".absolute_location" do
     it "expands a ./-relative location against the root, keeping the line suffix" do
       expect(described_class.absolute_location("./spec/a_spec.rb:5", "/proj"))
@@ -47,6 +77,83 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     it "keeps a nested line suffix and an already-absolute path" do
       expect(described_class.absolute_location("/x/spec/a_spec.rb:5:9", "/proj"))
         .to eq("/x/spec/a_spec.rb:5:9")
+    end
+  end
+
+  describe "lines no example executes" do
+    ledger = File.join(fixture_dir, "ledger.rb")
+    ledger_spec = File.join(fixture_dir, "ledger_examples.rb")
+    line_of = ->(text) { File.readlines(ledger).index { |l| l.include?(text) } + 1 }
+    refund_body = line_of.call("@total -= amount")
+    limit = line_of.call("LIMIT = 100")
+
+    it "marks a method body no example calls as uncovered, and nothing that ran while the file loaded" do
+      map = described_class.new(spec_files: [ledger_spec], target_files: [ledger]).call
+
+      expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(true)
+      expect(map.uncovered?(ledger, [line_of.call("@total += amount")])).to be(false)
+      expect(map.uncovered?(ledger, [line_of.call("LIMIT = 100")])).to be(false)
+      expect(map.uncovered?(ledger, [line_of.call("attr_reader")])).to be(false)
+      expect(map.uncovered?(ledger, [line_of.call("def refund")])).to be(false)
+      expect(map.built_from?([ledger_spec])).to be(true)
+    end
+
+    it "vouches for no line when a spec file fails to load" do
+      broken = File.join(fixture_dir, "broken_examples.rb")
+      map = described_class.new(spec_files: [ledger_spec, broken], target_files: [ledger]).call
+
+      expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(false)
+    end
+
+    it "vouches for no line when the run stops before every example ran" do
+      fail_fast = File.join(fixture_dir, "fail_fast_examples.rb")
+      map = described_class.new(spec_files: [fail_fast], target_files: [ledger]).call
+
+      expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(false)
+    end
+
+    # A forked process counts its lines in its own copy of the counters, which
+    # the build never reads, while a mutation applied before the fork reaches it.
+    it "vouches for no line when an example forks" do
+      forking = File.join(fixture_dir, "forking_examples.rb")
+      map = described_class.new(spec_files: [forking], target_files: [ledger]).call
+
+      expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(false)
+      expect(map.uncovered?(ledger, [line_of.call("@total += amount")])).to be(false)
+    end
+
+    # A preload runs in the parent before the build forks. Counting from before
+    # it keeps what ran while the files loaded; a file loaded while counting
+    # was off shows those lines at zero and cannot be trusted.
+    define_method(:build_in_subprocess) do |load_while:|
+      script = <<~RUBY
+        require "coverage"
+        require "rspec/core"
+        require "evilution"
+        require "evilution/coverage/map_builder"
+        Coverage.setup(lines: true)
+        Coverage.resume
+        require #{ledger.inspect} if #{load_while == :counting}
+        Coverage.suspend
+        require #{ledger.inspect}
+        map = Evilution::Coverage::MapBuilder.new(spec_files: [#{ledger_spec.inspect}], target_files: [#{ledger.inspect}]).call
+        puts map.uncovered?(#{ledger.inspect}, [#{refund_body}])
+        puts map.uncovered?(#{ledger.inspect}, [#{limit}])
+      RUBY
+      lib_dir = File.expand_path("../../../lib", __dir__)
+      # Run away from this project's .rspec, which requires its own spec helper.
+      out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib_dir, "-e", script, chdir: fixture_dir)
+      raise "build failed: #{err}" unless status.success?
+
+      out.lines.map(&:strip)
+    end
+
+    it "keeps the lines a file ran while it loaded before the build, when counting was on" do
+      expect(build_in_subprocess(load_while: :counting)).to eq(%w[true false])
+    end
+
+    it "vouches for no line of a file loaded before the build while counting was off" do
+      expect(build_in_subprocess(load_while: :suspended)).to eq(%w[false false])
     end
   end
 end

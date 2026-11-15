@@ -3,9 +3,10 @@
 RSpec.describe Evilution::Reporter::CLI::ItemFormatters::SubjectScore do
   subject(:formatter) { described_class.new }
 
-  def score(name:, total:, killed:, verified:, survived: 0, file: "app/helpers/example_helper.rb")
+  def score(name:, total:, killed:, verified:, survived: 0, uncovered: 0, file: "app/helpers/example_helper.rb")
     Evilution::Result::SubjectScore.new(
-      name: name, file_path: file, total: total, killed: killed, verified: verified, survived: survived
+      name: name, file_path: file, total: total, killed: killed, verified: verified, survived: survived,
+      uncovered: uncovered
     )
   end
 
@@ -22,6 +23,13 @@ RSpec.describe Evilution::Reporter::CLI::ItemFormatters::SubjectScore do
       row = score(name: "Helper#summary_for", total: 18, killed: 0, verified: 0)
 
       expect(formatter.format(row)).to eq("    #summary_for  0.00%  (0/18)  nothing reached this subject")
+    end
+
+    # A 0% reads like a method whose mutations all ran and survived; these never ran.
+    it "says how many of its mutations no test executes" do
+      row = score(name: "Helper#summary_for", total: 6, killed: 1, verified: 6, uncovered: 5)
+
+      expect(formatter.format(row)).to eq("    #summary_for  16.67%  (1/6)  5 uncovered")
     end
 
     # Subjects are grouped under their file, so the class prefix would repeat

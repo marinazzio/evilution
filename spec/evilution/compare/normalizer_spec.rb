@@ -86,11 +86,12 @@ RSpec.describe Evilution::Compare::Normalizer do
         "neutral" => [mut("neutral", 5)],
         "equivalent" => [mut("equivalent", 6)],
         "unresolved" => [mut("unresolved", 7)],
-        "unparseable" => [mut("unparseable", 8)]
+        "unparseable" => [mut("unparseable", 8)],
+        "uncovered" => [mut("uncovered", 9)]
       }
       records = normalizer.from_evilution(json)
       expect(records.map(&:status))
-        .to eq(%i[killed survived timeout error neutral equivalent unresolved unparseable])
+        .to eq(%i[killed survived timeout error neutral equivalent unresolved unparseable uncovered])
     end
 
     it "raises InvalidInput when 'file' is missing, carrying the record index" do

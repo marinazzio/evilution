@@ -173,6 +173,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
         report,
         verbosity: Evilution::MCP::MutateTool::OptionParser.normalize_verbosity(verbosity),
         survived_results: summary.survived_results,
+        uncovered_results: summary.uncovered_results,
         config: config,
         enricher: Evilution::MCP::MutateTool::SurvivedEnricher,
         summary: summary
