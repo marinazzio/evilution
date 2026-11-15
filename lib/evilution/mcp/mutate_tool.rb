@@ -45,7 +45,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
       },
       timeout: {
         type: "integer",
-        description: "Per-mutation timeout in seconds (default: 30)"
+        description: "Per-mutation timeout in seconds, the same for every mutation " \
+                     "(default: derived from the baseline time of each mutation's spec files)"
       },
       jobs: {
         type: "integer",
@@ -172,6 +173,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
         report,
         verbosity: Evilution::MCP::MutateTool::OptionParser.normalize_verbosity(verbosity),
         survived_results: summary.survived_results,
+        uncovered_results: summary.uncovered_results,
         config: config,
         enricher: Evilution::MCP::MutateTool::SurvivedEnricher,
         summary: summary

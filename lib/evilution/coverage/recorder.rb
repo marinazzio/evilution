@@ -31,7 +31,8 @@ class Evilution::Coverage::Recorder
   # (see MapBuilder). For those, the end of the build is read once more: what
   # ran after the last example counts as executed, and the executable lines
   # still at zero are recorded as never run.
-  def to_map(built_files:, vouched_files: [], spec_files: [])
+  # loaded_files: the project files the build loaded (see Map).
+  def to_map(built_files:, vouched_files: [], spec_files: [], loaded_files: [])
     record_prior
     missed = record_end_of_build(vouched_files)
     Evilution::Coverage::Map.new(
@@ -39,7 +40,8 @@ class Evilution::Coverage::Recorder
       built_files: built_files,
       executed_lines: @executed.transform_values(&:uniq),
       missed_lines: missed,
-      spec_files: spec_files
+      spec_files: spec_files,
+      loaded_files: loaded_files
     )
   end
 

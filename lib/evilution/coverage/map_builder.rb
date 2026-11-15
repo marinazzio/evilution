@@ -66,9 +66,21 @@ class Evilution::Coverage::MapBuilder
     # (which would recursively fork this builder).
     reset_world
     install_hook(recorder)
+    forks = watch_forks
     ::RSpec::Core::Runner.run(@spec_files, StringIO.new, StringIO.new)
-    vouched = run_complete? ? @target_files - unvouched : []
-    recorder.to_map(built_files: @target_files, vouched_files: vouched, spec_files: @spec_files)
+    vouched = run_complete? && !forks[:forked] ? @target_files - unvouched : []
+    recorder.to_map(built_files: @target_files, vouched_files: vouched, spec_files: @spec_files,
+                    loaded_files: loaded_project_files)
+  end
+
+  # The files of the project the build loaded: required, or compiled while
+  # lines were counted (RSpec loads a spec file without requiring it). Files of
+  # installed gems change only with the lockfile, which the cache is keyed on.
+  def loaded_project_files
+    roots = [@project_root, File.realpath(@project_root)].uniq.map { |root| "#{root}/" }
+    gems = ::Gem.path.map { |dir| "#{dir}/" }
+    files = ($LOADED_FEATURES + ::Coverage.peek_result.keys).uniq
+    files.select { |file| file.start_with?(*roots) && !file.start_with?(*gems) && File.file?(file) }
   end
 
   # The parent may have started counting before its preload and paused it
@@ -97,6 +109,24 @@ class Evilution::Coverage::MapBuilder
 
   def line_counts(entry)
     entry.is_a?(Hash) ? entry[:lines] : entry
+  end
+
+  # Whether an example forked: a forked process counts its lines in its own
+  # copy of the counters, which this build never reads, so what only it ran
+  # would read as never run -- while a mutation applied before the fork
+  # reaches it, and its tests can kill the mutation there. Kernel#fork,
+  # Process.fork and IO.popen("-") all go through Process._fork. Installed in
+  # the build's own child, which exits once the map is sent.
+  def watch_forks
+    forks = { forked: false }
+    hook = Module.new do
+      define_method(:_fork) do
+        forks[:forked] = true
+        super()
+      end
+    end
+    ::Process.singleton_class.prepend(hook)
+    forks
   end
 
   # Whether every example of the spec files ran: a spec file that failed to

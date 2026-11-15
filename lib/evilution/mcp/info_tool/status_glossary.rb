@@ -62,7 +62,7 @@ module Evilution::MCP::InfoTool::StatusGlossary
     },
     {
       "status" => "uncovered",
-      "meaning" => "No example executes a line the mutation sits on, so it was never run: with " \
+      "meaning" => "No example executes any line the mutation changes, so it was never run: with " \
                    "coverage targeting, the coverage map shows the line never ran, neither in an example " \
                    "nor while the files loaded. Untested code. Counted in the score as a survivor, and " \
                    "listed apart from the survivors that did run.",

@@ -323,6 +323,16 @@ RSpec.describe Evilution::MCP::MutateTool do
       expect(schema[:properties][:integration][:enum]).to include("test-unit")
     end
 
+    # Agents decide from this text whether to pass a timeout; giving one fixes
+    # the limit for every mutation instead of deriving it from the baseline.
+    it "describes the timeout as fixed for every mutation, defaulting to one derived from the baseline" do
+      description = described_class.input_schema.to_h[:properties][:timeout][:description]
+
+      expect(description).to include("the same for every mutation")
+      expect(description).to include("derived from the baseline")
+      expect(description).not_to include("default: 30")
+    end
+
     it "passes isolation option to config" do
       described_class.call(files: ["lib/foo.rb"], isolation: "fork", server_context: nil)
 

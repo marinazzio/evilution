@@ -32,7 +32,7 @@ RSpec.describe Evilution::Reporter::JSON::Timings do
   it "sums each mutation phase over the mutations" do
     out = described_class.new.call(summary(results: [result(apply: 0.1, test_run: 1.0), result(apply: 0.2), result]))
 
-    expect(out[:mutations]).to eq(apply: 0.3, test_run: 1.0, confirmation: 0.0, queue_wait: 0.0)
+    expect(out[:mutations]).to eq(apply: 0.3, test_run: 1.0, confirmation: 0.0, queue_wait: 0.0, adaptive_timeout: 0.0)
   end
 
   it "lists each worker with its utilisation" do
@@ -53,7 +53,8 @@ RSpec.describe Evilution::Reporter::JSON::Timings do
 
   it "has an empty section for each part a run did not measure" do
     expect(described_class.new.call(summary)).to eq(
-      phases: {}, baseline: [], mutations: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0 }, workers: []
+      phases: {}, baseline: [],
+      mutations: { apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0, adaptive_timeout: 0.0 }, workers: []
     )
   end
 

@@ -103,8 +103,8 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_uncovered_options(opts)
     opts.on("--[no-]skip-uncovered",
-            "With --example-targeting coverage, report a mutation no example executes the line of",
-            "as uncovered without running it (default: enabled)") do |v|
+            "With --example-targeting coverage, report a mutation as uncovered without running it",
+            "when no example executes any line it changes (default: enabled)") do |v|
       @options[:skip_uncovered] = v
     end
   end

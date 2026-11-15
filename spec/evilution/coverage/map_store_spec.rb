@@ -98,6 +98,18 @@ RSpec.describe Evilution::Coverage::MapStore do
       expect(store.stale_files([calc, util])).to eq([calc])
     end
 
+    it "lists every file when all of them changed" do
+      store.save(map, [calc, util])
+      File.write(calc, "def add(a, b) = 0\n")
+      File.write(util, "def noop = 1\n")
+      expect(store.stale_files([calc, util])).to contain_exactly(calc, util)
+    end
+
+    it "lists a file the cache was not keyed on" do
+      store.save(map, [calc])
+      expect(store.stale_files([calc, util])).to eq([util])
+    end
+
     it "treats every file as stale when there is no cache" do
       expect(store.stale_files([calc, util])).to contain_exactly(calc, util)
     end
@@ -132,6 +144,39 @@ RSpec.describe Evilution::Coverage::MapStore do
       expect(loaded.uncovered?(calc, [2])).to be(true)
       expect(loaded.uncovered?(util, [1])).to be(false)
       expect(loaded.built_from?(["/p/spec/calc_spec.rb"])).to be(true)
+    end
+  end
+
+  # A file the build loaded -- a shared example, another file that calls the
+  # code -- can start running a line the map says nothing executes.
+  describe "the files the build loaded" do
+    let(:shared) { write_source("shared_examples.rb", "# nothing calls refund yet\n") }
+    let(:map) { Evilution::Coverage::Map.new(index: {}, built_files: [calc], loaded_files: [shared]) }
+
+    it "are fresh while unchanged" do
+      store.save(map, [calc])
+
+      expect(store.stale_files([calc])).to eq([])
+    end
+
+    it "make the cache stale when one of them changes, though the caller did not name it" do
+      store.save(map, [calc])
+      File.write(shared, "# now it does\n")
+
+      expect(store.stale_files([calc])).to eq([shared])
+    end
+
+    it "make the cache stale when one of them is gone" do
+      store.save(map, [calc])
+      File.delete(shared)
+
+      expect(store.stale_files([calc])).to eq([shared])
+    end
+
+    it "are kept by a load" do
+      store.save(map, [calc])
+
+      expect(store.load([calc]).loaded_files).to eq([shared])
     end
   end
 

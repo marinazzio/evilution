@@ -239,8 +239,8 @@ class Evilution::Config
       #            any file the map has not fully built)
       # example_targeting_strategy: lexical
 
-      # With coverage targeting, report a mutation no example executes the line
-      # of as `uncovered`, without running it (default: true). It scores as a
+      # With coverage targeting, report a mutation as `uncovered`, without
+      # running it, when no example executes any line it changes (default: true). It scores as a
       # survivor. Lines that run only while files load (class bodies, constants,
       # `def` lines) count as executed. Set false to run them anyway.
       # skip_uncovered: true

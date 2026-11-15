@@ -5,7 +5,7 @@ require_relative "../../../parallel/work_queue"
 require_relative "../timeout_policy"
 require_relative "../runless_verdict"
 require_relative "../kill_history"
-require_relative "../isolated_run"
+require_relative "../timed_run"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Autoloaded rather than required at the bottom: ordered_delivery requires
@@ -54,6 +54,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @timeout_policy = timeout_policy || Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(config.timeout)
     @runless = runless
     @kill_history = kill_history
+    @timed_run = Evilution::Runner::MutationExecutor::TimedRun.new(isolator: isolator, timeout_policy: @timeout_policy)
   end
 
   def call(mutations, baseline_result:, integration:)
@@ -82,7 +83,8 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # live for the whole run and take the next mutation as soon as they are done
   # with the last, so a slow mutation holds up only its own worker.
   def run(mutations, delivery, integration)
-    partition = @cache.partition(mutations, packer: @packer, runless: @runless)
+    partition = @cache.partition(mutations, packer: @packer, runless: @runless,
+                                            time_limit_for: @timeout_policy.method(:final_limit))
     partition.cached_results.each do |index, compact|
       remember(mutations[index], compact)
       delivery.accept(index, compact, fresh: false)
@@ -98,7 +100,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     item_timeout = pool_deadline(uncached)
     pool = @pool_factory.call(item_timeout)
     on_result = lambda do |position, raw|
-      delivery.accept(uncached_indices[position], unpack_unfinished(raw, item_timeout), fresh: true)
+      delivery.accept(uncached_indices[position], unpack_unfinished(raw, item_timeout, uncached[position]), fresh: true)
       :stop if delivery.truncated?
     end
     run_pool(pool, uncached, on_result, arrival(uncached, item_timeout), integration)
@@ -115,16 +117,18 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # A kill is remembered the moment it is read, before its worker is sent the
   # next mutation, which then goes out with it.
   def arrival(uncached, item_timeout)
-    ->(position, raw) { remember(uncached[position], unpack_unfinished(raw, item_timeout)) }
+    ->(position, raw) { remember(uncached[position], unpack_unfinished(raw, item_timeout, uncached[position])) }
   end
 
   def remember(mutation, compact)
     @kill_history.record(mutation, status: compact[:status], killing_test: compact[:killing_test])
   end
 
-  # How long the pool waits on a worker for one mutation. A run that timed out
-  # in the killer-first order runs again in the defined order (see
-  # IsolatedRun), in the same worker, so the wait covers both.
+  # How long the pool waits on a worker for one mutation. The policy's item
+  # timeout covers a run under the adaptive limit and its confirmation under
+  # the fixed one (see TimedRun). A run that timed out in the killer-first
+  # order runs again in the defined order under the same limit (see
+  # IsolatedRun), in the same worker, so the wait covers both of each.
   def pool_deadline(uncached)
     deadline = @timeout_policy.item_timeout(uncached)
     return deadline unless deadline && @config.killer_first?
@@ -144,16 +148,15 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # child inherits what it was told.
   def run_in_worker(mutation, killers, integration, waited)
     integration.prioritize(killers) if integration.respond_to?(:prioritize)
-    result = Evilution::Runner::MutationExecutor::IsolatedRun.new(@isolator)
-                                                             .call(mutation, integration, @timeout_policy.call(mutation))
+    result = @timed_run.call(mutation, integration)
     @packer.compact(result).merge(queue_wait: waited)
   end
 
-  def unpack_unfinished(result, item_timeout)
+  def unpack_unfinished(result, item_timeout, mutation)
     return result unless result.is_a?(Evilution::Parallel::WorkQueue::Unfinished)
 
     case result.reason
-    when :timeout then timeout_compact(item_timeout)
+    when :timeout then timeout_compact(item_timeout, @timeout_policy.final_limit(mutation))
     when :died then DIED_COMPACT
     when :unreadable then UNREADABLE_COMPACT
     end
@@ -162,8 +165,10 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # A :timeout result is cacheable, so give it a realistic duration: the stuck
   # worker exhausted the dispatcher's item_timeout before being killed. A 0.0
   # here would be cached and skew summaries/reuse. Only a pool that has an
-  # item timeout times an item out, so it is never nil here.
-  def timeout_compact(item_timeout)
-    { status: :timeout, duration: item_timeout, timings: { test_run: item_timeout }, time_limit: item_timeout }
+  # item timeout times an item out, so it is never nil here. The limit is the
+  # mutation's own, which the worker should have enforced, not the backstop
+  # the pool set from the longest mutation of the run.
+  def timeout_compact(item_timeout, time_limit)
+    { status: :timeout, duration: item_timeout, timings: { test_run: item_timeout }, time_limit: time_limit }
   end
 end
