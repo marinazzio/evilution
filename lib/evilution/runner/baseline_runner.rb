@@ -57,11 +57,12 @@ class Evilution::Runner::BaselineRunner
   end
 
   # example_durations: what each example cost in the baseline, so a run that
-  # stops at its first kill can try the cheapest first.
+  # stops at its first kill can try the cheapest first, when killer_first asks.
   def rspec_integration_kwargs(baseline_result)
     {
       related_specs_heuristic: config.related_specs_heuristic?,
       example_filter: build_example_filter,
+      killer_first: config.killer_first?,
       example_durations: baseline_result ? baseline_result.example_durations : {}
     }
   end

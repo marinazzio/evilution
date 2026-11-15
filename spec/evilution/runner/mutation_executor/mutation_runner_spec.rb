@@ -185,6 +185,30 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
       expect(history).to have_received(:record).with(mut, status: :killed, killing_test: "t")
     end
 
+    it "runs a reordered run that timed out again in the defined order" do
+      mut = mutation
+      allow(history).to receive(:killers_for).and_return(["a[1:2]"])
+      integration = ordering_integration
+      integration.define_singleton_method(:reorders?) { !@defined }
+      integration.define_singleton_method(:in_defined_order) do |&block|
+        @defined = true
+        block.call
+      ensure
+        @defined = false
+      end
+      isolator = double(:isolator)
+      statuses = %i[timeout killed]
+      allow(isolator).to receive(:call) do |mutation:, **|
+        Evilution::Result::MutationResult.new(mutation: mutation, status: statuses.shift, duration: 0.1)
+      end
+
+      out = described_class.new(cache: cache_with, isolator: isolator, timeout_policy: fixed_policy, kill_history: history)
+                           .call(mut, integration: integration)
+
+      expect(out.status).to eq(:killed)
+      expect(isolator).to have_received(:call).twice
+    end
+
     it "records a cached kill as well" do
       mut = mutation
       backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, killing_test: "a[1:3]" })

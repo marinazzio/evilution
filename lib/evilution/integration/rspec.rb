@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "forwardable"
 require "stringio"
 require_relative "base"
 require_relative "known_failures"
@@ -11,6 +12,8 @@ require_relative "../related_spec_heuristic"
 require_relative "../integration"
 
 class Evilution::Integration::RSpec < Evilution::Integration::Base
+  extend Forwardable
+
   def self.baseline_runner
     BaselineRunner.new
   end
@@ -28,6 +31,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     example_filter: nil,
     known_failures: [],
     stop_on_kill: false,
+    killer_first: false,
     example_durations: {},
     framework_loader: FrameworkLoader.new,
     test_file_resolver: nil,
@@ -51,7 +55,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     @state_guard = state_guard
     @known_failures = Evilution::Integration::KnownFailures.new(known_failures)
     @stop_policy = Evilution::Integration::StopPolicy.new(enabled: stop_on_kill, known_failures: @known_failures)
-    @killer_first = KillerFirst.new(stop_on_kill: stop_on_kill, durations: example_durations)
+    @killer_first = KillerFirst.new(enabled: stop_on_kill && killer_first, durations: example_durations)
     @target_resolver = TargetResolver.new
     super(hooks: hooks)
   end
@@ -60,6 +64,9 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   def prioritize(test_ids)
     @killer_first.prioritize(test_ids)
   end
+
+  def_delegator :@killer_first, :reorders?
+  def_delegator :@killer_first, :suspended, :in_defined_order
 
   # One mutation per source file is enough: every mutation in a file shares
   # its source and resolves to the same spec files.

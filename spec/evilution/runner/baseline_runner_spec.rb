@@ -81,6 +81,22 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration(baseline_result)
     end
 
+    it "leaves the RSpec integration in the defined order by default" do
+      runner = described_class.new(config(integration: :rspec), hooks: nil)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(killer_first: false))
+                                                            .and_call_original
+
+      runner.build_integration
+    end
+
+    it "asks the RSpec integration for the killer-first order when configured" do
+      runner = described_class.new(config(integration: :rspec, killer_first: true), hooks: nil)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(killer_first: true))
+                                                            .and_call_original
+
+      runner.build_integration
+    end
+
     it "hands the RSpec integration no example times without a baseline result" do
       runner = described_class.new(config(integration: :rspec), hooks: nil)
       expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(example_durations: {}))

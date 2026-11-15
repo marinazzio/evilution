@@ -20,6 +20,7 @@ class Evilution::Runner::MutationExecutor
   autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
   autoload :RunlessVerdict, File.expand_path("mutation_executor/runless_verdict", __dir__)
   autoload :KillHistory, File.expand_path("mutation_executor/kill_history", __dir__)
+  autoload :IsolatedRun, File.expand_path("mutation_executor/isolated_run", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config

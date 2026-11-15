@@ -211,9 +211,13 @@ class that owns it.
    (`WorkQueue#map(on_arrival:)`), ahead of the ordered delivery. The RSpec
    integration (`Integration::RSpec::KillerFirst` / `ExampleOrder`) runs those
    killers first, then the cheapest examples by their baseline time
-   (`Baseline::Result#example_durations`), when the run stops at its first kill;
-   it sends back the killing example's id (`killing_test`) and the number of
-   examples that ran (`examples_run`).
+   (`Baseline::Result#example_durations`), when the run stops at its first kill
+   and `killer_first` is set (off by default: a suite whose examples depend on
+   their defined order would report kills that order does not produce); it
+   sends back the killing example's id (`killing_test`) and the number of
+   examples that ran (`examples_run`) either way. A reordered run that times
+   out is run again in the defined order (`MutationExecutor::IsolatedRun`, via
+   `Integration::Base#reorders?` / `#in_defined_order`), and that run decides.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

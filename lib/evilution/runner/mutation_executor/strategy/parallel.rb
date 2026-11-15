@@ -5,6 +5,7 @@ require_relative "../../../parallel/work_queue"
 require_relative "../timeout_policy"
 require_relative "../runless_verdict"
 require_relative "../kill_history"
+require_relative "../isolated_run"
 
 class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Autoloaded rather than required at the bottom: ordered_delivery requires
@@ -94,7 +95,7 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # Returns the pool's worker figures once every worker has been wound down.
   def run_uncached(mutations, uncached_indices, delivery, integration)
     uncached = uncached_indices.map { |i| mutations[i] }
-    item_timeout = @timeout_policy.item_timeout(uncached)
+    item_timeout = pool_deadline(uncached)
     pool = @pool_factory.call(item_timeout)
     on_result = lambda do |position, raw|
       delivery.accept(uncached_indices[position], unpack_unfinished(raw, item_timeout), fresh: true)
@@ -121,6 +122,16 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
     @kill_history.record(mutation, status: compact[:status], killing_test: compact[:killing_test])
   end
 
+  # How long the pool waits on a worker for one mutation. A run that timed out
+  # in the killer-first order runs again in the defined order (see
+  # IsolatedRun), in the same worker, so the wait covers both.
+  def pool_deadline(uncached)
+    deadline = @timeout_policy.item_timeout(uncached)
+    return deadline unless deadline && @config.killer_first?
+
+    deadline * 2
+  end
+
   def log_worker_diagnostics(worker_stats)
     return unless @diagnostics
 
@@ -133,10 +144,8 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel
   # child inherits what it was told.
   def run_in_worker(mutation, killers, integration, waited)
     integration.prioritize(killers) if integration.respond_to?(:prioritize)
-    test_command = ->(m) { integration.call(m) }
-    limit = @timeout_policy.call(mutation)
-    result = @isolator.call(mutation: mutation, test_command: test_command, timeout: limit)
-    result = result.with_time_limit(limit) if result.timeout?
+    result = Evilution::Runner::MutationExecutor::IsolatedRun.new(@isolator)
+                                                             .call(mutation, integration, @timeout_policy.call(mutation))
     @packer.compact(result).merge(queue_wait: waited)
   end
 

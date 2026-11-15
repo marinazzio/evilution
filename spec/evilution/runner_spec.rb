@@ -1011,7 +1011,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: ["spec/example_spec.rb"], hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       runner.call
@@ -1032,7 +1033,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: nil, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       empty_runner.call
@@ -2833,7 +2835,8 @@ RSpec.describe Evilution::Runner do
       expect(Evilution::Integration::RSpec).to receive(:new)
         .with(test_files: nil, hooks: hooks, fallback_to_full_suite: anything,
               related_specs_heuristic: anything, spec_selector: anything, example_filter: anything,
-              known_failures: anything, stop_on_kill: true, example_durations: anything)
+              known_failures: anything, stop_on_kill: true, killer_first: false,
+              example_durations: anything)
         .and_call_original
 
       hooked_runner = described_class.new(

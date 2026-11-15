@@ -4,6 +4,7 @@ require_relative "../mutation_executor"
 require_relative "../../result/mutation_result"
 require_relative "runless_verdict"
 require_relative "kill_history"
+require_relative "isolated_run"
 
 class Evilution::Runner::MutationExecutor::MutationRunner
   # timeout_policy: answers the time limit for each mutation's test run.
@@ -36,10 +37,8 @@ class Evilution::Runner::MutationExecutor::MutationRunner
   # inherits what it was told.
   def run(mutation, integration)
     integration.prioritize(@kill_history.killers_for(mutation)) if integration.respond_to?(:prioritize)
-    test_command = ->(m) { integration.call(m) }
-    limit = @timeout_policy.call(mutation)
-    result = @isolator.call(mutation: mutation, test_command: test_command, timeout: limit)
-    result = result.with_time_limit(limit) if result.timeout?
+    result = Evilution::Runner::MutationExecutor::IsolatedRun.new(@isolator)
+                                                             .call(mutation, integration, @timeout_policy.call(mutation))
     @cache.store(mutation, result)
     result
   end
