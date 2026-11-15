@@ -516,13 +516,13 @@ A mutation keeps the fixed 30s limit when the baseline cannot vouch for its spec
 Verdicts are kept per subject (a method, a constant, a declaration). A cached verdict is reused only while all of these are unchanged:
 
 - the subject's own source;
-- the rest of its file outside every subject: class and module lines, `include`s, `attr_*`s, other class-body code, and every constant of the file;
+- the rest of its file outside every method definition: class and module lines, `include`s, `attr_*`s, other class-body code, every constant of the file, and every class-body declaration (callbacks, validations, scopes, AASM machines), since these decide whether and when the file's methods run;
 - the contents of the spec files that resolve for the file (`--spec`, `spec_mappings`, or the resolver), and of the files the related-specs heuristic adds for the mutation when it is on;
 - the conventional helpers every spec file loads: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, `spec/support/**/*.rb`, `test/test_helper.rb`, `test/support/**/*.rb`, the `preload` file, and `Gemfile.lock` / `gems.locked`;
 - the evilution and Ruby versions;
 - the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill` and `warmup`.
 
-So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a class-body line (comments between methods included) or a spec file re-runs every subject of the file.
+So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a callback, validation or scope declaration, any other class-body line (comments between methods included) or a spec file re-runs every subject of the file. A method defined twice in one file (say, in both branches of an `if`) keeps a verdict per definition.
 
 What the cache does **not** see: other methods the subject calls (in the same file or another), other source files, and files a spec loads beyond the helpers above (factories, fixtures, shared examples outside `spec/support`), as well as `hooks`. A change there keeps the cached verdicts, so a survivor can stay a survivor after a test it depends on indirectly was fixed, or the other way around. Run without `--incremental` (or delete `tmp/evilution_cache/`) for a result that owes nothing to earlier runs, e.g. in CI.
 

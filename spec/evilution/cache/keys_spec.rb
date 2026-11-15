@@ -184,6 +184,87 @@ RSpec.describe Evilution::Cache::Keys do
       expect(key_of(edited, "Shop#price", "*", "/").first).not_to eq(key_of(with_point, "Shop#price", "*", "/").first)
     end
 
+    it "changes when a callback declaration that runs the subject is edited" do
+      with_callback = source.sub("RATE = 2\n", "RATE = 2\n  before_save :label, if: :frozen?\n")
+      edited = with_callback.sub("if: :frozen?", "if: :itself")
+
+      expect(key_of(edited, "Shop#label", "shop", "x").first)
+        .not_to eq(key_of(with_callback, "Shop#label", "shop", "x").first)
+    end
+
+    it "changes when a scope declaration of the file is edited" do
+      with_scope = source.sub("RATE = 2\n", "RATE = 2\n  scope :cheap, -> { where(rate: 1) }\n")
+      edited = with_scope.sub("rate: 1", "rate: 2")
+
+      expect(key_of(edited, "Shop#price", "*", "/").first).not_to eq(key_of(with_scope, "Shop#price", "*", "/").first)
+    end
+
+    it "tells apart two subjects of a file with the same name and source" do
+      twice = source.sub("  def label\n", "  def label\n    \"shop\"\n  end\n\n  def label\n")
+      subjects = parse(twice)
+      keys = self.keys
+      keys.index(subjects)
+      first, second = subjects.select { |s| s.name == "Shop#label" }
+      first_key = keys.subject_key(mutate(twice, first, "shop", "x"))
+      second_key = keys.subject_key(mutate(twice, second, "shop", "x"))
+
+      expect(first.source).to eq(second.source)
+      expect(first_key).not_to eq(second_key)
+    end
+
+    it "keeps telling apart same-named subjects when the file is not indexed" do
+      twice = source.sub("  def label\n", "  def label\n    \"shop\"\n  end\n\n  def label\n")
+      first, second = parse(twice).select { |s| s.name == "Shop#label" }
+
+      expect(keys.subject_key(mutate(twice, first, "shop", "x")))
+        .not_to eq(keys.subject_key(mutate(twice, second, "shop", "x")))
+    end
+
+    it "tells apart two subjects of a file with the same source and different names" do
+      twin = "module A\n  class Shop\n    def label\n      \"shop\"\n    end\n  end\nend\n" \
+             "module B\n  class Shop\n    def label\n      \"shop\"\n    end\n  end\nend\n"
+      subjects = parse(twin)
+      keys = self.keys
+      keys.index(subjects)
+      first = keys.subject_key(mutate(twin, subject_named(subjects, "A::Shop#label"), "shop", "x"))
+      second = keys.subject_key(mutate(twin, subject_named(subjects, "B::Shop#label"), "shop", "x"))
+
+      expect(first).not_to eq(second)
+    end
+
+    it "tells apart the same subject in two files with the same source" do
+      keys = self.keys
+      File.write("lib/copy.rb", source)
+      copy_subjects = Evilution::AST::Parser.new.call("lib/copy.rb")
+      subjects = parse(source)
+      keys.index(subjects + copy_subjects)
+      copy_price = subject_named(copy_subjects, "Shop#price")
+      copy = Evilution::Mutation.new(
+        subject: copy_price, operator_name: "op",
+        sources: Evilution::Mutation::Sources.new(original: source, mutated: source.sub("*", "/")),
+        location: Evilution::Mutation::Location.new(file_path: "lib/copy.rb", line: 5, column: 6)
+      )
+
+      expect(keys.subject_key(copy)).not_to eq(keys.subject_key(mutate(source, subject_named(subjects, "Shop#price"), "*", "/")))
+    end
+
+    it "keys a subject without a byte range in an indexed file" do
+      subjects = parse(source)
+      price = subject_named(subjects, "Shop#price")
+      loose = Evilution::Subject.new(name: price.name, file_path: price.file_path, line_number: price.line_number,
+                                     source: price.source, node: nil)
+      keys = self.keys
+      keys.index(subjects + [loose])
+      mutation = Evilution::Mutation.new(
+        subject: loose, operator_name: "op",
+        sources: Evilution::Mutation::Sources.new(original: source, mutated: source.sub("*", "/")),
+        location: Evilution::Mutation::Location.new(file_path: "lib/shop.rb", line: 5, column: 6)
+      )
+
+      expect(keys.subject_key(mutation)).not_to be_nil
+      expect(keys.subject_key(mutation)).not_to eq(keys.subject_key(mutate(source, price, "*", "/")))
+    end
+
     it "asks the spec selector about the mutation's file" do
       keys = keys(spec_selector: ->(path) { path == "lib/shop.rb" ? ["spec/shop_spec.rb"] : nil })
 
