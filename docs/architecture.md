@@ -154,9 +154,10 @@ class that owns it.
    that settles it, and its eval source is then the file's cached
    neutralization with the mutation spliced in (`Mutator::LoadSources`,
    `Integration::Loading::Neutralization#carry`); anything the def alone
-   cannot settle -- it does not parse alone, an endless def, an encoding
-   comment, a class-body call holding the def -- parses and neutralizes the
-   whole mutated file as before, so no verdict depends on the shortcut. A
+   cannot settle -- the original or the mutated def does not parse alone, an
+   endless def, an encoding comment, a class-body call holding the def --
+   parses and neutralizes the whole mutated file as before, so no verdict
+   depends on the shortcut. A
    mutation's `diff` hands Diff::LCS only the lines around the change
    (`Mutation::LineDiff`), with the same output as over the whole file. The
    planner then **deduplicates**
