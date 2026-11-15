@@ -105,6 +105,43 @@ RSpec.describe Evilution::Integration::Loading::ConcernRegistry do
     end
   end
 
+  # A prepended module cannot be taken off again, so a hook per registry
+  # would stay on the concern module for the life of the process, every one
+  # of them run by every later `extend`.
+  describe "hook on the concern module" do
+    def hooks_on(concern)
+      singleton = concern.singleton_class
+      singleton.ancestors.take_while { |mod| !mod.equal?(singleton) }
+    end
+
+    it "is installed once, however many registries track the concern" do
+      3.times { described_class.new.concerns(concern) }
+
+      expect(hooks_on(concern).size).to eq(1)
+    end
+
+    it "records a later module in every registry tracking the concern" do
+      first = described_class.new
+      second = described_class.new
+      first.concerns(concern)
+      second.concerns(concern)
+
+      later = concern_module
+
+      expect([first.concerns(concern), second.concerns(concern)]).to all(include(later))
+    end
+
+    it "records nothing in a registry that tracks another concern" do
+      other = Module.new
+      registry.concerns(other)
+      described_class.new.concerns(concern)
+
+      concern_module(concern)
+
+      expect(registry.concerns(other)).to eq([])
+    end
+  end
+
   describe ".default" do
     it "is one registry for the process" do
       expect(described_class.default).to be_a(described_class)

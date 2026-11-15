@@ -84,7 +84,7 @@ RSpec.describe Evilution::Coverage::Map do
       )
     end
 
-    it "is true when a line the mutation sits on never ran" do
+    it "is true when a line the mutation changes never ran" do
       expect(map.uncovered?("lib/calc.rb", [5])).to be(true)
     end
 
@@ -135,5 +135,21 @@ RSpec.describe Evilution::Coverage::Map do
 
     expect(restored.uncovered?("lib/calc.rb", [5])).to be(true)
     expect(restored.built_from?(["/p/spec/a_spec.rb"])).to be(true)
+  end
+
+  # What the build loaded keys the cache: a change to any of those files can
+  # change which lines run.
+  describe "#loaded_files" do
+    it "is empty unless given" do
+      expect(map.loaded_files).to eq([])
+    end
+
+    it "round-trips through to_h / from_h, frozen" do
+      original = described_class.new(index: {}, built_files: [], loaded_files: ["/p/lib/helper.rb"])
+      restored = described_class.from_h(JSON.parse(JSON.generate(original.to_h)))
+
+      expect(restored.loaded_files).to eq(["/p/lib/helper.rb"])
+      expect(restored.loaded_files).to be_frozen
+    end
   end
 end

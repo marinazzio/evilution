@@ -106,8 +106,9 @@ RSpec.describe Evilution::CoverageExampleFilter do
       )
     end
 
-    def located(line:, lines: line..line)
-      instance_double(Evilution::Mutation, file_path: source_rel, line: line, changed_lines: lines)
+    def located(line:, lines: line..line, original: "    a + b\n", mutated: "    a - b\n")
+      instance_double(Evilution::Mutation, file_path: source_rel, line: line, changed_lines: lines,
+                                           original_slice: original, mutated_slice: mutated)
     end
 
     it "is true for a mutation on a line no example and no load executed" do
@@ -132,6 +133,17 @@ RSpec.describe Evilution::CoverageExampleFilter do
     it "is false when the mutation would run a spec file the map was not built from" do
       expect(filter.uncovered?(located(line: 5), ["spec/calc_spec.rb", "spec/other_spec.rb"])).to be(false)
       expect(filter.uncovered?(located(line: 5), ["spec"])).to be(false)
+    end
+
+    # Ruby decides while parsing that `factor` is a local; take the only
+    # assignment away and a later `factor` calls a method instead, though the
+    # assignment's own line never runs.
+    it "is false when the lines the mutation changes assign a local variable" do
+      removed = located(line: 5, original: "    factor = 3\n", mutated: "    3\n")
+      added = located(line: 5, original: "    3\n", mutated: "    factor = 3\n")
+
+      expect(filter.uncovered?(removed, ["spec/calc_spec.rb"])).to be(false)
+      expect(filter.uncovered?(added, ["spec/calc_spec.rb"])).to be(false)
     end
 
     it "is false when the mutation has no spec file to run" do

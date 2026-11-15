@@ -8,7 +8,7 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::Mutations do
     double(
       "summary",
       total: 10, killed: 8, survived: 1, timed_out: 1,
-      neutral: 0, equivalent: 0, unresolved: 0, unparseable: 0, skipped: 0, uncovered: 0
+      neutral: 0, equivalent: 0, unresolved: 0, unparseable: 0, skipped: 0, uncovered: 0, implied: 0
     )
   end
 
@@ -37,6 +37,13 @@ RSpec.describe Evilution::Reporter::CLI::LineFormatters::Mutations do
     it "appends uncovered when positive" do
       allow(summary).to receive(:uncovered).and_return(3)
       expect(described_class.new.format(summary)).to include("timed out, 3 uncovered")
+    end
+
+    it "says how many survivors a probe-first sentinel implied without a run" do
+      allow(summary).to receive_messages(survived: 3, implied: 2)
+      expect(described_class.new.format(summary)).to eq(
+        "Mutations: 10 total, 8 killed, 3 survived (2 implied, not run), 1 timed out"
+      )
     end
 
     it "appends unparseable when positive" do

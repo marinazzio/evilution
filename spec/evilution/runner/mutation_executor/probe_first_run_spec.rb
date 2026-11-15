@@ -11,7 +11,7 @@ require "evilution/runner/mutation_executor/result_notifier"
 RSpec.describe Evilution::Runner::MutationExecutor::ProbeFirstRun do
   let(:probe) { Evilution::Runner::MutationExecutor::ProbeFirst.new }
   let(:notifier) { instance_double(Evilution::Runner::MutationExecutor::ResultNotifier, start: nil, finish: nil) }
-  let(:state) { instance_double(Evilution::Subject, name: "Gate#state", line_number: 3) }
+  let(:state) { instance_double(Evilution::Subject, name: "Gate#state", line_number: 3, source: "def state\n  1\nend\n") }
 
   before { allow(notifier).to receive(:notify).and_return(:continue) }
 
