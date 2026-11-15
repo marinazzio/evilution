@@ -19,16 +19,18 @@ class Evilution::Coverage::MapStore
   DEFAULT_ROOT = ".evilution/coverage"
   CACHE_FILE = "map.json"
   # Bumped when the map gains something an older cache cannot hold (the
-  # unexecuted lines and spec files): such a cache is rebuilt, not read.
-  FORMAT = 2
+  # unexecuted lines and spec files, the files the build loaded): such a cache
+  # is rebuilt, not read.
+  FORMAT = 3
 
   def initialize(root: DEFAULT_ROOT, digest: Evilution::Coverage::Digest.new)
     @root = root
     @digest = digest
   end
 
+  # Keyed on the source files and on every file the map's build loaded.
   def save(map, source_files)
-    payload = { "format" => FORMAT, "digests" => digests_for(source_files), "map" => map.to_h }
+    payload = { "format" => FORMAT, "digests" => digests_for(source_files | map.loaded_files), "map" => map.to_h }
     FileUtils.mkdir_p(@root)
     File.write(cache_path, JSON.generate(payload))
   end
@@ -44,13 +46,15 @@ class Evilution::Coverage::MapStore
 
   # Source files whose on-disk content no longer matches the cache (changed,
   # deleted, or never cached) -- the caller rebuilds these. Every file is stale
-  # when there is no cache at all.
+  # when there is no cache at all. The files the cache was keyed on are checked
+  # too, though the caller does not name them: a change to a file the build
+  # loaded makes the cache stale as well.
   def stale_files(source_files)
     payload = read_payload
     return source_files.dup unless payload
 
     cached_digests = payload["digests"] || {}
-    source_files.reject { |file| fresh?(file, cached_digests) }
+    (source_files | cached_digests.keys).reject { |file| fresh?(file, cached_digests) }
   end
 
   private
@@ -67,7 +71,7 @@ class Evilution::Coverage::MapStore
     missed = raw_map["missed_lines"].slice(*fresh_files)
     Evilution::Coverage::Map.from_h(
       "index" => index, "built_files" => built, "executed_lines" => executed,
-      "missed_lines" => missed, "spec_files" => raw_map["spec_files"]
+      "missed_lines" => missed, "spec_files" => raw_map["spec_files"], "loaded_files" => raw_map["loaded_files"]
     )
   end
 

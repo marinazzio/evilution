@@ -321,9 +321,13 @@ A mutation is reported `uncovered` only when the coverage map can vouch for it, 
 - At least one changed line is executable and never ran; none of them ran.
 - The map was built from every spec file the mutation would run. A mutation that runs a spec file the build did not (the related-specs heuristic, the full-suite fallback) runs.
 - Every example of those spec files ran in the build. A spec file that failed to load, or a build cut short (`fail_fast` in `.rspec`, an interrupt), makes the map vouch for no line.
-- The file was loaded while lines were counted. When coverage targeting is on, evilution counts from before the `preload` runs, so a preloaded file is covered too; a file loaded while counting was off is never vouched for.
+- The file was loaded while lines were counted. When coverage targeting is on and the tests run in forked processes (`isolation: fork`, the default for Rails apps and gems), evilution counts from before the `preload` runs, so a preloaded file is covered too; a file loaded while counting was off is never vouched for. Each forked test process stops that counting before its tests run, so a spec helper that starts line coverage itself (SimpleCov) works as it does without coverage targeting. Under `in_process` isolation the preload is not counted.
+- No example forked a process. A forked process counts its lines apart, where the build cannot see them, while a mutation applied before the fork reaches it; when any example forks, the map vouches for no line.
+- The mutation neither adds nor removes a local variable assignment. Ruby settles while parsing whether a name is a local, so such a change reaches lines that do run (a later read of the name becomes a method call), even when its own line never runs.
 
-The coverage map is cached under `.evilution/coverage/` and rebuilt when a target file, a resolved spec file or one of the helpers every spec file loads (`.rspec`, `spec/spec_helper.rb`, `spec/support/**/*.rb`, ... — the same list as the [incremental cache](#incremental-cache)) changes. It is RSpec only, like coverage targeting. Pass `--no-skip-uncovered` (or `skip_uncovered: false`) to run these mutations anyway.
+The coverage map is cached under `.evilution/coverage/` and rebuilt when any file it depends on changes: a target file, a resolved spec file, one of the helpers every spec file loads (`.rspec`, `spec/spec_helper.rb`, `spec/support/**/*.rb`, ... — the same list as the [incremental cache](#incremental-cache)), any file under the directory the spec files sit in (`spec/`, `test/`: shared examples, factories, fixture data), and any file of the project the build loaded (another file under `lib/` that calls the code, for instance). It is RSpec only, like coverage targeting. Pass `--no-skip-uncovered` (or `skip_uncovered: false`) to run these mutations anyway.
+
+`summary.uncovered` counts these mutations; it is unrelated to `summary.uncovered_code`, which lists targeted lines that hold no subject, so no mutation was generated for them.
 
 ## Disable Comments
 
@@ -419,8 +423,8 @@ Schema:
       "subject": "string    — method name (e.g. 'Foo#bar')",
       "line": "integer      — line number",
       "operators": ["string — operator names involved"],
-      "count": "integer     — number of survived mutations in this gap",
-      "mutations": ["... same shape as survived entries ..."]
+      "count": "integer     — number of survived and uncovered mutations in this gap",
+      "mutations": ["... same shape as survived entries; `status` tells a survivor from an uncovered mutation ..."]
     }
   ],
   "killed": ["... same shape as survived entries ..."],
@@ -799,21 +803,21 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
-| `summary`   | Yes     | `summary` + `survived` + `uncovered` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
+| `summary`   | Yes     | `summary` + `survived` + `uncovered` + `timed_out` + `errors` + `unresolved` (entries other than `survived` and `uncovered` shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
 | `full`      |         | All entries (killed/neutral/equivalent diffs stripped), including `timings` |
-| `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
+| `minimal`   |         | `summary` + `survived` + `uncovered` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 
-Use `minimal` when context window budget is tight and you only need to see what survived. The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
+Use `minimal` when context window budget is tight and you only need to see what survived (an `uncovered` mutation is a survivor no test executes, see [Uncovered mutations](#uncovered-mutations)). The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
 
 What survives trimming matters when you are deciding whether to trust a score:
 
 - `neutral` entries — and with them each `neutral_reason` — are dropped at `summary` and `minimal`. Use `full` to see why mutations were neutralised.
-- `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary` and `survived`.
+- `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary`, `survived` and `uncovered`.
 - Everything inside `summary` survives at every level, including `unresolved_target_files`, `uncovered_code`, `infra_retried`, `baseline_neutralized`, `baseline_failures` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
 
 ### Enriched Survived Entries
 
-Unlike `evilution --format json`, every survived entry returned by `evilution-mutate` carries extra fields so the agent can act without a second round-trip:
+Unlike `evilution --format json`, every survived and uncovered entry returned by `evilution-mutate` carries extra fields so the agent can act without a second round-trip:
 
 | Field | What it gives you |
 |---|---|

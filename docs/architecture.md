@@ -198,10 +198,17 @@ class that owns it.
    (`Integration::RSpec#uncovered?` → `CoverageExampleFilter#uncovered?` →
    `Coverage::Map#uncovered?`). The map knows the executable lines nothing ran
    (`missed_lines`) only for files the build vouches for: every example of the
-   spec files ran, and the file loaded while lines were counted — the runner
-   counts from before the preload (`Coverage::LoadTracker`) and `MapBuilder`
-   hands the parent's counts to its forked child, whose own start at zero.
-   These results are never cached and are scored as survivors.
+   spec files ran, none forked (a forked process counts apart), and the file
+   loaded while lines were counted — under fork isolation the runner counts
+   from before the preload (`Coverage::LoadTracker`) and `MapBuilder` hands the
+   parent's counts to its forked child, whose own start at zero. Every other
+   child forked to run tests (`ProcessSupervisor#spawn`, the baseline) stops
+   that counting first (`LoadTracker.release_inherited`), so a spec helper can
+   start coverage itself. A mutation that adds or removes a local variable
+   assignment runs regardless (`AST::LocalDeclaration`). The cached map
+   (`Coverage::MapStore`) is keyed on every project file the build loaded and
+   every file under the spec directories as well as on the targets, specs and
+   helpers. These results are never cached and are scored as survivors.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

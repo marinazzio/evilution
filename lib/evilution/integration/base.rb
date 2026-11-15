@@ -24,7 +24,7 @@ class Evilution::Integration::Base
     nil
   end
 
-  # Whether no test executes the line the mutation sits on, so it need not
+  # Whether no test executes any line the mutation changes, so it need not
   # run. Only an integration backed by line coverage can tell.
   def uncovered?(_mutation)
     false

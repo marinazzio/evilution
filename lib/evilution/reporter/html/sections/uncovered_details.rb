@@ -2,7 +2,8 @@
 
 require_relative "../sections"
 
-# The mutations no test executes the line of: never run, scored as survivors.
+# The mutations no test executes any changed line of: never run, scored as
+# survivors.
 class Evilution::Reporter::HTML::Sections::UncoveredDetails < Evilution::Reporter::HTML::Section
   template "uncovered_details"
 

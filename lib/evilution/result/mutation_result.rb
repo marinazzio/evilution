@@ -116,7 +116,7 @@ class Evilution::Result::MutationResult
     status == :unparseable
   end
 
-  # No test executes a line the mutation sits on, so it was never run: it
+  # No test executes any line the mutation changes, so it was never run: it
   # could only have survived. Scored as a survivor, but kept apart from them.
   def uncovered?
     status == :uncovered

@@ -63,7 +63,7 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
   end
 
   # Whether no example of the spec files this mutation would run executes the
-  # line it sits on (see Evilution::CoverageExampleFilter#uncovered?). Asked in
+  # lines it changes (see Evilution::CoverageExampleFilter#uncovered?). Asked in
   # the parent, ahead of the run, like #warm_targeting.
   def uncovered?(mutation)
     files = @test_file_resolver.call(mutation, warn: false)

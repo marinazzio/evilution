@@ -2982,30 +2982,48 @@ RSpec.describe Evilution::Runner do
 
       # The coverage map is built in a child forked after the preload; it needs
       # the preloaded files counted, and what ran while they loaded.
-      it "counts the lines the preload runs when coverage targeting is on, and pauses after" do
-        resolver = instance_double(Evilution::Runner::IsolationResolver)
+      # The resolver yields just before it requires the preload file.
+      define_method(:stub_preloading_resolver) do |order, fork_isolation|
+        resolver = instance_double(Evilution::Runner::IsolationResolver, fork_isolation?: fork_isolation)
         allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
-        order = []
-        allow(resolver).to receive(:perform_preload) { order << :preload }
+        allow(resolver).to receive(:perform_preload) do |&before_load|
+          before_load.call
+          order << :preload
+        end
+      end
+
+      define_method(:stub_tracker) do |order|
         tracker = instance_double(Evilution::Coverage::LoadTracker)
         allow(tracker).to receive(:start) { order << :start }
         allow(tracker).to receive(:pause) { order << :pause }
         allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
-        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+      end
+
+      define_method(:preload_with) do |cfg, fork_isolation: true|
+        order = []
+        stub_preloading_resolver(order, fork_isolation)
+        stub_tracker(order)
 
         described_class.new(config: cfg).send(:perform_preload)
+        order
+      end
 
-        expect(order).to eq(%i[start preload pause])
+      it "counts the lines the preload runs when coverage targeting is on, and pauses after" do
+        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+
+        expect(preload_with(cfg)).to eq(%i[start preload pause])
       end
 
       it "counts nothing without coverage targeting" do
-        resolver = instance_double(Evilution::Runner::IsolationResolver, perform_preload: nil)
-        allow(Evilution::Runner::IsolationResolver).to receive(:new).and_return(resolver)
-        tracker = instance_double(Evilution::Coverage::LoadTracker, pause: nil)
-        allow(Evilution::Coverage::LoadTracker).to receive(:new).and_return(tracker)
-        expect(tracker).not_to receive(:start)
+        expect(preload_with(Evilution::Config.new(skip_config_file: true, quiet: true))).to eq(%i[preload pause])
+      end
 
-        described_class.new(config: Evilution::Config.new(skip_config_file: true, quiet: true)).send(:perform_preload)
+      # The counting is handed back in every forked child that runs tests; a
+      # test run in this process would find it paused and could not start it.
+      it "counts nothing when the tests run in this process" do
+        cfg = Evilution::Config.new(example_targeting_strategy: :coverage, skip_config_file: true, quiet: true)
+
+        expect(preload_with(cfg, fork_isolation: false)).to eq(%i[preload pause])
       end
     end
 
