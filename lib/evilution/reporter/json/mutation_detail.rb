@@ -56,9 +56,11 @@ class Evilution::Reporter::JSON::MutationDetail
 
   # Which test killed the mutation and how many tests its run took, where the
   # integration tells.
+  # A survivor reported without a run names the sentinel that implied it.
   def append_run_fields(detail, result)
     detail[:killing_test] = result.killing_test if result.killing_test
     detail[:examples_run] = result.examples_run if result.examples_run
+    detail[:implied_by] = result.implied_by if result.implied_by
   end
 
   def append_memory_fields(detail, result)

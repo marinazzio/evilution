@@ -16,6 +16,7 @@ class Evilution::Cache::RunFingerprint
     integration isolation profile timeout adaptive_timeout? timeout_factor timeout_floor timeout_ceiling
     baseline example_targeting example_targeting_fallback example_targeting_strategy
     related_specs_heuristic fallback_to_full_suite preload stop_on_kill killer_first? warmup skip_uncovered?
+    probe_first?
   ].freeze
 
   HELPERS = %w[

@@ -49,6 +49,10 @@ RSpec.describe Evilution::Cache::RunFingerprint do
       .not_to eq(fingerprint(example_targeting_strategy: :coverage, skip_uncovered: false))
   end
 
+  it "changes with whether a survived sentinel implies its subject's other verdicts" do
+    expect(fingerprint).not_to eq(fingerprint(probe_first: true))
+  end
+
   it "changes with whether examples run killer-first" do
     expect(fingerprint(killer_first: true)).not_to eq(fingerprint(killer_first: false))
   end
