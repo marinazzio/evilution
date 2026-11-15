@@ -29,7 +29,7 @@ class Evilution::Reporter::JSON::MutationDetail
   private
 
   # Why a neutral was recorded — a red baseline and an infrastructure crash want
-  # opposite responses, and both land in the same bucket (EV-5pob / GH #1606).
+  # opposite responses, and both land in the same bucket.
   def append_neutral_reason(detail, result)
     reason = result.neutral_reason
     return unless reason

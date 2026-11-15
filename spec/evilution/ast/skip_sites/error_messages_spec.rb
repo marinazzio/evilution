@@ -31,8 +31,18 @@ RSpec.describe Evilution::AST::SkipSites::ErrorMessages do
     end
   end
 
-  it "covers a message given alone" do
-    expect(covered?("raise \"boom\"\n", "\"boom\"", Prism::StringNode)).to be true
+  context "with a message given alone" do
+    let(:source) { "fail \"boom \#{@x}\"\n" }
+
+    it "covers its literal text and what it reads" do
+      expect(covered?(source, "boom ", Prism::StringNode)).to be true
+      expect(covered?(source, "@x", Prism::InstanceVariableReadNode)).to be true
+    end
+
+    it "leaves the message as a whole, whose replacement could change the class raised" do
+      expect(covered?(source, "\"boom \#{@x}\"", Prism::InterpolatedStringNode)).to be false
+      expect(covered?("raise \"boom\"\n", "\"boom\"", Prism::StringNode)).to be false
+    end
   end
 
   it "covers the message of fail" do
@@ -65,8 +75,11 @@ RSpec.describe Evilution::AST::SkipSites::ErrorMessages do
     expect(covered?("raise Error, cause: original\n", "original", Prism::CallNode)).to be false
   end
 
-  it "covers a message given alone with a cause" do
-    expect(covered?("raise \"boom\", cause: original\n", "\"boom\"", Prism::StringNode)).to be true
+  it "covers the text of a message given alone with a cause" do
+    source = "raise \"boom \#{@x}\", cause: original\n"
+
+    expect(covered?(source, "boom ", Prism::StringNode)).to be true
+    expect(covered?(source, "\"boom \#{@x}\"", Prism::InterpolatedStringNode)).to be false
   end
 
   it "leaves the backtrace argument" do
@@ -109,7 +122,7 @@ RSpec.describe Evilution::AST::SkipSites::ErrorMessages do
 
   context "with an interpolated message" do
     it "covers reads of variables and attributes" do
-      source = "raise Error, \"bad \#{name}: \#{@record.id} (\#{opts[:key].inspect})\"\n"
+      source = "def f(opts)\n  raise Error, \"bad \#{name}: \#{@record.id} (\#{opts[:key].inspect})\"\nend\n"
 
       expect(covered?(source, "@record.id", Prism::CallNode)).to be true
       expect(covered?(source, ":key", Prism::SymbolNode)).to be true
@@ -123,10 +136,10 @@ RSpec.describe Evilution::AST::SkipSites::ErrorMessages do
     end
 
     context "when the message calls a method that may change state" do
-      let(:source) { "raise Error, \"left: \#{queue.pop!} of \#{count(items)}\"\n" }
+      let(:source) { "raise Error, \"left: \#{queue.pop} of \#{count(items)}\"\n" }
 
       it "leaves the call" do
-        expect(covered?(source, "queue.pop!", Prism::CallNode)).to be false
+        expect(covered?(source, "queue.pop", Prism::CallNode)).to be false
       end
 
       it "leaves a call that takes arguments" do

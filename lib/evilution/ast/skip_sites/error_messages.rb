@@ -18,8 +18,10 @@ require_relative "message"
 #
 # A mutation inside a message is skipped when it changes the message alone:
 # literal text of the message, or anything inside a message that only reads
-# (see Purity). In `"left: #{queue.pop!}"` the text is covered and the call
-# is not.
+# (see Purity). In `"left: #{queue.pop}"` the text is covered and the call
+# is not. A message given alone is not covered as a whole: replacing it
+# (`raise nil`) changes the class raised, as `raise` takes its only argument
+# for the error when it is not a string.
 class Evilution::AST::SkipSites::ErrorMessages
   RAISES = %i[raise fail].freeze
   CONSTRUCTORS = %i[new exception].freeze
@@ -32,12 +34,20 @@ class Evilution::AST::SkipSites::ErrorMessages
   # chain: the mutated node, then its ancestors, nearest first.
   def covers?(chain)
     chain.each_with_index.any? do |node, index|
-      Evilution::AST::SkipSites::Nodes.kernel_call?(node, RAISES) &&
+      Evilution::AST::SkipSites::Nodes.kernel_call?(node, RAISES) && !error_argument?(node, chain.first) &&
         Evilution::AST::SkipSites::Message.covered_in(chain, index, messages(node))
     end
   end
 
   private
+
+  # The first positional argument is what `raise` makes the error of: the
+  # class, or a message given alone. Replacing it as a whole changes the
+  # class raised.
+  def error_argument?(raise_call, node)
+    positional = Evilution::AST::SkipSites::Nodes.positional_arguments(raise_call)
+    !positional.nil? && Evilution::AST::SkipSites::Nodes.same?(positional.first, node)
+  end
 
   def messages(raise_call)
     positional = Evilution::AST::SkipSites::Nodes.positional_arguments(raise_call)

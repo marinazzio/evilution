@@ -3,10 +3,11 @@
 require "digest"
 require_relative "../cache"
 
-# A digest of what a source file holds outside its subjects: the class and
-# module lines, constants no subject owns, `include`s, `attr_*`s and other
-# class-body code. Editing a method leaves it unchanged; editing anything
-# its subjects do not cover changes it.
+# A digest of what a source file holds outside the spans it is given (its
+# method definitions, see Cache::Keys#index): the class and module lines,
+# constants, `include`s, `attr_*`s, declarations and other class-body code.
+# Editing a method leaves it unchanged; editing anything the spans do not
+# cover changes it.
 #
 # Each removed span is marked where it was, so text cannot move from one
 # side of a subject to the other unnoticed. Without a span for every subject

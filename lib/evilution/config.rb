@@ -21,7 +21,7 @@ class Evilution::Config
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default, canary: true, warmup: :none, stop_on_kill: true,
+    profile: :default, canary: true, warmup: :none, stop_on_kill: true, killer_first: false,
     timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60, skip_uncovered: true,
     probe_first: false, skip_sites: []
   }.freeze
@@ -36,7 +36,7 @@ class Evilution::Config
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
-              :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
+              :stop_on_kill, :killer_first, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
               :probe_first, :skip_sites
 
   def initialize(**options)
@@ -80,6 +80,12 @@ class Evilution::Config
 
   def stop_on_kill?
     stop_on_kill
+  end
+
+  # Whether a run that stops at its first kill tries the examples most likely
+  # to kill first. Only such a run gains anything from the order.
+  def killer_first?
+    killer_first && stop_on_kill?
   end
 
   # Whether each mutation's limit follows the baseline time of its spec files.
@@ -180,6 +186,12 @@ class Evilution::Config
       # verdict (default: true). Set false to run every selected example.
       # stop_on_kill: true
 
+      # With RSpec and stop_on_kill, run first the examples that killed other
+      # mutations nearby, then the cheapest (default: false). Only for a suite
+      # whose examples pass in any order: one that leans on the order they are
+      # defined in reports kills that a run in that order would not.
+      # killer_first: false
+
       # Test integration: rspec, minitest, test_unit (default: rspec)
       # integration: rspec
 
@@ -235,8 +247,8 @@ class Evilution::Config
       #            any file the map has not fully built)
       # example_targeting_strategy: lexical
 
-      # With coverage targeting, report a mutation no example executes the line
-      # of as `uncovered`, without running it (default: true). It scores as a
+      # With coverage targeting, report a mutation as `uncovered`, without
+      # running it, when no example executes any line it changes (default: true). It scores as a
       # survivor. Lines that run only while files load (class bodies, constants,
       # `def` lines) count as executed. Set false to run them anyway.
       # skip_uncovered: true
@@ -271,7 +283,8 @@ class Evilution::Config
       # debug_output   - puts/print/warn/p/pp and writes to $stdout/$stderr
       # error_messages - the message of a raised error
       # requires       - require/require_relative run while the file loads
-      # skip_sites: [logging, error_messages, requires]
+      #                  (no subject mutates these yet, so it skips nothing)
+      # skip_sites: [logging, error_messages]
 
       # Operator profile: default or strict (default: default).
       # strict adds aggressive mutators (e.g. replaces `x.predicate?` with
@@ -322,6 +335,7 @@ class Evilution::Config
     quiet_children_dir: nil,
     canary: nil,
     stop_on_kill: nil,
+    killer_first: nil,
     skip_uncovered: nil,
     probe_first: nil
   }.freeze

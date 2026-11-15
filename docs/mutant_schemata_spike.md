@@ -1,8 +1,9 @@
 # Mutant schemata: spike report
 
 Status: **no-go**. No prototype in `lib/`. The prototype was a harness
-loaded from outside the gem (see [Reproducing](#reproducing)). A cheaper
-change, found while measuring, is recommended instead
+loaded from outside the gem, kept in `scripts/schemata_spike/` (see
+[Reproducing](#reproducing)). Two cheaper
+changes, found while measuring, are recommended instead
 ([below](#what-to-do-instead)).
 
 ## Idea
@@ -47,10 +48,12 @@ i18n run (mean per mutant, fork child):
 
 Three quarters of `apply` is the constant pinner building a full syntax tree
 of the unchanged original file, in every mutation process, and getting the
-same names each time. The tree is large, and building it in a freshly forked
-child triggers GC and copy-on-write faults (26 GCs over 1831 calls; the same
-parse takes 0.5 ms in a warm parent). The eval that schemata would remove
-costs about 1 ms.
+same names each time. The same parse takes 0.5 ms in a warm parent; in a
+freshly forked child it costs about 6 ms on almost every call (p50 6.0 ms).
+GC is not the reason: only 26 of the 1831 calls ran a GC. The cost is per
+call, in allocating the tree on the child's fresh heap and the copy-on-write
+page faults of those first writes. The eval that schemata would remove costs
+about 1 ms.
 
 ## Prototype
 
@@ -107,7 +110,7 @@ switch with it. Not covered: methods built by `define_method` (their body is
 a block evaluated at load time; switching it means re-running the class-body
 call), `def`s inside blocks (concern `included`/`class_methods`, `Module.new`,
 `Class.new`, `Struct.new do`), and endless `def`s. Endless `def`s can be
-rewritten to the long form (an extra 150 of 611 on `maybe.rb`).
+rewritten to the long form (an extra 150 of 610 on `maybe.rb`).
 
 **Methods redefined later in the file.** Each `def` gets its own switch, and
 the later definition wins at load time, as it does when the file is
@@ -192,8 +195,9 @@ Eligible share (prototype rules):
 
 **Verdict equivalence:** identical on every run. Each mutant was matched by
 file, line, operator and diff against the eval-path run: fixture 440/440,
-i18n 1837/1837 and dry-monads `maybe.rb` 611/611 (three schemata runs
-each).
+i18n 1837/1837 and dry-monads `maybe.rb` 611/611 (one schemata run for the
+fixture, three for dry-monads, and every schemata run on i18n, probes
+included).
 
 **`apply` per mutant**, eval path vs schemata (mean, all mutants):
 
@@ -212,35 +216,73 @@ each).
 | dry-monads `maybe.rb`, `--jobs 2` | 45.3 / 88.8, 43.5 / 85.3, 43.8 / 85.8 | 44.9 / 87.3, 50.2 / 97.6, 43.3 / 83.9 | none measurable (`apply` saves 2.6 s of ~86 s killtime; one run on was a 15% outlier) |
 | fixture, `--jobs 2` (one pair) | 77.7 / 149.7 | 83.9 / 160.8 | no gain possible: `apply` is 0.17 s of the run; the difference is in test and confirmation time |
 
-On i18n, schemata removes 16 s of `apply` and adds 19 s of `test_run`. The
-tests themselves got slower:
+On i18n, schemata removes 16 s of `apply` and adds 19 s of `test_run`
+(42.2 / 42.8 s → 61.5 / 62.0 s). The tests themselves got slower. Four
+measurements, all with verdicts identical to the eval path, narrow down
+why:
 
-- With schemata on, a probe that evaluated the meta-methods again inside
-  each mutation process (fresh copies, not the parent's) brought `test_run`
-  back to the eval path's 42 s. So the slowdown comes from running methods
-  compiled in the parent, not from the switch or the size of the methods.
-- GC per mutation process went from 10.6 to 13.4 ms, and major GCs from 0.11
-  to 0.26 per mutant, with the parent's heap 16.5 MB larger. The rest of the
-  difference is consistent with first-call inline-cache writes into the
-  parent's instruction sequences: each one copies a shared page. Under the
-  eval path the file's methods are compiled in the child, on its own pages.
+- **GC per mutation process** went from 10.6 to 13.4 ms, and major GCs from
+  0.115 to 0.258 per mutant, with the parent's heap 16.5 MB larger (one run
+  each with GC counters).
+- **Full GC in the parent before forking** (`Process.warmup` after the
+  meta-methods are built: full GC, compaction, heap trim), three rounds
+  alternated with schemata alone, the eval path alone and the eval path
+  with the same warm-up. The machine was busier than in the runs above, so
+  compare within this table only (means of three runs, seconds):
+
+  | i18n, `--jobs 2` | duration | killtime | `test_run` | GC per mutant | major GCs per mutant |
+  |---|---|---|---|---|---|
+  | eval path | 48.0 | 92.6 | 51.5 | 12.2 ms | 0.14 |
+  | schemata | 55.1 | 103.5 | 79.9 | 16.5 ms | 0.31 |
+  | schemata + parent warm-up | 44.3 | 81.1 | 58.5 | 7.4 ms | 0.14 |
+  | eval path + parent warm-up | 42.9 | 82.2 | 41.7 | 6.9 ms | 0.17 |
+
+  The warm-up removes the GC penalty of the bigger heap: with it, the child
+  spends about as long in GC under schemata as under the eval path. It does
+  not remove the rest: `test_run` is still 16.7 s (9 ms per mutant) higher
+  than the eval path with the same warm-up.
+- **Re-evaluating the meta-methods inside each mutation process** (fresh
+  copies compiled in the child, `apply` 252 s) brought `test_run` back to
+  the eval path's 42 s. So the switch and the size of the methods do not
+  slow the tests by themselves.
+- **`GC.start` inside each mutation process**, after setting the switch and
+  before the tests (`apply` 65 s), brought `test_run` down to 29.1 s, below
+  the eval path's 42 s, because the tests then ran with no GC debt at all.
+  A full GC in the child also touches the whole inherited heap, so this
+  probe moves page faults out of the tests as well as GC, and does not
+  separate the two.
+
+So of the 28 s of extra `test_run` in those rounds, about 12 s (40%) was GC
+from the larger parent heap, which a pre-fork warm-up removes. The
+remaining 17 s (60%) is tied to running methods compiled in the parent
+rather than in the child. First-call writes
+(inline caches) into the parent's instruction sequences, each copying a
+shared page, would explain it, but that mechanism was not measured.
 
 On top of that the parent spends 2.3 s building and evaluating the
-meta-methods before the first mutation. That is 6% of the run, paid
-serially.
+meta-methods before the first mutation, serially. That time was not broken
+down; it covers two extra `Prism.parse` calls per variant in the
+local-conflict guard and compiling methods that hold a full copy of the
+body per variant (1751 copies of a few long methods on i18n).
 
 ## Decision
 
-**No-go**, for four reasons:
+**No-go**, and it still holds with the pre-fork warm-up measured above.
+Four reasons:
 
 1. **The ceiling is low.** What schemata removes is `apply`: 0.1% of
    killtime on the fixture, 3.6% on dry-monads `maybe.rb`, 20% on i18n.
    Three quarters of that 20% is one parse (below) that needs no schemata
    to remove.
-2. **On the one target where the ceiling is worth having, it lost.** i18n
-   ran 8% slower. The parent-compiled meta-methods cost the mutation
-   processes more in GC and copy-on-write than the skipped eval saved, and
-   building them cost 2.3 s serially. dry-monads came out even.
+2. **On the one target where the ceiling is worth having, it did not win.**
+   As built (whole-body variants, no pre-fork GC) i18n ran 8% slower. A
+   `Process.warmup` in the parent removes the GC part of that loss, but the
+   same warm-up speeds up the eval path too, and against that schemata
+   ties (killtime -1%, wall +3%): the tests still run 9 ms per
+   mutant slower on parent-compiled methods, which eats the saved `apply`.
+   dry-monads came out even. This is measured for this whole-body design
+   only; switching at the mutated expression (Untch, Stryker) would cut
+   the heap growth and build time, and was not built.
 3. **The correctness surface is large for what is left.** Variant line
    numbers shift. Local variables leak between branches and need a parse per
    variant to guard. Visibility, `module_function` and aliases have to be
@@ -254,8 +296,12 @@ serially.
    and `load_crashed` detection stay on the eval path. Schemata would be a
    second way to apply a mutation, to be kept equivalent with the first.
 
-A smaller version (switch only, no per-variant line fidelity) was not built:
-it saves the same `apply` and keeps reasons 2–4.
+Reason 1 holds on its own: even a version that cost nothing could remove at
+most a fifth of i18n's killtime, and three quarters of that a parse memo
+removes without schemata. Reasons 3 and 4 hold for any version.
+Expression-level switching was not built: it saves the same `apply`, keeps
+reasons 1, 3 and 4, and whether it also avoids the slower tests of reason 2
+is open.
 
 ## What to do instead
 
@@ -270,11 +316,29 @@ memoized per source and filled in `MutationExecutor#warm` (the same harness,
 | off | 17.97 s, 17.58 s | 81.6 s, 79.4 s | 42.1 s, 41.1 s |
 | on | 8.52 s, 8.77 s | 72.6 s, 75.6 s | 37.7 s, 39.2 s |
 
-That is **-8% wall and -9% killtime on i18n**, with verdicts identical
+That is about **-8% killtime and -8% wall on i18n** (killtime 80.5 → 74.1 s,
+wall 41.6 → 38.4 s, means of two runs), with verdicts identical
 (1837/1837), using a cache filled in the parent the way the concern
-registry already is. It is a small change with no new way to apply a
-mutation. Worth filing as its own issue. `RedefinitionRecovery` parses the
-original too, but only on a conflict.
+registry already is. Of the 9.1 s of `apply` saved, about 6.4 s reaches
+killtime: `test_run` rose with the memo on (45.4 / 43.9 → 46.2 / 48.6 s),
+probably the same shift of GC work into the tests that schemata shows
+(not measured for the memo). Two runs each is thin: unmodified i18n runs in
+the same session ranged from 38.2 to 42.1 s, about the size of the gain. It
+is a small change with no new way to apply a mutation. Worth filing as its
+own issue, and the gain should be confirmed there with
+`scripts/benchmark_perf` (interleaved repeats), which this spike did not
+use. `RedefinitionRecovery` parses the original too, but only on a
+conflict.
+
+**Collect and compact the parent's heap once before forking.** In the
+warm-up rounds above, `Process.warmup` in the parent after
+`MutationExecutor#warm` cut the eval path's GC per mutation process from
+12.2 to 6.9 ms and its `test_run` from 51.5 to 41.7 s: **-11% killtime and
+-11% wall on i18n** (92.6 → 82.2 s, 48.0 → 42.9 s, means of three
+alternated runs, verdicts identical). It is one call with no new way to
+apply a mutation. Worth its own issue, measured there with
+`scripts/benchmark_perf` on more than one canary (it compacts the heap,
+which a C extension that does not support compaction could mind).
 
 The rest of the per-mutant fixed cost is the isolation itself (fork, sandbox,
 reap: 9.5–10.5 ms per mutant under `fork`, more than `apply` on every
@@ -283,25 +347,31 @@ neither.
 
 ## Reproducing
 
-Corpus: scratchpad copies of `/tmp/ev-canaries/{dry-monads,i18n}` (pinned
-commits in `scripts/benchmark_perf.yml`) and of the fixture, each with a
-Gemfile adding `gem "evilution", path: <tree>`.
+The harness, the timing wrapper and the aggregation scripts are in
+[`scripts/schemata_spike/`](../scripts/schemata_spike/); its README lists
+every environment switch. Corpus: copies of the dry-monads and i18n canaries
+(pinned commits in `scripts/benchmark_perf.yml`) and of the fixture, each
+with a Gemfile adding `gem "evilution", path: <tree>`.
 
 - Baseline: the per-mutation `timings` (`apply`, `test_run`,
   `confirmation`) of a normal JSON run. Isolation overhead per mutant is
   `duration` minus those.
-- Step breakdown: prepend a timing wrapper to `call` of `SyntaxValidator`,
-  `ConstantPinner`, `ConcernStateCleaner`, `SourceEvaluator`,
-  `RedefinitionRecovery` and `MutationApplier#mark_feature_loaded`, loaded
-  with `RUBYOPT=-r<file>` (it must `require "bundler/setup"` first).
-- Schemata: the harness described under [Prototype](#prototype): a module
+- Step breakdown (`apply_prof.rb`): prepends a timing wrapper to `call` of
+  `SyntaxValidator`, `ConstantPinner`, `ConcernStateCleaner`,
+  `SourceEvaluator`, `RedefinitionRecovery` and
+  `MutationApplier#mark_feature_loaded`, loaded with `RUBYOPT=-r<file>` (it
+  must `require "bundler/setup"` first).
+- Schemata (`schemata.rb`): the harness described under
+  [Prototype](#prototype): a module
   prepended to `MutationExecutor` whose private `warm(integration,
   mutations)` calls `super` and then builds and evaluates the meta-methods,
   and one prepended to `MutationApplier` whose `call`/`restore`
   set and clear the global for the mutations it switched (keyed by file and
   `mutated_source.hash`, stable across `fork`).
-- Verdict equivalence: match the two runs' JSON entries by file, line,
-  operator and diff, and compare statuses.
+- Probes and the memo: switches of the same harness (`EV_SCHEMATA_REEVAL`,
+  `EV_SCHEMATA_GC`, `EV_PARENT_WARMUP`, `EV_GCSTAT`, `EV_PIN_MEMO`).
+- Verdict equivalence (`compare_verdicts.rb`): match the two runs' JSON
+  entries by file, line, operator and diff, and compare statuses.
 
 Commands (in the target dir, `--jobs 2`):
 

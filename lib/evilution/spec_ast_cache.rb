@@ -40,7 +40,22 @@ class Evilution::SpecAstCache
     @entries.key?(path)
   end
 
+  # Parses and keeps a file ahead of the first #fetch for it, but only where
+  # it fits beside what is already held: an entry that pushed out an earlier
+  # one would cost the parse it is meant to save. A file that does not parse
+  # raises as #fetch would.
+  def preload(path)
+    return if cached?(path) || full?
+
+    blocks = parse(path)
+    insert(path, blocks) if @total_blocks + blocks.length <= @max_blocks
+  end
+
   private
+
+  def full?
+    @entries.length >= @max_files || @total_blocks >= @max_blocks
+  end
 
   def insert(path, blocks)
     @entries[path] = blocks

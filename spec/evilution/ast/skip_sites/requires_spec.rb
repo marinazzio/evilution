@@ -39,8 +39,20 @@ RSpec.describe Evilution::AST::SkipSites::Requires do
     expect(covered?(source, "part", Prism::LocalVariableReadNode)).to be true
   end
 
+  it "covers a require guarded by a rescue" do
+    source = "begin\n  require \"oj\"\nrescue LoadError\n  nil\nend\n"
+
+    expect(covered?(source, "\"oj\"", Prism::StringNode)).to be true
+  end
+
+  it "leaves a require whose value is used" do
+    expect(covered?("HAS_OJ = require(\"zlib\")\n", "\"zlib\"", Prism::StringNode)).to be false
+    expect(covered?("loaded = require \"oj\"\nloaded\n", "require \"oj\"", Prism::CallNode)).to be false
+  end
+
   it "leaves a require inside a method, which loads lazily" do
     expect(covered?("def f\n  require \"json\"\nend\n", "\"json\"", Prism::StringNode)).to be false
+    expect(covered?("def f\n  require \"json\"\n  1\nend\n", "\"json\"", Prism::StringNode)).to be false
   end
 
   it "leaves a require inside a block, which runs later" do

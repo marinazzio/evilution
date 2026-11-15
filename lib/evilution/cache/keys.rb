@@ -21,12 +21,10 @@ require_relative "run_fingerprint"
 #
 # Neither key sees the other methods a subject calls, other source files, or
 # what spec files load beyond the conventional helpers; a change there keeps
-# the cached verdicts. Constants are the exception within the file: they stay
-# part of the skeleton.
+# the cached verdicts. Only method definitions are left out of the skeleton:
+# constants and class-body declarations (callbacks, validations, scopes, AASM
+# machines) stay in it, so editing one changes every key of its file.
 class Evilution::Cache::Keys
-  CONSTANT_KINDS = %i[constant constant_write].freeze
-  private_constant :CONSTANT_KINDS
-
   def self.for(config)
     new(
       fingerprint: Evilution::Cache::RunFingerprint.new(config),
@@ -46,17 +44,21 @@ class Evilution::Cache::Keys
     @spans = {}
     @names = {}
     @skeletons = {}
+    @starts = {}
     @subject_keys = {}.compare_by_identity
   end
 
   # Every subject parsed from the run's files, before any is filtered out:
-  # the skeleton leaves out all of them, whichever this run mutates, except
-  # constants. A constant is read by the methods around it, so editing one
-  # changes the key of every subject in its file.
+  # the skeleton leaves out every method definition, whichever this run
+  # mutates. Everything else stays in it. A constant is read by the methods
+  # around it, and a class-body declaration runs at load and decides whether
+  # and when methods run (`before_save :normalize, if: :frozen?`), so editing
+  # either changes the key of every subject in its file.
   def index(subjects)
     subjects.group_by(&:file_path).each do |file_path, file_subjects|
-      @spans[file_path] = file_subjects.reject { |subject| CONSTANT_KINDS.include?(subject.kind) }.map(&:byte_range)
+      @spans[file_path] = file_subjects.select { |subject| subject.kind == :method }.map(&:byte_range)
       @names[file_path] = file_subjects.map(&:name)
+      @starts[file_path] = starts(file_subjects)
     end
   end
 
@@ -87,14 +89,32 @@ class Evilution::Cache::Keys
 
   private
 
+  def starts(subjects)
+    subjects.filter_map { |subject| [subject.name, subject.byte_range.begin] if subject.byte_range }
+  end
+
   def build_subject_key(mutation, subject, source)
     specs = @spec_digest.call(@spec_selector.call(mutation.file_path))
     return nil unless specs
 
     Digest::SHA256.hexdigest(
-      [@fingerprint.to_s, mutation.file_path, subject.name, skeleton(mutation.file_path, source),
+      [@fingerprint.to_s, mutation.file_path, subject.name, place(subject), skeleton(mutation.file_path, source),
        Digest::SHA256.hexdigest(subject.source), specs].join("\0")
     )
+  end
+
+  # Tells apart subjects of one file that share a name and a source, such as
+  # a method defined twice: which of the same-named subjects it is, counted
+  # from the top of the file, so that it keeps its key when it only moves.
+  # Without that count -- the file was not indexed, or the subject has no
+  # byte range -- the line it starts on, so such a subject loses its
+  # verdicts when it moves.
+  def place(subject)
+    starts = @starts[subject.file_path]
+    range = subject.byte_range
+    return "@#{subject.line_number}" if starts.nil? || range.nil?
+
+    starts.count { |name, start| name == subject.name && start < range.begin }.to_s
   end
 
   def skeleton(file_path, source)

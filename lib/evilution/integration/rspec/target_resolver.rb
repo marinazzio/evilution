@@ -5,7 +5,7 @@ require_relative "../rspec"
 # Targets are passed straight through when they resolve against Dir.pwd,
 # preserving the relative-path contract for callers/tests. When the CWD
 # cannot find them — workers chdir'd into a per-mutation sandbox by the
-# isolator (EV-wqxu / GH #1278) — the targets are expanded against
+# isolator — the targets are expanded against
 # Evilution::PROJECT_ROOT so RSpec::Core::Runner can still load the files.
 class Evilution::Integration::RSpec::TargetResolver
   # Splits a target into (path, line). RSpec example locations end in
