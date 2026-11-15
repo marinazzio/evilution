@@ -26,6 +26,14 @@ RSpec.describe Evilution::Integration::Base do
     source_file.close!
   end
 
+  # An integration without per-mutation targeting caches nothing worth
+  # filling ahead of the run.
+  describe "#warm_targeting" do
+    it "does nothing by default" do
+      expect(described_class.new.warm_targeting([mutation])).to be_nil
+    end
+  end
+
   describe "abstract methods" do
     subject(:base) { described_class.new }
 
@@ -345,6 +353,34 @@ RSpec.describe Evilution::Integration::Base do
 
         expect { concrete_class.new(hooks: failing_hooks, mutation_applier: applier).call(mutation) }
           .to raise_error(ArgumentError, "hook")
+      end
+
+      # A fork child runs one mutation and exits right after reporting it, so
+      # nothing would ever see the restored file; evaluating it again only
+      # delays the report.
+      context "in a process that ends with its mutation" do
+        around do |example|
+          previous = Evilution.instance_variable_get(:@single_mutation_process)
+          Evilution.single_mutation_process!
+          example.run
+        ensure
+          Evilution.instance_variable_set(:@single_mutation_process, previous)
+        end
+
+        it "does not restore the original after the tests have run" do
+          allow(applier).to receive(:call).with(mutation).and_return(nil)
+          expect(applier).not_to receive(:restore)
+
+          expect(integration.call(mutation)).to include(passed: false, test_command: "test")
+          expect(events).to include(:run_tests)
+        end
+
+        it "does not restore the original when applying the mutation failed" do
+          allow(applier).to receive(:call).with(mutation).and_return({ passed: false, error: "injected" })
+          expect(applier).not_to receive(:restore)
+
+          integration.call(mutation)
+        end
       end
     end
   end

@@ -47,6 +47,24 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.mutation).to eq(mutation)
     end
 
+    # The child does not evaluate the original source again after its tests,
+    # so whatever it measures afterwards must not go through definitions the
+    # mutation may have replaced; here the tests redefine the RSS reader, as a
+    # mutation of that file would.
+    it "measures its memory with the definitions it started with, not ones the tests replaced" do
+      test_command = lambda { |_m|
+        Evilution::Memory.define_singleton_method(:rss_kb) { raise "mutated rss_kb" }
+        Evilution::Memory.define_singleton_method(:rss_kb_for) { |_pid| raise "mutated rss_kb_for" }
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_survived
+      expect(result.error_message).to be_nil
+      expect(result.child_rss_kb).to be_a(Integer) if File.exist?("/proc/self/status")
+    end
+
     it "declares the child a process that ends with its mutation" do
       test_command = ->(_m) { { passed: Evilution.single_mutation_process? } }
 
@@ -480,32 +498,139 @@ RSpec.describe Evilution::Isolation::Fork do
     # already returned. The dispatcher item_timeout then kills the pool worker.
     # Fix: reap_and_decode bounds Process.wait by a deadline; if pid hasn't
     # exited, force-terminate via the same TERM/KILL ladder used on timeout.
-    it "bounds reap_and_decode so a child that hasn't exited can't hang the parent" do
-      pid = Process.fork { sleep 60 }
-      handle = Evilution::ProcessSupervisor::Handle.new(
-        pid: pid, pgid: pid, fds: [], sandbox_dir: nil
-      )
-      payload = Marshal.dump(passed: true)
-      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    describe "reaping a child after its result has been read" do
+      let(:pipe) { IO.pipe }
+      let(:read_io) { pipe.first }
+      let(:write_io) { pipe.last }
 
-      Timeout.timeout(8) do
-        isolator.send(:reap_and_decode, handle, payload)
+      after do
+        [read_io, write_io].each { |io| io.close unless io.closed? }
+        begin
+          Process.kill("KILL", @pid) if @pid
+        rescue Errno::ESRCH
+          nil
+        end
+        begin
+          Process.waitpid(@pid) if @pid
+        rescue Errno::ECHILD
+          nil
+        end
       end
 
-      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
-      expect(elapsed).to be < 5
-      expect { Process.kill(0, pid) }.to raise_error(Errno::ESRCH)
+      def stuck_child_handle
+        @pid = Process.fork { sleep 60 }
+        Evilution::ProcessSupervisor::Handle.new(pid: @pid, pgid: @pid, fds: [], sandbox_dir: nil)
+      end
+
+      def reap_within(seconds, handle)
+        start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        decoded = Timeout.timeout(8) { isolator.send(:reap_and_decode, handle, Marshal.dump(passed: true), read_io) }
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - start).to be < seconds
+        decoded
+      end
+
+      it "bounds the wait so a child that hasn't exited can't hang the parent" do
+        handle = stuck_child_handle
+
+        decoded = reap_within(5, handle)
+
+        expect(decoded).to include(passed: true)
+        expect { Process.kill(0, @pid) }.to raise_error(Errno::ESRCH)
+      end
+
+      # Every writer has let go of the pipe, so it stays readable; the wait
+      # must not turn into a spin on it.
+      it "bounds the wait for a child that closed the pipe but did not exit" do
+        handle = stuck_child_handle
+        write_io.close
+        allow(read_io).to receive(:wait_readable).and_call_original
+
+        reap_within(5, handle)
+
+        expect(read_io).to have_received(:wait_readable).at_most(5).times
+        expect { Process.kill(0, @pid) }.to raise_error(Errno::ESRCH)
+      end
+    end
+
+    # A child exits right after writing its result; waiting for it in fixed
+    # steps added the remainder of a step to every mutation. The waits start
+    # short and double, so a child that exits promptly is noticed promptly.
+    it "waits for the child to exit in steps that start short and double" do
+      read_io, write_io = IO.pipe
+      write_io.close
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      handle = Evilution::ProcessSupervisor::Handle.new(pid: 0, pgid: 0, fds: [], sandbox_dir: nil)
+      allow(supervisor).to receive(:reap_nonblock).and_return(false, false, false, false, true)
+      allow(isolator).to receive(:sleep)
+
+      decoded = isolator.send(:reap_and_decode, handle, Marshal.dump(passed: true), read_io)
+
+      expect(decoded).to include(passed: true)
+      step = described_class::REAP_STEP_MIN
+      expect(isolator).to have_received(:sleep).with(step * 2).ordered
+      expect(isolator).to have_received(:sleep).with(step * 4).ordered
+      expect(isolator).to have_received(:sleep).with(step * 8).ordered
+      expect(isolator).to have_received(:sleep).exactly(3).times
+    ensure
+      read_io.close
+    end
+
+    it "caps the step between liveness checks" do
+      read_io, write_io = IO.pipe
+      write_io.close
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      handle = Evilution::ProcessSupervisor::Handle.new(pid: 0, pgid: 0, fds: [], sandbox_dir: nil)
+      answers = ([false] * 10) + [true]
+      allow(supervisor).to receive(:reap_nonblock) { answers.shift }
+      allow(isolator).to receive(:sleep)
+
+      isolator.send(:reap_and_decode, handle, Marshal.dump(passed: true), read_io)
+
+      expect(isolator).to have_received(:sleep).with(described_class::REAP_STEP_MAX).at_least(:once)
+      expect(isolator).not_to have_received(:sleep).with(a_value > described_class::REAP_STEP_MAX)
+    ensure
+      read_io.close
+    end
+
+    it "reaps a child that exited after writing its result without signalling it" do
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      allow(supervisor).to receive(:signal_group).and_call_original
+
+      result = isolator.call(mutation:, test_command: ->(_m) { { passed: true } }, timeout: 5)
+
+      expect(result).to be_survived
+      expect(supervisor).not_to have_received(:signal_group)
+    end
+
+    # The child's pid is free once it is reaped, but its process group lives
+    # on while the grandchild does; sweeping the group is what keeps a
+    # process the tests started from outliving the mutation.
+    it "reaps without signalling the child's pid when a grandchild still holds the pipe, " \
+       "and terminates the grandchild" do
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      allow(supervisor).to receive(:signal_group).and_call_original
+      grandchild_file = Tempfile.new("grandchild_pid")
+      test_command = lambda { |_m|
+        File.write(grandchild_file.path, Process.fork { sleep 30 }.to_s)
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 10)
+
+      expect(result).to be_survived
+      expect(result.error_message).to be_nil
+      expect(supervisor).not_to have_received(:signal_group)
+      grandchild = File.read(grandchild_file.path).to_i
+      wait_until { !process_alive?(grandchild) }
+      expect(process_alive?(grandchild)).to be(false)
     ensure
       begin
-        Process.kill("KILL", pid) if pid
-      rescue Errno::ESRCH
+        grandchild = File.read(grandchild_file.path).to_i
+        Process.kill("KILL", grandchild) if grandchild.positive?
+      rescue Errno::ESRCH, Errno::ENOENT
         nil
       end
-      begin
-        Process.waitpid(pid) if pid
-      rescue Errno::ECHILD
-        nil
-      end
+      grandchild_file.close!
     end
 
     # When the machine stack overflows through `const_missing`, Ruby runs

@@ -79,4 +79,17 @@ RSpec.describe Evilution::CoverageExampleFilter do
       expect(lexical).to have_received(:call).with(mut, ["spec/other_spec.rb"])
     end
   end
+
+  describe "#warm" do
+    # Coverage answers from its map; the lexical filter is what it falls back
+    # on, and its caches are what a forked child would otherwise fill.
+    it "warms the lexical filter it falls back on" do
+      m = mutation(file_path: source_rel, line: 3)
+      allow(lexical).to receive(:warm)
+
+      filter.warm(m, ["spec/calc_spec.rb"])
+
+      expect(lexical).to have_received(:warm).with(m, ["spec/calc_spec.rb"])
+    end
+  end
 end

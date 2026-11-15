@@ -420,6 +420,71 @@ RSpec.describe Evilution::ProcessSupervisor do
       supervisor.terminate(h, grace: 0.2)
       expect(described_class.registry).not_to include(h)
     end
+
+    # Once reaped, the pid is free for the kernel to hand to an unrelated
+    # process; signalling it would hit that process instead. The group id is
+    # not free while a grandchild is still in the group, so the group is still
+    # swept.
+    context "when the child has already been reaped" do
+      it "does not signal its pid" do
+        h = supervisor.spawn { exit!(0) }
+        wait_until { supervisor.reap_nonblock(h) }
+        allow(Process).to receive(:kill).and_call_original
+
+        supervisor.terminate(h, grace: 0.2)
+
+        expect(Process).not_to have_received(:kill).with(anything, h.pid)
+      end
+
+      it "terminates a grandchild left in its process group" do
+        pidfile = File.join(Dir.mktmpdir("supervisor-sweep"), "gpid")
+        h = supervisor.spawn do
+          gpid = Process.fork { sleep 60 }
+          File.write(pidfile, gpid.to_s)
+          exit!(0)
+        end
+        wait_until { supervisor.reap_nonblock(h) }
+        wait_until { File.exist?(pidfile) && !File.empty?(pidfile) }
+        gpid = File.read(pidfile).to_i
+        expect(process_alive?(gpid)).to be(true)
+
+        supervisor.terminate(h, grace: 0.2)
+
+        wait_until { !process_alive?(gpid) }
+        expect(process_alive?(gpid)).to be(false)
+      ensure
+        begin
+          Process.kill("KILL", gpid) if gpid
+        rescue Errno::ESRCH
+          nil
+        end
+        FileUtils.rm_rf(File.dirname(pidfile)) if pidfile
+      end
+
+      it "tolerates a process group that is already empty" do
+        h = supervisor.spawn { exit!(0) }
+        wait_until { supervisor.reap_nonblock(h) }
+
+        expect { supervisor.terminate(h, grace: 0.2) }.not_to raise_error
+      end
+
+      it "keeps the exit status recorded when it was reaped" do
+        h = supervisor.spawn { exit!(5) }
+        wait_until { supervisor.reap_nonblock(h) }
+
+        supervisor.terminate(h, grace: 0.2)
+
+        expect(h.status.exitstatus).to eq(5)
+      end
+
+      it "does not wait out the grace period" do
+        h = supervisor.spawn { exit!(0) }
+        supervisor.reap(h)
+        expect(supervisor).not_to receive(:sleep)
+
+        supervisor.terminate(h, grace: 0.2)
+      end
+    end
   end
 
   describe "#reap" do
@@ -443,6 +508,21 @@ RSpec.describe Evilution::ProcessSupervisor do
       h = supervisor.spawn { exit!(0) }
       supervisor.reap(h)
       expect { supervisor.reap(h) }.not_to raise_error
+    end
+
+    it "keeps the exit status of a child it already reaped" do
+      h = supervisor.spawn { exit!(4) }
+      supervisor.reap(h)
+
+      supervisor.reap(h)
+
+      expect(h.status.exitstatus).to eq(4)
+    end
+
+    it "marks the handle reaped" do
+      h = supervisor.spawn { exit!(0) }
+
+      expect { supervisor.reap(h) }.to change(h, :reaped).from(nil).to(true)
     end
   end
 
@@ -481,6 +561,24 @@ RSpec.describe Evilution::ProcessSupervisor do
 
       expect(h.status).to be_signaled
       expect(Signal.signame(h.status.termsig)).to eq("KILL")
+    end
+
+    it "marks the handle reaped once the child has exited" do
+      h = supervisor.spawn { exit!(0) }
+
+      wait_until { supervisor.reap_nonblock(h) }
+
+      expect(h.reaped).to be(true)
+    end
+
+    # The pid may already belong to another child of this process.
+    it "does not wait on the pid of a child it already reaped" do
+      h = supervisor.spawn { exit!(0) }
+      wait_until { supervisor.reap_nonblock(h) }
+      allow(Process).to receive(:waitpid).and_call_original
+
+      expect(supervisor.reap_nonblock(h)).to be(true)
+      expect(Process).not_to have_received(:waitpid)
     end
 
     # $? would hold some earlier child's status here, and attributing that
