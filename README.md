@@ -368,7 +368,7 @@ Schema:
     "phases": "object — wall-clock seconds per phase of the run, in the order they ran: subject_discovery, preload, canary, baseline, planning (mutation generation and equivalence detection), execution (every mutation, including the serial re-run of infrastructure crashes and building the coverage map when coverage targeting is on), finalize; they add up to about summary.duration",
     "baseline": "array — one entry per spec file the baseline ran, in order: { spec_file, duration }; empty when the baseline did not run",
     "mutations": "object — each per-mutation timing phase summed over all mutations: { apply, test_run, confirmation, queue_wait }; process seconds, so in a parallel run they add up across workers and can exceed the execution phase",
-    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; workers live for the whole run, so there are --jobs entries (fewer when there are fewer mutations to run) plus one for each worker that replaced one killed after a timeout, a crash or an unreadable reply; busy and wall are 0.0 for a worker that died before reporting them; empty for --jobs 1"
+    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; workers live for the whole run, so there are --jobs entries (fewer when there are fewer mutations to run) plus one for each worker that replaced one killed after a timeout, a crash or an unreadable reply; under --isolation in_process each mutation gets a fresh worker, so there is one entry per mutation run; busy and wall are 0.0 for a worker that died before reporting them; empty for --jobs 1"
   },
   "subjects": [
     {

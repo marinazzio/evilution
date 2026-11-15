@@ -707,7 +707,7 @@ RSpec.describe Evilution::ExampleFilter do
 
     it "lets through an error that is not a parse failure" do
       failing = instance_double(Evilution::SpecAstCache)
-      allow(failing).to receive(:fetch).and_raise(RuntimeError, "bug")
+      allow(failing).to receive(:preload).and_raise(RuntimeError, "bug")
 
       expect { described_class.new(cache: failing).warm(mutation(original_source: src, line: 3), [spec_path]) }
         .to raise_error(RuntimeError, "bug")
@@ -721,6 +721,45 @@ RSpec.describe Evilution::ExampleFilter do
       expect(Prism).not_to receive(:parse)
 
       warmed.warm(mutation(original_source: nil, line: 3), [])
+    end
+
+    # The caches are bounded. Warming past their bound would push out the
+    # files warmed first, which the first mutations to run need, and parse
+    # again, for every source file, a spec list longer than the bound.
+    context "with more files than the caches hold" do
+      let(:other_spec_path) do
+        write_source(<<~RUBY)
+          RSpec.describe Foo do
+            it "exercises bar_method again" do
+              Foo.new.bar_method
+            end
+          end
+        RUBY
+      end
+      let(:cache) { Evilution::SpecAstCache.new(max_files: 1) }
+      let(:source_cache) { Evilution::SourceAstCache.new(max_entries: 1) }
+
+      it "keeps the spec files warmed first" do
+        warmed.warm(mutation(original_source: src, line: 3), [spec_path, other_spec_path])
+
+        expect(cache.cached?(spec_path)).to be(true)
+        expect(cache.cached?(other_spec_path)).to be(false)
+      end
+
+      it "parses nothing more once they are full" do
+        warmed.warm(mutation(original_source: src, line: 3), [spec_path, other_spec_path])
+        expect(Prism).not_to receive(:parse)
+
+        warmed.warm(mutation(original_source: "#{src}\n# changed\n", line: 3), [spec_path, other_spec_path])
+      end
+
+      it "keeps the source warmed first" do
+        warmed.warm(mutation(original_source: src, line: 3), [spec_path])
+        warmed.warm(mutation(original_source: "#{src}\n# changed\n", line: 3), [spec_path])
+        expect(Prism).not_to receive(:parse)
+
+        warmed.call(mutation(original_source: src, line: 3), [spec_path])
+      end
     end
 
     it "warms the spec files without a source cache" do
