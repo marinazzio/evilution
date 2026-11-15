@@ -5,6 +5,7 @@ Metrics/AbcSize:
   Exclude:
     - "lib/evilution/runner.rb"
     - "lib/evilution/isolation/fork.rb"
+    - "scripts/combined_runs_spike/combined.rb"
 
 Metrics/ClassLength:
   Exclude:
@@ -21,6 +22,7 @@ Metrics/ClassLength:
 Metrics/MethodLength:
   Exclude:
     - "lib/evilution/runner.rb"
+    - "scripts/combined_runs_spike/combined.rb"
 
 # The empty forward declaration (`class Evilution::CLI; end`) that lets the
 # children nest under the namespace before the full definition counts as a
@@ -35,3 +37,15 @@ Metrics/ParameterLists:
     - "lib/evilution/result/summary.rb"
     - "lib/evilution/result/mutation_result.rb"
     - "lib/evilution/runner/mutation_executor/strategy/parallel.rb"
+
+# A measurement harness kept as it ran for docs/combined_runs_spike.md, not
+# gem code: refactoring it would change the code the report measured, so its
+# metric offenses are accepted rather than paid down (with the AbcSize and
+# MethodLength entries above).
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - "scripts/combined_runs_spike/combined.rb"
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - "scripts/combined_runs_spike/combined.rb"
