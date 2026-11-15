@@ -386,6 +386,22 @@ RSpec.describe Evilution::Integration::RSpec do
       expect(result[:test_command]).to eq("rspec --format progress --no-color --order defined spec/some_spec.rb")
     end
 
+    # An example id holds square brackets, which zsh reads as a glob: the
+    # reported command must reproduce the run when pasted into a shell, while
+    # RSpec itself still gets the target unchanged.
+    it "shell-escapes the test_command but passes example ids to RSpec unchanged" do
+      target = "/proj/spec/some_spec.rb[1:2:1]"
+      targeted = described_class.new(test_files: ["spec/some_spec.rb"], example_filter: ->(_mutation, _files) { [target] })
+      allow(RSpec::Core::Runner).to receive(:run).and_return(1)
+
+      result = targeted.call(mutation)
+
+      expect(RSpec::Core::Runner).to have_received(:run).with(include(target), anything, anything)
+      expect(result[:test_command]).not_to include(target)
+      expect(Shellwords.split(result[:test_command]))
+        .to eq(["rspec", "--format", "progress", "--no-color", "--order", "defined", target])
+    end
+
     it "includes default spec path in test_command when no test_files and fallback enabled" do
       default_integration = described_class.new(fallback_to_full_suite: true)
       allow(RSpec::Core::Runner).to receive(:run).and_return(0)

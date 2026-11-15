@@ -101,19 +101,14 @@ RSpec.describe Evilution::Coverage::MapBuilder do
   end
 
   describe ".absolute_location" do
-    it "expands a ./-relative location against the root, keeping the line suffix" do
-      expect(described_class.absolute_location("./spec/a_spec.rb:5", "/proj"))
-        .to eq("/proj/spec/a_spec.rb:5")
-    end
-
     it "expands a ./-relative example id against the root, keeping the id" do
       expect(described_class.absolute_location("./spec/a_spec.rb[1:2:1]", "/proj"))
         .to eq("/proj/spec/a_spec.rb[1:2:1]")
     end
 
-    it "keeps a nested line suffix and an already-absolute path" do
-      expect(described_class.absolute_location("/x/spec/a_spec.rb:5:9", "/proj"))
-        .to eq("/x/spec/a_spec.rb:5:9")
+    it "keeps an already-absolute example id" do
+      expect(described_class.absolute_location("/x/spec/a_spec.rb[1:2]", "/proj"))
+        .to eq("/x/spec/a_spec.rb[1:2]")
     end
   end
 

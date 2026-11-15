@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "forwardable"
+require "shellwords"
 require "stringio"
 require_relative "base"
 require_relative "known_failures"
@@ -148,10 +149,11 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
 
   # The command reported is the run in the defined order: it is what a reader
   # can run to reproduce the verdict, and the killer-first ordering exists
-  # only inside evilution.
+  # only inside evilution. It is shell-escaped so it pastes as is: an example
+  # id ("spec/x_spec.rb[1:2]") is a glob to zsh.
   def run_targets(targets, ordered: false)
     files = @target_resolver.call(targets)
-    command = "rspec #{run_args("defined", files).join(" ")}"
+    command = "rspec #{Shellwords.join(run_args("defined", files))}"
     args = ordered ? run_args(ExampleOrder::NAME, files) : run_args("defined", files)
 
     reset_examples

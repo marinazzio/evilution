@@ -12,17 +12,12 @@ require_relative "recorder"
 # hook, ::RSpec.world mutation, and ::Coverage state never leak into the
 # calling process; the parent receives only the serialized map over a pipe.
 class Evilution::Coverage::MapBuilder
-  LOCATION_SUFFIX = /\A(.+?)(:\d+(?::\d+)*|\[\d+(?::\d+)*(?:,\d+(?::\d+)*)*\])\z/
-
-  # RSpec reports example locations relative to its run dir as "./spec/x.rb:5",
-  # and example ids as "./spec/x.rb[1:2]". Store them ABSOLUTE (path expanded
-  # against the project root, line suffix or id preserved) so they replay
-  # regardless of the per-mutation run's CWD --
-  # Integration::RSpec#resolve_target passes absolute targets through unchanged.
-  def self.absolute_location(raw, root)
-    match = LOCATION_SUFFIX.match(raw)
-    path, suffix = match ? [match[1], match[2]] : [raw, ""]
-    "#{File.expand_path(path, root)}#{suffix}"
+  # RSpec reports example ids relative to its run dir ("./spec/x_spec.rb[1:2]").
+  # Store them ABSOLUTE so they replay regardless of the per-mutation run's CWD
+  # -- Integration::RSpec::TargetResolver passes absolute targets through
+  # unchanged. File.expand_path leaves the trailing "[1:2]" as it is.
+  def self.absolute_location(id, root)
+    File.expand_path(id, root)
   end
 
   def initialize(spec_files:, target_files:, project_root: Evilution::PROJECT_ROOT)

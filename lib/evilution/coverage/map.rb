@@ -3,7 +3,9 @@
 require_relative "../coverage"
 
 # Immutable query over a per-example line-coverage index:
-#   source file -> line -> [example locations ("spec.rb:line")].
+#   source file -> line -> [examples that ran it, as absolute RSpec example ids
+#   ("/proj/spec/x_spec.rb[1:2]"); maps cached before ids were recorded hold
+#   "/proj/spec/x_spec.rb:line"].
 # built_files records the source files for which the build completed, so
 # callers can distinguish "line genuinely uncovered" (file built, no entry)
 # from "we never built this file" (must fall back, not assert a gap).
