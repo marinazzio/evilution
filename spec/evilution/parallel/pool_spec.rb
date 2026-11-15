@@ -167,4 +167,22 @@ RSpec.describe Evilution::Parallel::Pool do
       end
     end
   end
+
+  describe "worker database copies" do
+    it "passes the setting to its work queue" do
+      allow(Evilution::Parallel::WorkQueue).to receive(:new).and_call_original
+
+      described_class.new(size: 2, copy_worker_databases: true)
+
+      expect(Evilution::Parallel::WorkQueue).to have_received(:new).with(hash_including(copy_worker_databases: true))
+    end
+
+    it "leaves them off by default" do
+      allow(Evilution::Parallel::WorkQueue).to receive(:new).and_call_original
+
+      described_class.new(size: 2)
+
+      expect(Evilution::Parallel::WorkQueue).to have_received(:new).with(hash_including(copy_worker_databases: false))
+    end
+  end
 end

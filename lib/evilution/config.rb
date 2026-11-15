@@ -23,7 +23,7 @@ class Evilution::Config
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
     profile: :default, canary: true, warmup: :none, stop_on_kill: true, killer_first: false,
     timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60, skip_uncovered: true,
-    probe_first: false, skip_sites: []
+    probe_first: false, skip_sites: [], copy_worker_databases: true
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -37,7 +37,7 @@ class Evilution::Config
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
               :stop_on_kill, :killer_first, :timeout_factor, :timeout_floor, :timeout_ceiling, :skip_uncovered,
-              :probe_first, :skip_sites
+              :probe_first, :skip_sites, :copy_worker_databases
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -146,6 +146,12 @@ class Evilution::Config
     probe_first
   end
 
+  # Whether a parallel worker that would share the preloaded SQLite test
+  # database with the others gets a copy of its own.
+  def copy_worker_databases?
+    copy_worker_databases
+  end
+
   def self.file_options
     FileLoader.load
   end
@@ -197,6 +203,12 @@ class Evilution::Config
 
       # Number of parallel workers (default: 1)
       # jobs: 1
+
+      # With jobs > 1 and a preloaded Rails app, give each worker its own copy
+      # of a SQLite test database the workers would otherwise share (one
+      # database.yml path for all, or a TEST_ENV_NUMBER database that is not
+      # prepared). Set false to let them share it (default: true).
+      # copy_worker_databases: true
 
       # Stop after N surviving mutants (default: disabled)
       # fail_fast: 1
@@ -337,7 +349,8 @@ class Evilution::Config
     stop_on_kill: nil,
     killer_first: nil,
     skip_uncovered: nil,
-    probe_first: nil
+    probe_first: nil,
+    copy_worker_databases: nil
   }.freeze
   private_constant :SIMPLE_ATTR_TRANSFORMS
 

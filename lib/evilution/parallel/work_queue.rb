@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "../parallel"
+require_relative "../worker_database"
 
 class Evilution::Parallel::WorkQueue
   SHUTDOWN = :__shutdown__
@@ -18,7 +19,10 @@ class Evilution::Parallel::WorkQueue
   DIED = Unfinished.new(reason: :died)
   UNREADABLE = Unfinished.new(reason: :unreadable)
 
-  def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil)
+  # `copy_worker_databases` gives each worker that would share the preloaded
+  # SQLite test database a copy of its own (WorkerDatabase::Copies).
+  def initialize(size:, hooks: nil, prefetch: 1, item_timeout: nil, worker_max_items: nil,
+                 copy_worker_databases: false)
     Validators::PositiveInt.call!(:size, size)
     Validators::PositiveInt.call!(:prefetch, prefetch)
     Validators::OptionalPositiveNumber.call!(:item_timeout, item_timeout)
@@ -29,6 +33,7 @@ class Evilution::Parallel::WorkQueue
     @prefetch = prefetch
     @item_timeout = item_timeout
     @worker_max_items = worker_max_items
+    @copy_worker_databases = copy_worker_databases
     @worker_stats = []
   end
 
@@ -47,11 +52,26 @@ class Evilution::Parallel::WorkQueue
   # moment the result is read, before its worker is sent the next item, which
   # can then be built from it (items need only answer #length, #empty? and
   # #[]). It should be quick: the worker waits for it.
-  def map(items, on_result: nil, on_arrival: nil, &block)
+  def map(items, on_result: nil, on_arrival: nil, &)
     return [] if items.empty?
 
-    workers = (0...[@size, items.length].min).map { |i| spawn_one(i, &block) }
-    dispatcher = build_dispatcher(workers, items, on_result, on_arrival, &block)
+    copies = database_copies
+    begin
+      run_workers(items, copies, on_result, on_arrival, &)
+    ensure
+      copies.remove
+    end
+  end
+
+  def worker_stats
+    @worker_stats.map { |stat| stat.dup.freeze }
+  end
+
+  private
+
+  def run_workers(items, copies, on_result, on_arrival, &block)
+    workers = (0...[@size, items.length].min).map { |i| spawn_one(i, copies, &block) }
+    dispatcher = build_dispatcher(workers, items, copies, on_result, on_arrival, &block)
 
     retired = []
     begin
@@ -65,14 +85,13 @@ class Evilution::Parallel::WorkQueue
     end
   end
 
-  def worker_stats
-    @worker_stats.map { |stat| stat.dup.freeze }
+  # One directory per pass, removed once its workers are gone.
+  def database_copies
+    @copy_worker_databases ? Evilution::WorkerDatabase::Copies.new : Evilution::WorkerDatabase::Copies::NONE
   end
 
-  private
-
-  def spawn_one(worker_index, &)
-    Worker.spawn(worker_index: worker_index, hooks: @hooks, &)
+  def spawn_one(worker_index, copies, &)
+    Worker.spawn(worker_index: worker_index, hooks: @hooks, copies: copies, &)
   end
 
   # A worker's own failure comes back as first_error, not as a raise. When the
@@ -87,11 +106,21 @@ class Evilution::Parallel::WorkQueue
     raise
   end
 
-  def build_dispatcher(workers, items, on_result, on_arrival, &block)
+  # The dispatcher retires (and reaps) a worker before asking for its
+  # replacement, so the old worker's copies can go first: however often
+  # workers are replaced, each slot holds one worker's copies at a time. A
+  # slot dropped without a replacement keeps its copies until the pass ends,
+  # which never puts more on disk than one per slot.
+  def replace(old, copies, &)
+    copies.discard(old.pid)
+    spawn_one(old.worker_index, copies, &)
+  end
+
+  def build_dispatcher(workers, items, copies, on_result, on_arrival, &block)
     Dispatcher.new(
       workers: workers, items: items, prefetch: @prefetch,
       item_timeout: @item_timeout, worker_max_items: @worker_max_items,
-      recycle_factory: ->(old) { spawn_one(old.worker_index, &block) },
+      recycle_factory: ->(old) { replace(old, copies, &block) },
       on_result: on_result, on_arrival: on_arrival
     )
   end

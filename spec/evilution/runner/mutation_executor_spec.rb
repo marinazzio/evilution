@@ -611,6 +611,17 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(size: 2, item_timeout: 18))
     end
 
+    it "builds the pool with worker database copies as configured" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_parallel_kwargs(config(jobs: 2), hooks: nil)[:pool_factory].call(18)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(copy_worker_databases: true))
+
+      capture_parallel_kwargs(config(jobs: 2, copy_worker_databases: false), hooks: nil)[:pool_factory].call(18)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(copy_worker_databases: false))
+    end
+
     it "gives every mutation a fresh worker under in-process isolation" do
       pool = instance_double(Evilution::Parallel::Pool)
       allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)

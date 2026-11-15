@@ -53,6 +53,10 @@ RSpec.describe Evilution::Cache::RunFingerprint do
     expect(fingerprint).not_to eq(fingerprint(probe_first: true))
   end
 
+  it "changes with whether workers get their own copy of a shared SQLite database" do
+    expect(fingerprint).not_to eq(fingerprint(copy_worker_databases: false))
+  end
+
   it "changes with whether examples run killer-first" do
     expect(fingerprint(killer_first: true)).not_to eq(fingerprint(killer_first: false))
   end

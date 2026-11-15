@@ -158,6 +158,15 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--no-preload", "Disable parent-process preload even for Rails projects") { @options[:preload] = false }
     opts.on("--warmup NAME", "After preload, warm lazily-initialised framework state once " \
                              "in the parent: none, rails (default: none)") { |w| @options[:warmup] = w }
+    add_worker_database_options(opts)
+  end
+
+  def add_worker_database_options(opts)
+    opts.on("--[no-]copy-worker-databases",
+            "With --jobs > 1 and a preloaded Rails app, give each worker its own copy of a SQLite",
+            "test database the workers would otherwise share (default: enabled)") do |v|
+      @options[:copy_worker_databases] = v
+    end
   end
 
   def add_output_options(opts)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "pathname"
+
 # A stand-in for the slice of ActiveRecord and Rails that per-worker database
 # reconnection touches, so the behaviour can be specified without depending on
 # Rails. Install with FakeActiveRecord.install(self) from inside an example;
@@ -15,15 +17,31 @@ module FakeActiveRecord
   MIGRATED = { tables: %w[schema_migrations users], versions: %w[20260101000000] }.freeze
 
   # Mirrors ActiveRecord::DatabaseConfigurations for a two-tier database.yml:
-  # { "test" => { "adapter" => ..., "database" => ... } }.
+  # { "test" => { "adapter" => ..., "database" => ... } }, or for a list of
+  # db configs, as ActiveRecord also accepts.
   class Configurations
+    # Mirrors ActiveRecord::DatabaseConfigurations::HashConfig.new(env_name, name, hash).
+    module HashConfig
+      def self.new(env_name, name, configuration_hash)
+        DbConfig.new(env_name: env_name, name: name, configuration_hash: configuration_hash)
+      end
+    end
+
     attr_reader :raw
 
     def initialize(raw)
       @raw = raw
     end
 
+    def configurations
+      return raw if raw.is_a?(Array)
+
+      raw.filter_map { |env_name, _| configs_for(env_name: env_name, name: "primary") }
+    end
+
     def configs_for(env_name:, name:)
+      return raw.find { |config| config.env_name == env_name && config.name == name } if raw.is_a?(Array)
+
       section = raw[env_name]
       return nil unless section.is_a?(Hash) && name == "primary"
 
@@ -184,7 +202,9 @@ module FakeActiveRecord
 
   Application = Struct.new(:config)
 
-  def self.install(example, &renderer)
+  # Pass root: to give the fake Rails a Rails.root, which relative SQLite
+  # paths are resolved against.
+  def self.install(example, root: nil, &renderer)
     renderer ||= -> { sqlite_yml }
     base = Class.new(Base)
     example.stub_const("ActiveRecord::Base", base)
@@ -193,6 +213,7 @@ module FakeActiveRecord
     rails = Module.new
     app = Application.new(AppConfig.new(&renderer))
     rails.define_singleton_method(:application) { app }
+    rails.define_singleton_method(:root) { Pathname.new(root) } unless root.nil?
     example.stub_const("Rails", rails)
     base.boot(renderer.call)
     base

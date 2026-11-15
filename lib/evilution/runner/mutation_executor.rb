@@ -164,7 +164,8 @@ class Evilution::Runner::MutationExecutor
       size: @config.jobs,
       hooks: @hooks,
       item_timeout: item_timeout,
-      worker_max_items: worker_max_items
+      worker_max_items: worker_max_items,
+      copy_worker_databases: @config.copy_worker_databases?
     )
   end
 

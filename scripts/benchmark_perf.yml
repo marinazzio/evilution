@@ -29,7 +29,9 @@
 # redmine-tracker runs with --jobs 1: --preload boots Rails before the workers
 # fork, so all workers share one SQLite file whatever TEST_ENV_NUMBER says,
 # and at --jobs 4 ~20% of verdicts flip between runs (and ~57 extra kills
-# appear that a single worker does not reproduce).
+# appear that a single worker does not reproduce). Versions with per-worker
+# database copies (copy_worker_databases) give the same verdicts at --jobs 4
+# as at --jobs 1; the target stays at --jobs 1 so older versions compare.
 #
 # The fixture target needs only `bundle install` in its dir.
 #

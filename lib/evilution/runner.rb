@@ -24,7 +24,6 @@ class Evilution::Runner
   def call
     install_signal_handlers
     configure_child_output
-    emit_parallel_db_warning
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     clock = Evilution::Runner::PhaseClock.new
 
@@ -33,6 +32,7 @@ class Evilution::Runner
 
     clock.measure(:preload) { perform_preload }
     log_memory("after preload") if rails_root_detected?
+    emit_parallel_db_warning
 
     clock.measure(:canary) { run_canary }
     baseline_result = clock.measure(:baseline) { run_baseline(subjects) }
@@ -207,7 +207,14 @@ class Evilution::Runner
     mutation_executor.call(mutations, baseline_result)
   end
 
+  # Workers forked from a preloaded app get copies of a shared SQLite
+  # database, so the advice to give each worker its own is only for runs
+  # whose workers cannot: copies off, no preloaded app, or a preloaded
+  # connection the copies leave alone (a file: URI, one set up outside
+  # database.yml).
   def emit_parallel_db_warning
+    return if config.copy_worker_databases? && Evilution::WorkerDatabase.copies_cover?
+
     Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
   end
 
@@ -301,6 +308,7 @@ require_relative "session/store"
 require_relative "temp_dir_tracker"
 require_relative "rails_detector"
 require_relative "parallel_db_warning"
+require_relative "worker_database"
 require_relative "child_output"
 require_relative "runner/subject_pipeline"
 require_relative "runner/target_spec_audit"

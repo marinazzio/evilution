@@ -304,6 +304,35 @@ mutation subprocess and any grandchildren it spawned rather than orphaning them,
 and a terminal interrupt (Ctrl-C) is forwarded to every worker group — an
 aborted parallel run leaves no stray worker or mutation processes behind.
 
+### One database per worker
+
+A preloaded Rails app is booted, and its `database.yml` resolved, in the
+parent, so every worker inherits a connection to the same test database. When
+that is a SQLite file, workers would load fixtures into and write to one
+database at once, and a test could fail on another worker's data: a kill that
+depends on timing, not on the mutation. Right after the fork, before its first
+mutation, each worker therefore runs `Evilution::WorkerDatabase`:
+
+1. it re-renders `database.yml` with its own `TEST_ENV_NUMBER` and, when that
+   names a different, prepared database, reconnects `ActiveRecord::Base` to
+   it (the `parallel_tests` convention);
+2. otherwise, with `copy_worker_databases` on (the default), it copies the
+   preloaded SQLite database through SQLite's backup API into a directory of
+   its own (`WorkerDatabase::Copies`) and reconnects to the copy.
+
+The per-mutation children forked by the worker inherit the worker's
+connection settings, so all of a worker's mutations run against its database.
+The parent picks the copies directory under the system temp dir before the
+workers fork and removes it when `WorkQueue#map` returns or raises (an
+interrupt reaches the parent as an exception, so it is covered). A worker
+that is recycled, times out or dies is reaped first, and its subdirectory is
+deleted before its replacement forks, so frequent replacement never holds
+more than one copy per worker slot on disk. The
+directory is deliberately not registered with `TempDirTracker`: every forked
+process inherits that tracker's `at_exit` cleanup, and a mutation child dying
+through it would delete the databases of workers still running. See the
+README's "Parallel Runs with SQLite" for what is and is not covered.
+
 ## Related flags
 
 - `--timeout N` sets the per-mutation time limit. Under `fork`, this drives

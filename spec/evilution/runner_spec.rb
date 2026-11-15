@@ -1897,7 +1897,8 @@ RSpec.describe Evilution::Runner do
 
     it "returns all results when using parallel execution" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                             copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1945,7 +1946,8 @@ RSpec.describe Evilution::Runner do
 
     it "uses Parallel::Pool when jobs > 1" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                             copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1956,12 +1958,14 @@ RSpec.describe Evilution::Runner do
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
 
-      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                                    copy_worker_databases: true)
     end
 
     it "strips source strings from mutations in parallel path" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                             copy_worker_databases: true).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1978,7 +1982,8 @@ RSpec.describe Evilution::Runner do
 
     it "sends compact hashes through the pool instead of full MutationResults" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil,
+                                                             copy_worker_databases: true).and_return(pool)
 
       captured_block = nil
       allow(pool).to receive(:map) do |batch, on_result: nil, **, &block|
@@ -2887,8 +2892,8 @@ RSpec.describe Evilution::Runner do
       allow(pool).to receive(:map) { |_items, on_result: nil, **| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
-      expect(Evilution::Parallel::Pool).to receive(:new)
-        .with(size: 2, hooks: hooks, item_timeout: 10, worker_max_items: nil).and_return(pool)
+      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks, item_timeout: 10, worker_max_items: nil,
+                                                              copy_worker_databases: true).and_return(pool)
 
       parallel_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],
@@ -3048,6 +3053,35 @@ RSpec.describe Evilution::Runner do
         runner.send(:emit_parallel_db_warning)
 
         expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+      end
+
+      it "stays quiet when the workers will copy the database of a booted app" do
+        allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(true)
+
+        runner.send(:emit_parallel_db_warning)
+
+        expect(Evilution::ParallelDbWarning).not_to have_received(:warn_if_sqlite_parallel)
+      end
+
+      it "warns when the copies would not cover the preloaded database" do
+        allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(false)
+
+        runner.send(:emit_parallel_db_warning)
+
+        expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+      end
+
+      it "warns about a booted app when worker database copies are off" do
+        cfg = Evilution::Config.new(skip_config_file: true, baseline: false, copy_worker_databases: false)
+        allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(true)
+
+        described_class.new(config: cfg).send(:emit_parallel_db_warning)
+
+        expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(cfg)
+        expect(Evilution::WorkerDatabase).not_to have_received(:copies_cover?)
       end
     end
 
@@ -3237,6 +3271,16 @@ RSpec.describe Evilution::Runner do
       runner.call
 
       expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+    end
+
+    it "emits the parallel DB warning after the preload, which decides whether the workers copy" do
+      order = []
+      allow(runner).to receive(:perform_preload) { order << :preload }
+      allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel) { order << :warning }
+
+      runner.call
+
+      expect(order).to eq(%i[preload warning])
     end
 
     it "clears operator parse caches during the run" do
