@@ -53,6 +53,23 @@ RSpec.describe Evilution::Mutator::Base do
       expect(filter.skipped_count).to eq(1)
     end
 
+    it "hands the filter the code the mutation puts in" do
+      operator_class = Class.new(described_class) do
+        def visit_call_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "raise", node: node)
+        end
+      end
+      fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      node = Prism.parse("log()").value.statements.body.first
+      subject_obj = double("Subject", name: "Test#m", file_path: fixture_path, node: node, kind: :method, concern_hook?: false)
+      filter = double("Filter", skip?: true)
+
+      operator_class.new.call(subject_obj, filter: filter, file_source: "log()")
+
+      expect(filter).to have_received(:skip?).with(node, file_path: fixture_path, source: "log()", mutated_source: "raise",
+                                                         replacement: "raise")
+    end
+
     it "skips mutations when filter matches an ancestor of the node" do
       operator_class = Class.new(described_class) do
         def visit_integer_node(node)

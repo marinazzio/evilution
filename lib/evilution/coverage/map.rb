@@ -13,7 +13,8 @@ class Evilution::Coverage::Map
       lines.transform_keys(&:to_i)
     end
     new(index: index, built_files: hash["built_files"] || [], executed_lines: hash["executed_lines"] || {},
-        missed_lines: hash["missed_lines"] || {}, spec_files: hash["spec_files"].to_a)
+        missed_lines: hash["missed_lines"] || {}, spec_files: hash["spec_files"].to_a,
+        loaded_files: hash["loaded_files"].to_a)
   end
 
   # executed_lines records, per file, the lines that ran at all during the build
@@ -26,14 +27,20 @@ class Evilution::Coverage::Map
   # neither while the files loaded nor in any example. A file is listed only
   # when the build vouches for it: every example of the spec files ran, and the
   # file's load was counted. spec_files are the spec files the build ran.
-  def initialize(index:, built_files:, executed_lines: {}, missed_lines: {}, spec_files: [])
+  #
+  # loaded_files are the project files the build loaded: a change to any of
+  # them can change which lines run, so a cached map is keyed on them too.
+  def initialize(index:, built_files:, executed_lines: {}, missed_lines: {}, spec_files: [], loaded_files: [])
     @index = deep_freeze_index(index)
     @built_files = built_files.to_a.freeze
     @executed_lines = deep_freeze_executed(executed_lines)
     @missed_lines = deep_freeze_executed(missed_lines)
     @spec_files = spec_files.to_a.freeze
+    @loaded_files = loaded_files.to_a.freeze
     freeze
   end
+
+  attr_reader :loaded_files
 
   def examples_for(file, line)
     @index.dig(file, line) || []
@@ -69,7 +76,7 @@ class Evilution::Coverage::Map
   def to_h
     {
       "index" => @index, "built_files" => @built_files, "executed_lines" => @executed_lines,
-      "missed_lines" => @missed_lines, "spec_files" => @spec_files
+      "missed_lines" => @missed_lines, "spec_files" => @spec_files, "loaded_files" => @loaded_files
     }
   end
 

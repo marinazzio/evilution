@@ -165,9 +165,14 @@ class Evilution::Isolation::Fork
     end
   end
 
+  # The child does not evaluate the original source again after the tests, so
+  # the RSS reader is taken as a method object before they run: a mutation of
+  # its file would otherwise measure (or raise) on the mutant's behalf. The
+  # reader itself is taken, not `rss_kb`, whose body would look it up again.
   def execute_in_child(mutation, test_command)
+    rss_kb_for = Evilution::Memory.method(:rss_kb_for)
     result = test_command.call(mutation)
-    { child_rss_kb: Evilution::Memory.rss_kb }.merge(result)
+    { child_rss_kb: rss_kb_for.call(Process.pid) }.merge(result)
   rescue ScriptError, StandardError => e
     {
       passed: false,

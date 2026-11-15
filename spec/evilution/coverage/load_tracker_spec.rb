@@ -50,6 +50,62 @@ RSpec.describe Evilution::Coverage::LoadTracker do
     expect(out).to eq(["running"])
   end
 
+  # The baseline and the mutation runs are forked from the process that paused
+  # the counting. Coverage set up and paused cannot be started again
+  # (`Coverage.start` raises once it is set up, and `running?` is false), so a
+  # spec helper that starts coverage itself, as SimpleCov does, would fail there.
+  describe ".release_inherited" do
+    it "hands a forked child coverage it can start afresh, and keeps the parent's paused" do
+      out = run_ruby(<<~RUBY)
+        tracker = Evilution::Coverage::LoadTracker.new
+        tracker.start
+        tracker.pause
+        read, write = IO.pipe
+        pid = fork do
+          read.close
+          Evilution::Coverage::LoadTracker.release_inherited
+          Coverage.start(lines: true) unless Coverage.running?
+          write.puts(Coverage.state)
+          write.close
+          exit!(0)
+        end
+        write.close
+        Process.wait(pid)
+        puts read.read
+        puts Coverage.state
+      RUBY
+
+      expect(out).to eq(%w[running suspended])
+    end
+
+    it "leaves coverage that something else started alone" do
+      out = run_ruby(<<~RUBY)
+        Coverage.setup(lines: true)
+        Evilution::Coverage::LoadTracker.release_inherited
+        puts Coverage.state
+        Coverage.resume
+        Coverage.suspend
+        Evilution::Coverage::LoadTracker.release_inherited
+        puts Coverage.state
+      RUBY
+
+      expect(out).to eq(%w[suspended suspended])
+    end
+
+    it "leaves coverage the preload started while the tracker counted alone once it runs" do
+      out = run_ruby(<<~RUBY)
+        tracker = Evilution::Coverage::LoadTracker.new
+        tracker.start
+        tracker.pause
+        Coverage.resume
+        Evilution::Coverage::LoadTracker.release_inherited
+        puts Coverage.state
+      RUBY
+
+      expect(out).to eq(["running"])
+    end
+  end
+
   it "pauses nothing it did not start" do
     out = run_ruby(<<~RUBY)
       Evilution::Coverage::LoadTracker.new.pause

@@ -125,7 +125,7 @@ class Evilution::Mutator::Base < Prism::Visitor
   def checked_unless_ignored(node, mutated, edit, skip_unparseable)
     surgery = check(mutated, edit) if skip_unparseable
     return if skip_unparseable && surgery.unparseable?
-    return if ignored?(node, mutated)
+    return if ignored?(node, mutated, edit[:replacement])
 
     surgery || check(mutated, edit)
   end
@@ -141,10 +141,11 @@ class Evilution::Mutator::Base < Prism::Visitor
     @def_region ||= Evilution::AST::DefRegion.new(@file_source, @subject.node)
   end
 
-  def ignored?(node, mutated_source)
+  def ignored?(node, mutated_source, replacement)
     return false unless @filter
 
-    @filter.skip?(node, file_path: @subject.file_path, source: @file_source, mutated_source: mutated_source)
+    @filter.skip?(node, file_path: @subject.file_path, source: @file_source, mutated_source: mutated_source,
+                        replacement: replacement)
   end
 
   def build_mutation_record(node, surgery, slices, offset, changed_lines)

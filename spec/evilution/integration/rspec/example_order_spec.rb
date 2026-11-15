@@ -100,6 +100,45 @@ RSpec.describe Evilution::Integration::RSpec::ExampleOrder do
       expect(order.order([single, mixed])).to eq([mixed, single])
     end
 
+    # Pending examples, and those past the most a report keeps per file, never
+    # get a baseline time; one of them says nothing of what the others cost.
+    it "ranks a group by the examples it has times for, when it also holds one without" do
+      order = described_class.new(durations: { id("1:1") => 0.01, id("1:3") => 5.0 })
+      cheap_with_untimed = group(first, second)
+      slow = group(third)
+      order.start([])
+
+      expect(order.order([slow, cheap_with_untimed])).to eq([cheap_with_untimed, slow])
+    end
+
+    it "runs a group it has no time for at all after the timed ones" do
+      order = described_class.new(durations: { id("1:3") => 5.0 })
+      untimed = group(first, second)
+      slow = group(third)
+      order.start([])
+
+      expect(order.order([untimed, slow])).to eq([slow, untimed])
+    end
+
+    it "ranks a group by its best killer when a lesser one comes after it" do
+      order = described_class.new(durations: {})
+      mixed = group(first, third)
+      single = group(second)
+      order.start([id("1:1"), id("1:2"), id("1:3")])
+
+      expect(order.order([single, mixed])).to eq([mixed, single])
+    end
+
+    it "leaves a group's own list of examples as it was" do
+      examples = [first, second]
+      order = described_class.new(durations: { id("1:1") => 1.0 })
+      order.start([])
+
+      order.order([double("Group", descendant_filtered_examples: examples), group(third)])
+
+      expect(examples).to eq([first, second])
+    end
+
     it "orders a group with no examples left without failing" do
       order = described_class.new(durations: { id("1:1") => 1.0 })
       empty = group

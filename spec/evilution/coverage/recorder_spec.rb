@@ -133,6 +133,13 @@ RSpec.describe Evilution::Coverage::Recorder do
       expect(map.built_from?(["/proj/spec/calc_spec.rb"])).to be(true)
     end
 
+    it "hands the files the build loaded to the map" do
+      recorder.around_example("spec/calc_spec.rb:5") { :ran }
+      map = recorder.to_map(built_files: [target], loaded_files: ["/proj/lib/helper.rb"])
+
+      expect(map.loaded_files).to eq(["/proj/lib/helper.rb"])
+    end
+
     it "records none for a file the build does not vouch for" do
       recorder.around_example("spec/calc_spec.rb:5") { :ran }
       map = recorder.to_map(built_files: [target], vouched_files: [])

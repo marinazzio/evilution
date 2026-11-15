@@ -95,6 +95,40 @@ RSpec.describe Evilution::Integration::Loading::CreatedModules do
       expect([outer, inner]).to eq([[later], []])
     end
 
+    # A copy is made without Module#initialize: allocate, then
+    # initialize_copy. It is a new anonymous module all the same, holding the
+    # methods of the one it was copied from.
+    it "adds a module copied with dup" do
+      created = []
+      original = Module.new { def copied = :yes }
+
+      copy = described_class.into(created) { original.dup }
+
+      expect(created).to eq([copy])
+      expect(copy.instance_methods(false)).to eq([:copied])
+    end
+
+    it "adds a module copied with clone" do
+      created = []
+      original = Module.new { def copied = :yes }
+
+      copy = described_class.into(created) { original.clone }
+
+      expect(created).to eq([copy])
+      expect(copy.instance_methods(false)).to eq([:copied])
+    end
+
+    it "leaves out modules copied before or after the block" do
+      created = []
+      original = Module.new
+      original.dup
+
+      described_class.into(created) { nil }
+      original.clone
+
+      expect(created).to eq([])
+    end
+
     it "adds instances of a Module subclass, for the caller to sort out" do
       created = []
       subclass = Class.new(Module)

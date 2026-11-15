@@ -81,6 +81,22 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       runner.build_integration(baseline_result)
     end
 
+    it "leaves the RSpec integration in the defined order by default" do
+      runner = described_class.new(config(integration: :rspec), hooks: nil)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(killer_first: false))
+                                                            .and_call_original
+
+      runner.build_integration
+    end
+
+    it "asks the RSpec integration for the killer-first order when configured" do
+      runner = described_class.new(config(integration: :rspec, killer_first: true), hooks: nil)
+      expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(killer_first: true))
+                                                            .and_call_original
+
+      runner.build_integration
+    end
+
     it "hands the RSpec integration no example times without a baseline result" do
       runner = described_class.new(config(integration: :rspec), hooks: nil)
       expect(Evilution::Integration::RSpec).to receive(:new).with(hash_including(example_durations: {}))
@@ -261,6 +277,46 @@ RSpec.describe Evilution::Runner::BaselineRunner do
       helpers = [".rspec", "spec/spec_helper.rb"].map { |path| File.join(Evilution::PROJECT_ROOT, path) }
       support = Dir.glob(File.join(Evilution::PROJECT_ROOT, "spec/support/**/*.rb")).first
       expect(store).to have_received(:stale_files).with(array_including(*helpers, support))
+    end
+
+    # Shared examples, factories and fixtures under the spec directory can
+    # change which lines run as well; a change to any of them rebuilds the map.
+    it "keys the cached coverage map on every file under the spec directory" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).with("lib/foo.rb").and_return(["spec/foo_spec.rb"])
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["x"], save: nil)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      allow(Evilution::Coverage::MapBuilder).to receive(:new)
+        .and_return(instance_double(Evilution::Coverage::MapBuilder, call: Evilution::Coverage::Map.new(index: {}, built_files: [])))
+      allow(Evilution::Integration::RSpec).to receive(:new).and_return(Evilution::Integration::RSpec.allocate)
+
+      described_class.new(cfg).build_integration
+
+      fixtures = File.join(Evilution::PROJECT_ROOT, "spec/support/fixtures/uncovered_project/spec/ledger_spec.rb.fixture")
+      expect(store).to have_received(:stale_files).with(array_including(fixtures))
+      expect(store).to have_received(:stale_files)
+        .with(satisfy { |inputs| inputs.none? { |path| File.directory?(path) } })
+      expect(store).to have_received(:stale_files)
+        .with(satisfy { |inputs| !inputs.include?(File.join(Evilution::PROJECT_ROOT, "lib/evilution.rb")) })
+    end
+
+    # Only the directory a spec file sits in under the project: one outside the
+    # project, or at its top, adds no directory to sweep.
+    it "sweeps no directory for a spec file outside the project or at its top" do
+      cfg = config(integration: :rspec, example_targeting: true,
+                   example_targeting_strategy: :coverage, target_files: ["lib/foo.rb"])
+      allow(cfg.spec_selector).to receive(:call).with("lib/foo.rb").and_return(["/elsewhere/spec/foo_spec.rb", "foo_spec.rb"])
+      store = instance_double(Evilution::Coverage::MapStore, stale_files: ["x"], save: nil)
+      allow(Evilution::Coverage::MapStore).to receive(:new).and_return(store)
+      allow(Evilution::Coverage::MapBuilder).to receive(:new)
+        .and_return(instance_double(Evilution::Coverage::MapBuilder, call: Evilution::Coverage::Map.new(index: {}, built_files: [])))
+      allow(Evilution::Integration::RSpec).to receive(:new).and_return(Evilution::Integration::RSpec.allocate)
+
+      described_class.new(cfg).build_integration
+
+      expect(store).to have_received(:stale_files)
+        .with(satisfy { |inputs| inputs.none? { |path| path.end_with?(".fixture") } })
     end
 
     it "falls back to lexical when the target source resolves to no spec file" do

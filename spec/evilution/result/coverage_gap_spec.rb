@@ -125,6 +125,15 @@ RSpec.describe Evilution::Result::CoverageGap do
       expect(gap).not_to be_single
     end
 
+    it "lists the results a probe-first sentinel implied, which did not run" do
+      implied = Evilution::Result::MutationResult.new(mutation: mutation2, status: :survived,
+                                                      implied_by: "method_body_to_raise")
+      mixed = described_class.new(file_path: "lib/user.rb", subject_name: "User#check", line: 9,
+                                  mutation_results: [result1, implied])
+
+      expect([gap.implied_results, mixed.implied_results]).to eq([[], [implied]])
+    end
+
     it "deduplicates operator names" do
       result3 = Evilution::Result::MutationResult.new(mutation: mutation1, status: :survived, duration: 0.3)
       gap_with_dups = described_class.new(

@@ -58,8 +58,8 @@ RSpec.describe Evilution::Integration::RSpec, "killer-first ordering" do
     applier
   end
 
-  def integration(stop_on_kill: true, example_durations: durations, **)
-    described_class.new(test_files: ["spec/thing_spec.rb"], stop_on_kill: stop_on_kill,
+  def integration(stop_on_kill: true, killer_first: true, example_durations: durations, **)
+    described_class.new(test_files: ["spec/thing_spec.rb"], stop_on_kill: stop_on_kill, killer_first: killer_first,
                         example_durations: example_durations, **)
   end
 
@@ -74,6 +74,33 @@ RSpec.describe Evilution::Integration::RSpec, "killer-first ordering" do
     allow(Evilution::Integration::RSpec::ExampleIds).to receive(:executed_count).and_return(0)
   end
 
+  describe "#reorders?" do
+    it "is false unless killer-first ordering was asked for" do
+      expect(integration(killer_first: false).reorders?).to be(false)
+    end
+
+    it "is false for a run that goes through every example" do
+      expect(integration(stop_on_kill: false).reorders?).to be(false)
+    end
+
+    it "is true when asked for, for a run that stops at its first kill" do
+      expect(integration.reorders?).to be(true)
+    end
+  end
+
+  describe "#in_defined_order" do
+    it "runs the examples in the defined order within the block, and as asked again after it" do
+      captured = stub_runs(1, 1)
+      checked = integration
+
+      inside = checked.in_defined_order { [checked.reorders?, checked.call(build_mutation)] }
+      checked.call(build_mutation)
+
+      expect(inside.first).to be(false)
+      expect(captured.map { |run| order_of(run[:args]) }).to eq(["defined", order_name])
+    end
+  end
+
   describe "the order a run asks for" do
     it "is killer-first when the run stops at its first kill" do
       captured = stub_runs(1)
@@ -81,6 +108,20 @@ RSpec.describe Evilution::Integration::RSpec, "killer-first ordering" do
       integration.call(build_mutation)
 
       expect(order_of(captured.first[:args])).to eq(order_name)
+    end
+
+    # A suite whose examples lean on running in their defined order would fail
+    # in another one whatever the mutant, and report a kill no one can
+    # reproduce; so another order is asked for only when the user said so.
+    it "is the defined order unless killer-first ordering was asked for" do
+      captured = stub_runs(1)
+      checked = described_class.new(test_files: ["spec/thing_spec.rb"], stop_on_kill: true,
+                                    example_durations: durations)
+      checked.prioritize(["/p/thing_spec.rb[1:2]"])
+
+      checked.call(build_mutation)
+
+      expect(order_of(captured.first[:args])).to eq("defined")
     end
 
     it "is the defined order when the run goes through every example" do

@@ -229,6 +229,35 @@ RSpec.describe Evilution::Runner::MutationPlanner do
         expect(plan.skipped_sites).to eq({})
         expect(plan.skipped_count).to eq(planned(plan_for(@file, [])).length - planned(plan).length)
       end
+
+      def planned_slices(source, sites)
+        File.write(@file, source)
+        planned(plan_for(@file, sites)).map { |m| m.mutated_slice.strip }
+      end
+
+      it "keeps a mutation that makes a log line raise" do
+        source = "class Shop\n  def buy\n    logger.info { \"x\" }\n    1\n  end\nend\n"
+
+        expect(planned_slices(source, [:logging])).to include("logger.info { raise }")
+      end
+
+      it "keeps the replaced message of a raise given only a message, which changes the class raised" do
+        slices = planned_slices("class Shop\n  def buy\n    raise \"boom\"\n  end\nend\n", [:error_messages])
+
+        expect(slices).to include("raise nil")
+      end
+
+      it "keeps a log line whose value the method returns" do
+        source = "class Shop\n  def buy\n    work\n    logger.info(\"done\")\n  end\nend\n"
+
+        expect(planned_slices(source, [:logging])).to include("logger")
+      end
+
+      it "keeps a require whose value is assigned to a constant" do
+        slices = planned_slices("HAS_OJ = require(\"zlib\")\n", [:requires])
+
+        expect(slices).to include("HAS_OJ = require(nil)")
+      end
     end
 
     context "when ignore_patterns names a node enclosing the mutated one" do
