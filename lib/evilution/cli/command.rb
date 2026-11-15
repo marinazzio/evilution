@@ -2,6 +2,7 @@
 
 require_relative "../cli"
 require_relative "result"
+require_relative "../config"
 require_relative "../git/since_scope"
 
 class Evilution::CLI::Command
@@ -27,9 +28,11 @@ class Evilution::CLI::Command
   end
 
   # The file arguments and their line ranges, limited with --since REF to the
-  # lines changed since that ref.
+  # lines changed since that ref. The ref is checked before git reads it;
+  # Config, given the same option, strips it the same way.
   def scoped_paths
-    Evilution::Git::SinceScope.apply(@options[:since], files: @files, line_ranges: @line_ranges)
+    since = Evilution::Config::Validators::Since.call(@options[:since], target: @options[:target])
+    Evilution::Git::SinceScope.apply(since, files: @files, line_ranges: @line_ranges)
   end
 
   def build_operator_options(config)

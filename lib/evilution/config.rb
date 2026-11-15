@@ -379,15 +379,7 @@ class Evilution::Config
   end
 
   def assign_since(since)
-    return if since.nil?
-
-    @since = since.to_s.strip
-    raise Evilution::ConfigError, "--since needs a git ref, such as main or origin/main" if @since.empty?
-    return unless target.to_s.start_with?("source:")
-
-    raise Evilution::ConfigError,
-          "--since picks the changed files itself and cannot be combined with --target source:GLOB; " \
-          "pass the files to limit it to instead"
+    @since = Validators::Since.call(since, target: target)
   end
 
   def assign_adaptive_timeout(merged)
@@ -419,6 +411,7 @@ require_relative "config/validators/example_targeting_strategy"
 require_relative "config/validators/example_targeting_cache"
 require_relative "config/validators/profile"
 require_relative "config/validators/warmup"
+require_relative "config/validators/since"
 require_relative "config/validators/timeout_factor"
 require_relative "config/validators/timeout_floor"
 require_relative "config/validators/timeout_ceiling"

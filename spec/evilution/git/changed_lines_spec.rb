@@ -5,6 +5,18 @@ require "tmpdir"
 require "evilution/git/changed_lines"
 
 RSpec.describe Evilution::Git::ChangedLines do
+  # The scratch repositories are set up by these examples alone: the global
+  # and system git config (commit signing, hooks, templates) and the GIT_*
+  # variables of the shell running the suite would otherwise reach them.
+  around do |example|
+    saved = ENV.to_h
+    ENV.delete_if { |name, _| name.start_with?("GIT_") }
+    ENV.update("GIT_CONFIG_GLOBAL" => File::NULL, "GIT_CONFIG_NOSYSTEM" => "1")
+    example.run
+  ensure
+    ENV.replace(saved)
+  end
+
   def git(*args)
     system("git", *args, out: File::NULL, err: File::NULL) || raise("git #{args.join(" ")} failed")
   end
@@ -285,12 +297,35 @@ RSpec.describe Evilution::Git::ChangedLines do
       end
     end
 
+    it "keeps hunks apart whatever diff.interHunkContext the user set" do
+      in_git_repo do
+        write("lib/foo.rb", numbered(20))
+        commit_all
+        write("lib/foo.rb", numbered(20).sub("line 3\n", "three\n").sub("line 7\n", "seven\n").sub("line 12\n", "twelve\n"))
+        ENV.update("GIT_CONFIG_COUNT" => "1", "GIT_CONFIG_KEY_0" => "diff.interHunkContext", "GIT_CONFIG_VALUE_0" => "5")
+
+        expect(described_class.new("main").call).to eq("lib/foo.rb" => lines(3..3, 7..7, 12..12))
+      end
+    end
+
+    it "takes no context lines from GIT_DIFF_OPTS" do
+      in_git_repo do
+        write("lib/foo.rb", numbered(20))
+        commit_all
+        write("lib/foo.rb", numbered(20).sub("line 12\n", "twelve\n"))
+        ENV["GIT_DIFF_OPTS"] = "--unified=5"
+
+        expect(described_class.new("main").call).to eq("lib/foo.rb" => lines(12..12))
+      end
+    end
+
     it "raises a ConfigError carrying git's message when a git command fails" do
       in_git_repo do
         commit_all
         allow(Open3).to receive(:capture3).and_call_original
-        allow(Open3).to receive(:capture3).with("git", "-c", "core.quotePath=false", "diff", any_args)
-                                          .and_return(["", "fatal: boom\n", instance_double(Process::Status, success?: false)])
+        allow(Open3).to receive(:capture3)
+          .with({ "GIT_DIFF_OPTS" => nil }, "git", "-c", "core.quotePath=false", "diff", any_args)
+          .and_return(["", "fatal: boom\n", instance_double(Process::Status, success?: false)])
 
         expect { described_class.new("main").call }
           .to raise_error(Evilution::ConfigError, "--since: git diff failed: fatal: boom")
@@ -302,6 +337,12 @@ RSpec.describe Evilution::Git::ChangedLines do
 
       expect { described_class.new("main").call }
         .to raise_error(Evilution::ConfigError, /--since needs git, which could not be run: .*git/)
+    end
+
+    it "does not report an error other than a failed system call as git missing" do
+      allow(Open3).to receive(:capture3).and_raise(ArgumentError, "bad option")
+
+      expect { described_class.new("main").call }.to raise_error(ArgumentError, "bad option")
     end
 
     it "takes a commit as the ref" do

@@ -49,6 +49,33 @@ RSpec.describe Evilution::MCP::MutateTool::ConfigBuilder do
       expect(config.since).to eq("main")
     end
 
+    it "hands git the ref stripped of the space around it" do
+      allow(Evilution::Git::SinceScope).to receive(:apply)
+        .and_return(Evilution::Git::SinceScope::Paths.new(files: [], ranges: {}))
+
+      config = described_class.build(files: [], line_ranges: {}, params: { since: " main ", skip_config: true })
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply).with("main", files: [], line_ranges: {})
+      expect(config.since).to eq("main")
+    end
+
+    it "rejects an empty since before git is asked about it" do
+      allow(Evilution::Git::SinceScope).to receive(:apply)
+
+      expect { described_class.build(files: [], line_ranges: {}, params: { since: "", skip_config: true }) }
+        .to raise_error(Evilution::ConfigError, "--since needs a git ref, such as main or origin/main")
+      expect(Evilution::Git::SinceScope).not_to have_received(:apply)
+    end
+
+    it "rejects since with a source glob target before git is asked about it" do
+      allow(Evilution::Git::SinceScope).to receive(:apply)
+      params = { since: "main", target: "source:lib/**/*.rb", skip_config: true }
+
+      expect { described_class.build(files: [], line_ranges: {}, params: params) }
+        .to raise_error(Evilution::ConfigError, /--target source:GLOB/)
+      expect(Evilution::Git::SinceScope).not_to have_received(:apply)
+    end
+
     it "leaves files and line ranges as given without since" do
       config = described_class.build(files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 1..2 }, params: { skip_config: true })
 

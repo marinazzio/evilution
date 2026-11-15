@@ -19,11 +19,25 @@ class Evilution::Git::SinceScope
 
   # ref: the git ref, or nil for no --since, which leaves files and
   # line_ranges as given.
+  #
+  # A file given must exist and be a file: one that did not change drops out
+  # of the run, so a misspelled path or a directory would otherwise pass
+  # without anything checked.
   def self.apply(ref, files:, line_ranges:)
     return Paths.new(files: files, ranges: line_ranges) if ref.nil?
 
+    files.each { |file| check_file(file) }
     new(Evilution::Git::ChangedLines.new(ref).call).call(files: files, line_ranges: line_ranges)
   end
+
+  def self.check_file(file)
+    return if File.file?(file)
+    raise Evilution::ConfigError, "file not found: #{file}" unless File.exist?(file)
+
+    raise Evilution::ConfigError,
+          "#{file} is a directory; --since takes files, or no file arguments for every changed file under lib/ and app/"
+  end
+  private_class_method :check_file
 
   # changed: { path => Evilution::LineSet }, as Evilution::Git::ChangedLines
   # returns it.

@@ -86,6 +86,37 @@ RSpec.describe Evilution::CLI::Commands::Run do
       expect(described_class.new(parsed, stdout: out, stderr: err).call.exit_code).to eq(1)
     end
 
+    it "hands git the ref stripped of the space around it" do
+      parsed = Evilution::CLI::ParsedArgs.new(command: :run, files: ["lib/a.rb"],
+                                              options: { since: " main ", skip_config_file: true })
+
+      described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(Evilution::Git::SinceScope).to have_received(:apply).with("main", files: ["lib/a.rb"], line_ranges: {})
+    end
+
+    it "rejects an empty ref before git is asked about it" do
+      parsed = Evilution::CLI::ParsedArgs.new(command: :run, options: { since: "", skip_config_file: true })
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.exit_code).to eq(2)
+      expect(result.error.message).to eq("--since needs a git ref, such as main or origin/main")
+      expect(Evilution::Git::SinceScope).not_to have_received(:apply)
+    end
+
+    it "rejects a source glob target before git is asked about the ref" do
+      parsed = Evilution::CLI::ParsedArgs.new(command: :run,
+                                              options: { since: "main", target: "source:lib/**/*.rb",
+                                                         skip_config_file: true })
+
+      result = described_class.new(parsed, stdout: out, stderr: err).call
+
+      expect(result.exit_code).to eq(2)
+      expect(result.error.message).to include("--target source:GLOB")
+      expect(Evilution::Git::SinceScope).not_to have_received(:apply)
+    end
+
     it "reports a git error as a config error, exit 2" do
       allow(Evilution::Git::SinceScope).to receive(:apply).and_raise(Evilution::ConfigError, "--since: unknown git ref 'x'")
 

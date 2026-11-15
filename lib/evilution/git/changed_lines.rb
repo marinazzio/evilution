@@ -25,12 +25,19 @@ require_relative "unified_diff"
 class Evilution::Git::ChangedLines
   # Pinned against the user's git config: Evilution::Git::UnifiedDiff reads
   # the new file's name after a `b/` prefix, colours, external diff tools and
-  # text conversion would break that read or shift its lines, and rename
-  # detection decides whether a renamed file counts whole.
+  # text conversion would break that read or shift its lines, rename
+  # detection decides whether a renamed file counts whole, and inter-hunk
+  # context would join nearby hunks, unchanged lines between them included.
   DIFF_ARGS = %w[
-    diff -U0 --no-color --no-ext-diff --no-textconv --relative --find-renames --diff-filter=ACMRT --dst-prefix=b/
+    diff -U0 --inter-hunk-context=0 --no-color --no-ext-diff --no-textconv --relative --find-renames
+    --diff-filter=ACMRT --dst-prefix=b/
   ].freeze
   private_constant :DIFF_ARGS
+
+  # GIT_DIFF_OPTS sets the context lines of a diff over -U0; unset, so that
+  # only changed lines come back.
+  GIT_ENV = { "GIT_DIFF_OPTS" => nil }.freeze
+  private_constant :GIT_ENV
 
   def initialize(ref)
     @ref = ref
@@ -88,7 +95,7 @@ class Evilution::Git::ChangedLines
   # Output is read as bytes: a diff holds whatever the files hold, which need
   # not be valid UTF-8.
   def run(*)
-    output, error, status = Open3.capture3("git", "-c", "core.quotePath=false", *, binmode: true)
+    output, error, status = Open3.capture3(GIT_ENV, "git", "-c", "core.quotePath=false", *, binmode: true)
     [output.empty? ? error : output, status]
   rescue SystemCallError => e
     raise Evilution::ConfigError, "--since needs git, which could not be run: #{e.message}"

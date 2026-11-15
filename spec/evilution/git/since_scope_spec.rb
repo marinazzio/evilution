@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
 require "evilution/git/since_scope"
 
 RSpec.describe Evilution::Git::SinceScope do
@@ -11,6 +13,18 @@ RSpec.describe Evilution::Git::SinceScope do
     described_class.new(changed).call(files: files, line_ranges: line_ranges)
   end
 
+  def in_project(*paths)
+    Dir.mktmpdir("since_scope_spec") do |dir|
+      Dir.chdir(dir) do
+        paths.each do |path|
+          FileUtils.mkdir_p(File.dirname(path))
+          File.write(path, "")
+        end
+        yield
+      end
+    end
+  end
+
   describe ".apply" do
     it "leaves the files and ranges as given without a ref" do
       result = described_class.apply(nil, files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 1..2 })
@@ -20,12 +34,51 @@ RSpec.describe Evilution::Git::SinceScope do
     end
 
     it "narrows the files and ranges given to the lines changed since the ref" do
-      changed_lines = instance_double(Evilution::Git::ChangedLines, call: { "lib/a.rb" => lines(4..6) })
-      allow(Evilution::Git::ChangedLines).to receive(:new).with("main").and_return(changed_lines)
+      in_project("lib/a.rb") do
+        changed_lines = instance_double(Evilution::Git::ChangedLines, call: { "lib/a.rb" => lines(4..6) })
+        allow(Evilution::Git::ChangedLines).to receive(:new).with("main").and_return(changed_lines)
 
-      result = described_class.apply("main", files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 5..9 })
+        result = described_class.apply("main", files: ["lib/a.rb"], line_ranges: { "lib/a.rb" => 5..9 })
 
-      expect(result.ranges).to eq("lib/a.rb" => lines(5..6))
+        expect(result.ranges).to eq("lib/a.rb" => lines(5..6))
+      end
+    end
+
+    it "drops a file given that exists and did not change" do
+      in_project("lib/a.rb", "lib/b.rb") do
+        changed_lines = instance_double(Evilution::Git::ChangedLines, call: { "lib/b.rb" => lines(1..1) })
+        allow(Evilution::Git::ChangedLines).to receive(:new).with("main").and_return(changed_lines)
+
+        expect(described_class.apply("main", files: ["lib/a.rb", "lib/b.rb"], line_ranges: {}).files).to eq(["lib/b.rb"])
+      end
+    end
+
+    it "raises a ConfigError for a file given that does not exist, before git is asked" do
+      in_project("lib/a.rb") do
+        allow(Evilution::Git::ChangedLines).to receive(:new)
+
+        expect { described_class.apply("main", files: ["lib/a.rb", "lib/aa.rb"], line_ranges: {}) }
+          .to raise_error(Evilution::ConfigError, "file not found: lib/aa.rb")
+        expect(Evilution::Git::ChangedLines).not_to have_received(:new)
+      end
+    end
+
+    it "raises a ConfigError for a directory given, before git is asked" do
+      in_project("lib/a.rb") do
+        allow(Evilution::Git::ChangedLines).to receive(:new)
+
+        expect { described_class.apply("main", files: ["lib/"], line_ranges: {}) }
+          .to raise_error(Evilution::ConfigError, %r{\Alib/ is a directory; --since takes files})
+        expect(Evilution::Git::ChangedLines).not_to have_received(:new)
+      end
+    end
+
+    it "does not check the files given without a ref" do
+      in_project do
+        result = described_class.apply(nil, files: ["lib/missing.rb"], line_ranges: {})
+
+        expect(result.files).to eq(["lib/missing.rb"])
+      end
     end
 
     it "limits them to the lines changed since the ref" do
