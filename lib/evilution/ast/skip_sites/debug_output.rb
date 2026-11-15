@@ -11,19 +11,22 @@ require_relative "message"
 # job -- a CLI printing its result -- is console output all the same, which
 # is why this preset stands apart from logging.
 #
-# `p` and `pp` return what they print, so they are sites only as a statement
-# followed by another one in the same body, where their value is dropped;
-# as the last statement of a body, or inside an expression, their value may
-# be used. The others return nil wherever they stand.
+# `p` and `pp` return what they print and a stream's `write` the number of
+# bytes written, so they are sites only where their value goes unused (see
+# Nodes.value_dropped?): as the last statement of a method, or inside an
+# expression, a changed argument changes the value. The others return nil
+# whatever they print.
 #
 # Within a site, mutations are skipped by the same rule as for log lines
-# (see Logging).
+# (see Logging): the call itself and its receiver only where its value goes
+# unused.
 class Evilution::AST::SkipSites::DebugOutput
   PRINTERS = %i[puts print printf warn].freeze
   VALUE_PRINTERS = %i[p pp].freeze
-  STREAM_WRITERS = %i[puts print printf write].freeze
+  STREAM_PRINTERS = %i[puts print printf].freeze
+  STREAM_WRITERS = %i[write].freeze
   STREAMS = %w[stdout stderr STDOUT STDERR].freeze
-  private_constant :PRINTERS, :VALUE_PRINTERS, :STREAM_WRITERS, :STREAMS
+  private_constant :PRINTERS, :VALUE_PRINTERS, :STREAM_PRINTERS, :STREAM_WRITERS, :STREAMS
 
   def name
     :debug_output
@@ -31,31 +34,29 @@ class Evilution::AST::SkipSites::DebugOutput
 
   # chain: the mutated node, then its ancestors, nearest first.
   def covers?(chain)
-    chain.each_with_index.any? { |node, index| site?(node, chain[index + 1]) && covered_in_site?(chain, index) }
+    chain.each_index.any? { |index| site?(chain, index) && covered_in_site?(chain, index) }
   end
 
   private
 
-  def site?(node, parent)
+  def site?(chain, index)
+    node = chain[index]
     return false unless node.is_a?(Prism::CallNode)
+    return true if Evilution::AST::SkipSites::Nodes.kernel_call?(node, PRINTERS) || stream_call?(node, STREAM_PRINTERS)
 
-    Evilution::AST::SkipSites::Nodes.kernel_call?(node, PRINTERS) ||
-      stream_write?(node) ||
-      (Evilution::AST::SkipSites::Nodes.kernel_call?(node, VALUE_PRINTERS) && value_dropped?(node, parent))
+    value_printer?(node) && Evilution::AST::SkipSites::Nodes.value_dropped?(chain, index)
   end
 
-  def stream_write?(call)
+  def value_printer?(call)
+    Evilution::AST::SkipSites::Nodes.kernel_call?(call, VALUE_PRINTERS) || stream_call?(call, STREAM_WRITERS)
+  end
+
+  def stream_call?(call, names)
     receiver = call.receiver
-    return false unless STREAM_WRITERS.include?(call.name)
+    return false unless names.include?(call.name)
 
     stream = receiver.is_a?(Prism::GlobalVariableReadNode) || receiver.is_a?(Prism::ConstantReadNode)
     stream && STREAMS.include?(Evilution::AST::SkipSites::Nodes.receiver_name(receiver))
-  end
-
-  def value_dropped?(call, parent)
-    return false unless parent.is_a?(Prism::StatementsNode)
-
-    !Evilution::AST::SkipSites::Nodes.same?(parent.body.last, call)
   end
 
   def covered_in_site?(chain, site_index)

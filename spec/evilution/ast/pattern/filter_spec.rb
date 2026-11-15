@@ -8,7 +8,37 @@ RSpec.describe Evilution::AST::Pattern::Filter do
     Prism.parse(code).value.statements.body[0]
   end
 
+  describe "#match?" do
+    it "tells whether a pattern matches the node or an ancestor" do
+      source = "def log(x)\n  x + 1\nend\n"
+      sum = Prism.parse(source).value.statements.body[0].body.body[0]
+      filter = described_class.new(["def{name=log}"])
+
+      expect(filter.match?(sum, file_path: "a.rb", source: source)).to be true
+      expect(described_class.new(["def{name=other}"]).match?(sum, file_path: "a.rb", source: source)).to be false
+    end
+
+    it "is false when no pattern matches, with or without patterns" do
+      expect(described_class.new([]).match?(parse_node("log()"))).to be false
+      expect(described_class.new(["call{name=log}"]).match?(parse_node("info()"))).to be false
+    end
+
+    it "counts nothing" do
+      filter = described_class.new(["call{name=log}"])
+
+      filter.match?(parse_node("log()"))
+
+      expect(filter.skipped_count).to eq(0)
+    end
+  end
+
   describe "#skip?" do
+    it "takes the mutation's replacement, as SkipFilter does, and skips whatever it is" do
+      filter = described_class.new(["call{name=log}"])
+
+      expect(filter.skip?(parse_node("log()"), replacement: "raise")).to be true
+    end
+
     it "returns false when no patterns given" do
       filter = described_class.new([])
       node = parse_node("foo()")

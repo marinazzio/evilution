@@ -271,7 +271,8 @@ class Evilution::Config
       # debug_output   - puts/print/warn/p/pp and writes to $stdout/$stderr
       # error_messages - the message of a raised error
       # requires       - require/require_relative run while the file loads
-      # skip_sites: [logging, error_messages, requires]
+      #                  (no subject mutates these yet, so it skips nothing)
+      # skip_sites: [logging, error_messages]
 
       # Operator profile: default or strict (default: default).
       # strict adds aggressive mutators (e.g. replaces `x.predicate?` with

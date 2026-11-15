@@ -67,7 +67,8 @@ class Evilution::MCP::MutateTool < MCP::Tool
         description: "Presets of low-value code to leave unmutated (default: none, or the config file's " \
                      "skip_sites): logging (log lines, deprecation warnings), debug_output (puts/print/warn/p/pp), " \
                      "error_messages (the message of a raised error, not the raise or its class), requires " \
-                     "(load-time require/require_relative). Skips are counted per preset in summary.skipped_sites."
+                     "(load-time require/require_relative; no subject mutates these yet, so it skips nothing). " \
+                     "Skips are counted per preset in summary.skipped_sites."
       },
       spec: {
         type: "array",

@@ -11,7 +11,8 @@ require_relative "nodes"
 # can see, and the mutant survives for no reason worth reporting. A require
 # inside a method, block or lambda loads lazily and is left alone: it runs
 # when the code under test runs. A condition guarding a require is not part
-# of the site.
+# of the site, nor is a require whose value is used (`HAS_OJ = require
+# "oj"`): dropping it changes the value.
 #
 # Every mutation inside a site is skipped, the call itself included.
 class Evilution::AST::SkipSites::Requires
@@ -26,7 +27,8 @@ class Evilution::AST::SkipSites::Requires
   # chain: the mutated node, then its ancestors, nearest first.
   def covers?(chain)
     chain.each_with_index.any? do |node, index|
-      Evilution::AST::SkipSites::Nodes.kernel_call?(node, REQUIRES) && runs_on_load?(chain, index)
+      Evilution::AST::SkipSites::Nodes.kernel_call?(node, REQUIRES) && runs_on_load?(chain, index) &&
+        Evilution::AST::SkipSites::Nodes.value_dropped?(chain, index)
     end
   end
 
