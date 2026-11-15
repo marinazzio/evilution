@@ -3035,21 +3035,31 @@ RSpec.describe Evilution::Runner do
 
       it "stays quiet when the workers will copy the database of a booted app" do
         allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
-        allow(Evilution::WorkerDatabase).to receive(:app_booted?).and_return(true)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(true)
 
         runner.send(:emit_parallel_db_warning)
 
         expect(Evilution::ParallelDbWarning).not_to have_received(:warn_if_sqlite_parallel)
       end
 
+      it "warns when the copies would not cover the preloaded database" do
+        allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(false)
+
+        runner.send(:emit_parallel_db_warning)
+
+        expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(config)
+      end
+
       it "warns about a booted app when worker database copies are off" do
         cfg = Evilution::Config.new(skip_config_file: true, baseline: false, copy_worker_databases: false)
         allow(Evilution::ParallelDbWarning).to receive(:warn_if_sqlite_parallel)
-        allow(Evilution::WorkerDatabase).to receive(:app_booted?).and_return(true)
+        allow(Evilution::WorkerDatabase).to receive(:copies_cover?).and_return(true)
 
         described_class.new(config: cfg).send(:emit_parallel_db_warning)
 
         expect(Evilution::ParallelDbWarning).to have_received(:warn_if_sqlite_parallel).with(cfg)
+        expect(Evilution::WorkerDatabase).not_to have_received(:copies_cover?)
       end
     end
 

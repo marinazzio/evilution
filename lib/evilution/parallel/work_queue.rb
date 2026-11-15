@@ -94,11 +94,21 @@ class Evilution::Parallel::WorkQueue
     Worker.spawn(worker_index: worker_index, hooks: @hooks, copies: copies, &)
   end
 
+  # The dispatcher retires (and reaps) a worker before asking for its
+  # replacement, so the old worker's copies can go first: however often
+  # workers are replaced, each slot holds one worker's copies at a time. A
+  # slot dropped without a replacement keeps its copies until the pass ends,
+  # which never puts more on disk than one per slot.
+  def replace(old, copies, &)
+    copies.discard(old.pid)
+    spawn_one(old.worker_index, copies, &)
+  end
+
   def build_dispatcher(workers, items, copies, on_result, on_arrival, &block)
     Dispatcher.new(
       workers: workers, items: items, prefetch: @prefetch,
       item_timeout: @item_timeout, worker_max_items: @worker_max_items,
-      recycle_factory: ->(old) { spawn_one(old.worker_index, copies, &block) },
+      recycle_factory: ->(old) { replace(old, copies, &block) },
       on_result: on_result, on_arrival: on_arrival
     )
   end

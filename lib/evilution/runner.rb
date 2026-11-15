@@ -203,9 +203,11 @@ class Evilution::Runner
 
   # Workers forked from a preloaded app get copies of a shared SQLite
   # database, so the advice to give each worker its own is only for runs
-  # whose workers cannot.
+  # whose workers cannot: copies off, no preloaded app, or a preloaded
+  # connection the copies leave alone (a file: URI, one set up outside
+  # database.yml).
   def emit_parallel_db_warning
-    return if config.copy_worker_databases? && Evilution::WorkerDatabase.app_booted?
+    return if config.copy_worker_databases? && Evilution::WorkerDatabase.copies_cover?
 
     Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
   end

@@ -322,7 +322,10 @@ The per-mutation children forked by the worker inherit the worker's
 connection settings, so all of a worker's mutations run against its database.
 The parent picks the copies directory under the system temp dir before the
 workers fork and removes it when `WorkQueue#map` returns or raises (an
-interrupt reaches the parent as an exception, so it is covered). The
+interrupt reaches the parent as an exception, so it is covered). A worker
+that is recycled, times out or dies is reaped first, and its subdirectory is
+deleted before its replacement forks, so frequent replacement never holds
+more than one copy per worker slot on disk. The
 directory is deliberately not registered with `TempDirTracker`: every forked
 process inherits that tracker's `at_exit` cleanup, and a mutation child dying
 through it would delete the databases of workers still running. See the
