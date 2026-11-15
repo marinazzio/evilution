@@ -132,11 +132,12 @@ RSpec.describe Evilution::Reporter::CLI do
   describe "uncovered mutations" do
     it "lists them under their own heading" do
       mutation = double("Mutation", operator_name: "comparison_replacement", file_path: "lib/a.rb", line: 7,
-                                    diff: "- a\n+ b", subject: double("Subject", name: "A#b"))
+                                    diff: "- a\n+ b", unified_diff: nil, subject: double("Subject", name: "A#b"))
       result = Evilution::Result::MutationResult.new(mutation: mutation, status: :uncovered)
       output = described_class.new.call(Evilution::Result::Summary.new(results: [result]))
 
-      expect(output).to include("Uncovered mutations (no test executes their line, not run):\n  comparison_replacement: lib/a.rb:7")
+      expect(output).to include("Uncovered mutations (no test executes the lines they change, not run):\n  " \
+                                "comparison_replacement: lib/a.rb:7")
       expect(output).not_to include("Survived mutations")
     end
   end

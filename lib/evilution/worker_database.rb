@@ -46,6 +46,14 @@ class Evilution::WorkerDatabase
     !::Rails.application.nil? && ::ActiveRecord::Base.respond_to?(:connection_db_config)
   end
 
+  # Whether a worker forked now, with copies on, would end up on a database of
+  # its own rather than the preloaded one: the preloaded connection is the one
+  # database.yml names (reconnect leaves any other alone) and it is a SQLite
+  # file a copy can be made of. Asked in the parent before the workers fork.
+  def self.copies_cover?
+    new(stream: $stderr, copies: Copies::NONE).copies_cover?
+  end
+
   def initialize(stream:, copies:)
     @stream = stream
     @copies = copies
@@ -58,6 +66,13 @@ class Evilution::WorkerDatabase
     isolate(current) unless refresh(current)
   rescue StandardError, ScriptError => e
     report("kept the preloaded connection (#{e.class}: #{e.message})")
+  end
+
+  def copies_cover?
+    current = current_config
+    !current.nil? && same_config?(base.configurations, current) && SqliteCopy.copyable?(current.configuration_hash)
+  rescue StandardError, ScriptError
+    false
   end
 
   private

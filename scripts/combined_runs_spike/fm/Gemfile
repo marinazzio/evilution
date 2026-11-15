@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+# The constructed project behind the combined-runs failure modes. Copy this
+# directory out of the repository before running it, and point EVILUTION_PATH
+# at the evilution checkout to measure.
+source "https://rubygems.org"
+
+gem "evilution", path: ENV.fetch("EVILUTION_PATH")
+gem "rspec", "~> 3.13"

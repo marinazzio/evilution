@@ -75,7 +75,7 @@ class Evilution::Parallel::WorkQueue
 
     retired = []
     begin
-      run_result = dispatcher.run
+      run_result = run_dispatcher(dispatcher, workers)
       retired = run_result.retired
       raise dispatcher.first_error if dispatcher.first_error
 
@@ -94,11 +94,33 @@ class Evilution::Parallel::WorkQueue
     Worker.spawn(worker_index: worker_index, hooks: @hooks, copies: copies, &)
   end
 
+  # A worker's own failure comes back as first_error, not as a raise. When the
+  # dispatcher itself raises (on_result failing, an interrupt, a worker that
+  # could not be spawned), no one will take the results of the items in
+  # flight, so the workers are killed rather than shut down: a shutdown would
+  # wait for each to finish what it holds, up to the item timeout.
+  def run_dispatcher(dispatcher, workers)
+    dispatcher.run
+  rescue Exception # rubocop:disable Lint/RescueException
+    workers.each(&:kill)
+    raise
+  end
+
+  # The dispatcher retires (and reaps) a worker before asking for its
+  # replacement, so the old worker's copies can go first: however often
+  # workers are replaced, each slot holds one worker's copies at a time. A
+  # slot dropped without a replacement keeps its copies until the pass ends,
+  # which never puts more on disk than one per slot.
+  def replace(old, copies, &)
+    copies.discard(old.pid)
+    spawn_one(old.worker_index, copies, &)
+  end
+
   def build_dispatcher(workers, items, copies, on_result, on_arrival, &block)
     Dispatcher.new(
       workers: workers, items: items, prefetch: @prefetch,
       item_timeout: @item_timeout, worker_max_items: @worker_max_items,
-      recycle_factory: ->(old) { spawn_one(old.worker_index, copies, &block) },
+      recycle_factory: ->(old) { replace(old, copies, &block) },
       on_result: on_result, on_arrival: on_arrival
     )
   end

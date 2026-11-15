@@ -39,6 +39,35 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     end
   end
 
+  # The cached map is keyed on them: a change to any of them can change which
+  # lines run.
+  it "records the project files the build loaded, and none from outside the project" do
+    ledger = File.join(fixture_dir, "ledger.rb")
+    ledger_spec = File.join(fixture_dir, "ledger_examples.rb")
+    map = described_class.new(spec_files: [ledger_spec], target_files: [target], project_root: fixture_dir).call
+
+    expect(map.loaded_files).to include(ledger, ledger_spec)
+    expect(map.loaded_files).to all(start_with("#{fixture_dir}/"))
+    expect(map.loaded_files).to eq(map.loaded_files.uniq)
+  end
+
+  # Loaded before the build counted any line, as the code under test often is.
+  it "records a project file required before the build, too" do
+    root = File.expand_path("../../..", __dir__)
+    map = described_class.new(spec_files: [spec], target_files: [target], project_root: root).call
+
+    expect(map.loaded_files).to include(File.join(root, "lib/evilution/coverage/map_builder.rb"))
+  end
+
+  # A gem installed inside the project (vendor/bundle) changes with the lockfile.
+  it "leaves out the files of installed gems inside the project" do
+    allow(Gem).to receive(:path).and_return([fixture_dir])
+    map = described_class.new(spec_files: [spec], target_files: [target],
+                              project_root: File.dirname(fixture_dir)).call
+
+    expect(map.loaded_files).not_to include(start_with("#{fixture_dir}/"))
+  end
+
   describe ".absolute_location" do
     it "expands a ./-relative location against the root, keeping the line suffix" do
       expect(described_class.absolute_location("./spec/a_spec.rb:5", "/proj"))
@@ -81,6 +110,16 @@ RSpec.describe Evilution::Coverage::MapBuilder do
       map = described_class.new(spec_files: [fail_fast], target_files: [ledger]).call
 
       expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(false)
+    end
+
+    # A forked process counts its lines in its own copy of the counters, which
+    # the build never reads, while a mutation applied before the fork reaches it.
+    it "vouches for no line when an example forks" do
+      forking = File.join(fixture_dir, "forking_examples.rb")
+      map = described_class.new(spec_files: [forking], target_files: [ledger]).call
+
+      expect(map.uncovered?(ledger, [line_of.call("@total -= amount")])).to be(false)
+      expect(map.uncovered?(ledger, [line_of.call("@total += amount")])).to be(false)
     end
 
     # A preload runs in the parent before the build forks. Counting from before

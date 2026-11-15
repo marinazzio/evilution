@@ -146,12 +146,14 @@ classes, and only the methods written in that file.
 
 To see those modules being created without walking the heap (which touches
 every object in the process, twice per evaluation), an `in_process` run
-prepends a hook to `Module#initialize` the first time it evaluates a file. It
+prepends a hook to `Module#initialize` and `Module#initialize_copy` (for
+copies made with `dup` or `clone`) the first time it evaluates a file. It
 records nothing outside an evaluation. Likewise, a run that loads
 `ActiveSupport::Concern` modules prepends a hook to the concern module's
 `extended`, so the concerns it must clear before each evaluation are listed
-as they are defined; the heap is walked once per run, in the parent, for the
-ones that already existed.
+as they are defined. The heap is walked once per process for the ones that
+already existed: in the parent when ActiveSupport is already loaded there
+(by a preload, for instance), otherwise once in each mutation process.
 
 Other things a file can add to at load time are not undone: an `at_exit`
 hook, a `Signal.trap`, a `TracePoint`, a callback pushed into a registry of
@@ -322,7 +324,10 @@ The per-mutation children forked by the worker inherit the worker's
 connection settings, so all of a worker's mutations run against its database.
 The parent picks the copies directory under the system temp dir before the
 workers fork and removes it when `WorkQueue#map` returns or raises (an
-interrupt reaches the parent as an exception, so it is covered). The
+interrupt reaches the parent as an exception, so it is covered). A worker
+that is recycled, times out or dies is reaped first, and its subdirectory is
+deleted before its replacement forks, so frequent replacement never holds
+more than one copy per worker slot on disk. The
 directory is deliberately not registered with `TempDirTracker`: every forked
 process inherits that tracker's `at_exit` cleanup, and a mutation child dying
 through it would delete the databases of workers still running. See the
@@ -335,13 +340,18 @@ README's "Parallel Runs with SQLite" for what is and is not covered.
   to the interrupt-mask hazard described above. Without it each mutation's
   limit is derived from the baseline time of its spec files
   (`--timeout-factor`, `--timeout-floor`, `--timeout-ceiling`; see the README's
-  "Per-mutation timeout"), and the parallel pool's per-worker deadline is twice
-  the longest such limit in the run.
-- `--jobs N` runs N workers in parallel. The workers live for the whole run,
-  each taking the next mutation as soon as it is done with the last. The
-  parallel pool respects the configured isolation strategy, so
-  `--jobs 4 --isolation fork` uses fork isolation per-mutation inside each
-  worker.
+  "Per-mutation timeout"). A mutation that uses up such a limit while it is
+  shorter than the fixed one is run again under the fixed limit before a
+  timeout is reported, and the parallel pool's per-worker deadline is twice
+  the longest time a mutation of the run may take, both runs together.
+- `--jobs N` runs N workers in parallel. The parallel pool respects the
+  configured isolation strategy, so `--jobs 4 --isolation fork` uses fork
+  isolation per-mutation inside each worker; those workers live for the
+  whole run, each taking the next mutation as soon as it is done with the
+  last. Under `--isolation in_process` the mutation runs in the worker
+  itself, so each worker runs one mutation and is replaced by a fresh one
+  forked from the clean parent: nothing one mutation leaves behind reaches
+  the next.
 - `--[no-]canary` toggles the proof-of-life pre-flight check (see above).
 
 [rails-handle-interrupt]: https://github.com/rails/rails/blob/main/activesupport/lib/active_support/concurrency/thread_monitor.rb

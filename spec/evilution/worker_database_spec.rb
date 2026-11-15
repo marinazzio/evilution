@@ -402,6 +402,64 @@ RSpec.describe Evilution::WorkerDatabase do
     end
   end
 
+  describe ".copies_cover?" do
+    def install_with(database)
+      FakeActiveRecord.install(self) { { "test" => { "adapter" => "sqlite3", "database" => database } } }
+    end
+
+    it "is true when the preloaded connection is the SQLite file database.yml names" do
+      install_with("db/test.sqlite3")
+
+      expect(described_class.copies_cover?).to be(true)
+    end
+
+    it "is false when no Rails application is booted" do
+      FakeActiveRecord.install(self)
+      hide_const("ActiveRecord")
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "is false when ActiveRecord::Base has no connection" do
+      FakeActiveRecord.install(self).remove_connection
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "is false for a file: URI, which a copy could not keep" do
+      install_with("file:db/test.sqlite3")
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "is false for a database other than SQLite" do
+      FakeActiveRecord.install(self) { { "test" => { "adapter" => "postgresql", "database" => "app_test" } } }
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "is false when the connection no longer matches database.yml" do
+      base = install_with("db/test.sqlite3")
+      base.use_custom_connection({ adapter: "sqlite3", database: "db/other.sqlite3" })
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "is false when database.yml cannot be read" do
+      base = install_with("db/test.sqlite3")
+      allow(base).to receive(:configurations).and_raise(ArgumentError, "boom")
+
+      expect(described_class.copies_cover?).to be(false)
+    end
+
+    it "lets an interrupt through" do
+      base = install_with("db/test.sqlite3")
+      allow(base).to receive(:configurations).and_raise(Interrupt)
+
+      expect { described_class.copies_cover? }.to raise_error(Interrupt)
+    end
+  end
+
   context "with per-worker copies of a shared SQLite database" do
     around do |example|
       Dir.mktmpdir("evilution-worker-db") do |dir|

@@ -96,12 +96,18 @@ class Evilution::Runner
   # With coverage targeting, the lines the preload runs are counted: the
   # coverage map is built in a child forked after it, and needs the preloaded
   # files, and what ran while they loaded, to tell which lines no test executes.
+  # Only when the tests run in forked children, which hand the counting back
+  # before they run (Evilution::Coverage::LoadTracker.release_inherited): a
+  # test run in this process would find it paused, and could not start it.
   def perform_preload
     tracker = Evilution::Coverage::LoadTracker.new
-    tracker.start if config.coverage_targeting?
-    isolation_resolver.perform_preload
+    isolation_resolver.perform_preload { tracker.start if count_preload? }
   ensure
     tracker.pause if tracker
+  end
+
+  def count_preload?
+    config.coverage_targeting? && isolation_resolver.fork_isolation?
   end
 
   def plan_mutations(subjects)
@@ -203,9 +209,11 @@ class Evilution::Runner
 
   # Workers forked from a preloaded app get copies of a shared SQLite
   # database, so the advice to give each worker its own is only for runs
-  # whose workers cannot.
+  # whose workers cannot: copies off, no preloaded app, or a preloaded
+  # connection the copies leave alone (a file: URI, one set up outside
+  # database.yml).
   def emit_parallel_db_warning
-    return if config.copy_worker_databases? && Evilution::WorkerDatabase.app_booted?
+    return if config.copy_worker_databases? && Evilution::WorkerDatabase.copies_cover?
 
     Evilution::ParallelDbWarning.warn_if_sqlite_parallel(config)
   end

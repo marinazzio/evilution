@@ -52,6 +52,27 @@ RSpec.describe Evilution::WorkerDatabase::Copies do
     end
   end
 
+  describe "#discard" do
+    it "deletes the copies of one worker process and keeps the others'" do
+      gone = File.join(root, "worker-1")
+      kept = File.join(root, "worker-2")
+      [gone, kept].each do |dir|
+        FileUtils.mkdir_p(dir)
+        File.write(File.join(dir, "test.sqlite3"), "db")
+      end
+
+      copies.discard(1)
+
+      expect(File.exist?(gone)).to be(false)
+      expect(File.exist?(File.join(kept, "test.sqlite3"))).to be(true)
+    end
+
+    it "does nothing for a worker that made no copy" do
+      expect { copies.discard(1) }.not_to raise_error
+      expect(File.exist?(root)).to be(false)
+    end
+  end
+
   describe "#remove" do
     it "deletes every worker's copies" do
       FileUtils.mkdir_p(File.join(root, "worker-1"))
@@ -69,9 +90,10 @@ RSpec.describe Evilution::WorkerDatabase::Copies do
   end
 
   describe "NONE" do
-    it "is disabled and has nothing to remove" do
+    it "is disabled and has nothing to discard or remove" do
       expect(described_class::NONE.enabled?).to be(false)
-      expect { described_class::NONE.remove }.not_to raise_error
+      expect(described_class::NONE.discard(1)).to be_nil
+      expect(described_class::NONE.remove).to be_nil
     end
   end
 end

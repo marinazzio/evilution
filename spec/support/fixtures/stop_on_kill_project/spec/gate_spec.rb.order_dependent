@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "gate"
+
+# The second example leans on the first having run before it: it is the
+# cheaper one, and fails whatever the code when it runs first. Both call
+# `state` and `label`, so targeting picks both for every mutant; neither checks
+# `label`, so its mutants survive in the defined order.
+RSpec.describe Gate do
+  it "is open, after a while" do
+    sleep 0.05
+    $gate_checked = true
+    described_class.new.label
+    expect(described_class.new.state).to eq("open")
+  end
+
+  it "was checked before" do
+    described_class.new.state
+    described_class.new.label
+    expect($gate_checked).to be(true)
+  end
+end

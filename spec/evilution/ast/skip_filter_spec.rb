@@ -74,6 +74,33 @@ RSpec.describe Evilution::AST::SkipFilter do
       expect(filter.skip?(sum, file_path: "a.rb", source: source, mutated_source: "m1")).to be true
     end
 
+    it "keeps a mutation inside a site whose replacement raises, which changes more than a report" do
+      expect(filter.skip?(log_text, file_path: "a.rb", source: source, mutated_source: "m1", replacement: "raise"))
+        .to be false
+      expect(filter.skip?(log_text, file_path: "a.rb", source: source, mutated_source: "m2", replacement: "\"\""))
+        .to be true
+    end
+
+    it "skips a mutation an ignore pattern matches whatever its replacement" do
+      filter = described_class.new(patterns: ["call{name=+}"], sites: [])
+
+      expect(filter.skip?(sum, file_path: "a.rb", source: source, mutated_source: "m1", replacement: "raise")).to be true
+    end
+
+    it "leaves the count of its ignore patterns to itself" do
+      patterns = nil
+      allow(Evilution::AST::Pattern::Filter).to receive(:new).and_wrap_original do |original, *args, **options|
+        patterns = original.call(*args, **options)
+      end
+      filter = described_class.new(patterns: ["call{name=+}"], sites: [])
+
+      filter.skip?(sum, file_path: "a.rb", source: source)
+      filter.skip?(sum, file_path: "a.rb", source: source)
+
+      expect(patterns.skipped_count).to eq(0)
+      expect(filter.skipped_count).to eq(2)
+    end
+
     it "tests the node alone when no source is given" do
       expect(filter.skip?(log_text)).to be false
     end

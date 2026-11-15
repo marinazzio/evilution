@@ -71,7 +71,30 @@ RSpec.describe Evilution::AST::SkipSites::DebugOutput do
     end
   end
 
+  context "when the value of the output is used" do
+    it "leaves the call itself, whose value would change" do
+      expect(covered?("puts(x) || x.save\nnil\n", "puts(x)", Prism::CallNode)).to be false
+      expect(covered?("def f(x)\n  puts x.summary\nend\n", "puts x.summary", Prism::CallNode)).to be false
+    end
+
+    it "still covers the literal text of a printer that returns nil" do
+      expect(covered?("def f\n  puts \"done\"\nend\n", "\"done\"", Prism::StringNode)).to be true
+    end
+
+    it "leaves a stream write, which returns the number of bytes written" do
+      source = "def f\n  $stderr.write(\"done\")\nend\n"
+
+      expect(covered?(source, "\"done\"", Prism::StringNode)).to be false
+      expect(covered?(source, "$stderr.write(\"done\")", Prism::CallNode)).to be false
+    end
+
+    it "covers a stream write whose value is dropped" do
+      expect(covered?("def f\n  $stderr.write(\"done\")\n  1\nend\n", "\"done\"", Prism::StringNode)).to be true
+    end
+  end
+
   it "leaves output whose argument may change state" do
     expect(covered?("puts(queue.pop!)\n", "queue.pop!", Prism::CallNode)).to be false
+    expect(covered?("puts(queue.pop)\n", "puts(queue.pop)", Prism::CallNode)).to be false
   end
 end

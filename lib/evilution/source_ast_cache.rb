@@ -31,6 +31,16 @@ class Evilution::SourceAstCache
     result
   end
 
+  # Parses and keeps a source ahead of the first #fetch for it, but only while
+  # there is room: an entry that pushed out an earlier one would cost the
+  # parse it is meant to save.
+  def preload(source)
+    return if @entries.length >= @max_entries
+
+    key = Digest::SHA256.digest(source)
+    @entries[key] = Prism.parse(source) unless @entries.key?(key)
+  end
+
   private
 
   def evict_until_within_bounds

@@ -1,7 +1,8 @@
 # Combined runs: spike report
 
 Status: **no-go**. No prototype in `lib/`. The prototype was a harness
-loaded from outside the gem (see [Reproducing](#reproducing)). The corpus
+loaded from outside the gem, kept in `scripts/combined_runs_spike/` (see
+[Reproducing](#reproducing)). The corpus
 gate was met, but a constructed example shows the method can report a
 survivor as killed, and the coverage map cannot rule that out. See
 [Decision](#decision) for what would have to change first.
@@ -89,6 +90,9 @@ members a single run did not kill fall back.
 | httparty `httparty.rb` | 1412 (1203) | 920 | line not attributed: 283; uncovered: 209 | 157 | 818 | 5.2 | 1203 → 656 (**−45%**) |
 | grape `declared_params_handler.rb` | 691 (691) | 618 | line not attributed: 73 | 17 | 34 | 2.0 | 691 → 677 (**−2%**) |
 
+"Mutants" leaves out equivalent mutants (1 on dry-monads, 2 on grape), which
+are never run. The verdict table below counts them, hence 611 and 693 there.
+
 A cap barely changes these numbers above 8 members. With the ideal process
 count, cap 2 / 4 / 8 / none give −19 / −27 / −31 / −33% on dry-monads and
 −26 / −42 / −45 / −45% on httparty. Grape gains almost nothing: every
@@ -117,12 +121,12 @@ per target.
 | httparty | 6 (also cap 4, distinct subjects, no direct confirmation) | **0 / 1412** each | 0 |
 | grape | 2 | **0 / 693** each | 0 |
 
-That is 16 combined runs and 0 divergences on about 12,000 mutant verdicts,
+That is 16 combined runs and 0 divergences on about 13,900 mutant verdicts,
 so **the gate as stated is met**.
 
 The first dry-monads run had 16 divergences. They were not caused by
 combining. They came from a bug in coverage targeting, which also produces
-wrong verdicts in the control (see [Found along the way](#found-along-the-way)).
+wrong verdicts in the control (see [Known issues found along the way](#known-issues-found-along-the-way)).
 The harness now treats a failure outside any example as a group failure, so
 those groups fall back, and later runs reproduce the control exactly.
 
@@ -150,18 +154,19 @@ Where the time goes:
   though they went through more examples (5841, skipped ones included, vs 1095). Grouping pays when the fixed
   cost per process outweighs the examples it adds.
 - **fixture.** Each example sleeps 50 ms, so examples dominate. The 83 groups
-  cost 45.4 s, against 46.1 s for the same 297 kills in single runs. Process
-  count halved, examples gone through rose from 489 to 1849 (skipped ones included), and time stayed flat.
-  The whole −7% comes from direct confirmation: 46 group survivors skipped
-  their targeted run (50.8 s → 37.2 s). Without it the fixture is 6%
-  *slower*.
+  cost 44.9–46.0 s, against 39.2–41.0 s for the same 297 kills in single
+  runs. Process count halved, examples gone through rose from 490–514 to
+  1846–1858 (skipped ones included), and the groups cost about 14% *more*
+  than the single runs they replaced. The whole −7% comes from direct
+  confirmation: 46 group survivors skipped their targeted run (49.9–50.0 s
+  → 37.2 s). Without it the fixture is 6% *slower*.
 - **dry-monads.** 22 of 46 groups failed outside any example, because of the
   shared-example targeting bug below. 9 more failed to apply: dry-monads turns
   Ruby warnings into errors, and merged sources raised "assigned but unused
   variable" warnings. Only 75 members were killed in groups, saving about
   6.5 s of killtime. The rest of the measured gain was in mutants that still
-  ran singly: in all three combined runs they ran fewer examples (1006 vs
-  1092–1128 for the singly killed ones), consistent with groups filling the
+  ran singly: in all three combined runs they ran fewer examples (1006–1067
+  vs 1092–1128 for the singly killed ones), consistent with groups filling the
   kill history first. The ideal −33% process count is out of reach until that
   bug is fixed.
 - **Ordering.** The kill history matters to groups. With an empty history
@@ -191,6 +196,19 @@ survives, because the original `label(5)` returns `:positive`. Grouped with a
 `Router` mutant is reported killed. One more divergence. The
 distinct-subjects rule does not prevent either case: the members here are in
 different classes.
+
+Cheaper static guards do not make the method sound either. Requiring the
+members to be in different files excludes neither case: move `STORE`,
+`Writer` and `Reader` into three files, or `Router` and `Helper` into two,
+and the mechanism is the same. Requiring that no two members' bodies name a
+common constant or each other's classes does exclude both constructed cases
+(`Writer` and `Reader` both name `STORE`, `Router` names `Helper`), but one
+step of indirection gets past it: `Writer` and `Reader` reaching the store
+through two different helper classes, or `Router` calling a `Service` that
+calls `Helper`. (These variants were not run; the failing example and its
+attribution are the same as in the originals.) A static rule cannot follow indirect call chains, dynamic dispatch,
+instance variables on shared objects, globals, `ENV`, the filesystem or a
+database.
 
 Both cases produce a false kill, which is the worst error for a mutation
 tool to make: it hides a gap in the tests, and no reader can reproduce it.
@@ -224,7 +242,8 @@ so the prototype stops per member: it skips the remaining examples of a
 killed member, and stops the run once all members are killed. A survivor in
 a group still runs all of its targeted examples, and with that group's
 duration, then pays its confirmation run as well. On the fixture, groups went
-through 3.8 times as many examples (skipped ones included) as single runs did for the same kills.
+through 3.7 times as many examples (skipped ones included) as single runs did
+for the same kills.
 
 **Killer-first ordering.** Groups need a filled kill history as much as
 single runs do (see the fixture numbers above). The history fills while
@@ -245,21 +264,28 @@ fingerprint covers the helpers. Coverage from code the tests run in a
 forked subprocess is lost, so such examples are missing from affecting sets.
 Shared examples are recorded under the shared file (below).
 
-## Found along the way
+## Known issues found along the way
 
-- **Coverage targeting runs shared examples by their definition file.** The
+Both are bugs in coverage targeting as it ships, independent of combined
+runs, and both are filed.
+
+- **Coverage targeting runs shared examples by their definition file**
+  ([#1973](https://github.com/marinazzio/evilution/issues/1973)). The
   map credits examples defined in a shared group to that group's own
   location (dry-monads: `spec/shared/applicative.rb:5`). A targeted run
   passes that location to RSpec, which loads the shared file on its own,
   redefines the shared group and runs nothing. On dry-monads, where warnings
   are errors, this reports **30 mutants of `maybe.rb` killed with 0 examples
   run**, and 11 more as errors, in the plain single-run control. Lexical
-  targeting reports 10 of the line-92 mutants as survivors. This is a
-  verdict bug in coverage targeting today, independent of combined runs.
-  Worth its own issue.
-- **Coverage targeting without `--preload` on the fixture.** The map builder
-  child raised `uninitialized constant RSpec` (in `MapBuilder#reset_world`),
-  and the run fell back to lexical targeting. Passing
+  targeting reports 10 of the line-92 mutants as survivors. In a project
+  where the shared file loads cleanly on its own, the targeted run runs
+  nothing and the confirmation run over the whole spec file still decides,
+  at the cost of a wasted run.
+- **Coverage targeting without `--preload` falls back silently**
+  ([#1974](https://github.com/marinazzio/evilution/issues/1974)). On the
+  fixture, the map builder child raised `NameError: uninitialized constant
+  RSpec` (in `MapBuilder#reset_world`). The parent printed the backtrace,
+  wrote no map, and continued with lexical targeting. Passing
   `--preload spec/spec_helper.rb` avoids it.
 
 ## Decision
@@ -274,7 +300,8 @@ Shared examples are recorded under the shared file (below).
    result is a false kill, which no reader can reproduce.
 2. **The gain depends on the target.** −34% on httparty, where a kill costs
    more in process overhead than in examples. −7% on the fixture, all of it
-   from skipping survivors' targeted runs. −3% (noise) on grape, whose
+   from skipping survivors' targeted runs; the groups themselves cost more
+   than the single runs they replaced. −3% (noise) on grape, whose
    examples cover almost the whole file. −14% on dry-monads, where most
    groups fell back.
 3. **Failures are expensive.** A looping member costs its group the sum of
@@ -299,19 +326,29 @@ What would make it worth revisiting:
 
 Even then, a group kill would be the only verdict evilution gives that a
 single run cannot reproduce. Re-running each group kill alone to check it
-would cost exactly what grouping saves.
+would cost more than grouping saves: on httparty, 704 re-runs against 547
+processes saved (1203 → 656), each re-run mostly the fixed per-process cost
+(128 ms per kill, 1.75 examples, on average), so the combined run would be
+slower than single runs.
 
 ## Reproducing
 
-Corpus: scratchpad copies of the fixture and of `/tmp/ev-canaries/{dry-monads,httparty,grape}`
-(pinned commits in `scripts/benchmark_perf.yml`). Each copy has a Gemfile
-adding `gem "evilution", path: <tree>`. In httparty, the cwd-relative fixture
-paths are made absolute (`spec/spec_helper.rb` `file_fixture`, and the
+The harness, the comparison scripts and the constructed project are in
+[`scripts/combined_runs_spike/`](../scripts/combined_runs_spike/), whose
+README covers setup and running. They are measurement code, not loaded by
+the gem.
+
+Corpus: local copies of the fixture (`spec/support/fixtures/benchmark_project`),
+of the constructed project (`scripts/combined_runs_spike/fm`), and of the
+dry-monads, httparty and grape targets at the commits pinned in
+`scripts/benchmark_perf.yml`. Each copy has a Gemfile adding
+`gem "evilution", path: <tree>`. In httparty, the cwd-relative fixture paths
+are made absolute (`spec/spec_helper.rb` `file_fixture`, and the
 `tiny.gif` path in `spec/httparty_spec.rb`), because mutation processes run
 in a sandbox directory.
 
-Harness, loaded with `RUBYOPT=-r<file>` (it requires `bundler/setup` and
-`evilution` first):
+Harness (`combined.rb`), loaded with `RUBYOPT=-r<file>` (it requires
+`bundler/setup` and `evilution` first):
 
 - A module prepended to `Evilution::Runner::MutationExecutor` whose private
   `run_batch(notifier, pipeline, mutations, baseline_result, integration)`
@@ -332,10 +369,13 @@ Harness, loaded with `RUBYOPT=-r<file>` (it requires `bundler/setup` and
   `EV_COMBINED_DISTINCT=1` and `EV_COMBINED_DIRECT_CONFIRM=0` select the
   variants. `EV_COMBINED_OUT` writes the plan, the per-cap groupings and the
   per-group outcomes as JSON.
-- Verdict equivalence: match the two runs' JSON entries by file, line,
-  operator and diff, and compare statuses.
+- Verdict equivalence (`div.rb`): match the two runs' JSON entries by file,
+  line, operator and diff, and compare statuses. `analyze.rb` gives the
+  group-phase costs under [Process count and time](#process-count-and-time),
+  `ideal.rb` the ideal process counts, and `rest.rb` the cost of the mutants
+  left to single runs.
 
-Commands (in the target dir; the harness via `RUBYOPT`):
+Commands (in the target dir; the harness via `RUBYOPT`). `run.sh` wraps them:
 
 ```
 # fixture
@@ -353,7 +393,8 @@ bundle exec evilution run lib/grape/declared_params_handler.rb --spec spec/grape
   --jobs 2 --format json
 ```
 
-The constructed project behind the failure modes is one file:
+The constructed project behind the failure modes
+(`scripts/combined_runs_spike/fm`) is one file:
 
 - a `STORE` hash;
 - `Writer#with_entry` (set the key, yield, delete it in `ensure`);

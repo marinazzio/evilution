@@ -2,8 +2,11 @@
 
 require "spec_helper"
 require "evilution/ast/skip_sites/nodes"
+require_relative "../../../support/skip_site_helpers"
 
 RSpec.describe Evilution::AST::SkipSites::Nodes do
+  include SkipSiteHelpers
+
   def expression(code)
     Prism.parse(code).value.statements.body.first
   end
@@ -123,6 +126,68 @@ RSpec.describe Evilution::AST::SkipSites::Nodes do
 
     it "fails for other literals" do
       expect(described_class.string?(expression(":a"))).to be false
+    end
+  end
+
+  describe ".value_dropped?" do
+    def dropped?(source, slice = "log(x)")
+      described_class.value_dropped?(chain_at(source, slice, Prism::CallNode), 0)
+    end
+
+    it "holds for a statement followed by another one" do
+      expect(dropped?("def f(x)\n  log(x)\n  x\nend\n")).to be true
+    end
+
+    it "fails for the last statement of a method, whose value is returned" do
+      expect(dropped?("def f(x)\n  log(x)\nend\n")).to be false
+    end
+
+    it "fails for the last statement of a block, whose value the call may use" do
+      expect(dropped?("items.map { |x| log(x) }\n")).to be false
+    end
+
+    it "holds for a statement at the top of the file" do
+      expect(dropped?("log(x)\n")).to be true
+    end
+
+    it "fails for a value that is assigned, combined or passed on" do
+      expect(dropped?("ok = log(x)\nnil\n")).to be false
+      expect(dropped?("log(x) && save\nnil\n")).to be false
+      expect(dropped?("puts(log(x))\nnil\n")).to be false
+    end
+
+    it "follows the branches of a conditional to where its own value goes" do
+      expect(dropped?("def f(x)\n  log(x) if x\n  x\nend\n")).to be true
+      expect(dropped?("def f(x)\n  if x\n    1\n  else\n    log(x)\n  end\nend\n")).to be false
+      expect(dropped?("def f(x)\n  if x\n    1\n  elsif y\n    log(x)\n  end\n  x\nend\n")).to be true
+      expect(dropped?("def f(x)\n  case x\n  when 1 then log(x)\n  end\n  x\nend\n")).to be true
+    end
+
+    it "fails for the condition of a conditional or a loop" do
+      expect(dropped?("def f(x)\n  1 if log(x)\n  x\nend\n")).to be false
+      expect(dropped?("def f(x)\n  while log(x)\n    x\n  end\nend\n")).to be false
+    end
+
+    it "asks of the node at the given index, not of the first one" do
+      chain = chain_at("ok = log(x)\nnil\n", "x", Prism::CallNode)
+      log_index = chain.index { |node| node.is_a?(Prism::CallNode) && node.name == :log }
+
+      expect(described_class.value_dropped?(chain, log_index)).to be false
+      expect(described_class.value_dropped?(chain, log_index + 1)).to be true
+    end
+
+    it "follows begin and rescue to where their value goes" do
+      expect(dropped?("def f(x)\n  begin\n    1\n  rescue\n    log(x)\n  end\n  x\nend\n")).to be true
+      expect(dropped?("def f(x)\n  1\nrescue\n  log(x)\nend\n")).to be false
+    end
+
+    it "holds for the last statement of an ensure clause or a loop body, whose value is never used" do
+      expect(dropped?("def f(x)\n  1\nensure\n  log(x)\nend\n")).to be true
+      expect(dropped?("def f(x)\n  while x\n    log(x)\n  end\nend\n")).to be true
+    end
+
+    it "fails without the node's ancestors" do
+      expect(described_class.value_dropped?([expression("log(x)")], 0)).to be false
     end
   end
 end
