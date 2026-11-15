@@ -18,6 +18,7 @@ class Evilution::Runner::MutationExecutor
   autoload :Strategy, File.expand_path("mutation_executor/strategy", __dir__)
   autoload :Neutralizer, File.expand_path("mutation_executor/neutralizer", __dir__)
   autoload :TimeoutPolicy, File.expand_path("mutation_executor/timeout_policy", __dir__)
+  autoload :TimedRun, File.expand_path("mutation_executor/timed_run", __dir__)
 
   def initialize(config, isolator:, baseline_runner:, cache:, hooks:, diagnostics:, on_result: nil)
     @config = config

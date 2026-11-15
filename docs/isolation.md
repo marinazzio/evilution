@@ -309,8 +309,10 @@ aborted parallel run leaves no stray worker or mutation processes behind.
   to the interrupt-mask hazard described above. Without it each mutation's
   limit is derived from the baseline time of its spec files
   (`--timeout-factor`, `--timeout-floor`, `--timeout-ceiling`; see the README's
-  "Per-mutation timeout"), and the parallel pool's per-worker deadline is twice
-  the longest such limit in the run.
+  "Per-mutation timeout"). A mutation that uses up such a limit while it is
+  shorter than the fixed one is run again under the fixed limit before a
+  timeout is reported, and the parallel pool's per-worker deadline is twice
+  the longest time a mutation of the run may take, both runs together.
 - `--jobs N` runs N workers in parallel. The workers live for the whole run,
   each taking the next mutation as soon as it is done with the last. The
   parallel pool respects the configured isolation strategy, so

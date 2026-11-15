@@ -494,6 +494,25 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       expect(timeouts_given(cfg, baseline_with("spec/foo_spec.rb" => 2.0))).to eq([45])
     end
 
+    it "runs a mutation that used up a shorter adaptive limit again under the default one" do
+      cfg = config(spec_files: ["spec/foo_spec.rb"])
+      isolator = instance_double(Evilution::Isolation::Fork)
+      given = []
+      allow(isolator).to receive(:call) do |mutation:, timeout:, **|
+        given << timeout
+        if given.length == 1
+          Evilution::Result::MutationResult.new(mutation: mutation, status: :timeout, duration: 20.0)
+        else
+          killed_result(mutation)
+        end
+      end
+
+      execution = build(cfg, isolator: isolator).call([mutation], baseline_with("spec/foo_spec.rb" => 2.0))
+
+      expect(given).to eq([20.0, 30])
+      expect(execution.results.map(&:status)).to eq([:killed])
+    end
+
     it "keeps the default timeout without a baseline" do
       expect(timeouts_given(config(spec_files: ["spec/foo_spec.rb"]), nil)).to eq([30])
     end

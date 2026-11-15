@@ -36,6 +36,27 @@ RSpec.describe Evilution::Cache do
       expect(cached[:killing_test]).to eq("spec/example_spec.rb:10")
     end
 
+    it "returns the limit a cached timeout ran under" do
+      cache.store(mutation, result_data.merge(status: :timeout, killing_test: nil, time_limit: 7.5))
+
+      expect(cache.fetch(mutation)).to include(status: :timeout, time_limit: 7.5)
+    end
+
+    it "reads an entry written before the limit was recorded" do
+      cache.store(mutation, result_data)
+      path = Dir[File.join(cache_dir, "*.json")].first
+      File.write(path, JSON.generate(JSON.parse(File.read(path)).transform_values { |e| e.except("time_limit") }))
+
+      expect(cache.fetch(mutation)).to include(status: :killed, test_command: "rspec spec/example_spec.rb",
+                                               time_limit: nil)
+    end
+
+    it "returns no limit for an entry that recorded none" do
+      cache.store(mutation, result_data)
+
+      expect(cache.fetch(mutation)[:time_limit]).to be_nil
+    end
+
     it "returns nil when source file content changes" do
       cache.store(mutation, result_data)
 

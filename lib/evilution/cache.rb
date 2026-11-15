@@ -23,7 +23,8 @@ class Evilution::Cache
     return nil unless entry.is_a?(Hash) && entry["status"].is_a?(String)
 
     { status: entry["status"].to_sym, duration: entry["duration"],
-      killing_test: entry["killing_test"], test_command: entry["test_command"] }
+      killing_test: entry["killing_test"], test_command: entry["test_command"],
+      time_limit: entry["time_limit"] }
   end
 
   def store(mutation, result_data)
@@ -37,7 +38,8 @@ class Evilution::Cache
       "status" => result_data[:status].to_s,
       "duration" => result_data[:duration],
       "killing_test" => result_data[:killing_test],
-      "test_command" => result_data[:test_command]
+      "test_command" => result_data[:test_command],
+      "time_limit" => result_data[:time_limit]
     }
 
     write_file(file_key, data)

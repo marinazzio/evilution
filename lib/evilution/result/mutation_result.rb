@@ -37,11 +37,14 @@ class Evilution::Result::MutationResult
   end
 
   def with_time_limit(seconds)
-    self.class.new(
-      mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
-      test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
-      known_failures_only: @known_failures_only, timings: @timings, time_limit: seconds
-    )
+    copy(time_limit: seconds)
+  end
+
+  # This result came from running the mutation again after a first run used up
+  # a shorter limit; that run is part of what the mutation cost.
+  def after_adaptive_timeout(seconds)
+    base = timings || Evilution::Result::MutationTimings.new
+    copy(duration: @duration + seconds, timings: base.with_adaptive_timeout(seconds))
   end
 
   # Where the duration went (Evilution::Result::MutationTimings), when the
@@ -114,5 +117,15 @@ class Evilution::Result::MutationResult
 
   def unparseable?
     status == :unparseable
+  end
+
+  private
+
+  def copy(**changes)
+    self.class.new(
+      mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
+      test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
+      known_failures_only: @known_failures_only, timings: @timings, time_limit: @time_limit, **changes
+    )
   end
 end

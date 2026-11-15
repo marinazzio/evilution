@@ -42,6 +42,28 @@ RSpec.describe Evilution::Runner::MutationExecutor::TimeoutPolicy do
       expect(policy.call(mutation)).to eq(30)
     end
 
+    # These hooks run inside the time a mutation's test run is allowed, and
+    # the baseline runs none of them, so its times leave their cost out.
+    %w[worker_process_start mutation_insert_pre mutation_insert_post].each do |event|
+      it "keeps the default timeout when a #{event} hook is configured" do
+        policy = described_class.build(config(hooks: { event => "hooks/start.rb" }), baseline)
+
+        expect(policy.call(mutation)).to eq(30)
+      end
+    end
+
+    it "keeps the default timeout when the hook is named by a symbol" do
+      policy = described_class.build(config(hooks: { worker_process_start: "hooks/start.rb" }), baseline)
+
+      expect(policy.call(mutation)).to eq(30)
+    end
+
+    it "still adapts with a hook that runs before any mutation does" do
+      policy = described_class.build(config(hooks: { "setup_integration_pre" => "hooks/setup.rb" }), baseline)
+
+      expect(policy.call(mutation)).to eq(10)
+    end
+
     it "passes the configured factor, floor and ceiling on" do
       cfg = config(timeout_factor: 3, timeout_floor: 1, timeout_ceiling: 5)
 

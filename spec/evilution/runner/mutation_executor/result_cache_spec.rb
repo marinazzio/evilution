@@ -18,39 +18,87 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
     Evilution::Result::MutationResult.new(mutation: mut, status: :survived, duration: 0.1)
   end
 
-  def timed_out(mut)
-    Evilution::Result::MutationResult.new(mutation: mut, status: :timeout, duration: 5.0, test_command: "c")
+  def timed_out(mut, time_limit: nil)
+    Evilution::Result::MutationResult.new(mutation: mut, status: :timeout, duration: 5.0, test_command: "c",
+                                          time_limit: time_limit)
   end
 
   describe "#fetch" do
     it "returns nil when the underlying cache is nil (no caching configured)" do
-      expect(described_class.new(nil).fetch(mutation)).to be_nil
+      expect(described_class.new(nil).fetch(mutation, time_limit: 30)).to be_nil
     end
 
     it "returns nil when the cache has no entry for the mutation" do
       backend = instance_double("Cache", fetch: nil)
-      expect(described_class.new(backend).fetch(mutation)).to be_nil
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
     end
 
     it "returns nil when the cached entry status is not killed or timeout" do
       backend = instance_double("Cache", fetch: { status: :survived, duration: 0.1 })
-      expect(described_class.new(backend).fetch(mutation)).to be_nil
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
     end
 
     it "rebuilds a MutationResult when status is killed" do
       mut = mutation
       backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, killing_test: "t", test_command: "c" })
-      result = described_class.new(backend).fetch(mut)
+      result = described_class.new(backend).fetch(mut, time_limit: 30)
       expect(result.status).to eq(:killed)
       expect(result.duration).to eq(0.2)
       expect(result.mutation).to be(mut)
     end
 
-    it "rebuilds a MutationResult when status is timeout" do
+    it "rebuilds a MutationResult when status is timeout and the run would allow no more time" do
       mut = mutation
-      backend = instance_double("Cache", fetch: { status: :timeout, duration: 5.0, killing_test: nil, test_command: "c" })
-      result = described_class.new(backend).fetch(mut)
-      expect(result.status).to eq(:timeout)
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 5.0, killing_test: nil, test_command: "c",
+                                                  time_limit: 30 })
+      result = described_class.new(backend).fetch(mut, time_limit: 30)
+      expect([result.status, result.time_limit]).to eq([:timeout, 30])
+    end
+
+    it "reuses a cached timeout under a shorter limit than it ran under" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 30.0, time_limit: 30 })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: 10).status).to eq(:timeout)
+    end
+
+    # A timeout says only that the run needed more than its limit; with more
+    # time now, the mutation may well be killed, as raising the limit to get
+    # the kill back is the remedy for a timeout that should have been one.
+    it "does not reuse a cached timeout when the run would now allow more time" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 10.0, time_limit: 10 })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
+    end
+
+    it "does not reuse a cached timeout when the run would now allow unlimited time" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 10.0, time_limit: 10 })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: nil)).to be_nil
+    end
+
+    # Entries written before the limit was recorded cannot say what it was.
+    it "does not reuse a cached timeout that does not record its limit" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 30.0, time_limit: nil })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
+    end
+
+    it "does not reuse a cached timeout whose entry has no limit at all" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 30.0 })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
+    end
+
+    it "does not reuse a cached timeout whose recorded limit is not a number" do
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 30.0, time_limit: "60" })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: 30)).to be_nil
+    end
+
+    it "reuses a cached kill whatever the limit is now" do
+      backend = instance_double("Cache", fetch: { status: :killed, duration: 0.2, time_limit: nil })
+
+      expect(described_class.new(backend).fetch(mutation, time_limit: nil).status).to eq(:killed)
     end
   end
 
@@ -117,7 +165,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
                                               status: :killed,
                                               duration: 0.1,
                                               killing_test: "t",
-                                              test_command: "c")
+                                              test_command: "c",
+                                              time_limit: nil)
       described_class.new(backend).store(mut, killed(mut))
     end
 
@@ -132,8 +181,9 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
                                               status: :timeout,
                                               duration: 5.0,
                                               killing_test: nil,
-                                              test_command: "c")
-      described_class.new(backend).store(mut, timed_out(mut))
+                                              test_command: "c",
+                                              time_limit: 7.5)
+      described_class.new(backend).store(mut, timed_out(mut, time_limit: 7.5))
     end
   end
 
@@ -149,12 +199,25 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultCache do
       allow(backend).to receive(:fetch).with(m2).and_return(status: :killed, duration: 0.3, killing_test: "k", test_command: "c")
 
       cache = described_class.new(backend)
-      partition = cache.partition([m1, m2, m3], packer: packer)
+      partition = cache.partition([m1, m2, m3], packer: packer, time_limit_for: ->(_m) { 30 })
 
       expect(partition.uncached_indices).to eq([0])
       expect(partition.cached_results.keys).to contain_exactly(1, 2)
       expect(partition.cached_results[1][:status]).to eq(:killed)
       expect(partition.cached_results[2][:status]).to eq(:unparseable)
+    end
+
+    it "asks each mutation's current limit before reusing its cached timeout" do
+      m1 = mutation
+      m2 = mutation
+      backend = instance_double("Cache")
+      allow(backend).to receive(:fetch).and_return(status: :timeout, duration: 10.0, time_limit: 10)
+      limits = { m1 => 10, m2 => 30 }.compare_by_identity
+
+      partition = described_class.new(backend).partition([m1, m2], packer: packer, time_limit_for: ->(m) { limits[m] })
+
+      expect(partition.uncached_indices).to eq([1])
+      expect(partition.cached_results.keys).to eq([0])
     end
   end
 end
