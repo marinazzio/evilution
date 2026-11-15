@@ -17,10 +17,14 @@
 # A subject written in a concern's `included` or `prepended` block is marked
 # `concern_hook`: the block runs in each class that takes the concern, so a
 # mutation of it has to be run again on the classes that took it already.
+#
+# byte_range: where `source` sits in the file, in bytes; nil when the subject
+# was not taken from a parsed file.
 class Evilution::Subject
-  attr_reader :name, :file_path, :line_number, :source, :node, :kind
+  attr_reader :name, :file_path, :line_number, :source, :node, :kind, :byte_range
 
-  def initialize(name:, file_path:, line_number:, source:, node:, kind: :method, concern_hook: false)
+  def initialize(name:, file_path:, line_number:, source:, node:, kind: :method, concern_hook: false,
+                 byte_range: nil)
     @name = name
     @file_path = file_path
     @line_number = line_number
@@ -28,6 +32,7 @@ class Evilution::Subject
     @node = node
     @kind = kind
     @concern_hook = concern_hook
+    @byte_range = byte_range
   end
 
   def concern_hook?

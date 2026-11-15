@@ -119,8 +119,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel::OrderedD
     expect(subject.results.map(&:mutation)).to eq(mutations.first(1))
     expect(notifier).to have_received(:notify).once
     expect(backend).to have_received(:store).with(mutations[2], hash_including(status: :killed))
+    expect(backend).to have_received(:store).with(mutations[0], hash_including(status: :survived))
     expect(backend).to have_received(:store).with(mutations[3], hash_including(status: :timeout))
-    expect(backend).to have_received(:store).twice
+    expect(backend).not_to have_received(:store).with(mutations[1], anything)
+    expect(backend).to have_received(:store).exactly(3).times
   end
 
   it "is not truncated while the notifier lets it continue" do

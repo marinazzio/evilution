@@ -107,7 +107,10 @@ class that owns it.
 
 1. **Config** — `Config#initialize` merges YAML + CLI + env (`Config::Sources.merge`),
    applies `DEFAULTS`, freezes. `Runner#initialize` builds the `AST::Parser`,
-   `Mutator::Registry.for_profile(config.profile)`, and (if `incremental`) a `Cache`.
+   `Mutator::Registry.for_profile(config.profile)`, and (if `incremental`) a `Cache`
+   keyed per subject by `Cache::Keys` (see README, "Incremental cache"). Once the
+   subjects are found, every parsed subject is handed to `Cache#index`, so the cache
+   can key a subject apart from the rest of its file.
 2. **Subjects** — `Runner::SubjectPipeline#call` resolves target files (explicit,
    `source:<glob>`, or `Git::ChangedFiles`), then `AST::Parser#call` runs
    `Prism.parse` and `AST::SubjectFinder` (a `Prism::Visitor`) emits one

@@ -5,6 +5,12 @@ require_relative "../../result/mutation_result"
 require_relative "../../infra_crash"
 
 class Evilution::Runner::MutationExecutor::ResultCache
+  # The verdicts about a mutation. A survivor is kept too: its key changes
+  # with the subject and its spec files, so a test that would now kill it
+  # re-runs it.
+  CACHEABLE_STATUSES = %i[killed survived timeout].freeze
+  private_constant :CACHEABLE_STATUSES
+
   Partition = Data.define(:uncached_indices, :cached_results)
 
   def initialize(backend)
@@ -32,7 +38,7 @@ class Evilution::Runner::MutationExecutor::ResultCache
 
   def store(mutation, result)
     return unless @backend
-    return unless result.killed? || result.timeout?
+    return unless CACHEABLE_STATUSES.include?(result.status)
     return if infra_crash?(result)
     # Nor is one where only already-failing examples failed: the baseline
     # that says so belongs to this run, and the cache keeps no trace of it.
@@ -44,6 +50,13 @@ class Evilution::Runner::MutationExecutor::ResultCache
                    killing_test: result.killing_test,
                    test_command: result.test_command,
                    time_limit: result.time_limit)
+  end
+
+  # Writes out what the run stored (see Evilution::Cache#flush).
+  def flush
+    return unless @backend
+
+    @backend.flush
   end
 
   # A kill that came from an infrastructure crash is not a verdict about the
@@ -80,12 +93,13 @@ class Evilution::Runner::MutationExecutor::ResultCache
 
   private
 
-  # A kill stands whatever the limit is now. A timeout says only that the run
-  # needed more than the limit it had, so it answers for a run that would get
-  # no more time than that; one that does not record its limit answers for none.
+  # A kill or a survivor stands whatever the limit is now. A timeout says only
+  # that the run needed more than the limit it had, so it answers for a run
+  # that would get no more time than that; one that does not record its limit
+  # answers for none.
   def reusable?(data, time_limit)
     case data[:status]
-    when :killed then true
+    when :killed, :survived then true
     when :timeout then timeout_reusable?(data[:time_limit], time_limit)
     else false
     end

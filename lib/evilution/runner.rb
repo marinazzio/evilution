@@ -18,7 +18,7 @@ class Evilution::Runner
     @hooks = hooks
     @parser = Evilution::AST::Parser.new
     @registry = Evilution::Mutator::Registry.for_profile(config.profile)
-    @cache = config.incremental? ? Evilution::Cache.new : nil
+    @cache = config.incremental? ? Evilution::Cache.new(keys: Evilution::Cache::Keys.for(config)) : nil
   end
 
   def call
@@ -28,7 +28,7 @@ class Evilution::Runner
     start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     clock = Evilution::Runner::PhaseClock.new
 
-    subjects = clock.measure(:subject_discovery) { subject_pipeline.call }
+    subjects = clock.measure(:subject_discovery) { discover_subjects }
     log_memory("after parse_subjects", "#{subjects.length} subjects")
 
     clock.measure(:preload) { perform_preload }
@@ -59,6 +59,14 @@ class Evilution::Runner
 
   def subject_pipeline
     @subject_pipeline ||= Evilution::Runner::SubjectPipeline.new(config, parser: parser, registry: registry)
+  end
+
+  # The cache keys a subject apart from the rest of its file, which takes
+  # every subject of the file, whether this run mutates it or not.
+  def discover_subjects
+    subjects = subject_pipeline.call
+    cache.index(subject_pipeline.parsed_subjects) if cache
+    subjects
   end
 
   def mutation_planner

@@ -29,6 +29,13 @@ class Evilution::Runner::SubjectPipeline
     @target_files ||= resolve_target_files
   end
 
+  # Every subject #call parsed, before the target and line ranges filtered
+  # them; empty before #call and once #report_uncovered_code is done with
+  # them.
+  def parsed_subjects
+    (@subjects_by_file || {}).values.flatten
+  end
+
   # Warns about the targeted lines that hold code outside every subject and
   # that no mutation reached either. mutated_lines: the lines mutations were
   # generated for, per file -- known only once #call's subjects are planned.

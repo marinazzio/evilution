@@ -34,6 +34,14 @@ RSpec.describe Evilution::AST::Parser do
       end
     end
 
+    it "sets on each subject the byte range of the file its source spans" do
+      source = File.read(fixture_path)
+
+      parser.call(fixture_path).each do |subject|
+        expect(source.byteslice(subject.byte_range.begin, subject.byte_range.size)).to eq(subject.source)
+      end
+    end
+
     it "sets correct line numbers" do
       subjects = parser.call(fixture_path)
       lines = subjects.to_h { |s| [s.name, s.line_number] }

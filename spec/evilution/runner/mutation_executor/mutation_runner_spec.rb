@@ -170,10 +170,10 @@ RSpec.describe Evilution::Runner::MutationExecutor::MutationRunner do
     expect(isolator).to have_received(:call).with(hash_including(timeout: 30))
   end
 
-  it "does not store survived results in cache" do
+  it "stores survived results in cache" do
     mut = mutation
     backend = instance_double("Cache", fetch: nil)
-    expect(backend).not_to receive(:store)
+    expect(backend).to receive(:store).with(mut, hash_including(status: :survived))
     isolator = double(:isolator)
     allow(isolator).to receive(:call).and_return(survived(mut))
 

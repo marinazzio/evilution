@@ -237,7 +237,8 @@ module Evilution::AST
         source: source,
         node: node,
         kind: kind,
-        concern_hook: in_hook?(loc)
+        concern_hook: in_hook?(loc),
+        byte_range: loc.start_offset...loc.end_offset
       )
     end
 
