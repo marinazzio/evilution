@@ -47,6 +47,24 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result.mutation).to eq(mutation)
     end
 
+    # The child does not evaluate the original source again after its tests,
+    # so whatever it measures afterwards must not go through definitions the
+    # mutation may have replaced; here the tests redefine the RSS reader, as a
+    # mutation of that file would.
+    it "measures its memory with the definitions it started with, not ones the tests replaced" do
+      test_command = lambda { |_m|
+        Evilution::Memory.define_singleton_method(:rss_kb) { raise "mutated rss_kb" }
+        Evilution::Memory.define_singleton_method(:rss_kb_for) { |_pid| raise "mutated rss_kb_for" }
+        { passed: true }
+      }
+
+      result = isolator.call(mutation:, test_command:, timeout: 5)
+
+      expect(result).to be_survived
+      expect(result.error_message).to be_nil
+      expect(result.child_rss_kb).to be_a(Integer) if File.exist?("/proc/self/status")
+    end
+
     it "declares the child a process that ends with its mutation" do
       test_command = ->(_m) { { passed: Evilution.single_mutation_process? } }
 
@@ -535,14 +553,43 @@ RSpec.describe Evilution::Isolation::Fork do
     end
 
     # A child exits right after writing its result; waiting for it in fixed
-    # steps added the remainder of a step to every mutation.
-    it "does not idle in fixed steps while the child exits after writing its result" do
-      allow(isolator).to receive(:sleep).and_call_original
+    # steps added the remainder of a step to every mutation. The waits start
+    # short and double, so a child that exits promptly is noticed promptly.
+    it "waits for the child to exit in steps that start short and double" do
+      read_io, write_io = IO.pipe
+      write_io.close
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      handle = Evilution::ProcessSupervisor::Handle.new(pid: 0, pgid: 0, fds: [], sandbox_dir: nil)
+      allow(supervisor).to receive(:reap_nonblock).and_return(false, false, false, false, true)
+      allow(isolator).to receive(:sleep)
 
-      result = isolator.call(mutation:, test_command: ->(_m) { { passed: true } }, timeout: 5)
+      decoded = isolator.send(:reap_and_decode, handle, Marshal.dump(passed: true), read_io)
 
-      expect(result).to be_survived
-      expect(isolator).not_to have_received(:sleep).with(a_value >= 0.05)
+      expect(decoded).to include(passed: true)
+      step = described_class::REAP_STEP_MIN
+      expect(isolator).to have_received(:sleep).with(step * 2).ordered
+      expect(isolator).to have_received(:sleep).with(step * 4).ordered
+      expect(isolator).to have_received(:sleep).with(step * 8).ordered
+      expect(isolator).to have_received(:sleep).exactly(3).times
+    ensure
+      read_io.close
+    end
+
+    it "caps the step between liveness checks" do
+      read_io, write_io = IO.pipe
+      write_io.close
+      supervisor = isolator.instance_variable_get(:@supervisor)
+      handle = Evilution::ProcessSupervisor::Handle.new(pid: 0, pgid: 0, fds: [], sandbox_dir: nil)
+      answers = ([false] * 10) + [true]
+      allow(supervisor).to receive(:reap_nonblock) { answers.shift }
+      allow(isolator).to receive(:sleep)
+
+      isolator.send(:reap_and_decode, handle, Marshal.dump(passed: true), read_io)
+
+      expect(isolator).to have_received(:sleep).with(described_class::REAP_STEP_MAX).at_least(:once)
+      expect(isolator).not_to have_received(:sleep).with(a_value > described_class::REAP_STEP_MAX)
+    ensure
+      read_io.close
     end
 
     it "reaps a child that exited after writing its result without signalling it" do
@@ -555,7 +602,11 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(supervisor).not_to have_received(:signal_group)
     end
 
-    it "reaps without signalling when a grandchild still holds the pipe" do
+    # The child's pid is free once it is reaped, but its process group lives
+    # on while the grandchild does; sweeping the group is what keeps a
+    # process the tests started from outliving the mutation.
+    it "reaps without signalling the child's pid when a grandchild still holds the pipe, " \
+       "and terminates the grandchild" do
       supervisor = isolator.instance_variable_get(:@supervisor)
       allow(supervisor).to receive(:signal_group).and_call_original
       grandchild_file = Tempfile.new("grandchild_pid")
@@ -569,6 +620,9 @@ RSpec.describe Evilution::Isolation::Fork do
       expect(result).to be_survived
       expect(result.error_message).to be_nil
       expect(supervisor).not_to have_received(:signal_group)
+      grandchild = File.read(grandchild_file.path).to_i
+      wait_until { !process_alive?(grandchild) }
+      expect(process_alive?(grandchild)).to be(false)
     ensure
       begin
         grandchild = File.read(grandchild_file.path).to_i

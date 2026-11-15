@@ -176,7 +176,8 @@ class that owns it.
    integration parses each source file and its resolved spec files once in the
    parent (`ExampleFilter#warm` fills `SourceAstCache` / `SpecAstCache`), so
    every forked child inherits the parses instead of repeating them and losing
-   them on exit.
+   them on exit. Warming stops where the bounded caches are full rather than
+   evicting what it warmed first; later files are parsed by their children.
 6. **Execute** — `Runner::MutationExecutor#call` picks a strategy by `config.jobs`:
    `Strategy::Sequential` for `jobs == 1`, `Strategy::Parallel` (via
    `Parallel::Pool` / `WorkQueue`) for `jobs > 1`. Either way each mutation reaches
@@ -186,15 +187,21 @@ class that owns it.
    back through `Strategy::Parallel::OrderedDelivery`, which puts them in
    mutation order before the notifier (progress, `--fail-fast`) and the reports
    see them. On fail-fast the pool sends nothing more, lets the mutations in
-   flight finish and shuts its workers down.
+   flight finish and shuts its workers down; their results are not reported
+   but still go to the `--incremental` cache. Under in-process isolation each
+   worker runs a single mutation and is replaced, since the mutation runs in
+   the worker itself.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation
    (`Integration::Loading::MutationApplier`), and runs `Integration::Base#call` →
    `run_tests`. The child's result is marshaled back over a length-prefixed pipe.
    After reading it the parent waits on that pipe for the child to close it,
-   in slices bounded by `REAP_DEADLINE`, and reaps the child as soon as it has
-   exited; a reaped child is never signalled again (its pid may be reused).
+   then polls for the child's exit with a short backoff (1 ms doubling up to
+   50 ms), all bounded by `REAP_DEADLINE`. A reaped child's pid is never
+   signalled or waited on again (it may be reused), but its process group is
+   still sent one TERM, so grandchildren the tests left behind do not outlive
+   the mutation.
    A fork child does not evaluate the original file again after its tests
    (`Evilution.single_mutation_process?`): it exits right after reporting.
    `Isolation::InProcess` is the lighter path for plain-Ruby projects.
