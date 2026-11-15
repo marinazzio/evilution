@@ -18,12 +18,14 @@ class Evilution::Runner::MutationExecutor::ResultCache
     @backend = backend
   end
 
-  def fetch(mutation)
+  # time_limit: the longest the mutation's test run would be allowed now; nil
+  # when it would run without a limit.
+  def fetch(mutation, time_limit:)
     return nil unless @backend
 
     data = @backend.fetch(mutation)
     return nil unless data
-    return nil unless CACHEABLE_STATUSES.include?(data[:status])
+    return nil unless reusable?(data, time_limit)
 
     Evilution::Result::MutationResult.new(
       mutation: mutation,
@@ -67,9 +69,10 @@ class Evilution::Runner::MutationExecutor::ResultCache
     Evilution::InfraCrash.class_name?(result.error_class)
   end
 
-  # A mutation the runless verdict answers goes in with the cached results:
-  # it needs no worker, and its verdict is not stored.
-  def partition(batch, packer:, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
+  # time_limit_for: answers the time limit #fetch is to compare against for
+  # each mutation. A mutation the runless verdict answers goes in with the
+  # cached results: it needs no worker, and its verdict is not stored.
+  def partition(batch, packer:, time_limit_for:, runless: Evilution::Runner::MutationExecutor::RunlessVerdict.new)
     uncached_indices = []
     cached_results = {}
 
@@ -80,7 +83,7 @@ class Evilution::Runner::MutationExecutor::ResultCache
         next
       end
 
-      cached = fetch(mutation)
+      cached = fetch(mutation, time_limit: time_limit_for.call(mutation))
       if cached
         cached_results[i] = packer.compact(cached)
       else
@@ -89,5 +92,23 @@ class Evilution::Runner::MutationExecutor::ResultCache
     end
 
     Partition.new(uncached_indices: uncached_indices, cached_results: cached_results)
+  end
+
+  private
+
+  # A kill or a survivor stands whatever the limit is now. A timeout says only
+  # that the run needed more than the limit it had, so it answers for a run
+  # that would get no more time than that; one that does not record its limit
+  # answers for none.
+  def reusable?(data, time_limit)
+    case data[:status]
+    when :killed, :survived then true
+    when :timeout then timeout_reusable?(data[:time_limit], time_limit)
+    else false
+    end
+  end
+
+  def timeout_reusable?(cached_limit, time_limit)
+    cached_limit.is_a?(Numeric) && time_limit.is_a?(Numeric) && time_limit <= cached_limit
   end
 end

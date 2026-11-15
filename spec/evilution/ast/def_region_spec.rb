@@ -64,6 +64,14 @@ RSpec.describe Evilution::AST::DefRegion do
       expect(region.node.location.start_column).to eq(2)
     end
 
+    it "settles every mutation of the def, not only the first" do
+      def_region = region(source)
+      offset = source.index("* 2")
+
+      expect(def_region.parse(offset: offset, length: 3, replacement: "* 3")).not_to be_nil
+      expect(def_region.parse(offset: offset, length: 3, replacement: "* 4")).not_to be_nil
+    end
+
     it "is nil when the mutated def does not parse" do
       expect(parse(source, "* 2", "* ")).to be_nil
     end
@@ -118,6 +126,12 @@ RSpec.describe Evilution::AST::DefRegion do
       code = "class A\n  def total\n    x(<<~TXT) end\n    body\n  TXT\nend\n"
 
       expect(parse(code, "x(", "y(")).to be_nil
+    end
+
+    it "is nil when the mutation removes a heredoc opener whose body runs after the def" do
+      code = "class A\n  def total(name) format(<<~MSG, name) end\n    Hello %s\n  MSG\nend\n"
+
+      expect(parse(code, "format(<<~MSG, name)", "nil")).to be_nil
     end
 
     it "is nil in a file that names its encoding" do

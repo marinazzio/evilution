@@ -132,6 +132,34 @@ RSpec.describe Evilution::Result::MutationResult do
     end
   end
 
+  describe "#after_adaptive_timeout" do
+    let(:memory) { Evilution::Result::MemoryStats.new(child_rss_kb: 1, memory_delta_kb: 2, parent_rss_kb: 3) }
+
+    # The run that used up the shorter limit is part of what the mutation cost,
+    # so its time goes into the duration and is named among the timings.
+    it "adds the time of the timed-out run to a copy that keeps every other field" do
+      original = described_class.new(
+        mutation: mutation, status: :killed, duration: 15.5, killing_test: "t", test_command: "c",
+        memory: memory, timings: Evilution::Result::MutationTimings.new(test_run: 15.0)
+      )
+
+      copy = original.after_adaptive_timeout(10.25)
+
+      expect([copy.status, copy.duration, copy.killing_test, copy.test_command, copy.memory, copy.time_limit])
+        .to eq([:killed, 25.75, "t", "c", memory, nil])
+      expect(copy.timings.to_h).to eq(test_run: 15.0, adaptive_timeout: 10.25)
+      expect(copy).to be_frozen
+    end
+
+    it "names the timed-out run as the only timing when the re-run measured none" do
+      original = described_class.new(mutation: mutation, status: :timeout, duration: 30.5, time_limit: 30)
+
+      copy = original.after_adaptive_timeout(10.25)
+
+      expect([copy.duration, copy.time_limit, copy.timings.to_h]).to eq([40.75, 30, { adaptive_timeout: 10.25 }])
+    end
+  end
+
   it "stores duration" do
     result = described_class.new(mutation: mutation, status: :killed, duration: 1.5)
 
