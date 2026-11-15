@@ -82,6 +82,22 @@ RSpec.describe Evilution::CLI::Parser::OptionsBuilder do
     expect(options[:canary]).to be(false)
   end
 
+  it "parses the adaptive timeout bounds as numbers" do
+    options, = parse(["--timeout-factor", "4", "--timeout-floor", "2.5", "--timeout-ceiling", "90"])
+    expect(options.slice(:timeout_factor, :timeout_floor, :timeout_ceiling))
+      .to eq(timeout_factor: 4.0, timeout_floor: 2.5, timeout_ceiling: 90.0)
+  end
+
+  it "parses -t as the fixed timeout" do
+    options, = parse(["-t", "45"])
+    expect(options[:timeout]).to eq(45)
+  end
+
+  it "leaves the timeout absent when no --timeout is given, so the limit can follow the baseline" do
+    options, = parse(["--timeout-floor", "5"])
+    expect(options).not_to have_key(:timeout)
+  end
+
   it "parses --stop-on-kill to true" do
     options, = parse(["--stop-on-kill"])
     expect(options[:stop_on_kill]).to be(true)

@@ -18,13 +18,14 @@ class Evilution::Reporter::JSON::Timings
     }
   end
 
-  # The fields a mutation's row carries about its own time: none when it
-  # measured nothing.
+  # The fields a mutation's row carries about its own time: where it went,
+  # when the run measured it, and the limit it ran under, when it used it up.
   def mutation_fields(result)
+    fields = {}
+    fields[:time_limit] = result.time_limit.round(4) if result.time_limit
     timings = result.timings
-    return {} unless timings
-
-    { timings: timings.to_h.transform_values { |seconds| seconds.round(4) } }
+    fields[:timings] = timings.to_h.transform_values { |seconds| seconds.round(4) } if timings
+    fields
   end
 
   private

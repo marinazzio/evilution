@@ -412,6 +412,72 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#adaptive_timeout?" do
+      it "is true when no timeout is given" do
+        expect(Evilution::Config.new(skip_config_file: true).adaptive_timeout?).to be true
+      end
+
+      it "is false when a timeout is given" do
+        expect(Evilution::Config.new(timeout: 30, skip_config_file: true).adaptive_timeout?).to be false
+      end
+
+      it "is false when the config file sets a timeout" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\ntimeout: 30\n")
+
+            expect(Evilution::Config.new.adaptive_timeout?).to be false
+          end
+        end
+      end
+
+      it "is true when the config file tunes only the adaptive bounds" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\ntimeout_factor: 4\ntimeout_floor: 2.5\ntimeout_ceiling: 90\n")
+            config = Evilution::Config.new
+
+            expect(config.adaptive_timeout?).to be true
+            expect([config.timeout_factor, config.timeout_floor, config.timeout_ceiling]).to eq([4, 2.5, 90])
+          end
+        end
+      end
+    end
+
+    describe "adaptive timeout bounds" do
+      it "defaults to a factor of 10, a 10s floor and a 60s ceiling" do
+        config = Evilution::Config.new(skip_config_file: true)
+
+        expect([config.timeout_factor, config.timeout_floor, config.timeout_ceiling]).to eq([10, 10, 60])
+      end
+
+      it "accepts numeric strings" do
+        config = Evilution::Config.new(timeout_factor: "2.5", skip_config_file: true)
+
+        expect(config.timeout_factor).to eq(2.5)
+      end
+
+      %i[timeout_factor timeout_floor timeout_ceiling].each do |key|
+        [0, -1, "abc", nil, true, Float::INFINITY].each do |bad|
+          it "rejects #{key}: #{bad.inspect}" do
+            expect { Evilution::Config.new(key => bad, skip_config_file: true) }
+              .to raise_error(Evilution::ConfigError, "#{key} must be a positive number, got #{bad.inspect}")
+          end
+        end
+      end
+
+      it "rejects a floor above the ceiling" do
+        expect { Evilution::Config.new(timeout_floor: 20, timeout_ceiling: 15, skip_config_file: true) }
+          .to raise_error(Evilution::ConfigError, "timeout_floor (20) must not exceed timeout_ceiling (15)")
+      end
+
+      it "accepts a floor equal to the ceiling" do
+        config = Evilution::Config.new(timeout_floor: 15, timeout_ceiling: 15, skip_config_file: true)
+
+        expect(config.timeout_floor).to eq(config.timeout_ceiling)
+      end
+    end
+
     describe "#stop_on_kill?" do
       it "defaults to true" do
         expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true

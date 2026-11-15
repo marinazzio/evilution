@@ -98,6 +98,59 @@ RSpec.describe Evilution::Result::MutationResult do
     expect(result.mutation).to be(mutation)
   end
 
+  describe "#time_limit" do
+    it "is nil unless one was recorded" do
+      expect(described_class.new(mutation: mutation, status: :timeout).time_limit).to be_nil
+    end
+
+    it "is recorded by #with_time_limit on a copy that keeps every other field" do
+      error = Evilution::Result::ErrorInfo.new(klass: "E", message: "m")
+      memory = Evilution::Result::MemoryStats.new(child_rss_kb: 1, memory_delta_kb: 2, parent_rss_kb: 3)
+      timings = Evilution::Result::MutationTimings.new(test_run: 4.1)
+      original = described_class.new(
+        mutation: mutation, status: :timeout, duration: 4.1, killing_test: "t", test_command: "c",
+        memory: memory, error: error, neutral_reason: :reason, known_failures_only: true, timings: timings
+      )
+
+      copy = original.with_time_limit(4.0)
+
+      expect(copy.time_limit).to eq(4.0)
+      expect([copy.mutation, copy.status, copy.duration, copy.killing_test, copy.test_command, copy.memory,
+              copy.error, copy.neutral_reason, copy.known_failures_only?, copy.timings])
+        .to eq([mutation, :timeout, 4.1, "t", "c", memory, error, :reason, true, timings])
+      expect(copy).to be_frozen
+      expect(original.time_limit).to be_nil
+    end
+  end
+
+  describe "#after_adaptive_timeout" do
+    let(:memory) { Evilution::Result::MemoryStats.new(child_rss_kb: 1, memory_delta_kb: 2, parent_rss_kb: 3) }
+
+    # The run that used up the shorter limit is part of what the mutation cost,
+    # so its time goes into the duration and is named among the timings.
+    it "adds the time of the timed-out run to a copy that keeps every other field" do
+      original = described_class.new(
+        mutation: mutation, status: :killed, duration: 15.5, killing_test: "t", test_command: "c",
+        memory: memory, timings: Evilution::Result::MutationTimings.new(test_run: 15.0)
+      )
+
+      copy = original.after_adaptive_timeout(10.25)
+
+      expect([copy.status, copy.duration, copy.killing_test, copy.test_command, copy.memory, copy.time_limit])
+        .to eq([:killed, 25.75, "t", "c", memory, nil])
+      expect(copy.timings.to_h).to eq(test_run: 15.0, adaptive_timeout: 10.25)
+      expect(copy).to be_frozen
+    end
+
+    it "names the timed-out run as the only timing when the re-run measured none" do
+      original = described_class.new(mutation: mutation, status: :timeout, duration: 30.5, time_limit: 30)
+
+      copy = original.after_adaptive_timeout(10.25)
+
+      expect([copy.duration, copy.time_limit, copy.timings.to_h]).to eq([40.75, 30, { adaptive_timeout: 10.25 }])
+    end
+  end
+
   it "stores duration" do
     result = described_class.new(mutation: mutation, status: :killed, duration: 1.5)
 

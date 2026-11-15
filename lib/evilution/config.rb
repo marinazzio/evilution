@@ -21,7 +21,8 @@ class Evilution::Config
     example_targeting_fallback: :full_file, example_targeting_strategy: :lexical,
     example_targeting_cache: { max_files: 50, max_blocks: 10_000 },
     quiet_children: false, quiet_children_dir: "tmp/evilution_children",
-    profile: :default, canary: true, warmup: :none, stop_on_kill: true
+    profile: :default, canary: true, warmup: :none, stop_on_kill: true,
+    timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60
   }.freeze
 
   attr_reader :target_files, :schema_version, :timeout, :format,
@@ -34,7 +35,7 @@ class Evilution::Config
               :example_targeting, :example_targeting_fallback, :example_targeting_strategy,
               :example_targeting_cache,
               :spec_selector, :quiet_children, :quiet_children_dir, :profile, :canary, :warmup,
-              :stop_on_kill
+              :stop_on_kill, :timeout_factor, :timeout_floor, :timeout_ceiling
 
   def initialize(**options)
     skip_file = options.delete(:skip_config_file) ? true : false
@@ -77,6 +78,12 @@ class Evilution::Config
 
   def stop_on_kill?
     stop_on_kill
+  end
+
+  # Whether each mutation's limit follows the baseline time of its spec files.
+  # A timeout given on the command line or in the config file keeps winning.
+  def adaptive_timeout?
+    @adaptive_timeout
   end
 
   def incremental?
@@ -135,8 +142,14 @@ class Evilution::Config
       # Omit to keep the legacy lenient behavior (unknown keys ignored).
       schema_version: #{CURRENT_SCHEMA_VERSION}
 
-      # Per-mutation timeout in seconds (default: 30)
+      # Per-mutation timeout in seconds. Left unset, each mutation's limit is
+      # timeout_factor x the baseline time of its spec files, kept between
+      # timeout_floor and timeout_ceiling; 30 is used where the baseline has no
+      # time for them. Setting it gives every mutation this fixed limit.
       # timeout: 30
+      # timeout_factor: 10
+      # timeout_floor: 10
+      # timeout_ceiling: 60
 
       # Output format: text or json (default: text)
       # format: text
@@ -240,6 +253,7 @@ class Evilution::Config
     assign_simple_attributes(merged)
     assign_validated_attributes(merged)
     assign_example_targeting(merged)
+    assign_adaptive_timeout(merged)
     @spec_selector = Builders::SpecSelector.call(
       spec_files: @spec_files,
       spec_mappings: @spec_mappings,
@@ -288,6 +302,7 @@ class Evilution::Config
   VALIDATED_ATTRS = %i[
     integration jobs fail_fast isolation ignore_patterns
     hooks preload spec_mappings spec_pattern profile warmup
+    timeout_factor timeout_floor timeout_ceiling
   ].freeze
   private_constant :VALIDATED_ATTRS
 
@@ -303,6 +318,14 @@ class Evilution::Config
     @example_targeting_fallback = Validators::ExampleTargetingFallback.call(merged[:example_targeting_fallback])
     @example_targeting_strategy = Validators::ExampleTargetingStrategy.call(merged[:example_targeting_strategy])
     @example_targeting_cache    = Validators::ExampleTargetingCache.call(merged[:example_targeting_cache])
+  end
+
+  def assign_adaptive_timeout(merged)
+    @adaptive_timeout = !merged[:timeout_given]
+    return if @timeout_floor <= @timeout_ceiling
+
+    raise Evilution::ConfigError,
+          "timeout_floor (#{@timeout_floor}) must not exceed timeout_ceiling (#{@timeout_ceiling})"
   end
 end
 
@@ -325,6 +348,9 @@ require_relative "config/validators/example_targeting_strategy"
 require_relative "config/validators/example_targeting_cache"
 require_relative "config/validators/profile"
 require_relative "config/validators/warmup"
+require_relative "config/validators/timeout_factor"
+require_relative "config/validators/timeout_floor"
+require_relative "config/validators/timeout_ceiling"
 require_relative "config/builders"
 require_relative "config/builders/spec_resolver"
 require_relative "config/builders/spec_selector"

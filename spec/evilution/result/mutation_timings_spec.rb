@@ -74,8 +74,21 @@ RSpec.describe Evilution::Result::MutationTimings do
   end
 
   it "names the phases in order" do
-    expect(described_class::PHASES).to eq(%i[apply test_run confirmation queue_wait])
+    expect(described_class::PHASES).to eq(%i[apply test_run confirmation queue_wait adaptive_timeout])
     expect(described_class::PHASES).to be_frozen
+  end
+
+  describe "#with_adaptive_timeout" do
+    it "adds the time of a run that used up a shorter limit, keeping the other phases" do
+      timings = described_class.new(apply: 0.1, test_run: 0.5).with_adaptive_timeout(10.2)
+
+      expect(timings.to_h).to eq(apply: 0.1, test_run: 0.5, adaptive_timeout: 10.2)
+      expect(timings).to be_frozen
+    end
+
+    it "reads back from its hash form" do
+      expect(described_class.from_h(adaptive_timeout: 10.2).adaptive_timeout).to eq(10.2)
+    end
   end
 
   describe "#to_h" do

@@ -10,6 +10,7 @@ require "evilution/runner/mutation_executor/result_packer"
 require "evilution/runner/mutation_executor/result_notifier"
 require "evilution/runner/mutation_executor/neutralization_pipeline"
 require "evilution/runner/mutation_executor/strategy/parallel"
+require "evilution/runner/mutation_executor/timeout_policy"
 require "evilution/parallel/work_queue"
 require "evilution/parallel/pool"
 require "timeout"
@@ -60,7 +61,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
         packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
         pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
         notifier: notifier,
-        pool_factory: -> { pool },
+        pool_factory: ->(_item_timeout) { pool },
         config: cfg
       )
     end
@@ -100,7 +101,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
   end
 
   describe "streaming" do
-    def strategy_for(pool, isolator, config: cfg, notifier: nil, backend: nil)
+    def strategy_for(pool, isolator, config: cfg, notifier: nil, backend: nil, timeout_policy: nil, pool_factory: nil)
       backend ||= instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }
       diags = Evilution::Runner::Diagnostics.new(config)
       allow(diags).to receive(:log_memory)
@@ -110,8 +111,9 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
         packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
         pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
         notifier: notifier || Evilution::Runner::MutationExecutor::ResultNotifier.new(config, diagnostics: diags, on_result: nil),
-        pool_factory: -> { pool },
-        config: config
+        pool_factory: pool_factory || ->(_item_timeout) { pool },
+        config: config,
+        timeout_policy: timeout_policy
       )
     end
 
@@ -159,7 +161,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       backend = instance_double("Cache")
       allow(backend).to receive(:store)
       allow(backend).to receive(:fetch) do |m|
-        { status: :timeout, duration: 9.0 } if m.equal?(mutations[1])
+        { status: :timeout, duration: 9.0, time_limit: 30 } if m.equal?(mutations[1])
       end
 
       execution = strategy_for(fake_pool(order: [1, 0]), echo_isolator, backend: backend)
@@ -199,6 +201,124 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       expect(isolator).to have_received(:call).with(hash_including(timeout: 30))
     end
 
+    it "runs each mutation under the limit the timeout policy gives it" do
+      m1 = mutation("m1")
+      m2 = instance_double(Evilution::Mutation, file_path: "lib/bar.rb", to_s: "m2", unparseable?: false,
+                                                strip_sources!: nil)
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) { |mutation:, **| killed(mutation) }
+      policy = Class.new(Evilution::Runner::MutationExecutor::TimeoutPolicy::Base) do
+        define_method(:call) { |mut| mut.equal?(m1) ? 4.0 : 7.5 }
+      end.new
+
+      strategy_for(fake_pool, isolator, timeout_policy: policy)
+        .call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(isolator).to have_received(:call).with(hash_including(mutation: m1, timeout: 4.0))
+      expect(isolator).to have_received(:call).with(hash_including(mutation: m2, timeout: 7.5))
+    end
+
+    it "builds the pool with the item timeout the policy gives for the mutations it runs" do
+      m1 = mutation("m1")
+      policy = Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(12)
+      given = nil
+      factory = lambda do |item_timeout|
+        given = item_timeout
+        fake_pool
+      end
+      strategy = strategy_for(nil, echo_isolator, timeout_policy: policy, pool_factory: factory)
+
+      strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(given).to eq(24)
+    end
+
+    it "records the limit a timed-out mutation ran under" do
+      m1 = mutation("m1")
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call) do |mutation:, **|
+        Evilution::Result::MutationResult.new(mutation: mutation, status: :timeout, duration: 4.1)
+      end
+      policy = Evilution::Runner::MutationExecutor::TimeoutPolicy::Fixed.new(4)
+
+      execution = strategy_for(fake_pool, isolator, timeout_policy: policy)
+                  .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.results.first.time_limit).to eq(4)
+    end
+
+    it "confirms a timeout under a shorter limit in the worker before reporting it" do
+      m1 = mutation("m1")
+      isolator = double(:isolator)
+      allow(isolator).to receive(:call).and_return(
+        Evilution::Result::MutationResult.new(mutation: m1, status: :timeout, duration: 10.0), killed(m1)
+      )
+      policy = Class.new(Evilution::Runner::MutationExecutor::TimeoutPolicy::Base) do
+        define_method(:call) { |_mut| 10 }
+        define_method(:confirmation_limit) { |_mut| 30 }
+      end.new
+
+      execution = strategy_for(fake_pool, isolator, timeout_policy: policy)
+                  .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.results.first.status).to eq(:killed)
+      expect(isolator).to have_received(:call).with(hash_including(timeout: 30))
+    end
+
+    it "runs a cached timeout again when the mutation's limit now leaves more time" do
+      m1 = mutation("m1")
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 10.0, time_limit: 10 })
+      allow(backend).to receive(:store)
+      isolator = echo_isolator
+
+      execution = strategy_for(fake_pool, isolator, backend: backend)
+                  .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.results.first.status).to eq(:killed)
+      expect(isolator).to have_received(:call).once
+    end
+
+    it "records a backstop timeout with the mutation's own limit" do
+      m1 = mutation("m1")
+      m2 = mutation("m2")
+      policy = Class.new(Evilution::Runner::MutationExecutor::TimeoutPolicy::Base) do
+        define_method(:call) { |mut| mut.equal?(m1) ? 4 : 50 }
+      end.new
+      compact_kill = Evilution::Runner::MutationExecutor::ResultPacker.new.compact(killed(m2))
+      pool = fake_pool(results: [Evilution::Parallel::WorkQueue::TIMED_OUT, compact_kill])
+
+      execution = strategy_for(pool, echo_isolator, timeout_policy: policy)
+                  .call([m1, m2], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      first = execution.results.first
+      expect([first.status, first.duration, first.time_limit]).to eq([:timeout, 100, 4])
+    end
+
+    # The cached timeout has to cover the confirmation run too, not just the
+    # first, shorter limit.
+    it "runs a cached timeout again when it ran under less than the mutation's final limit" do
+      m1 = mutation("m1")
+      backend = instance_double("Cache", fetch: { status: :timeout, duration: 10.0, time_limit: 10 })
+      allow(backend).to receive(:store)
+      isolator = echo_isolator
+      policy = Class.new(Evilution::Runner::MutationExecutor::TimeoutPolicy::Base) do
+        define_method(:call) { |_mut| 10 }
+        define_method(:confirmation_limit) { |_mut| 30 }
+      end.new
+
+      strategy_for(fake_pool, isolator, backend: backend, timeout_policy: policy)
+        .call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(isolator).to have_received(:call).once
+    end
+
+    it "records no limit on a mutation that finished in time" do
+      execution = strategy_for(fake_pool, echo_isolator)
+                  .call([mutation("m1")], baseline_result: nil, integration: ->(_) { "cmd" })
+
+      expect(execution.results.first.time_limit).to be_nil
+    end
+
     it "hands the baseline to the neutralisation pipeline" do
       pipeline = instance_double(Evilution::Runner::MutationExecutor::NeutralizationPipeline)
       allow(pipeline).to receive(:call) { |result, **| result }
@@ -207,7 +327,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
         cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend), isolator: echo_isolator,
         packer: Evilution::Runner::MutationExecutor::ResultPacker.new, pipeline: pipeline,
         notifier: instance_spy(Evilution::Runner::MutationExecutor::ResultNotifier, notify: :continue),
-        pool_factory: -> { fake_pool }, config: cfg
+        pool_factory: ->(_item_timeout) { fake_pool }, config: cfg
       )
 
       strategy.call([mutation("m1")], baseline_result: :baseline, integration: ->(_) { "cmd" })
@@ -247,7 +367,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: packer,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -270,7 +390,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -283,6 +403,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     # timeout 30 * 2), not a misleading 0.0 that would be cached/reported.
     expect(result.duration).to eq(60.0)
     expect(result.timings.to_h).to eq(test_run: 60.0)
+    # The limit is the mutation's own, not the pool's backstop for the run.
+    expect(result.time_limit).to eq(30)
   end
 
   it "translates an UNREADABLE pool sentinel into an :error result that says so" do
@@ -297,7 +419,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -324,7 +446,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -354,7 +476,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -388,7 +510,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg_ff, diagnostics: diags, on_result: nil),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg_ff
     )
 
@@ -421,7 +543,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: Evilution::Runner::MutationExecutor::ResultNotifier.new(cfg_ff, diagnostics: diags, on_result: nil),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg_ff
     )
 
@@ -449,7 +571,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier(diags),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg,
       diagnostics: diags
     )
@@ -479,7 +601,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
         [Evilution::Runner::MutationExecutor::Neutralizer::InfraError.new]
       ),
       notifier: notifier(diags),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg,
       diagnostics: diags
     )
@@ -509,7 +631,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier(diags),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg,
       diagnostics: diags
     )
@@ -537,7 +659,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier_spy,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -565,7 +687,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier_spy,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -596,7 +718,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier(diags),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg_j1,
       diagnostics: diags
     )
@@ -620,7 +742,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg,
       diagnostics: nil
     )
@@ -651,7 +773,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: pipeline,
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -679,7 +801,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -708,7 +830,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -736,7 +858,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -762,7 +884,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier(diags),
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg,
       diagnostics: diags
     )
@@ -800,7 +922,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
       packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
       pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
       notifier: notifier,
-      pool_factory: -> { pool },
+      pool_factory: ->(_item_timeout) { pool },
       config: cfg
     )
 
@@ -846,7 +968,7 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
         packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
         pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
         notifier: real_pool_notifier(config),
-        pool_factory: -> { Evilution::Parallel::Pool.new(size: config.jobs, item_timeout: item_timeout) },
+        pool_factory: ->(_deadline) { Evilution::Parallel::Pool.new(size: config.jobs, item_timeout: item_timeout) },
         config: config
       )
     end

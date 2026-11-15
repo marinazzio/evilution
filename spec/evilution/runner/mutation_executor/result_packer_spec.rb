@@ -42,7 +42,8 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
         error_class: "RuntimeError",
         error_backtrace: ["a.rb:1"],
         known_failures_only: false,
-        timings: { apply: 0.1, test_run: 0.3 }
+        timings: { apply: 0.1, test_run: 0.3 },
+        time_limit: nil
       )
     end
   end
@@ -60,6 +61,21 @@ RSpec.describe Evilution::Runner::MutationExecutor::ResultPacker do
       expect(rebuilt.error_backtrace).to eq(["a.rb:1"])
       expect(rebuilt.known_failures_only?).to be(false)
       expect(rebuilt.timings.to_h).to eq(apply: 0.1, test_run: 0.3)
+    end
+
+    it "carries the limit a timed-out mutation ran under" do
+      timed_out = Evilution::Result::MutationResult.new(mutation: mutation, status: :timeout, duration: 4.2)
+                                                   .with_time_limit(4.0)
+
+      rebuilt = packer.rebuild(mutation, packer.compact(timed_out))
+
+      expect([rebuilt.status, rebuilt.time_limit]).to eq([:timeout, 4.0])
+    end
+
+    it "rebuilds a packed Hash that carries no limit, as the pool's own sentinels do" do
+      rebuilt = packer.rebuild(mutation, { status: :error, duration: 0.0 })
+
+      expect(rebuilt.time_limit).to be_nil
     end
 
     it "carries the time the item waited for a worker" do

@@ -33,5 +33,14 @@ class Evilution::Config::Validators::Base
     rescue ::ArgumentError, ::TypeError
       raise Evilution::ConfigError, "#{name} must be a positive integer, got #{value.inspect}"
     end
+
+    # A number given as a number keeps its type, so it reads back as written;
+    # a string is parsed as a Float.
+    def coerce_positive_number!(value, name:)
+      number = value.is_a?(Numeric) ? value : Float(value, exception: false)
+      return number if number && number.finite? && number.positive?
+
+      raise Evilution::ConfigError, "#{name} must be a positive number, got #{value.inspect}"
+    end
   end
 end

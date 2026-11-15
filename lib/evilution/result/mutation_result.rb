@@ -8,14 +8,18 @@ require_relative "mutation_timings"
 class Evilution::Result::MutationResult
   STATUSES = %i[killed survived timeout error neutral equivalent unresolved unparseable].freeze
 
-  attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason
+  attr_reader :mutation, :status, :duration, :killing_test, :test_command, :memory, :error, :neutral_reason,
+              :time_limit
 
   # known_failures_only: the tests failed, but every example that did was
   # already failing before any mutation ran, so the failure says nothing
   # about this one.
+  #
+  # time_limit: the seconds the test run was allowed, recorded on a run that
+  # used them up so a reader can tell a short adaptive limit from a long one.
   def initialize(mutation:, status:, duration: 0.0, killing_test: nil,
                  test_command: nil, memory: nil, error: nil, neutral_reason: nil, known_failures_only: false,
-                 timings: nil)
+                 timings: nil, time_limit: nil)
     raise ArgumentError, "invalid status: #{status}" unless STATUSES.include?(status)
 
     @mutation = mutation
@@ -28,7 +32,19 @@ class Evilution::Result::MutationResult
     @neutral_reason = neutral_reason
     @known_failures_only = known_failures_only == true
     @timings = timings
+    @time_limit = time_limit
     freeze
+  end
+
+  def with_time_limit(seconds)
+    copy(time_limit: seconds)
+  end
+
+  # This result came from running the mutation again after a first run used up
+  # a shorter limit; that run is part of what the mutation cost.
+  def after_adaptive_timeout(seconds)
+    base = timings || Evilution::Result::MutationTimings.new
+    copy(duration: @duration + seconds, timings: base.with_adaptive_timeout(seconds))
   end
 
   # Where the duration went (Evilution::Result::MutationTimings), when the
@@ -101,5 +117,15 @@ class Evilution::Result::MutationResult
 
   def unparseable?
     status == :unparseable
+  end
+
+  private
+
+  def copy(**changes)
+    self.class.new(
+      mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
+      test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
+      known_failures_only: @known_failures_only, timings: @timings, time_limit: @time_limit, **changes
+    )
   end
 end
