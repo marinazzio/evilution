@@ -12,6 +12,8 @@ require "evilution/runner/mutation_executor/neutralization_pipeline"
 require "evilution/runner/mutation_executor/strategy/parallel"
 require "evilution/runner/mutation_executor/timeout_policy"
 require "evilution/parallel/work_queue"
+require "evilution/parallel/pool"
+require "timeout"
 require_relative "../../../../support/streaming_pool"
 
 RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
@@ -927,6 +929,92 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel do
     strategy.call([m1], baseline_result: nil, integration: ->(_) { "cmd" })
 
     expect(call_order).to eq(%i[store strip])
+  end
+
+  describe "on a real pool" do
+    # Crosses the pipe to the worker processes, so it has to be marshalable,
+    # which a test double is not.
+    let(:mutation_class) do
+      stub_const("ParallelSpecMutation", Struct.new(:id, :sleep_for, :verdict) do
+        def file_path = "lib/foo.rb"
+        def to_s = id
+        def unparseable? = false
+        def strip_sources! = nil
+      end)
+    end
+
+    # Runs in the worker: sleeps as long as the mutation says, then returns
+    # its verdict, so the workers finish out of mutation order.
+    let(:sleeping_isolator) do
+      Class.new do
+        def call(mutation:, **)
+          sleep(mutation.sleep_for)
+          Evilution::Result::MutationResult.new(mutation: mutation, status: mutation.verdict, duration: mutation.sleep_for)
+        end
+      end.new
+    end
+
+    def real_pool_notifier(config)
+      diags = Evilution::Runner::Diagnostics.new(config)
+      allow(diags).to receive(:log_memory)
+      Evilution::Runner::MutationExecutor::ResultNotifier.new(config, diagnostics: diags, on_result: nil)
+    end
+
+    def real_pool_strategy(config, item_timeout)
+      backend = instance_double("Cache", fetch: nil).tap { |b| allow(b).to receive(:store) }
+      described_class.new(
+        cache: Evilution::Runner::MutationExecutor::ResultCache.new(backend),
+        isolator: sleeping_isolator,
+        packer: Evilution::Runner::MutationExecutor::ResultPacker.new,
+        pipeline: Evilution::Runner::MutationExecutor::NeutralizationPipeline.new([]),
+        notifier: real_pool_notifier(config),
+        pool_factory: ->(_deadline) { Evilution::Parallel::Pool.new(size: config.jobs, item_timeout: item_timeout) },
+        config: config
+      )
+    end
+
+    def run_on_real_pool(mutations, config:, item_timeout:)
+      strategy = real_pool_strategy(config, item_timeout)
+      Timeout.timeout(30) { strategy.call(mutations, baseline_result: nil, integration: ->(_) { "cmd" }) }
+    end
+
+    def expect_no_worker_left(execution)
+      expect(execution.worker_stats).not_to be_empty
+      execution.worker_stats.each do |stat|
+        expect { Process.wait(stat.pid) }.to raise_error(Errno::ECHILD)
+      end
+    end
+
+    it "lists results in mutation order when workers finish out of order and one hangs" do
+      config = Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, jobs: 3, timeout: 1)
+      mutations = [
+        mutation_class.new("m0", 0.6, :killed), mutation_class.new("m1", 0.0, :survived),
+        mutation_class.new("m2", 60, :killed), mutation_class.new("m3", 0.1, :killed),
+        mutation_class.new("m4", 0.0, :survived)
+      ]
+
+      execution = run_on_real_pool(mutations, config: config, item_timeout: 1)
+
+      expect(execution.results.map { |r| r.mutation.id }).to eq(%w[m0 m1 m2 m3 m4])
+      expect(execution.results.map(&:status)).to eq(%i[killed survived timeout killed survived])
+      expect(execution.truncated).to be(false)
+      expect_no_worker_left(execution)
+    end
+
+    it "cuts the run at the first survivor in mutation order while other mutations are in flight" do
+      config = Evilution::Config.new(quiet: true, baseline: false, skip_config_file: true, jobs: 3, fail_fast: 1)
+      mutations = [
+        mutation_class.new("m0", 0.5, :killed), mutation_class.new("m1", 0.1, :survived),
+        mutation_class.new("m2", 0.8, :survived)
+      ] + Array.new(6) { |i| mutation_class.new("k#{i}", 0.1, :killed) }
+
+      execution = run_on_real_pool(mutations, config: config, item_timeout: 10)
+
+      expect(execution.results.map { |r| r.mutation.id }).to eq(%w[m0 m1])
+      expect(execution.truncated).to be(true)
+      expect(execution.worker_stats.sum(&:items_completed)).to be < mutations.length
+      expect_no_worker_left(execution)
+    end
   end
 
   # A project that turns warnings into exceptions (dry-monads does) loads

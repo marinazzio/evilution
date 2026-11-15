@@ -108,6 +108,21 @@ RSpec.describe Evilution::Runner::MutationExecutor::Strategy::Parallel::OrderedD
     expect(mutations[2]).not_to have_received(:strip_sources!)
   end
 
+  it "still caches the fresh results that arrive once the run is truncated, without listing them" do
+    allow(notifier).to receive(:notify).and_return(:truncate)
+    subject = delivery
+    subject.accept(1, compact(:killed), fresh: false)
+    subject.accept(2, compact(:killed), fresh: true)
+    subject.accept(0, compact(:survived), fresh: true)
+    subject.accept(3, compact(:timeout), fresh: true)
+
+    expect(subject.results.map(&:mutation)).to eq(mutations.first(1))
+    expect(notifier).to have_received(:notify).once
+    expect(backend).to have_received(:store).with(mutations[2], hash_including(status: :killed))
+    expect(backend).to have_received(:store).with(mutations[3], hash_including(status: :timeout))
+    expect(backend).to have_received(:store).twice
+  end
+
   it "is not truncated while the notifier lets it continue" do
     subject = delivery
     expect(subject.truncated?).to be(false)

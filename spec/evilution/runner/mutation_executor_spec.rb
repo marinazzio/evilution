@@ -421,8 +421,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
   end
 
   describe "parallel pool construction" do
-    def capture_parallel_kwargs(cfg, hooks:, baseline: nil)
-      isolator = instance_double(Evilution::Isolation::Fork)
+    def capture_parallel_kwargs(cfg, hooks:, baseline: nil, isolator: instance_double(Evilution::Isolation::Fork))
       parallel = instance_double(Evilution::Runner::MutationExecutor::Strategy::Parallel)
       allow(parallel).to receive(:call).and_return(
         Evilution::Runner::MutationExecutor::ExecutionResult.new(results: [], truncated: false)
@@ -453,6 +452,26 @@ RSpec.describe Evilution::Runner::MutationExecutor do
       capture_parallel_kwargs(config(jobs: 2, timeout: 9), hooks: nil)[:pool_factory].call(18)
 
       expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(size: 2, item_timeout: 18))
+    end
+
+    it "gives every mutation a fresh worker under in-process isolation" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_parallel_kwargs(config(jobs: 2), hooks: nil,
+                                               isolator: Evilution::Isolation::InProcess.new)[:pool_factory].call(18)
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(worker_max_items: 1))
+    end
+
+    it "keeps each worker for the whole run under fork isolation" do
+      pool = instance_double(Evilution::Parallel::Pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).and_return(pool)
+
+      capture_parallel_kwargs(config(jobs: 2), hooks: nil,
+                                               isolator: Evilution::Isolation::Fork.new)[:pool_factory].call(18)
+
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(hash_including(worker_max_items: nil))
     end
 
     it "hands the strategy a timeout policy built from the baseline" do

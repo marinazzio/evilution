@@ -1895,7 +1895,7 @@ RSpec.describe Evilution::Runner do
 
     it "returns all results when using parallel execution" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1943,7 +1943,7 @@ RSpec.describe Evilution::Runner do
 
     it "uses Parallel::Pool when jobs > 1" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1954,12 +1954,12 @@ RSpec.describe Evilution::Runner do
       parallel_runner = described_class.new(config: parallel_config)
       parallel_runner.call
 
-      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10)
+      expect(Evilution::Parallel::Pool).to have_received(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil)
     end
 
     it "strips source strings from mutations in parallel path" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
       compact = [
         { status: :killed, duration: 0.1, child_rss_kb: nil, memory_delta_kb: nil },
         { status: :survived, duration: 0.2, child_rss_kb: nil, memory_delta_kb: nil }
@@ -1976,7 +1976,7 @@ RSpec.describe Evilution::Runner do
 
     it "sends compact hashes through the pool instead of full MutationResults" do
       pool = instance_double(Evilution::Parallel::Pool)
-      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10).and_return(pool)
+      allow(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: nil, item_timeout: 10, worker_max_items: nil).and_return(pool)
 
       captured_block = nil
       allow(pool).to receive(:map) do |batch, on_result: nil, &block|
@@ -2854,7 +2854,8 @@ RSpec.describe Evilution::Runner do
       allow(pool).to receive(:map) { |_items, on_result: nil| StreamingPool.replay(compact, on_result) }
       allow(pool).to receive(:worker_stats).and_return([])
 
-      expect(Evilution::Parallel::Pool).to receive(:new).with(size: 2, hooks: hooks, item_timeout: 10).and_return(pool)
+      expect(Evilution::Parallel::Pool).to receive(:new)
+        .with(size: 2, hooks: hooks, item_timeout: 10, worker_max_items: nil).and_return(pool)
 
       parallel_config = Evilution::Config.new(
         target_files: ["lib/example.rb"],

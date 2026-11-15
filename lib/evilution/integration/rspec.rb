@@ -53,8 +53,11 @@ class Evilution::Integration::RSpec < Evilution::Integration::Base
     super(hooks: hooks)
   end
 
-  # One mutation per source file is enough: every mutation in a file shares
-  # its source and resolves to the same spec files.
+  # One mutation per source file: every mutation in a file shares its source
+  # and the spec files the selector resolves for it. The related-spec
+  # heuristic, when on, adds files per mutation from its diff; those are
+  # warmed only if the file's first mutation adds them, and are otherwise
+  # parsed by the child that runs the mutation, as without warming.
   def warm_targeting(mutations)
     mutations.uniq(&:file_path).each do |mutation|
       files = @test_file_resolver.call(mutation, warn: false)
