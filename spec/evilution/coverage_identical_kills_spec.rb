@@ -68,14 +68,17 @@ RSpec.describe "Coverage targeting: identical kills vs full-file" do
     subjects.flat_map { |subject| registry.mutations_for(subject) }
   end
 
-  def killed_status(mutation, integration)
+  def status_of(mutation, integration)
     isolator = Evilution::Isolation::Fork.new
-    result = isolator.call(
+    isolator.call(
       mutation: mutation,
       test_command: ->(mut) { integration.call(mut) },
       timeout: 20
-    )
-    result.status == :killed
+    ).status
+  end
+
+  def killed_status(mutation, integration)
+    status_of(mutation, integration) == :killed
   end
 
   it "kills exactly the same mutations under coverage targeting as under full-file" do
@@ -96,5 +99,56 @@ RSpec.describe "Coverage targeting: identical kills vs full-file" do
 
     expect(killed_by_coverage).to match_array(killed_by_full)
     expect(killed_by_full).not_to be_empty # the fixture genuinely has killable mutations
+  end
+
+  # A shared group's examples run only as part of the spec file that includes
+  # it. A shared file that cannot load on its own -- here it raises, as one does
+  # under a spec helper that turns warnings into errors -- must never be what a
+  # targeted run is handed.
+  context "when the covering examples come from a shared group" do
+    let(:shared_path) { File.join(spec_dir, "shared", "adds.rb") }
+
+    before do
+      FileUtils.mkdir_p(File.dirname(shared_path))
+      File.write(shared_path, <<~RUBY)
+        raise "shared group loaded on its own" unless $idk_including_spec_loaded
+
+        RSpec.shared_examples "idk adds" do
+          it "adds" do
+            expect(described_class.new.add(2, 3)).to eq(5)
+          end
+        end
+      RUBY
+      File.write(spec_path, <<~RUBY)
+        $idk_including_spec_loaded = true
+        require_relative "#{source_path}"
+        require_relative "#{shared_path}"
+
+        RSpec.describe IdkCalc do
+          it_behaves_like "idk adds"
+
+          it "subtracts" do
+            expect(described_class.new.sub(5, 2)).to eq(3)
+          end
+        end
+      RUBY
+    end
+
+    it "reports every mutation as the full-file run does" do
+      mutations = real_mutations
+      map = Evilution::Coverage::MapBuilder.new(spec_files: [spec_path], target_files: [source_path]).call
+      lexical = Evilution::ExampleFilter.new(cache: Evilution::SpecAstCache.new)
+      coverage_filter = Evilution::CoverageExampleFilter.new(map: map, lexical: lexical)
+
+      coverage_integration = Evilution::Integration::RSpec.new(test_files: [spec_path], example_filter: coverage_filter)
+      full_integration = Evilution::Integration::RSpec.new(test_files: [spec_path])
+
+      by_coverage = mutations.to_h { |m| [m.to_s, status_of(m, coverage_integration)] }
+      by_full = mutations.to_h { |m| [m.to_s, status_of(m, full_integration)] }
+
+      expect(by_coverage).to eq(by_full)
+      expect(by_full.values).to include(:killed)
+      expect(by_full.values).not_to include(:error)
+    end
   end
 end

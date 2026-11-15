@@ -12,14 +12,15 @@ require_relative "recorder"
 # hook, ::RSpec.world mutation, and ::Coverage state never leak into the
 # calling process; the parent receives only the serialized map over a pipe.
 class Evilution::Coverage::MapBuilder
-  LOCATION_LINE_SUFFIX = /\A(.+?)(:\d+(?::\d+)*)\z/
+  LOCATION_SUFFIX = /\A(.+?)(:\d+(?::\d+)*|\[\d+(?::\d+)*(?:,\d+(?::\d+)*)*\])\z/
 
-  # RSpec reports example locations relative to its run dir as "./spec/x.rb:5".
-  # Store them ABSOLUTE (path expanded against the project root, line suffix
-  # preserved) so they replay regardless of the per-mutation run's CWD --
+  # RSpec reports example locations relative to its run dir as "./spec/x.rb:5",
+  # and example ids as "./spec/x.rb[1:2]". Store them ABSOLUTE (path expanded
+  # against the project root, line suffix or id preserved) so they replay
+  # regardless of the per-mutation run's CWD --
   # Integration::RSpec#resolve_target passes absolute targets through unchanged.
   def self.absolute_location(raw, root)
-    match = LOCATION_LINE_SUFFIX.match(raw)
+    match = LOCATION_SUFFIX.match(raw)
     path, suffix = match ? [match[1], match[2]] : [raw, ""]
     "#{File.expand_path(path, root)}#{suffix}"
   end
@@ -141,13 +142,15 @@ class Evilution::Coverage::MapBuilder
     ::RSpec.respond_to?(:clear_examples) ? ::RSpec.clear_examples : ::RSpec.reset
   end
 
+  # Each example is recorded by its id ("./spec/x_spec.rb[1:2:1]"), not its
+  # :location. An example from a shared group has its :location in the shared
+  # file, which on its own defines no example (and may not even load); its id
+  # names the spec file that includes the group and picks out that one example.
   def install_hook(recorder)
     root = @project_root
     ::RSpec.configure do |config|
       config.around(:each) do |example|
-        location = Evilution::Coverage::MapBuilder.absolute_location(
-          example.metadata[:location].to_s, root
-        )
+        location = Evilution::Coverage::MapBuilder.absolute_location(example.id, root)
         recorder.around_example(location) { example.run }
       end
     end

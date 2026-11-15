@@ -23,8 +23,8 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     add_examples = map.examples_for(target, add_line)
     sub_examples = map.examples_for(target, sub_line)
 
-    expect(add_examples).to include(a_string_matching(/calculator_examples\.rb:\d+/))
-    expect(sub_examples).to include(a_string_matching(/calculator_examples\.rb:\d+/))
+    expect(add_examples).to include(a_string_matching(/calculator_examples\.rb\[[\d:]+\]\z/))
+    expect(sub_examples).to include(a_string_matching(/calculator_examples\.rb\[[\d:]+\]\z/))
     # The "adds" example must not be credited with the subtraction line.
     expect(add_examples).not_to eq(sub_examples)
     expect(map.built?(target)).to be(true)
@@ -68,10 +68,47 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     expect(map.loaded_files).not_to include(start_with("#{fixture_dir}/"))
   end
 
+  # An example from a shared group is defined in the shared file, but it runs
+  # only as part of the spec file that includes the group; on its own the
+  # shared file defines no example and may not even load.
+  describe "examples from a shared group" do
+    including = File.join(fixture_dir, "shared_group_examples.rb")
+    shared = File.join(fixture_dir, "shared", "adds_group.rb")
+    add_line = File.readlines(target).index { |l| l.include?("a + b") } + 1
+
+    it "credits the line to the spec file that includes the group" do
+      map = described_class.new(spec_files: [including], target_files: [target]).call
+      examples = map.examples_for(target, add_line)
+
+      expect(examples).not_to be_empty
+      expect(examples).to all(start_with("#{including}["))
+      expect(examples).not_to include(start_with(shared))
+    end
+
+    it "records a location that runs exactly the covering example" do
+      map = described_class.new(spec_files: [including], target_files: [target]).call
+      location = map.examples_for(target, add_line).first
+      script = <<~RUBY
+        require "rspec/core"
+        exit RSpec::Core::Runner.run([#{location.inspect}, "--format", "progress"])
+      RUBY
+      # Run away from this project's .rspec, which requires its own spec helper.
+      out, err, status = Open3.capture3(RbConfig.ruby, "-e", script, chdir: fixture_dir)
+
+      expect(status).to be_success, err
+      expect(out).to include("1 example, 0 failures")
+    end
+  end
+
   describe ".absolute_location" do
     it "expands a ./-relative location against the root, keeping the line suffix" do
       expect(described_class.absolute_location("./spec/a_spec.rb:5", "/proj"))
         .to eq("/proj/spec/a_spec.rb:5")
+    end
+
+    it "expands a ./-relative example id against the root, keeping the id" do
+      expect(described_class.absolute_location("./spec/a_spec.rb[1:2:1]", "/proj"))
+        .to eq("/proj/spec/a_spec.rb[1:2:1]")
     end
 
     it "keeps a nested line suffix and an already-absolute path" do
