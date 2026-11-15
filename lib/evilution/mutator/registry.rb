@@ -197,12 +197,18 @@ class Evilution::Mutator::Registry
     self
   end
 
-  def mutations_for(subject, filter: nil, operator_options: {})
-    @operators.flat_map do |operator_class|
-      next [] unless operator_class.subject_kinds.include?(subject.kind)
+  # file_sources: the run's file sources by path, which a caller mutating
+  # several subjects of a file hands over so the file is read once (a Hash
+  # that reads a path on first lookup); without it the subject's file is
+  # read here, once for all the operators.
+  def mutations_for(subject, filter: nil, operator_options: {}, file_sources: nil)
+    operators = @operators.select { |operator_class| operator_class.subject_kinds.include?(subject.kind) }
+    return [] if operators.empty?
 
-      operator = build_operator(operator_class, operator_options)
-      operator.call(subject, filter: filter)
+    path = subject.file_path
+    file_source = file_sources ? file_sources[path] : File.read(path)
+    operators.flat_map do |operator_class|
+      build_operator(operator_class, operator_options).call(subject, filter: filter, file_source: file_source)
     end
   end
 

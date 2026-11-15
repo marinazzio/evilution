@@ -37,11 +37,8 @@ class Evilution::Mutator::Operator::FreezeRemoval < Evilution::Mutator::Base
     super + %i[constant_write]
   end
 
-  def call(subject, filter: nil)
-    @subject = subject
-    @file_source = File.read(subject.file_path)
-    @mutations = []
-    @filter = filter
+  def call(subject, filter: nil, file_source: nil)
+    prepare(subject, filter: filter, file_source: file_source)
 
     constant_writes_for(subject).each { |write| freezes_in(write).each { |freeze_call| remove(freeze_call) } }
     @mutations

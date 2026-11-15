@@ -287,6 +287,64 @@ RSpec.describe Evilution::Mutator::Registry do
       expect(mutations.first).to be_a(Evilution::Mutation)
     end
 
+    context "with the file of the subject" do
+      let(:fixture_path) { File.expand_path("../../support/fixtures/simple_class.rb", __dir__) }
+      let!(:adult_def) { Evilution::AST::Parser.new.call(fixture_path).find { |s| s.name == "User#adult?" }.node }
+      let(:subject_obj) do
+        double("Subject", name: "User#adult?", file_path: fixture_path, node: adult_def, kind: :method,
+                          concern_hook?: false)
+      end
+
+      before do
+        2.times do
+          registry.register(Class.new(Evilution::Mutator::Base) do
+            def visit_integer_node(node)
+              add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0",
+                           node: node)
+            end
+          end)
+        end
+        allow(File).to receive(:read).and_call_original
+      end
+
+      it "reads the file once for all the operators" do
+        registry.mutations_for(subject_obj)
+
+        expect(File).to have_received(:read).with(fixture_path).once
+      end
+
+      it "mutates the file source it is handed instead of reading the file" do
+        source = File.read(fixture_path)
+
+        mutations = registry.mutations_for(subject_obj, file_sources: { fixture_path => source })
+
+        expect(File).to have_received(:read).with(fixture_path).once
+        expect(mutations.map(&:original_source)).to all(equal(source))
+      end
+    end
+
+    it "takes the file source from the sources it is handed, which read it on first use" do
+      fixture_path = File.expand_path("../../support/fixtures/simple_class.rb", __dir__)
+      adult = Evilution::AST::Parser.new.call(fixture_path).find { |s| s.name == "User#adult?" }
+      registry.register(Class.new(Evilution::Mutator::Base) do
+        def visit_integer_node(node)
+          add_mutation(offset: node.location.start_offset, length: node.location.length, replacement: "0", node: node)
+        end
+      end)
+      sources = Hash.new { |cache, path| cache[path] = File.read(path) }
+
+      mutations = registry.mutations_for(adult, file_sources: sources)
+
+      expect(mutations.map(&:original_source)).to all(equal(sources[fixture_path]))
+    end
+
+    it "reads no file for a subject no operator takes" do
+      subject_obj = double("Subject", file_path: "/no/such/file.rb", kind: :method,
+                                      node: Prism.parse("def foo; end").value.statements.body.first)
+
+      expect(registry.mutations_for(subject_obj)).to eq([])
+    end
+
     it "returns empty array when no operators registered" do
       subject_obj = double("Subject",
                            file_path: File.expand_path("../../support/fixtures/simple_class.rb", __dir__),

@@ -36,6 +36,27 @@ RSpec.describe Evilution::Runner::MutationPlanner do
       expect(plan.equivalent).to eq([])
     end
 
+    it "hands the operators of every subject of a file one source, read once" do
+      file = fixture("simple_class.rb")
+      sources = []
+      allow(registry).to receive(:mutations_for).and_wrap_original do |original, subject, **options|
+        mutations = original.call(subject, **options)
+        sources << options.fetch(:file_sources)[subject.file_path]
+        mutations
+      end
+      subjects = subjects_for(file)
+      content = File.read(file)
+      allow(File).to receive(:read).and_call_original
+
+      described_class.new(config, registry: registry).call(subjects)
+
+      expect(sources.length).to be > 1
+      expect(sources).to all(equal(sources.first))
+      expect(sources.first).to eq(content)
+      # Once to mutate, and once each to find the disable comments and the sig blocks.
+      expect(File).to have_received(:read).with(file).exactly(3).times
+    end
+
     it "lists the lines mutations were generated for, per file" do
       file = fixture("arithmetic.rb")
       plan = described_class.new(config, registry: registry).call(subjects_for(file))
@@ -337,7 +358,8 @@ RSpec.describe Evilution::Runner::MutationPlanner do
           file, = plan_for(dir, 4..6)
 
           expect(registry).to have_received(:mutations_for)
-            .with(anything, filter: nil, operator_options: hash_including(line_ranges: { file => 4..6 })).at_least(:once)
+            .with(anything, filter: nil, operator_options: hash_including(line_ranges: { file => 4..6 }),
+                            file_sources: anything).at_least(:once)
         end
       end
 
