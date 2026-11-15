@@ -5,6 +5,7 @@ Metrics/AbcSize:
   Exclude:
     - "lib/evilution/runner.rb"
     - "lib/evilution/isolation/fork.rb"
+    - "scripts/schemata_spike/**/*"
 
 Metrics/ClassLength:
   Exclude:
@@ -18,10 +19,12 @@ Metrics/ClassLength:
     - "lib/evilution/spec_resolver.rb"
     - "lib/evilution/mutator/registry.rb"
     - "lib/evilution/result/summary.rb"
+    - "scripts/schemata_spike/**/*"
 
 Metrics/MethodLength:
   Exclude:
     - "lib/evilution/runner.rb"
+    - "scripts/schemata_spike/**/*"
 
 # The empty forward declaration (`class Evilution::CLI; end`) that lets the
 # children nest under the namespace before the full definition counts as a
@@ -36,3 +39,20 @@ Metrics/ParameterLists:
     - "lib/evilution/result/summary.rb"
     - "lib/evilution/result/mutation_result.rb"
     - "lib/evilution/runner/mutation_executor/strategy/parallel.rb"
+
+# The mutant schemata spike harness is kept as it was measured (style fixes
+# only), so the committed code is the code behind the numbers in
+# docs/mutant_schemata_spike.md. It is measurement-only (never loaded by the
+# gem); splitting its methods to meet the metric limits would make it differ
+# from what was run.
+Metrics/ModuleLength:
+  Exclude:
+    - "scripts/schemata_spike/**/*"
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - "scripts/schemata_spike/**/*"
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - "scripts/schemata_spike/**/*"
