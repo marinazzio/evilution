@@ -19,6 +19,7 @@ Metrics/ClassLength:
     - "lib/evilution/cli/parser/options_builder.rb"
     - "lib/evilution/spec_resolver.rb"
     - "lib/evilution/mutator/registry.rb"
+    - "lib/evilution/result/summary.rb"
     - "scripts/schemata_spike/**/*"
 
 Metrics/MethodLength:
