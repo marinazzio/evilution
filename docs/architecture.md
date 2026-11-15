@@ -174,7 +174,10 @@ class that owns it.
    back through `Strategy::Parallel::OrderedDelivery`, which puts them in
    mutation order before the notifier (progress, `--fail-fast`) and the reports
    see them. On fail-fast the pool sends nothing more, lets the mutations in
-   flight finish and shuts its workers down.
+   flight finish and shuts its workers down; their results are not reported
+   but still go to the `--incremental` cache. Under in-process isolation each
+   worker runs a single mutation and is replaced, since the mutation runs in
+   the worker itself.
 7. **Isolate + test** — `Isolation::Fork#call` (default for Rails/gems) spawns a
    sandboxed worker through `ProcessSupervisor#spawn` (own process group, TERM →
    grace → KILL ladder, sandbox reap), applies the mutation

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "timeout"
 require "evilution/parallel/pool"
 
 RSpec.describe Evilution::Parallel::Pool do
@@ -27,6 +28,32 @@ RSpec.describe Evilution::Parallel::Pool do
       pool.map([1, 2], on_result: ->(index, value) { streamed << [index, value] }) { |n| n + 1 }
 
       expect(streamed).to contain_exactly([0, 2], [1, 3])
+    end
+
+    it "gives every item a fresh worker when worker_max_items is 1" do
+      pool = described_class.new(size: 1, worker_max_items: 1)
+      pids = pool.map([1, 2, 3]) { |_n| Process.pid }
+
+      expect(pids.uniq.length).to eq(3)
+    end
+
+    it "gives up an item that outlasts item_timeout" do
+      pool = described_class.new(size: 1, item_timeout: 0.5)
+      results = Timeout.timeout(15) do
+        pool.map([60, 1]) do |n|
+          sleep(n) if n == 60
+          n
+        end
+      end
+
+      expect(results).to eq([Evilution::Parallel::WorkQueue::TIMED_OUT, 1])
+    end
+
+    it "keeps one worker for every item when worker_max_items is not given" do
+      pool = described_class.new(size: 1)
+      pids = pool.map([1, 2, 3]) { |_n| Process.pid }
+
+      expect(pids.uniq.length).to eq(1)
     end
 
     it "runs items in separate worker processes" do
