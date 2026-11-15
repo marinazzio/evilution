@@ -130,7 +130,44 @@ RSpec.describe Evilution::Runner::IsolationResolver do
     end
   end
 
+  describe "#fork_isolation?" do
+    it "is true when the tests run in forked children" do
+      resolver = described_class.new(config(isolation: :fork), target_files: -> { [] }, hooks: nil)
+
+      expect(resolver.fork_isolation?).to be(true)
+    end
+
+    it "is false when they run in this process" do
+      resolver = described_class.new(config(isolation: :in_process), target_files: -> { [] }, hooks: nil)
+
+      expect(resolver.fork_isolation?).to be(false)
+    end
+  end
+
   describe "#perform_preload" do
+    # A caller counting what the preload runs starts counting there, and only
+    # when there is a preload.
+    it "yields just before it requires the preload file" do
+      Dir.mktmpdir do |dir|
+        marker = File.join(dir, "marker")
+        preload = File.join(dir, "preload_helper.rb")
+        File.write(preload, "File.write(#{marker.inspect}, 'loaded')\n")
+        resolver = described_class.new(config(isolation: :fork, preload: preload), target_files: -> { [] }, hooks: nil)
+        loaded_when_yielded = nil
+
+        resolver.perform_preload { loaded_when_yielded = File.exist?(marker) }
+
+        expect(loaded_when_yielded).to be(false)
+        expect(File.exist?(marker)).to be(true)
+      end
+    end
+
+    it "does not yield when nothing is preloaded" do
+      resolver = described_class.new(config(preload: false, isolation: :fork), target_files: -> { [] }, hooks: nil)
+
+      expect { |probe| resolver.perform_preload(&probe) }.not_to yield_control
+    end
+
     it "is a no-op when config.preload is false" do
       resolver = described_class.new(
         config(preload: false, isolation: :fork), target_files: -> { [] }, hooks: nil

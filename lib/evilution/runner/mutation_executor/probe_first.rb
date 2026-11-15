@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "prism"
 require_relative "../mutation_executor"
 
 # Which subjects no selected test exercises, learnt from one sentinel mutation
@@ -13,6 +14,12 @@ require_relative "../mutation_executor"
 # another mutation of the subject. A subject without a sentinel (an empty
 # body, a body that already only raises, a subject that is not a method) is
 # never skipped.
+#
+# Nor is a method with a rescue or ensure clause of its own: the body raise
+# replaces only the statements before it and keeps the clause, which can
+# catch the raise (`rescue StandardError`) or return over it (`ensure;
+# return x`), so the method returns normally and the sentinel survives while
+# the tests check the method's result.
 class Evilution::Runner::MutationExecutor::ProbeFirst
   SENTINEL_OPERATOR = "method_body_to_raise"
   # A sentinel no test executes says the same as one that ran and survived.
@@ -37,13 +44,15 @@ class Evilution::Runner::MutationExecutor::ProbeFirst
 
   def initialize
     @unexercised = Set.new
+    @probeable = {}
   end
 
   def sentinel?(mutation)
     subject = mutation.subject
     return false if subject.nil?
+    return false unless mutation.operator_name == SENTINEL_OPERATOR && mutation.line == subject.line_number
 
-    mutation.operator_name == SENTINEL_OPERATOR && mutation.line == subject.line_number
+    probeable?(subject)
   end
 
   # The sentinels go first, so every one of them has a verdict before any
@@ -69,6 +78,17 @@ class Evilution::Runner::MutationExecutor::ProbeFirst
   end
 
   private
+
+  # Whether the subject is a method whose body raise reaches its caller: a
+  # method definition without a rescue or ensure clause of its own, which
+  # would make its body a BeginNode. Read from the subject's source, as its
+  # node is released before the mutations run.
+  def probeable?(subject)
+    @probeable.fetch(subject) do
+      definition = Prism.parse(subject.source).value.statements.body.first
+      @probeable[subject] = definition.is_a?(Prism::DefNode) && !definition.body.is_a?(Prism::BeginNode)
+    end
+  end
 
   # The line tells apart two methods of one name in a file, such as a
   # method defined again where its class is reopened.

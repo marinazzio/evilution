@@ -8,18 +8,20 @@ require_relative "../../feedback/messages"
 require_relative "../../feedback/setup_warning"
 
 module Evilution::MCP::MutateTool::ReportTrimmer
-  MINIMAL_KEYS = %w[summary survived].freeze
+  # An uncovered mutation is a survivor no test executes, as actionable as one
+  # that ran: it is kept wherever survivors are, with its diff.
+  MINIMAL_KEYS = %w[summary survived uncovered].freeze
   FULL_DIFF_STRIP_KEYS = %w[killed neutral equivalent unresolved unparseable].freeze
   SUMMARY_DROP_KEYS = %w[killed neutral equivalent unparseable timings].freeze
   # EV-187j / GH #1169: at summary verbosity, non-survived entries that remain
-  # (timed_out, errors, unresolved, uncovered) shed `diff` and `error_backtrace` payload —
+  # (timed_out, errors, unresolved) shed `diff` and `error_backtrace` payload —
   # those two fields dominate response size at scale and aren't actionable for
-  # a scanning agent. Survived stays full-detail.
+  # a scanning agent. Survived and uncovered stay full-detail.
   SUMMARY_HEAVY_FIELDS = %w[diff error_backtrace].freeze
-  SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved uncovered].freeze
+  SUMMARY_TRIM_KEYS = %w[timed_out errors unresolved].freeze
   # Per-mutation timings are for profiling a run, not for acting on a result,
   # so summary verbosity drops them from every entry it keeps, survived included.
-  SUMMARY_TIMED_KEYS = %w[survived timed_out errors unresolved].freeze
+  SUMMARY_TIMED_KEYS = %w[survived uncovered timed_out errors unresolved].freeze
 
   # EV-t7kh / GH #1170: at minimal verbosity we surface a small sample of any
   # errored mutations so agents are not stuck in a diagnose-vs-token-cap
@@ -28,7 +30,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
   ERROR_BACKTRACE_HEAD_LINES = 5
   ERROR_SAMPLE_KEYS = %w[operator file line error_message error_class].freeze
 
-  def self.call(json_string, verbosity:, survived_results:, config:, enricher:, summary: nil)
+  def self.call(json_string, verbosity:, survived_results:, config:, enricher:, summary: nil, uncovered_results: [])
     data = ::JSON.parse(json_string)
     case verbosity
     when "full"
@@ -40,7 +42,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     when "minimal"
       apply_minimal(data)
     end
-    enricher.call(data, survived_results, config)
+    enricher.call(data, survived_results, config, uncovered_results: uncovered_results)
     embed_feedback(data, summary) unless verbosity == "minimal"
     embed_setup_warning(data, summary)
     ::JSON.generate(data)

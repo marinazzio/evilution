@@ -15,7 +15,8 @@ require_relative "skip_sites/presets"
 # their attribution order.
 class Evilution::AST::SkipFilter
   PATTERNS = :ignore_patterns
-  private_constant :PATTERNS
+  RAISE = /\braise\b/
+  private_constant :PATTERNS, :RAISE
 
   # nil when the config skips nothing.
   def self.for(config)
@@ -37,9 +38,11 @@ class Evilution::AST::SkipFilter
   # file_path, source: the file the node was parsed from and its source;
   # without a source only the node itself is tested. mutated_source: the
   # file as the mutation leaves it, the identity a skip is counted by;
-  # without one each skip counts.
-  def skip?(node, file_path: nil, source: nil, mutated_source: nil)
-    reason = reason_for(node, file_path, source)
+  # without one each skip counts. replacement: the code the mutation puts
+  # in; one that raises makes the code fail where it reported, so no preset
+  # skips it.
+  def skip?(node, file_path: nil, source: nil, mutated_source: nil, replacement: nil)
+    reason = reason_for(node, file_path, source, replacement)
     return false unless reason
 
     @skipped[mutated_source ? [file_path, mutated_source.hash] : Object.new] ||= reason
@@ -64,9 +67,9 @@ class Evilution::AST::SkipFilter
 
   private
 
-  def reason_for(node, file_path, source)
-    return PATTERNS if @patterns.skip?(node, file_path: file_path, source: source)
-    return nil if @presets.empty?
+  def reason_for(node, file_path, source, replacement)
+    return PATTERNS if @patterns.match?(node, file_path: file_path, source: source)
+    return nil if @presets.empty? || (replacement && replacement.match?(RAISE))
 
     chain = [node, *@ancestor_lookup.ancestors(node, file_path, source)]
     preset = @presets.find { |candidate| candidate.covers?(chain) }

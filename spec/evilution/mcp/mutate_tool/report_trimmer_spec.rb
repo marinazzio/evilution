@@ -134,6 +134,31 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     expect(out.keys).to contain_exactly("summary", "survived", "errors")
   end
 
+  # An uncovered mutation is a survivor no test executes: as actionable as
+  # one that ran and survived, so it is kept, with its diff, wherever they are.
+  describe "uncovered entries" do
+    let(:with_uncovered) do
+      JSON.generate({
+                      "summary" => { "total" => 2 },
+                      "survived" => [{ "line" => 1, "diff" => "keep" }],
+                      "uncovered" => [{ "line" => 2, "diff" => "keep too", "timings" => { "test_run" => 0 } }]
+                    })
+    end
+
+    def trimmed(json, verbosity)
+      JSON.parse(described_class.call(json, verbosity: verbosity, survived_results: [], config: nil, enricher: noop_enricher))
+    end
+
+    it "keeps them in minimal mode" do
+      expect(trimmed(with_uncovered, "minimal")["uncovered"]).to eq([{ "line" => 2, "diff" => "keep too",
+                                                                       "timings" => { "test_run" => 0 } }])
+    end
+
+    it "keeps their diff in summary mode, and drops their timings like the survivors'" do
+      expect(trimmed(with_uncovered, "summary")["uncovered"]).to eq([{ "line" => 2, "diff" => "keep too" }])
+    end
+  end
+
   it "handles missing diff-bearing sections in full mode without raising" do
     sparse = { "summary" => { "total" => 0 }, "survived" => [] }.to_json
     expect do
@@ -145,12 +170,23 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
     captured = nil
     survived = [:a]
     cfg = Object.new
-    enricher = ->(data, results, config) { captured = [data, results, config] }
+    enricher = ->(data, results, config, uncovered_results:) { captured = [data, results, config, uncovered_results] }
 
     described_class.call(json_input, verbosity: "full", survived_results: survived, config: cfg, enricher: enricher)
     expect(captured[0]["survived"]).to eq([{ "id" => 1 }])
     expect(captured[1]).to be(survived)
     expect(captured[2]).to be(cfg)
+    expect(captured[3]).to eq([])
+  end
+
+  it "hands the uncovered results to the enricher too" do
+    captured = nil
+    uncovered = [:b]
+    enricher = ->(_data, _results, _config, uncovered_results:) { captured = uncovered_results }
+
+    described_class.call(json_input, verbosity: "full", survived_results: [], config: nil, enricher: enricher,
+                                     uncovered_results: uncovered)
+    expect(captured).to be(uncovered)
   end
 end
 
@@ -167,7 +203,7 @@ end
 
 RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "feedback embedding" do
   let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [] }) }
-  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:noop_enricher) { ->(_data, _survived, _config, **) {} }
   let(:config) { instance_double(Evilution::Config) }
 
   it "embeds feedback_url + feedback_hint when summary has friction" do
@@ -201,7 +237,7 @@ end
 
 RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "setup_warning embedding" do
   let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [] }) }
-  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:noop_enricher) { ->(_data, _survived, _config, **) {} }
   let(:config) { instance_double(Evilution::Config) }
 
   def errored_result(klass)
@@ -268,7 +304,7 @@ end
 
 RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity preserves contract" do
   let(:bare_report) { JSON.generate({ "summary" => {}, "survived" => [], "killed" => [] }) }
-  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:noop_enricher) { ->(_data, _survived, _config, **) {} }
   let(:config) { instance_double(Evilution::Config) }
 
   it "does NOT embed feedback fields when verbosity=minimal even on friction" do
@@ -290,7 +326,7 @@ end
 # EV-t7kh / GH #1170: at minimal verbosity, surface a trimmed sample of
 # errored mutations so agents are not stuck in a diagnose-vs-token-cap deadlock.
 RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity errors sample" do
-  let(:noop_enricher) { ->(_data, _survived, _config) {} }
+  let(:noop_enricher) { ->(_data, _survived, _config, **) {} }
   let(:long_backtrace) { (1..20).map { |i| "lib/foo.rb:#{i}:in 'bar'" } }
 
   it "includes a trimmed errors sample when errors are present" do

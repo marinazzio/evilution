@@ -39,6 +39,13 @@ RSpec.describe "Mutations on lines no test executes", :aggregate_failures do
     end
   end
 
+  # What SimpleCov does when a spec helper starts it: start line coverage
+  # unless something already runs it.
+  starts_coverage = lambda do |dir|
+    helper = File.join(dir, "spec/spec_helper.rb")
+    File.write(helper, "require \"coverage\"\nCoverage.start(lines: true) unless Coverage.running?\n#{File.read(helper)}")
+  end
+
   # One evilution run per set of flags, shared by the examples that read it.
   runs = Hash.new { |cache, flags| cache[flags] = in_project.call { |dir| run_evilution.call(dir, flags) } }
 
@@ -46,7 +53,9 @@ RSpec.describe "Mutations on lines no test executes", :aggregate_failures do
     report.fetch(bucket).map { |entry| entry.fetch("line") }.uniq.sort
   end
 
-  [[], ["--preload", "spec/spec_helper.rb"]].each do |flags|
+  # The preload is counted only when the tests run in processes forked from
+  # it, so the preloaded context forks.
+  [[], ["--isolation", "fork", "--preload", "spec/spec_helper.rb"]].each do |flags|
     context(flags.empty? ? "when the spec file loads the code" : "when the code is preloaded") do
       it "reports the mutants of a method no example calls as uncovered" do
         report = runs[flags]
@@ -73,11 +82,60 @@ RSpec.describe "Mutations on lines no test executes", :aggregate_failures do
     end
   end
 
+  context "when the spec helper starts coverage itself" do
+    [[], ["--isolation", "fork", "--preload", "lib/ledger.rb"]].each do |flags|
+      it "runs the tests without errors and still reports the uncovered mutants (#{flags.join(" ")})" do
+        report = in_project.call do |dir|
+          starts_coverage.call(dir)
+          run_evilution.call(dir, flags)
+        end
+
+        expect(report["summary"]["errors"]).to eq(0)
+        expect(report["summary"].fetch("baseline_failures", [])).to eq([])
+        expect(report["summary"]["killed"]).to be_positive
+        expect(lines_of(report, "uncovered")).to eq(refund)
+      end
+    end
+  end
+
   it "runs them all with --no-skip-uncovered" do
     report = runs[["--no-skip-uncovered"]]
 
     expect(report["uncovered"]).to eq([])
     expect(lines_of(report, "survived")).to include(refund_body)
+  end
+
+  # The coverage map is cached across runs. A file the specs load that starts
+  # calling the code changes which lines run, though neither the target nor
+  # its spec file changed: the cached map must not be read then.
+  it "rebuilds the map when another file the specs load starts calling the code" do
+    in_project.call do |dir|
+      settlement = File.join(dir, "lib/settlement.rb")
+      write_settlement = lambda do |body, expected|
+        File.write(settlement, "module Settlement\n  EXPECTED = #{expected}\n\n  " \
+                               "def self.settle(ledger)\n    #{body}\n  end\nend\n")
+      end
+      write_settlement.call("ledger", 10)
+      spec = File.join(dir, "spec/ledger_spec.rb")
+      File.write(spec, File.read(spec).sub(/^end\s*\z/, <<~RUBY))
+          it "settles" do
+            ledger = described_class.new
+            ledger.add(10)
+            Settlement.settle(ledger)
+            expect(ledger.total).to eq(Settlement::EXPECTED)
+          end
+        end
+      RUBY
+      File.write(spec, File.read(spec).sub("require_relative \"spec_helper\"\n", "\\0require \"settlement\"\n"))
+
+      first = run_evilution.call(dir, [])
+      write_settlement.call("ledger.refund(1)", 8)
+      second = run_evilution.call(dir, [])
+
+      expect(lines_of(first, "uncovered")).to eq(refund)
+      expect(lines_of(second, "uncovered")).to eq([])
+      expect(second["summary"]["killed"]).to be > first["summary"]["killed"]
+    end
   end
 
   it "reports them uncovered again on an incremental re-run" do

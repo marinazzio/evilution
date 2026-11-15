@@ -15,7 +15,7 @@ require_relative "example_ids"
 # its child groups, so examples never leave their group and a group's
 # `before(:context)` hooks still run once, around all of its examples. A group
 # goes first when any example under it is a killer, otherwise by the time its
-# examples take in all.
+# timed examples take in all.
 #
 # Registered with RSpec under NAME and chosen with `--order NAME`. Outside a
 # run (between #start and #finish) it keeps the order it is given, so a
@@ -74,8 +74,13 @@ class Evilution::Integration::RSpec::ExampleOrder
     [@ranks.fetch(id, UNKNOWN), @durations.fetch(id, UNKNOWN)]
   end
 
+  # A group's cost is what its timed examples take: an example without a time
+  # (pending, or past what a report keeps per file) says nothing of the others.
+  # A group with examples but no time for any of them comes after the timed.
   def group_key(group)
     keys = group.descendant_filtered_examples.map { |example| example_key(example) }
-    [keys.map(&:first).min || UNKNOWN, keys.sum(&:last)]
+    known = keys.map(&:last).reject { |seconds| seconds == UNKNOWN }
+    cost = known.empty? && !keys.empty? ? UNKNOWN : known.sum
+    [keys.map(&:first).min || UNKNOWN, cost]
   end
 end

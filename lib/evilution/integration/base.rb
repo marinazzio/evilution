@@ -24,7 +24,7 @@ class Evilution::Integration::Base
     nil
   end
 
-  # Whether no test executes the line the mutation sits on, so it need not
+  # Whether no test executes any line the mutation changes, so it need not
   # run. Only an integration backed by line coverage can tell.
   def uncovered?(_mutation)
     false
@@ -36,6 +36,19 @@ class Evilution::Integration::Base
   # have nothing to do with them.
   def prioritize(_test_ids)
     nil
+  end
+
+  # Whether the next run tries its tests in an order of the integration's own
+  # choosing rather than the one they are defined in. Asked in the parent,
+  # before the run.
+  def reorders?
+    false
+  end
+
+  # Runs the block with every run in it trying the tests in their defined
+  # order. A forked child inherits it.
+  def in_defined_order
+    yield
   end
 
   # Fills what loading a mutated file looks up on the heap (see
