@@ -139,6 +139,12 @@ class Evilution::Result::Summary
     results.count(&:uncovered?)
   end
 
+  # The survivors a probe-first sentinel implied: counted in survived, but
+  # they did not run.
+  def implied
+    results.count(&:implied_by)
+  end
+
   # An uncovered mutation stays in: it is untested code, scored as the
   # survivor running it would have produced.
   def score_denominator

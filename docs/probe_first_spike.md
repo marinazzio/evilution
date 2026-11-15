@@ -22,7 +22,12 @@ and when deleting the statement survives, skip the other mutants inside it.
   its verdict and answers which mutants it implies. A sentinel that survived or
   is `uncovered` implies; killed, timeout, error, neutral do not. Subjects
   without a sentinel (empty body, a body that is a single `raise`, constants,
-  class-body declarations) are never skipped.
+  class-body declarations) are never skipped. Nor is a method with a `rescue`
+  or `ensure` clause of its own: `method_body_to_raise` replaces only the
+  statements before the clause and keeps it, and the clause can catch the
+  `raise` (`rescue StandardError`) or return over it (`ensure` with a
+  `return`), so the method returns normally and the mutant survives while the
+  tests check the method's result. Such a mutant is not taken as a sentinel.
 - `Runner::MutationExecutor::ProbeFirstRun` runs two batches through the
   unchanged sequential or parallel strategy: all sentinels, then the rest. One
   notifier spans both, so progress, `--fail-fast` and the logs see one run;
@@ -85,22 +90,35 @@ them.
 
 | Target | Mutants | Sentinels survived | Implied survivors | Of those, killed in the full run | Killtime saved |
 |---|---|---|---|---|---|
-| i18n | 1837 | 10 / 19 | 871 | **0** | 37.2 s of 79.1 s (47%) |
+| i18n | 1837 | 9 / 18 | 520 | **0** | 22.9 s of 79.1 s (29%) |
 | httparty, fixed | 1412 | 17 / 62 | 206 | **0** | 37.5 s of 226.1 s (17%) |
 | dry-monads `maybe.rb` (extra) | 611 | 11 / 35 | 114 | **0** | 15.0 s of 96.6 s (16%) |
 | redmine | 500 | 1 / 12 | 3 | **0** | 1.9 s of 240.4 s (1%) |
 | grape | 693 | 0 / 11 | 0 | – | 0 |
+| **Total** (without the artifact rows below) | 5053 | 38 / 138 | **843** | **0** | |
 | httparty (artifact) | 1412 | 0 / 62 | 0 | – | 0 |
 | dry-monads `list.rb` (artifact) | 923 | 0 / 35 | 0 | – | 0 |
-| **Total** | 7388 | 39 / 236 | **1194** | **0** | |
 
 `maybe.rb` was added because `list.rb`, the corpus' dry-monads target, kills
-every mutant (see artifacts). The implied sets of the probe-first runs agree
-with a simulation on the full runs (httparty 206 = 206, i18n 871 vs 867,
-`maybe.rb` 114 vs 107; the simulation guesses each subject's span from line
-numbers).
+every mutant (see artifacts). The artifact rows are left out of the total:
+the "httparty (artifact)" row is the same file as "httparty, fixed", and every
+sentinel of both artifact rows is "killed" by the artifact, not by a test.
+The implied sets of the probe-first runs agree with a simulation on the full
+runs (httparty 206 = 206, i18n 520 vs 522, `maybe.rb` 114 vs 107; the
+simulation guesses each subject's span from line numbers).
 
-No implied survivor was killed in any full run: **divergence 0 of 1194**. The
+The i18n row is the probe-first run's with one method taken out: the runs were
+taken before methods with their own `rescue` or `ensure` were excluded from
+probing (see Prototype). Of the 39 sentinels that survived then, one belonged
+to such a method, i18n's `translate_localization_format` (`rescue
+MissingTranslationData => e`); its rescue is too narrow to catch the
+sentinel's `RuntimeError`, and its 351 implied mutants all survived the full
+run too, so leaving it unprobed costs those 351 skips (871 implied, 37.2 s of
+killtime, before) and loses no kill. The other 38 surviving sentinels belong
+to methods without a rescue or ensure clause, and so does every sentinel of
+the other targets.
+
+No implied survivor was killed in any full run: **divergence 0 of 843**. The
 case that would diverge -- a test that rescues the sentinel's `RuntimeError`
 around the call, or a matcher that expects some error, while a value mutant of
 the same method is still caught -- did not occur in this corpus.
@@ -130,7 +148,8 @@ copy the same 21 mutants survive.
 
 So with coverage targeting probe-first adds little (2-9% of killtime). Its
 value is where `uncovered` cannot reach: **Minitest and test-unit** (i18n and
-redmine above, 47% and 1%), and RSpec runs that keep lexical targeting.
+redmine above, 29% and 1% of killtime), and RSpec runs that keep lexical
+targeting.
 
 ## Results: statement level (`statement_deletion`), simulated
 
@@ -157,16 +176,20 @@ by about 10%):
 
 | Target | Off | On | Change |
 |---|---|---|---|
-| i18n, `--jobs 2` | 44.7, 45.3 | 22.8, 23.9 | **-48%** |
-| i18n, `--jobs 1` | 83.9, 82.1 | 41.4, 39.2 | **-50%** |
+| i18n, `--jobs 2` | 47.1, 39.1 | 31.4, 27.7 | **-31%** |
+| i18n, `--jobs 1` | 88.6, 85.7 | 53.2, 49.4 | **-41%** |
 | httparty, fixed, `--jobs 2` | 141.3, 127.3 | 114.4, 118.2 | **-13%** |
 | grape, `--jobs 2` (nothing implied) | 65.9, 70.8 | 69.8, 69.7 | none (noise) |
 
-The wall time saved follows the killtime saved, and a little more: an implied
-survivor also skips its survivor confirmation run. Verdicts and scores were
-identical in every pair. (An interleaved `scripts/benchmark_perf` run of the
-`HEAD` export against the worktree with `--probe-first`, three repeats, gave
-the same picture: i18n -43% / -51%, httparty fixed -14%, 0 lost kills; it also
+The i18n rows were taken again once methods with their own `rescue` or
+`ensure` were no longer probed (520 implied survivors in every "on" run; the
+earlier runs, with 871 implied, gave -48% at `--jobs 2` and -50% at
+`--jobs 1`). The wall time saved follows the killtime saved, and a little
+more: an implied survivor also skips its survivor confirmation run. Verdicts
+and scores were identical in every pair. (An interleaved
+`scripts/benchmark_perf` run of the `HEAD` export against the worktree with
+`--probe-first`, three repeats, before that change, gave the same picture:
+i18n -43% / -51%, httparty fixed -14%, 0 lost kills; it also
 showed grape 14% faster with nothing implied, which the same-tree pair above
 does not, so that run's deltas carry a difference between the two trees and
 the table above is the one to read.)
@@ -211,19 +234,22 @@ second batch starts a fresh pool.
 - **Statement level (`statement_deletion` as sentinel): no-go.** 7–39% of the
   mutants it would skip are killed by a full run, on every target.
 - **Subject level (`method_body_to_raise` as sentinel): go, as an opt-in.**
-  Divergence 0 of 1194 implied survivors. On the targets with untested
-  methods worth the name it saves 13–50% of wall time (i18n -48%, httparty
-  -13%) and 16–47% of killtime (`maybe.rb` 16%); it costs nothing measurable
+  Divergence 0 of 843 implied survivors. On the targets with untested
+  methods worth the name it saves 13–41% of wall time (i18n -31% at
+  `--jobs 2`, -41% at `--jobs 1`; httparty -13%) and 16–29% of killtime
+  (`maybe.rb` 16%, i18n 29%); it costs nothing measurable
   where there are none. It
   stays behind `--probe-first` / `probe_first: true`, marked experimental in
   the README, and joins the incremental cache's run fingerprint.
 - **On by default: not yet.** Only four of seven targets had a single
-  unexercised method, so 0 divergences is evidence from few subjects (39
+  unexercised method, so 0 divergences is evidence from few subjects (38
   sentinels that survived); the case that would diverge (a caller that
-  rescues the sentinel's error) is common in real code and absent here; an
+  rescues the sentinel's error) is common in real code and absent here
+  (a method that rescues it itself is not probed, see Prototype); an
   implied survivor has no `test_command` or confirmation run of its own; and
   with RSpec coverage targeting `uncovered` already reports most of the same
-  mutants (185 of 206 on httparty, 47 of 114 on `maybe.rb`). Revisit after a stability-matrix round run with
+  mutants on httparty (185 of 206, 90%) but under half on `maybe.rb` (47 of
+  114, 41%). Revisit after a stability-matrix round run with
   `--probe-first` on, comparing its verdicts against a full run: if the
   divergence stays at 0, make it the default for runs without coverage
   targeting (Minitest and test-unit first, where nothing else skips untested

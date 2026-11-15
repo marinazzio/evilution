@@ -342,7 +342,7 @@ RSpec.describe Evilution::Runner::MutationExecutor do
     end
 
     context "with probe_first" do
-      let(:state) { instance_double(Evilution::Subject, name: "Gate#state", line_number: 3) }
+      let(:state) { instance_double(Evilution::Subject, name: "Gate#state", line_number: 3, source: "def state\n  1\nend\n") }
 
       def subject_mutation(operator: "integer_literal", line: 4)
         instance_double(Evilution::Mutation, file_path: "lib/gate.rb", operator_name: operator, line: line,

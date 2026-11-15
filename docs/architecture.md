@@ -204,8 +204,9 @@ class that owns it.
    These results are never cached and are scored as survivors.
    With `probe_first`, `MutationExecutor::ProbeFirstRun` runs the batch in two:
    first each subject's sentinel (`method_body_to_raise` at the subject's
-   line, see `MutationExecutor::ProbeFirst`), then the rest, each batch through
-   the same strategy and one notifier. A sentinel that survived (or is
+   line, see `MutationExecutor::ProbeFirst`; none for a method with its own
+   `rescue` or `ensure`, which can swallow the raise), then the rest, each
+   batch through the same strategy and one notifier. A sentinel that survived (or is
    uncovered) makes `RunlessVerdict` report the subject's other mutations
    `:survived` with `implied_by` set, without a run; they are not cached either.
    Each mutation also goes to the integration with the tests that killed its

@@ -8,8 +8,8 @@ require "evilution/runner/mutation_executor/probe_first"
 RSpec.describe Evilution::Runner::MutationExecutor::ProbeFirst do
   subject(:probe) { described_class.new }
 
-  def subject_named(name, line: 3)
-    instance_double(Evilution::Subject, name: name, line_number: line)
+  def subject_named(name, line: 3, source: "def state\n  1\nend\n")
+    instance_double(Evilution::Subject, name: name, line_number: line, source: source)
   end
 
   def mutation(operator: "integer_literal", line: 4, subject: subject_named("Gate#state"), file_path: "lib/gate.rb")
@@ -43,6 +43,46 @@ RSpec.describe Evilution::Runner::MutationExecutor::ProbeFirst do
 
     it "is false for a mutation without a subject" do
       expect(probe.sentinel?(mutation(operator: "method_body_to_raise", line: 3, subject: nil))).to be false
+    end
+
+    # The body raise keeps a method-level rescue or ensure, which can turn the
+    # raise into a normal return: its survival says nothing about the tests.
+    it "is false for a method whose own rescue can catch the body raise" do
+      source = "def safe_div(a, b)\n  a / b\nrescue StandardError\n  -1\nend\n"
+
+      expect(probe.sentinel?(sentinel(subject: subject_named("Calc#safe_div", source: source)))).to be false
+    end
+
+    it "is false for a method whose own ensure can return over the body raise" do
+      source = "def guarded(x)\n  x * 2\nensure\n  return 7 if x.nil?\nend\n"
+
+      expect(probe.sentinel?(sentinel(subject: subject_named("Calc#guarded", source: source)))).to be false
+    end
+
+    it "is true for a method whose rescue sits in a begin block of its body, which the raise replaces" do
+      source = "def load\n  begin\n    read\n  rescue IOError\n    nil\n  end\nend\n"
+
+      expect(probe.sentinel?(sentinel(subject: subject_named("Store#load", source: source)))).to be true
+    end
+
+    it "is true for a singleton method" do
+      source = "def self.build(x)\n  new(x)\nend\n"
+
+      expect(probe.sentinel?(sentinel(subject: subject_named("Gate.build", source: source)))).to be true
+    end
+
+    it "parses a subject's source once, however often its mutations are asked about" do
+      allow(Prism).to receive(:parse).and_call_original
+      state = subject_named("Gate#state")
+      3.times { probe.sentinel?(sentinel(subject: state)) }
+
+      expect(Prism).to have_received(:parse).once
+    end
+
+    it "is false for a subject whose source is not a method definition" do
+      source = "scope :recent, -> { order(:created_at) }\n"
+
+      expect(probe.sentinel?(sentinel(subject: subject_named("Gate.recent", source: source)))).to be false
     end
   end
 
@@ -100,6 +140,14 @@ RSpec.describe Evilution::Runner::MutationExecutor::ProbeFirst do
       probe.record(result(sentinel, :survived))
 
       expect(probe.implied_by(mutation(subject: nil))).to be_nil
+    end
+
+    it "implies nothing for a method whose own rescue swallowed the sentinel's raise" do
+      source = "def safe_div(a, b)\n  a / b\nrescue StandardError\n  -1\nend\n"
+      safe_div = subject_named("Calc#safe_div", source: source)
+      probe.record(result(sentinel(subject: safe_div), :survived))
+
+      expect(probe.implied_by(mutation(subject: safe_div))).to be_nil
     end
 
     it "learns nothing from a survivor that is not a sentinel" do

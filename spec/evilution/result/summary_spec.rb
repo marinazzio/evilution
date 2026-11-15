@@ -219,6 +219,16 @@ RSpec.describe Evilution::Result::Summary do
     end
   end
 
+  describe "#implied" do
+    it "counts the survivors a probe-first sentinel implied, which did not run" do
+      implied = Evilution::Result::MutationResult.new(mutation: mutation, status: :survived,
+                                                      implied_by: "method_body_to_raise")
+      s = described_class.new(results: [make_result(:survived), implied, make_result(:killed)])
+
+      expect([s.implied, s.survived]).to eq([1, 2])
+    end
+  end
+
   describe "#uncovered_results" do
     it "returns only uncovered results" do
       unc = make_result(:uncovered)

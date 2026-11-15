@@ -33,6 +33,7 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
         "fail_fast" => config.fail_fast,
         "stop_on_kill" => config.stop_on_kill,
         "skip_uncovered" => config.skip_uncovered,
+        "probe_first" => config.probe_first,
         "min_score" => config.min_score,
         "suggest_tests" => config.suggest_tests,
         "save_session" => config.save_session,
