@@ -194,7 +194,15 @@ class Evilution::Result::Summary
     results.select(&:uncovered?)
   end
 
+  # The survivors, and the mutations no test executes: survivors that were
+  # not run.
   def coverage_gaps
+    Evilution::Result::CoverageGapGrouper.new.call(survived_results + uncovered_results)
+  end
+
+  # The survivors' gaps alone, for a report that lists the uncovered
+  # mutations apart.
+  def survived_gaps
     Evilution::Result::CoverageGapGrouper.new.call(survived_results)
   end
 

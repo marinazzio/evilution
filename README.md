@@ -127,6 +127,7 @@ Every command, subcommand, and flag listed in this section is part of evilution'
 | `--no-baseline`              | Boolean | _(enabled)_  | Skip baseline test suite check. By default, a baseline run detects pre-existing failures, so that a mutation whose tests fail only on those is recorded `neutral` rather than killed. |
 | `--[no-]canary`              | Boolean | _(enabled)_  | Run a proof-of-life synthetic mutation at session start; abort the run if the pipeline misreports it. Catches misconfigured isolation, broken autoload, and reporter-plugin eviction before any real score is produced. Pass `--no-canary` to skip (e.g. CI speed, or when the canary itself is the thing under test). |
 | `--[no-]stop-on-kill`        | Boolean | _(enabled)_  | Stop each mutation's test run at the first failure that decides the verdict. Disable to run every selected example. |
+| `--[no-]killer-first`        | Boolean | _(disabled)_ | RSpec, with stop-on-kill: run first the examples that killed nearby mutations, then the cheapest. Only for suites whose examples pass in any order. See [Killer-first order](#killer-first-order-killer_first). |
 | `--fail-fast [N]`            | Integer | _(none)_     | Stop after N surviving mutants (default 1 if no value given). |
 | `-v`, `--verbose`            | Boolean | false        | Verbose output with RSS memory and GC stats per phase and per mutation; also prints error class, message, and first 5 backtrace lines for errored mutations. |
 | `--suggest-tests`            | Boolean | false        | Generate concrete test code in suggestions (RSpec or Minitest, based on `--integration`; falls back to generic phrasing for `test-unit`). |
@@ -227,6 +228,7 @@ schema_version: 1            # opts into strict validation (rejects unknown keys
 # isolation: auto          # auto | fork | in_process (auto selects fork for Rails + gems, in_process otherwise; in_process cannot contain a mutation that takes the Ruby process down, see docs/isolation.md)
 # canary: true             # proof-of-life synthetic mutation at session start (false to skip)
 # stop_on_kill: true       # stop each mutation's test run at the first deciding failure (false runs every selected example)
+# killer_first: false      # RSpec + stop_on_kill: run likely killers and cheap examples first (only for order-independent suites)
 # skip_uncovered: true     # with coverage targeting, report mutations no example executes as uncovered without running them
 # probe_first: false       # experimental: when a method's body-to-raise mutant survives, report its other mutants as implied survivors without running them
 # preload: null            # path to preload before forking; false to disable; auto-detects for Rails + gems
@@ -280,6 +282,7 @@ All keys recognised under `schema_version: 1`:
 | `fail_fast`                  | Integer / null                | `null`                                 | Stop after N surviving mutants. `null` = disabled.                                                                                       |
 | `baseline`                   | Boolean                       | `true`                                 | Run baseline test suite to detect pre-existing failures (a mutation failing only on those is `:neutral`).                                                          |
 | `stop_on_kill`               | Boolean                       | `true`                                 | Stop each mutation's test run at the first failure that decides the verdict. Set `false` to run every selected example. |
+| `killer_first`               | Boolean                       | `false`                                | With RSpec and `stop_on_kill`, run first the examples that killed nearby mutations, then the cheapest. Only for suites whose examples pass in any order; see [Killer-first order](#killer-first-order-killer_first). |
 | `isolation`                  | String                        | `auto`                                 | Isolation strategy: `auto`, `fork`, `in_process`. `auto` selects `fork` for Rails projects and packaged gems (`*.gemspec`), `in_process` otherwise. Under `in_process` a mutation that takes the Ruby process down ends the run: see [What `in_process` cannot contain](docs/isolation.md#what-in_process-cannot-contain). |
 | `incremental`                | Boolean                       | `false`                                | Cache verdicts across runs; see [Incremental cache](#incremental-cache).                                                                 |
 | `suggest_tests`              | Boolean                       | `false`                                | Generate concrete test code in survivor suggestions (matches `integration`).                                                             |
@@ -312,7 +315,13 @@ All keys recognised under `schema_version: 1`:
 
 By default each mutation's test run stops at the first failing example that decides the verdict, so the remaining selected examples are not run. Failures that were already failing in the baseline run do not stop it (the mutation is still recorded `neutral` if only those fail), and neither do infrastructure crashes (the mutation is still recorded `neutral` if only those occur). A mutant whose first failure is followed by a hang or a dead test process is now reported `killed`; a `--no-stop-on-kill` run may report the same mutant as `timeout` or `error`, so its score can be slightly lower. Pass `--no-stop-on-kill` (or `stop_on_kill: false`) to run every selected example. Minitest classes that call `parallelize_me!` are not stopped early: their tests all run, as they would with `--no-stop-on-kill`.
 
-With RSpec (3.13 or later), a run that stops at its first kill also chooses the order of its examples, since everything before the kill is its cost: first the examples that killed other mutations on the same line, then elsewhere in the same subject, earlier in this run (the latest killer first); then the rest, cheapest first by the time each took in the baseline; examples with no baseline time last. Examples stay inside their example group, and a group's `before(:context)` hooks still run once around its examples; a group goes first when it holds a killer, otherwise by the time its examples take in all. The order is chosen per run whatever `config.order` or `--order` the project sets, and only the order changes, never which examples run. A survivor runs every selected example either way, and its [confirmation](#survivor-confirmation) run against the whole file keeps the defined order, as does the command reported in `test_command`. A suite whose examples depend on running in their defined order can be run with `--no-stop-on-kill`, which also keeps the defined order. In a parallel run, the mutations already handed to a worker when a kill comes back go without that killer. Minitest and test-unit runs keep their own order. The JSON report lists, per mutation, the example that killed it (`killing_test`) and how many examples ran (`examples_run`).
+#### Killer-first order (`killer_first`)
+
+With RSpec (3.13 or later), `--killer-first` (or `killer_first: true`) lets a run that stops at its first kill choose the order of its examples, since everything before the kill is its cost: first the examples that killed other mutations on the same line, then elsewhere in the same subject, earlier in this run (the latest killer first); then the rest, cheapest first by the time each took in the baseline; examples with no baseline time last. Examples stay inside their example group, and a group's `before(:context)` hooks still run once around its examples; a group goes first when it holds a killer, otherwise by the time its timed examples take in all (a group with no timed example goes last). Only the order changes, never which examples run. A survivor runs every selected example either way, and its [confirmation](#survivor-confirmation) run against the whole file keeps the defined order, as does the command reported in `test_command`. It has no effect with `--no-stop-on-kill`. In a parallel run, the mutations already handed to a worker when a kill comes back go without that killer. Minitest and test-unit runs keep their own order.
+
+It is off by default because it is safe only for a suite whose examples pass in any order. An example that relies on one defined before it (a global, a class variable or a record that an earlier example sets up) fails when it runs first, whatever the mutant, so the mutation is reported `killed` even though a run in the defined order, including the reported `test_command`, would let it survive. Nothing in the report shows this, and it only raises the score. If your suite runs in random order (`config.order = :random`) and passes, it is a fair candidate. A run that times out in the killer-first order is run again in the defined order, which decides the verdict: a mutant that hangs the cheapest example would otherwise be reported `timeout` where the defined order reports `killed`. Such a mutation can take up to twice its time limit, and a parallel run gives each mutation twice the usual time before it gives a worker up. Under an [adaptive limit](#per-mutation-timeout) this happens under each limit: a reordered run that uses up the adaptive limit runs again in the defined order under it, and only when that times out too does the mutation run again under the fixed limit, reordered and then, if it times out once more, in the defined order, which decides.
+
+The JSON report lists, per mutation, the example that killed it (`killing_test`) and how many examples ran (`examples_run`), whatever the order.
 
 #### Uncovered mutations
 
@@ -326,9 +335,13 @@ A mutation is reported `uncovered` only when the coverage map can vouch for it, 
 - At least one changed line is executable and never ran; none of them ran.
 - The map was built from every spec file the mutation would run. A mutation that runs a spec file the build did not (the related-specs heuristic, the full-suite fallback) runs.
 - Every example of those spec files ran in the build. A spec file that failed to load, or a build cut short (`fail_fast` in `.rspec`, an interrupt), makes the map vouch for no line.
-- The file was loaded while lines were counted. When coverage targeting is on, evilution counts from before the `preload` runs, so a preloaded file is covered too; a file loaded while counting was off is never vouched for.
+- The file was loaded while lines were counted. When coverage targeting is on and the tests run in forked processes (`isolation: fork`, the default for Rails apps and gems), evilution counts from before the `preload` runs, so a preloaded file is covered too; a file loaded while counting was off is never vouched for. Each forked test process stops that counting before its tests run, so a spec helper that starts line coverage itself (SimpleCov) works as it does without coverage targeting. Under `in_process` isolation the preload is not counted.
+- No example forked a process. A forked process counts its lines apart, where the build cannot see them, while a mutation applied before the fork reaches it; when any example forks, the map vouches for no line.
+- The mutation neither adds nor removes a local variable assignment. Ruby settles while parsing whether a name is a local, so such a change reaches lines that do run (a later read of the name becomes a method call), even when its own line never runs.
 
-The coverage map is cached under `.evilution/coverage/` and rebuilt when a target file, a resolved spec file or one of the helpers every spec file loads (`.rspec`, `spec/spec_helper.rb`, `spec/support/**/*.rb`, ... — the same list as the [incremental cache](#incremental-cache)) changes. It is RSpec only, like coverage targeting. Pass `--no-skip-uncovered` (or `skip_uncovered: false`) to run these mutations anyway.
+The coverage map is cached under `.evilution/coverage/` and rebuilt when any file it depends on changes: a target file, a resolved spec file, one of the helpers every spec file loads (`.rspec`, `spec/spec_helper.rb`, `spec/support/**/*.rb`, ... — the same list as the [incremental cache](#incremental-cache)), any file under the directory the spec files sit in (`spec/`, `test/`: shared examples, factories, fixture data), and any file of the project the build loaded (another file under `lib/` that calls the code, for instance). It is RSpec only, like coverage targeting. Pass `--no-skip-uncovered` (or `skip_uncovered: false`) to run these mutations anyway.
+
+`summary.uncovered` counts these mutations; it is unrelated to `summary.uncovered_code`, which lists targeted lines that hold no subject, so no mutation was generated for them.
 
 #### Probe-first (experimental)
 
@@ -403,16 +416,16 @@ Schema:
       "killing_test": "string (optional, RSpec only) — the example whose failure killed the mutation, as `/absolute/path/spec/file_spec.rb[1:2]` (spec file and RSpec scoped id); absent when no example decided the kill",
       "examples_run": "integer (optional, RSpec only) — how many examples ran against the mutation, the survivor confirmation run included; absent for results that did not run (cached, uncovered, unparseable)",
       "implied_by": "string (optional, survived only, --probe-first) — the sentinel operator ('method_body_to_raise') whose survival implied this verdict; the mutation itself did not run",
-      "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; a result read from the --incremental cache carries the limit its run had",
+      "time_limit": "float (optional, timeout only) — the seconds this mutation's test run was allowed, rounded to 4 decimals; for a timeout confirmed by a second run (see Per-mutation timeout) the limit of that second run; for a timeout read from the --incremental cache, the limit it was recorded under",
       "neutral_reason": "object (optional, neutral only) — { kind: 'baseline_failure' | 'infra_error', detail: string|null — the failing spec file or the crash class; null when the run was given explicit --spec files and no single spec can be named }",
-      "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from the dispatcher sending it to a worker to that worker starting it; a worker is sent its next mutation as soon as it finishes one, so this is the cost of the hand-over, and for a worker's first mutation also of the worker starting up }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
+      "timings": "object (optional) — where this mutation's duration went, in seconds rounded to 4 decimals; only the phases that happened are listed: { apply — parsing and evaluating the mutated source, test_run — the first test run, confirmation — the re-run of a survivor against its whole spec files (RSpec, targeted runs only), queue_wait — parallel runs only: from the dispatcher sending it to a worker to that worker starting it; a worker is sent its next mutation as soon as it finishes one, so this is the cost of the hand-over, and for a worker's first mutation also of the worker starting up, adaptive_timeout — a first run that used up an adaptive limit shorter than the fixed one, after which the mutation ran again under the fixed limit and the other phases describe that second run (see Per-mutation timeout) }; what duration holds beyond these is the isolation around the run (fork, sandbox, reap); a timed-out mutation reports nothing itself, so its whole duration is counted as test_run; absent for results read from the --incremental cache"
     }
   ],
   "timings": {
     "phases": "object — wall-clock seconds per phase of the run, in the order they ran: subject_discovery, preload, canary, baseline, planning (mutation generation and equivalence detection), execution (every mutation, including the serial re-run of infrastructure crashes and building the coverage map when coverage targeting is on), finalize; they add up to about summary.duration",
     "baseline": "array — one entry per spec file the baseline ran, in order: { spec_file, duration }; empty when the baseline did not run",
-    "mutations": "object — each per-mutation timing phase summed over all mutations: { apply, test_run, confirmation, queue_wait }; process seconds, so in a parallel run they add up across workers and can exceed the execution phase",
-    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; workers live for the whole run, so there are --jobs entries (fewer when there are fewer mutations to run; with --probe-first the sentinels and the other mutations run in two pools one after the other, so up to twice as many) plus one for each worker that replaced one killed after a timeout, a crash or an unreadable reply; busy and wall are 0.0 for a worker that died before reporting them; empty for --jobs 1"
+    "mutations": "object — each per-mutation timing phase summed over all mutations: { apply, test_run, confirmation, queue_wait, adaptive_timeout }; process seconds, so in a parallel run they add up across workers and can exceed the execution phase",
+    "workers": "array — one entry per worker process of a parallel run: { pid, items, busy, wall, utilization — busy / wall }; workers live for the whole run, so there are --jobs entries (fewer when there are fewer mutations to run; with --probe-first the sentinels and the other mutations run in two pools one after the other, so up to twice as many) plus one for each worker that replaced one killed after a timeout, a crash or an unreadable reply; under --isolation in_process each mutation gets a fresh worker, so there is one entry per mutation run; busy and wall are 0.0 for a worker that died before reporting them; empty for --jobs 1"
   },
   "subjects": [
     {
@@ -433,8 +446,8 @@ Schema:
       "subject": "string    — method name (e.g. 'Foo#bar')",
       "line": "integer      — line number",
       "operators": ["string — operator names involved"],
-      "count": "integer     — number of survived mutations in this gap",
-      "mutations": ["... same shape as survived entries ..."]
+      "count": "integer     — number of survived and uncovered mutations in this gap",
+      "mutations": ["... same shape as survived entries; `status` tells a survivor from an uncovered mutation ..."]
     }
   ],
   "killed": ["... same shape as survived entries ..."],
@@ -541,26 +554,30 @@ So when no timeout is given, each mutation's limit follows the time its own spec
 limit = clamp(timeout_factor × baseline seconds of the mutation's spec files, timeout_floor, timeout_ceiling)
 ```
 
-With the defaults (factor 10, floor 10s, ceiling 60s) a mutant on a spec file that passes in 0.3s is given up after 10s instead of 30s, and one whose spec files take 4s gets 40s. The baseline runs each spec file in a forked process of its own, so its time already holds the fork and loading the file; the factor leaves room for a mutant that legitimately slows the code down, for the re-run of a survivor against its whole spec files ([Survivor Confirmation](#survivor-confirmation)) and for workers competing for the CPU under `--jobs`, and the floor covers spec files so fast that scheduling noise outweighs them. Raise `timeout_floor` on a loaded or slow machine if kills turn into timeouts.
+With the defaults (factor 10, floor 10s, ceiling 60s) a mutant on a spec file that passes in 0.3s is first given 10s instead of 30s, and one whose spec files take 4s gets 40s. The baseline runs each spec file in a forked process of its own, so its time holds the fork and loading the file; the factor leaves room for the re-run of a survivor against its whole spec files ([Survivor Confirmation](#survivor-confirmation)) and for workers competing for the CPU under `--jobs`, and the floor covers spec files so fast that scheduling noise outweighs them.
 
-A mutation keeps the fixed 30s limit when the baseline cannot vouch for its spec files: no baseline ran (`--no-baseline`), no spec file resolves for its source (it falls back to the whole suite, or is reported unresolved), one of its spec files failed in the baseline, or `related_specs_heuristic` adds spec files the baseline never ran.
+A mutant that slows the code down can still fail its test well after its baseline suggests, and a timeout reported there would hide a kill. So a mutation that uses up a limit shorter than the fixed 30s is run again under 30s, and the verdict of that second run is the one reported: a mutation is only reported as a timeout where the fixed limit would have reported one too. The first run is part of what the mutation cost: it is in its `duration` and in the JSON report's `timings` as `adaptive_timeout`. A mutant that loops therefore costs the shorter limit plus 30s; the time saved is on kills and survivors, and on spec files slow enough to get a longer limit. Raise `timeout_floor` if many mutations are run twice.
 
-`--timeout N` (or `timeout:` in the config file) gives every mutation the same N seconds, as before; pass `--timeout 30` for the previous behaviour. The limit a timed-out mutation ran under is in the JSON report as `time_limit`. Under `--jobs` the pool gives up on a worker that has not answered within twice the longest limit of the run.
+A mutation keeps the fixed 30s limit when the baseline cannot vouch for its spec files: no baseline ran (`--no-baseline`), no spec file resolves for its source (it falls back to the whole suite, or is reported unresolved), one of its spec files failed in the baseline, or `related_specs_heuristic` adds spec files the baseline never ran. Every mutation keeps it when a `worker_process_start`, `mutation_insert_pre` or `mutation_insert_post` hook is configured: those run inside the time a mutation is allowed, and the baseline runs none of them.
+
+`--timeout N` (or `timeout:` in the config file) gives every mutation the same N seconds, as before; pass `--timeout 30` for the previous behaviour. The limit a timed-out mutation ran under is in the JSON report as `time_limit`. Under `--jobs` the pool gives up on a worker that has not answered within twice the longest time a mutation of the run may take, both of its runs together.
+
+With `--incremental`, a cached timeout is reused only while the mutation would get no more time than the limit it was recorded under; raising `--timeout`, `timeout_floor` or the factor runs it again. Timeouts cached before the limit was recorded are run again once.
 
 ### Incremental cache
 
-`--incremental` (or `incremental: true`) keeps each mutation's verdict — killed, survived or timeout — in `tmp/evilution_cache/` and reuses it on the next run instead of running the mutation again. A reused verdict is reported and scored like a fresh one; it carries no `timings` and no memory figures, since nothing ran.
+`--incremental` (or `incremental: true`) keeps each mutation's verdict — killed, survived or timeout — in `tmp/evilution_cache/` and reuses it on the next run instead of running the mutation again. A reused verdict is reported and scored like a fresh one; it carries no `timings` and no memory figures, since nothing ran. A cached timeout is reused only while the mutation would get no more time than the limit it was recorded under (see [Per-mutation timeout](#per-mutation-timeout)).
 
 Verdicts are kept per subject (a method, a constant, a declaration). A cached verdict is reused only while all of these are unchanged:
 
 - the subject's own source;
-- the rest of its file outside every subject: class and module lines, `include`s, `attr_*`s, other class-body code, and every constant of the file;
+- the rest of its file outside every method definition: class and module lines, `include`s, `attr_*`s, other class-body code, every constant of the file, and every class-body declaration (callbacks, validations, scopes, AASM machines), since these decide whether and when the file's methods run;
 - the contents of the spec files that resolve for the file (`--spec`, `spec_mappings`, or the resolver), and of the files the related-specs heuristic adds for the mutation when it is on;
 - the conventional helpers every spec file loads: `.rspec`, `spec/spec_helper.rb`, `spec/rails_helper.rb`, `spec/support/**/*.rb`, `test/test_helper.rb`, `test/support/**/*.rb`, the `preload` file, and `Gemfile.lock` / `gems.locked`;
 - the evilution and Ruby versions;
-- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill`, `warmup`, whether uncovered mutations are skipped (`skip_uncovered` with coverage targeting) and `probe_first`.
+- the settings that decide how a mutation is run and judged: `integration`, `isolation`, `profile`, `timeout` and the adaptive timeout's `timeout_factor` / `timeout_floor` / `timeout_ceiling`, `baseline`, the example-targeting settings, `related_specs_heuristic`, `fallback_to_full_suite`, `preload`, `stop_on_kill`, `killer_first`, `warmup`, whether uncovered mutations are skipped (`skip_uncovered` with coverage targeting) and `probe_first`.
 
-So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a class-body line (comments between methods included) or a spec file re-runs every subject of the file.
+So editing one method re-runs that method's mutations only, and a method that only moved because a method above it grew or shrank keeps its verdicts. Editing a constant, a callback, validation or scope declaration, any other class-body line (comments between methods included) or a spec file re-runs every subject of the file. A method defined twice in one file (say, in both branches of an `if`) keeps a verdict per definition.
 
 What the cache does **not** see: other methods the subject calls (in the same file or another), other source files, and files a spec loads beyond the helpers above (factories, fixtures, shared examples outside `spec/support`), as well as `hooks`. A change there keeps the cached verdicts, so a survivor can stay a survivor after a test it depends on indirectly was fixed, or the other way around. Run without `--incremental` (or delete `tmp/evilution_cache/`) for a result that owes nothing to earlier runs, e.g. in CI.
 
@@ -813,21 +830,21 @@ The `evilution-mutate` tool accepts a `verbosity` parameter to control response 
 
 | Level       | Default | What's included                                              |
 |-------------|---------|--------------------------------------------------------------|
-| `summary`   | Yes     | `summary` + `survived` + `uncovered` + `timed_out` + `errors` + `unresolved` (non-survived entries shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
+| `summary`   | Yes     | `summary` + `survived` + `uncovered` + `timed_out` + `errors` + `unresolved` (entries other than `survived` and `uncovered` shed `diff` and `error_backtrace`; the run's `timings` block and every entry's `timings` are dropped, to bound payload size) |
 | `full`      |         | All entries (killed/neutral/equivalent diffs stripped), including `timings` |
-| `minimal`   |         | `summary` + `survived` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
+| `minimal`   |         | `summary` + `survived` + `uncovered` (plus a trimmed sample of up to 3 errored entries when `errors > 0`) |
 
-Use `minimal` when context window budget is tight and you only need to see what survived. The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
+Use `minimal` when context window budget is tight and you only need to see what survived (an `uncovered` mutation is a survivor no test executes, see [Uncovered mutations](#uncovered-mutations)). The trimmed `errors` sample (each entry: `error_message`, `error_class`, location, plus the first 5 backtrace lines) is added so a partly-broken run is still self-diagnosable without escalating verbosity. Use `full` when you need to inspect killed/neutral/equivalent entries for debugging.
 
 What survives trimming matters when you are deciding whether to trust a score:
 
 - `neutral` entries — and with them each `neutral_reason` — are dropped at `summary` and `minimal`. Use `full` to see why mutations were neutralised.
-- `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary` and `survived`.
+- `subjects` is kept at `full` and `summary`, and dropped at `minimal`, which keeps only `summary`, `survived` and `uncovered`.
 - Everything inside `summary` survives at every level, including `unresolved_target_files`, `uncovered_code`, `infra_retried`, `baseline_neutralized`, `baseline_failures` and the `neutral` count — so even a `minimal` response still says whether a target file went untested and how much of the run the score covers.
 
 ### Enriched Survived Entries
 
-Unlike `evilution --format json`, every survived entry returned by `evilution-mutate` carries extra fields so the agent can act without a second round-trip:
+Unlike `evilution --format json`, every survived and uncovered entry returned by `evilution-mutate` carries extra fields so the agent can act without a second round-trip:
 
 | Field | What it gives you |
 |---|---|

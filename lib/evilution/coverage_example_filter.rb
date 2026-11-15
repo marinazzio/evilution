@@ -2,6 +2,7 @@
 
 require_relative "version"
 require_relative "coverage/map"
+require_relative "ast/local_declaration"
 
 # Per-mutation example targeting backed by a real line-coverage Map (EV-ndjd).
 # Honours the same contract as the lexical Evilution::ExampleFilter --
@@ -27,6 +28,7 @@ class Evilution::CoverageExampleFilter
     @map = map
     @lexical = lexical
     @project_root = project_root.to_s
+    @local_declaration = Evilution::AST::LocalDeclaration.new
   end
 
   def call(mutation, spec_paths)
@@ -42,9 +44,14 @@ class Evilution::CoverageExampleFilter
   # Whether no example of these spec files, and no file load, executes any
   # line the mutation changes -- so running it could only end in a survivor.
   # The lines it changes, not the line it is reported at: a method body's
-  # mutation is reported at its `def`, which runs while the file loads. Only a map built from every one of the spec files can say so;
-  # anything else (a spec file the build did not run, the whole spec dir, a
-  # file the map cannot vouch for) answers no and the mutation runs.
+  # mutation is reported at its `def`, which runs while the file loads. Only a
+  # map built from every one of the spec files can say so; anything else (a
+  # spec file the build did not run, the whole spec dir, a file the map cannot
+  # vouch for) answers no and the mutation runs.
+  #
+  # A mutation that adds or removes a local variable assignment runs too:
+  # Ruby settles what a name means while parsing, so the change reaches lines
+  # that do run (see Evilution::AST::LocalDeclaration).
   def uncovered?(mutation, spec_paths)
     return false if spec_paths.nil?
 
@@ -52,12 +59,18 @@ class Evilution::CoverageExampleFilter
     return false unless @map.built_from?(specs)
 
     file = File.expand_path(mutation.file_path, @project_root)
-    @map.uncovered?(file, mutation.changed_lines)
+    @map.uncovered?(file, mutation.changed_lines) && !declares_local?(mutation)
   end
 
   # The map is built before this filter is; the lexical filter it falls back
   # on parses lazily, and is what a forked child would otherwise fill.
   def warm(mutation, spec_paths)
     @lexical.warm(mutation, spec_paths)
+  end
+
+  private
+
+  def declares_local?(mutation)
+    @local_declaration.in?(mutation.original_slice) || @local_declaration.in?(mutation.mutated_slice)
   end
 end

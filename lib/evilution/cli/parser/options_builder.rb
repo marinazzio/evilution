@@ -103,8 +103,8 @@ class Evilution::CLI::Parser::OptionsBuilder
 
   def add_uncovered_options(opts)
     opts.on("--[no-]skip-uncovered",
-            "With --example-targeting coverage, report a mutation no example executes the line of",
-            "as uncovered without running it (default: enabled)") do |v|
+            "With --example-targeting coverage, report a mutation as uncovered without running it",
+            "when no example executes any line it changes (default: enabled)") do |v|
       @options[:skip_uncovered] = v
     end
     opts.on("--[no-]probe-first",
@@ -145,6 +145,7 @@ class Evilution::CLI::Parser::OptionsBuilder
             "(default: enabled). Use --no-stop-on-kill to run every selected example.") do |v|
       @options[:stop_on_kill] = v
     end
+    add_killer_first_option(opts)
     opts.on("--stdin", "Read target file paths from stdin (one per line)") { @options[:stdin] = true }
   end
 
@@ -177,6 +178,14 @@ class Evilution::CLI::Parser::OptionsBuilder
     opts.on("--profile NAME", "Operator profile: default, strict (default: default). " \
                               "strict adds aggressive mutators for pre-merge audits.") { |p| @options[:profile] = p }
     opts.on("--strict", "Shortcut for --profile=strict") { @options[:profile] = "strict" }
+  end
+
+  def add_killer_first_option(opts)
+    opts.on("--[no-]killer-first",
+            "With RSpec and stop-on-kill, run first the examples that killed nearby mutations, then the " \
+            "cheapest (default: disabled). Only for suites whose examples pass in any order.") do |v|
+      @options[:killer_first] = v
+    end
   end
 
   def add_extra_flag_options(opts)

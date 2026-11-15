@@ -36,13 +36,27 @@ class Evilution::Runner::MutationExecutor::Strategy::Parallel::OrderedDelivery
 
   # `fresh` says the workers produced the result in this run, as opposed to it
   # coming from the cache.
-  # Results that arrive after the run was truncated are kept back for good.
+  # Results held back or arriving once the run is truncated are neither listed
+  # nor notified. The fresh ones still go to the cache: they are verdicts the
+  # workers spent the time on, and a later --incremental run need not repeat
+  # them.
   def accept(index, compact, fresh:)
     @pending[index] = [compact, fresh]
     release while !@truncated && @pending.key?(@results.length)
+    cache_held_back if @truncated
   end
 
   private
+
+  def cache_held_back
+    @pending.each do |index, (compact, fresh)|
+      next unless fresh
+
+      mutation = @mutations[index]
+      @cache.store(mutation, @packer.rebuild(mutation, compact))
+    end
+    @pending.clear
+  end
 
   def release
     mutation = @mutations[@results.length]

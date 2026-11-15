@@ -42,6 +42,22 @@ RSpec.describe Evilution::MCP::MutateTool::SurvivedEnricher do
       expect(entry["next_step"]).to include("spec/foo_spec.rb", "lib/foo.rb:12", "Foo#bar", "some_op")
     end
 
+    # An uncovered mutation needs a test as much as a survivor does.
+    it "enriches the uncovered entries from the uncovered results" do
+      data = { "survived" => [], "uncovered" => [{}] }
+      resolver = double
+      allow(resolver).to receive(:call).with("lib/foo.rb").and_return("spec/foo_spec.rb")
+      allow(Evilution::SpecResolver).to receive(:new).and_return(resolver)
+      config = double(integration: :rspec)
+      allow(config).to receive(:respond_to?).with(:spec_files).and_return(false)
+
+      described_class.call(data, [], config, uncovered_results: [result])
+      entry = data["uncovered"].first
+      expect(entry["subject"]).to eq("Foo#bar")
+      expect(entry["spec_file"]).to eq("spec/foo_spec.rb")
+      expect(entry["next_step"]).to include("spec/foo_spec.rb", "lib/foo.rb:12")
+    end
+
     it "honours an explicit spec override from config" do
       data = { "survived" => [{}] }
       config = double(integration: :rspec)

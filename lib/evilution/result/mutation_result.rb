@@ -47,12 +47,14 @@ class Evilution::Result::MutationResult
   end
 
   def with_time_limit(seconds)
-    self.class.new(
-      mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
-      test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
-      known_failures_only: @known_failures_only, timings: @timings, time_limit: seconds, examples_run: @examples_run,
-      implied_by: @implied_by
-    )
+    copy(time_limit: seconds)
+  end
+
+  # This result came from running the mutation again after a first run used up
+  # a shorter limit; that run is part of what the mutation cost.
+  def after_adaptive_timeout(seconds)
+    base = timings || Evilution::Result::MutationTimings.new
+    copy(duration: @duration + seconds, timings: base.with_adaptive_timeout(seconds))
   end
 
   # Where the duration went (Evilution::Result::MutationTimings), when the
@@ -127,9 +129,20 @@ class Evilution::Result::MutationResult
     status == :unparseable
   end
 
-  # No test executes a line the mutation sits on, so it was never run: it
+  # No test executes any line the mutation changes, so it was never run: it
   # could only have survived. Scored as a survivor, but kept apart from them.
   def uncovered?
     status == :uncovered
+  end
+
+  private
+
+  def copy(**changes)
+    self.class.new(
+      mutation: @mutation, status: @status, duration: @duration, killing_test: @killing_test,
+      test_command: @test_command, memory: @memory, error: @error, neutral_reason: @neutral_reason,
+      known_failures_only: @known_failures_only, timings: @timings, time_limit: @time_limit, examples_run: @examples_run,
+      implied_by: @implied_by, **changes
+    )
   end
 end

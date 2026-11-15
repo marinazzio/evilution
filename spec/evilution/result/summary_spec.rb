@@ -117,17 +117,20 @@ RSpec.describe Evilution::Result::Summary do
       summary = described_class.new(results: [
                                       timed(apply: 0.1, test_run: 1.0),
                                       timed(apply: 0.2, test_run: 2.0, confirmation: 3.0, queue_wait: 0.5),
+                                      timed(test_run: 4.0, adaptive_timeout: 10.0),
                                       make_result(:killed)
                                     ])
 
       totals = summary.mutation_timing_totals
 
-      expect(totals.keys).to eq(%i[apply test_run confirmation queue_wait])
-      expect(totals.transform_values { |v| v.round(4) }).to eq(apply: 0.3, test_run: 3.0, confirmation: 3.0, queue_wait: 0.5)
+      expect(totals.keys).to eq(%i[apply test_run confirmation queue_wait adaptive_timeout])
+      expect(totals.transform_values { |v| v.round(4) })
+        .to eq(apply: 0.3, test_run: 7.0, confirmation: 3.0, queue_wait: 0.5, adaptive_timeout: 10.0)
     end
 
     it "is zero for every phase when no mutation measured anything" do
-      expect(summary.mutation_timing_totals).to eq(apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0)
+      expect(summary.mutation_timing_totals)
+        .to eq(apply: 0.0, test_run: 0.0, confirmation: 0.0, queue_wait: 0.0, adaptive_timeout: 0.0)
     end
   end
 
@@ -659,6 +662,32 @@ RSpec.describe Evilution::Result::Summary do
       s = described_class.new(results: [make_result(:killed)], duration: 1.0)
 
       expect(s.coverage_gaps).to eq([])
+    end
+
+    # A mutation no test executes is the plainest gap there is.
+    it "groups the uncovered results with the survivors" do
+      subj = double("Subject", name: "User#check")
+      survivor = double("Mutation", operator_name: "op1", file_path: "lib/user.rb", line: 9, diff: "", subject: subj)
+      unrun = double("Mutation", operator_name: "op2", file_path: "lib/user.rb", line: 12, diff: "", subject: subj)
+      survived = Evilution::Result::MutationResult.new(mutation: survivor, status: :survived, duration: 0.1)
+      uncovered = Evilution::Result::MutationResult.new(mutation: unrun, status: :uncovered)
+      s = described_class.new(results: [survived, uncovered, make_result(:killed)], duration: 1.0)
+
+      expect(s.coverage_gaps.map(&:mutation_results)).to eq([[survived], [uncovered]])
+    end
+  end
+
+  # The text report lists the uncovered mutations under a heading of their own.
+  describe "#survived_gaps" do
+    it "groups only the survivors" do
+      subj = double("Subject", name: "User#check")
+      survivor = double("Mutation", operator_name: "op1", file_path: "lib/user.rb", line: 9, diff: "", subject: subj)
+      unrun = double("Mutation", operator_name: "op2", file_path: "lib/user.rb", line: 12, diff: "", subject: subj)
+      survived = Evilution::Result::MutationResult.new(mutation: survivor, status: :survived, duration: 0.1)
+      uncovered = Evilution::Result::MutationResult.new(mutation: unrun, status: :uncovered)
+      s = described_class.new(results: [survived, uncovered], duration: 1.0)
+
+      expect(s.survived_gaps.map(&:mutation_results)).to eq([[survived]])
     end
   end
 

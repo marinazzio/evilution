@@ -21,8 +21,8 @@ RSpec.describe Evilution::MCP::InfoTool::Actions::Environment do
       settings = parse_body(response).fetch("settings")
       expect(settings.keys).to include(
         "timeout", "format", "integration", "jobs", "isolation", "baseline",
-        "incremental", "fail_fast", "stop_on_kill", "skip_uncovered", "probe_first", "min_score", "suggest_tests",
-        "save_session",
+        "incremental", "fail_fast", "stop_on_kill", "killer_first", "skip_uncovered", "probe_first", "min_score",
+        "suggest_tests", "save_session",
         "target", "skip_heredoc_literals", "ignore_patterns"
       )
     end

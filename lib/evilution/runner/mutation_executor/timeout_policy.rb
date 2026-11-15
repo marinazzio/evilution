@@ -14,6 +14,10 @@ module Evilution::Runner::MutationExecutor::TimeoutPolicy
   # answering, so it sits well past the limit the worker enforces itself.
   ITEM_TIMEOUT_FACTOR = 2
 
+  # Hooks that run inside the time a mutation's test run is allowed. The
+  # baseline fires none of them, so its times leave their cost out.
+  PER_MUTATION_HOOKS = %w[worker_process_start mutation_insert_pre mutation_insert_post].freeze
+
   # Autoloaded rather than required at the bottom: each policy file requires
   # this one, and requiring it while it is still loading is a circular require,
   # which Ruby warns about -- and a project that turns warnings into exceptions
@@ -40,7 +44,13 @@ module Evilution::Runner::MutationExecutor::TimeoutPolicy
   # The related-specs heuristic adds spec files per mutation that the baseline
   # never ran, so there is no time to scale for them.
   def self.adaptive?(config, baseline_result)
-    config.adaptive_timeout? && !baseline_result.nil? && !config.related_specs_heuristic?
+    config.adaptive_timeout? && !baseline_result.nil? && !config.related_specs_heuristic? &&
+      !per_mutation_hooks?(config)
   end
   private_class_method :adaptive?
+
+  def self.per_mutation_hooks?(config)
+    config.hooks.keys.any? { |event| PER_MUTATION_HOOKS.include?(event.to_s) }
+  end
+  private_class_method :per_mutation_hooks?
 end

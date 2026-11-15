@@ -422,16 +422,50 @@ RSpec.describe Evilution::ProcessSupervisor do
     end
 
     # Once reaped, the pid is free for the kernel to hand to an unrelated
-    # process; signalling it would hit that process instead.
+    # process; signalling it would hit that process instead. The group id is
+    # not free while a grandchild is still in the group, so the group is still
+    # swept.
     context "when the child has already been reaped" do
-      it "sends no signal" do
+      it "does not signal its pid" do
         h = supervisor.spawn { exit!(0) }
         wait_until { supervisor.reap_nonblock(h) }
         allow(Process).to receive(:kill).and_call_original
 
         supervisor.terminate(h, grace: 0.2)
 
-        expect(Process).not_to have_received(:kill)
+        expect(Process).not_to have_received(:kill).with(anything, h.pid)
+      end
+
+      it "terminates a grandchild left in its process group" do
+        pidfile = File.join(Dir.mktmpdir("supervisor-sweep"), "gpid")
+        h = supervisor.spawn do
+          gpid = Process.fork { sleep 60 }
+          File.write(pidfile, gpid.to_s)
+          exit!(0)
+        end
+        wait_until { supervisor.reap_nonblock(h) }
+        wait_until { File.exist?(pidfile) && !File.empty?(pidfile) }
+        gpid = File.read(pidfile).to_i
+        expect(process_alive?(gpid)).to be(true)
+
+        supervisor.terminate(h, grace: 0.2)
+
+        wait_until { !process_alive?(gpid) }
+        expect(process_alive?(gpid)).to be(false)
+      ensure
+        begin
+          Process.kill("KILL", gpid) if gpid
+        rescue Errno::ESRCH
+          nil
+        end
+        FileUtils.rm_rf(File.dirname(pidfile)) if pidfile
+      end
+
+      it "tolerates a process group that is already empty" do
+        h = supervisor.spawn { exit!(0) }
+        wait_until { supervisor.reap_nonblock(h) }
+
+        expect { supervisor.terminate(h, grace: 0.2) }.not_to raise_error
       end
 
       it "keeps the exit status recorded when it was reaped" do

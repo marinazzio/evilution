@@ -526,6 +526,30 @@ RSpec.describe Evilution::Config do
       end
     end
 
+    describe "#killer_first?" do
+      it "is false by default" do
+        expect(Evilution::Config.new(skip_config_file: true).killer_first?).to be false
+      end
+
+      it "is true when killer_first: true is given" do
+        expect(Evilution::Config.new(killer_first: true, skip_config_file: true).killer_first?).to be true
+      end
+
+      it "is false when the run goes through every example, where order changes nothing" do
+        config = Evilution::Config.new(killer_first: true, stop_on_kill: false, skip_config_file: true)
+        expect(config.killer_first?).to be false
+      end
+
+      it "loads killer_first from a strict YAML config" do
+        Dir.mktmpdir do |dir|
+          Dir.chdir(dir) do
+            File.write(".evilution.yml", "schema_version: 1\nkiller_first: true\n")
+            expect(Evilution::Config.new.killer_first?).to be true
+          end
+        end
+      end
+    end
+
     describe "#stop_on_kill?" do
       it "defaults to true" do
         expect(Evilution::Config.new(skip_config_file: true).stop_on_kill?).to be true

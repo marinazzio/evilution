@@ -30,6 +30,38 @@ RSpec.describe Evilution::CLI::Printers::SessionDetail do
       expect(io.string).to include("Git:     main (abc123)")
     end
 
+    # A mutation no test executes is a survivor that was not run; a session
+    # whose only gaps are those must not read as clean.
+    describe "uncovered mutations" do
+      before do
+        data["summary"]["uncovered"] = 1
+        data["uncovered"] = [
+          { "operator" => "ArithmeticReplacement", "file" => "lib/a.rb", "line" => 14,
+            "subject" => "Foo#refund", "diff" => "- a - b\n+ a + b\n" }
+        ]
+      end
+
+      it "counts them in the summary line" do
+        described_class.new(data, format: :text).render(io)
+        expect(io.string).to match(/Survived: 3  Uncovered: 1  Timed out: 0/)
+      end
+
+      it "lists them under a heading of their own, numbered from one" do
+        data["uncovered"] << { "operator" => "IntegerLiteral", "file" => "lib/a.rb", "line" => 15, "subject" => "Foo#refund" }
+        described_class.new(data, format: :text).render(io)
+        expect(io.string).to include("\n\nUncovered mutations (2, no test executes the lines they change):\n")
+        expect(io.string).to include("\n  1. ArithmeticReplacement — lib/a.rb:14\n")
+        expect(io.string).to include("\n  2. IntegerLiteral — lib/a.rb:15\n")
+        expect(io.string).to include("Subject: Foo#refund")
+      end
+    end
+
+    it "leaves a session without uncovered mutations as it was" do
+      described_class.new(data, format: :text).render(io)
+      expect(io.string).not_to include("Uncovered")
+      expect(io.string).to include("Survived: 3  Timed out: 0")
+    end
+
     it "skips git line when git data is missing" do
       data.delete("git")
       described_class.new(data, format: :text).render(io)
