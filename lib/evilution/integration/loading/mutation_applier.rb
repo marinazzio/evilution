@@ -30,8 +30,10 @@ require_relative "../../diagnostic"
 # error. A syntax error is never the mutant's doing in that sense: it means
 # the mutation was not valid Ruby to begin with. A mutant that froze a class
 # its file declares would make the original fail as well, on the class it
-# froze; that class is set aside for the original (FrozenNamespaces), which
-# then loads as it does in a process the mutant has not touched.
+# froze; for that check alone the frozen class is set aside and the original
+# defines the class afresh (FrozenNamespaces), then the frozen class is put
+# back. The fresh class has only what this file defines, so the check tells
+# whether this file's original loads, not whether the whole class works.
 class Evilution::Integration::Loading::MutationApplier
   def initialize(syntax_validator: Evilution::Integration::Loading::SyntaxValidator.new,
                  constant_pinner: Evilution::Integration::Loading::ConstantPinner.new,

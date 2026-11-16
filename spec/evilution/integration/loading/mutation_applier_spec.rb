@@ -357,9 +357,8 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
         evaluated = []
         allow(pinner).to receive(:call).and_raise(LoadError, "cannot load such file -- autoloaded")
 
-        result = applier_with(evaluator_failing_on({}, evaluated)).call(restorable_mutation)
+        applier_with(evaluator_failing_on({}, evaluated)).call(restorable_mutation)
 
-        expect(result).to include(load_crashed: true, error_class: "LoadError")
         expect(evaluated).to eq(["ORIGINAL\n"])
       end
 
@@ -632,22 +631,35 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
       Object.send(:remove_const, :EkaxFrozenBag) if Object.const_defined?(:EkaxFrozenBag)
     end
 
-    it "counts it as a crash of the load, the original loading again in place of the frozen class" do
+    it "counts it as a crash of the load, the original loading in place of the frozen class" do
       result = applier.call(freezing)
 
       expect(result).to include(passed: false, load_crashed: true, error_class: "FrozenError")
       # Ruby versions word the frozen receiver differently.
       expect(result[:error]).to match(/\Aload failed: FrozenError: can't modify frozen ([Cc]lass|#<Class:EkaxFrozenBag>): EkaxFrozenBag\z/)
-      expect(EkaxFrozenBag.frozen?).to be(false)
-      expect(EkaxFrozenBag.new([1, 2]).size).to eq(2)
-      expect(EkaxFrozenBag::EMPTY.size).to eq(0)
     end
 
-    it "lets the next mutant of the file load" do
+    # Other files may hold the class, include the module or have added methods
+    # to it; a class the original defines afresh would have none of that.
+    it "puts the class the mutant froze back once the original has been checked" do
+      bag = EkaxFrozenBag
+
       applier.call(freezing)
 
-      expect(applier.call(resizing)).to be_nil
-      expect(EkaxFrozenBag.new([1, 2]).size).to eq(0)
+      expect(Object.const_get(:EkaxFrozenBag, false)).to equal(bag)
+      expect(bag.frozen?).to be(true)
+      expect(EkaxFrozenBag.new([1, 2]).size).to eq(2)
+    end
+
+    # The class cannot be thawed, so in the same process the next mutant of
+    # the file hits it as the freezing one left it, and cannot be judged.
+    it "leaves the next mutant of the file an error" do
+      applier.call(freezing)
+
+      result = applier.call(resizing)
+
+      expect(result).to include(passed: false, error_class: "FrozenError")
+      expect(result.key?(:load_crashed)).to be(false)
     end
 
     it "leaves the failure an error when the class was frozen before the mutant" do

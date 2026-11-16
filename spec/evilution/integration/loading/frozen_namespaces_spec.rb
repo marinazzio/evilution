@@ -40,7 +40,7 @@ RSpec.describe Evilution::Integration::Loading::FrozenNamespaces do
       expect(namespaces.recover { :loaded }).to eq(:loaded)
     end
 
-    it "sets aside a declared class a later freeze stopped, then runs the block once more" do
+    it "sets aside a declared class a later freeze stopped while it runs the block once more, then puts it back" do
       namespaces = described_class.taken(%w[EkaxFrozenOuter EkaxFrozenOuter::Inner])
       frozen = EkaxFrozenOuter::Inner.freeze
       seen = []
@@ -50,36 +50,55 @@ RSpec.describe Evilution::Integration::Loading::FrozenNamespaces do
 
       expect(result).to eq(:loaded)
       expect(seen).to eq([true, false])
-      expect(EkaxFrozenOuter.const_defined?(:Inner, false)).to be(false)
+      expect(EkaxFrozenOuter.const_get(:Inner, false)).to equal(frozen)
+    end
+
+    # The second run evaluates the original, which defines the class afresh;
+    # whatever else refers to the frozen class (an including class, methods
+    # another file added) must find it in its place afterwards.
+    it "puts the frozen class back in place of the one the second run defined, without a redefinition warning" do
+      namespaces = described_class.taken(%w[EkaxFrozenOther])
+      frozen = EkaxFrozenOther.freeze
+      attempt = attempts([freeze_error(frozen)])
+      define_afresh = -> { Object.const_set(:EkaxFrozenOther, Class.new) unless Object.const_defined?(:EkaxFrozenOther, false) }
+
+      expect { namespaces.recover { attempt.call(&define_afresh) } }.not_to output.to_stderr
+      expect(Object.const_get(:EkaxFrozenOther, false)).to equal(frozen)
     end
 
     it "sets aside only the class the error names, keeping its namespace" do
       namespaces = described_class.taken(%w[EkaxFrozenOuter EkaxFrozenOuter::Inner])
       outer = EkaxFrozenOuter
-      attempt = attempts([freeze_error(EkaxFrozenOuter::Inner.freeze)])
+      seen = []
+      attempt = attempts([freeze_error(EkaxFrozenOuter::Inner.freeze)], seen)
 
-      namespaces.recover { attempt.call { nil } }
+      namespaces.recover { attempt.call { Object.const_get(:EkaxFrozenOuter, false).equal?(outer) } }
 
-      expect(Object.const_get(:EkaxFrozenOuter, false)).to equal(outer)
+      expect(seen).to eq([true, true])
     end
 
     it "sets aside a top-level class" do
       namespaces = described_class.taken(%w[EkaxFrozenOther])
-      attempt = attempts([freeze_error(EkaxFrozenOther.freeze)])
+      frozen = EkaxFrozenOther.freeze
+      seen = []
+      attempt = attempts([freeze_error(frozen)], seen)
 
-      namespaces.recover { attempt.call { nil } }
+      namespaces.recover { attempt.call { Object.const_defined?(:EkaxFrozenOther, false) } }
 
-      expect(Object.const_defined?(:EkaxFrozenOther, false)).to be(false)
+      expect(seen).to eq([true, false])
+      expect(Object.const_get(:EkaxFrozenOther, false)).to equal(frozen)
     end
 
     it "sets aside a declared class that was not loaded yet when taken" do
       namespaces = described_class.taken(%w[EkaxFrozenOuter::Later])
       later = Class.new.freeze
       EkaxFrozenOuter.const_set(:Later, later)
-      attempt = attempts([freeze_error(later)])
+      seen = []
+      attempt = attempts([freeze_error(later)], seen)
 
-      expect(namespaces.recover { attempt.call { nil } }).to eq(:loaded)
-      expect(EkaxFrozenOuter.const_defined?(:Later, false)).to be(false)
+      expect(namespaces.recover { attempt.call { EkaxFrozenOuter.const_defined?(:Later, false) } }).to eq(:loaded)
+      expect(seen).to eq([true, false])
+      expect(EkaxFrozenOuter.const_get(:Later, false)).to equal(later)
     end
 
     it "lets the error through, keeping the class, when the class was frozen already" do
@@ -122,7 +141,7 @@ RSpec.describe Evilution::Integration::Loading::FrozenNamespaces do
       expect(Object.const_defined?(:EkaxFrozenOther, false)).to be(true)
     end
 
-    it "runs the block once more at most" do
+    it "runs the block once more at most, putting the frozen class back when that run raises" do
       namespaces = described_class.taken(%w[EkaxFrozenOther])
       first = EkaxFrozenOther.freeze
       seen = []
@@ -130,6 +149,7 @@ RSpec.describe Evilution::Integration::Loading::FrozenNamespaces do
 
       expect { namespaces.recover { attempt.call { :tried } } }.to raise_error(ArgumentError, "still broken")
       expect(seen).to eq(%i[tried tried])
+      expect(Object.const_get(:EkaxFrozenOther, false)).to equal(first)
     end
 
     it "lets an error other than FrozenError through untouched, though it names a declared class" do
@@ -178,15 +198,16 @@ RSpec.describe Evilution::Integration::Loading::FrozenNamespaces do
 
     it "finds the frozen class past a declared name that is not defined when the error is raised" do
       namespaces = described_class.taken(%w[EkaxFrozenNotYet EkaxFrozenOther])
-      attempt = attempts([freeze_error(EkaxFrozenOther.freeze)])
+      seen = []
+      attempt = attempts([freeze_error(EkaxFrozenOther.freeze)], seen)
 
-      expect(namespaces.recover { attempt.call { nil } }).to eq(:loaded)
-      expect(Object.const_defined?(:EkaxFrozenOther, false)).to be(false)
+      expect(namespaces.recover { attempt.call { Object.const_defined?(:EkaxFrozenOther, false) } }).to eq(:loaded)
+      expect(seen).to eq([true, false])
     end
   end
 
-  it "keeps how it finds and removes a frozen class to itself" do
-    expect(described_class.private_instance_methods(false)).to contain_exactly(:initialize, :frozen_since_taken, :put_aside)
+  it "offers recovering as its only instance method" do
+    expect(described_class.public_instance_methods(false)).to eq([:recover])
   end
 
   describe "NONE" do

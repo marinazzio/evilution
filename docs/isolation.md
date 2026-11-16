@@ -155,6 +155,16 @@ as they are defined. The heap is walked once per process for the ones that
 already existed: in the parent when ActiveSupport is already loaded there
 (by a preload, for instance), otherwise once in each mutation process.
 
+A mutant can also freeze a class or module its file declares (`EMPTY =
+Bag.freeze` where the original builds `Bag.new([].freeze).freeze`), and Ruby
+cannot thaw it. Evilution still reports that mutant: it checks the original
+against a fresh copy of the class, then puts the frozen class back, since
+other files may reopen the class or include the module and keep referring to
+the frozen one. Under `in_process` the class therefore stays frozen for the
+rest of the run, and the later mutants of that file are reported as errors.
+A `--isolation fork` run judges them, since every mutant there starts from a
+process the freeze never touched.
+
 Other things a file can add to at load time are not undone: an `at_exit`
 hook, a `Signal.trap`, a `TracePoint`, a callback pushed into a registry of
 some library. If the file you are mutating does one of those at the top
