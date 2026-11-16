@@ -10,7 +10,7 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
   SETTINGS = %w[
     timeout format integration jobs isolation baseline incremental fail_fast stop_on_kill killer_first
     skip_uncovered probe_first min_score suggest_tests save_session target skip_heredoc_literals ignore_patterns
-    skip_sites
+    skip_sites timeout_factor timeout_floor timeout_ceiling copy_worker_databases
   ].freeze
   private_constant :SETTINGS
 
@@ -29,8 +29,11 @@ class Evilution::MCP::InfoTool::Actions::Environment < Evilution::MCP::InfoTool:
   class << self
     private
 
+    # With no timeout set, "timeout" is only the fallback: each mutation's limit
+    # follows the baseline (timeout_factor, timeout_floor, timeout_ceiling).
     def settings(config)
       SETTINGS.to_h { |name| [name, config.public_send(name)] }
+              .merge("adaptive_timeout" => config.adaptive_timeout?)
     end
   end
 end

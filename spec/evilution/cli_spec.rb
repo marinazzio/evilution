@@ -817,7 +817,7 @@ RSpec.describe Evilution::CLI do
       cli = described_class.new(%w[environment show])
       output = capture_stdout { cli.call }
 
-      expect(output).to include("timeout: 30")
+      expect(output).to include("timeout: adaptive (10 x baseline, 10-60 s; 30 s without a baseline time)")
       expect(output).to include("format: text")
       expect(output).to include("integration: rspec")
       expect(output).to include("jobs: 1")

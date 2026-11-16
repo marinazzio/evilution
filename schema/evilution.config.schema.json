@@ -15,13 +15,36 @@
       "type": "integer",
       "minimum": 1,
       "default": 30,
-      "description": "Per-mutation timeout in seconds."
+      "description": "Per-mutation timeout in seconds. Left unset, each mutation's limit is timeout_factor x the baseline time of its spec files, kept between timeout_floor and timeout_ceiling; 30 is used where the baseline has no time for them. Setting it gives every mutation this fixed limit."
+    },
+    "timeout_factor": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 10,
+      "description": "Adaptive timeout: multiple of the baseline time of a mutation's spec files."
+    },
+    "timeout_floor": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 10,
+      "description": "Adaptive timeout: lowest limit in seconds. Must not exceed timeout_ceiling."
+    },
+    "timeout_ceiling": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 60,
+      "description": "Adaptive timeout: highest limit in seconds."
     },
     "format": {
       "type": "string",
       "enum": ["text", "json", "html"],
       "default": "text",
       "description": "Output format."
+    },
+    "output": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Write the report to this file instead of standard output."
     },
     "target": {
       "type": ["string", "null"],
@@ -37,7 +60,7 @@
     },
     "integration": {
       "type": "string",
-      "enum": ["rspec", "minitest"],
+      "enum": ["rspec", "minitest", "test_unit"],
       "default": "rspec",
       "description": "Test framework integration."
     },
@@ -57,6 +80,11 @@
       "default": 1,
       "description": "Number of parallel workers."
     },
+    "copy_worker_databases": {
+      "type": "boolean",
+      "default": true,
+      "description": "With jobs above 1, a preloaded Rails app and a file-based SQLite test database, give each worker its own copy of the database."
+    },
     "fail_fast": {
       "type": ["integer", "null"],
       "minimum": 1,
@@ -67,6 +95,11 @@
       "type": "boolean",
       "default": true,
       "description": "Stop each mutation's test run at the first failing example that decides the verdict."
+    },
+    "killer_first": {
+      "type": "boolean",
+      "default": false,
+      "description": "Run the examples that killed nearby mutations first in each kill check. RSpec 3.13+ only, and only with stop_on_kill."
     },
     "baseline": {
       "type": "boolean",
@@ -191,6 +224,22 @@
         "max_blocks": { "type": "integer", "minimum": 1 }
       }
     },
+    "example_targeting_strategy": {
+      "type": "string",
+      "enum": ["lexical", "coverage"],
+      "default": "lexical",
+      "description": "How the examples for each mutation are chosen: lexical (by spec structure) or coverage (by a per-example line-coverage map)."
+    },
+    "skip_uncovered": {
+      "type": "boolean",
+      "default": true,
+      "description": "With coverage targeting, report a mutation whose changed lines no example executes as uncovered without running it."
+    },
+    "probe_first": {
+      "type": "boolean",
+      "default": false,
+      "description": "Experimental: probe each subject with a raise first; when no test fails, report its other mutants as survivors without running them."
+    },
     "quiet_children": {
       "type": "boolean",
       "default": false,
@@ -206,6 +255,17 @@
       "enum": ["default", "strict"],
       "default": "default",
       "description": "Operator profile. strict adds aggressive truthiness mutators on top of default."
+    },
+    "canary": {
+      "type": "boolean",
+      "default": true,
+      "description": "Run a proof-of-life mutation at session start and abort if the pipeline misreports it."
+    },
+    "warmup": {
+      "type": ["string", "boolean"],
+      "enum": ["none", "rails", false],
+      "default": "none",
+      "description": "Warm lazily initialised framework state in the parent before workers fork: none or rails. false means none."
     },
     "hooks": {
       "type": "object",

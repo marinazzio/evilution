@@ -475,6 +475,7 @@ Schema:
       "diff": "string    — legacy +/- diff snippet",
       "unified_diff": "string (optional, survived and uncovered only) — git-style unified diff with `--- a/file`, `+++ b/file`, `@@` hunk header and sdiff body; omitted when source slices are unavailable",
       "suggestion": "string — actionable hint for surviving mutants (survived and uncovered only)",
+      "test_command": "string (optional) — the command that reproduces the run behind this verdict, shell-escaped so it can be pasted as is (a targeted RSpec run names example ids such as `spec/x_spec.rb[1:2]`); for a survivor confirmed against its whole spec files, that confirming run",
       "killing_test": "string (optional, RSpec only) — the example whose failure killed the mutation, as `/absolute/path/spec/file_spec.rb[1:2]` (spec file and RSpec scoped id); absent when no example decided the kill",
       "examples_run": "integer (optional, RSpec only) — how many examples ran against the mutation, the survivor confirmation run included; absent for results that did not run (cached, uncovered, unparseable)",
       "implied_by": "string (optional, survived only, --probe-first) — the sentinel operator ('method_body_to_raise') whose survival implied this verdict; the mutation itself did not run",
@@ -994,8 +995,8 @@ Per-tool placement:
 - **`evilution-session` `diff`** — `{ "schema_version": Integer, "summary": { base_score, head_score, score_delta, base_survived, head_survived, base_total, head_total, base_killed, head_killed }, "fixed": Array, "new_survivors": Array, "persistent": Array }`. The mutation arrays carry the same per-mutation fields the session `survived` list uses (`operator`, `file`, `line`, `subject`, `diff`).
 - **`evilution-info` `subjects`** — `{ "schema_version": Integer, "subjects": Array<{ name, file, line, mutations }>, "total_subjects": Integer, "total_mutations": Integer }`. Discovery only: this lists what *can* be mutated. The `subjects` array in a run's report is a different shape, carrying what each subject scored.
 - **`evilution-info` `tests`** — `{ "schema_version": Integer, "specs": Array<{ source, spec }>, "unresolved": Array<String>, "total_sources": Integer, "total_specs": Integer }`.
-- **`evilution-info` `environment`** — `{ "schema_version": Integer, "version": String, "ruby": String, "config_file": String|null, ... }` mirroring the effective `Evilution::Config`.
-- **`evilution-info` `statuses`** — `{ "schema_version": Integer, "statuses": Array<{ name, meaning, in_score }> }`.
+- **`evilution-info` `environment`** — `{ "schema_version": Integer, "version": String, "ruby": String, "config_file": String|null, "settings": Object }`. `settings` holds the effective value of each run setting under its config key, plus `adaptive_timeout`: when it is `true`, `timeout` is only the fallback and each mutation's limit follows the baseline (`timeout_factor`, `timeout_floor`, `timeout_ceiling`).
+- **`evilution-info` `statuses`** — `{ "schema_version": Integer, "statuses": Array<{ status, meaning, counted_in_score }> }`.
 - **`evilution-info` `feedback`** — `{ "schema_version": Integer, "discussion_url": String, "consent": String, "privacy": String }`.
 
 #### Deprecation cycle
@@ -1020,7 +1021,7 @@ When a parameter, action, or output field on the public MCP contract is deprecat
 ### 1. Full project scan
 
 ```bash
-bundle exec evilution run lib/ --format json --min-score 0.8
+bundle exec evilution run --target 'source:lib/**/*.rb' --format json --min-score 0.8
 ```
 
 Parse JSON output. Exit code 0 = pass, 1 = fail — either the score is below `--min-score`, or a target file resolved to no spec and was never tested (`summary.unresolved_target_files` names them). Without `--min-score` no score gate is armed; the run still fails on an untested target file.
@@ -1207,7 +1208,7 @@ RUBYOPT="-Itest" bundle exec evilution mutate lib/<file>.rb \
 ### 8. CI gate
 
 ```bash
-bundle exec evilution run lib/ --format json --min-score 0.8 --quiet
+bundle exec evilution run --target 'source:lib/**/*.rb' --format json --min-score 0.8 --quiet
 # Exit code 0 = pass, 1 = fail, 2 = error
 ```
 
@@ -1218,9 +1219,9 @@ Note: `--quiet` suppresses all stdout output (including JSON). Use it in CI only
 ### 9. Regression tracking across runs (`compare`)
 
 ```bash
-bundle exec evilution run lib/ --format json --save-session
+bundle exec evilution run --target 'source:lib/**/*.rb' --format json --save-session
 # later, after edits:
-bundle exec evilution run lib/ --format json --save-session
+bundle exec evilution run --target 'source:lib/**/*.rb' --format json --save-session
 
 bundle exec evilution compare \
   --against .evilution/results/<earlier>.json \
