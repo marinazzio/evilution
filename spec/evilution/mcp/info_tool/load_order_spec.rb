@@ -1,19 +1,13 @@
 # frozen_string_literal: true
 
-require "open3"
-require "rbconfig"
+require_relative "../../../support/fresh_ruby_process"
 
 # Each file is required first in a fresh Ruby process, so no other spec has
 # loaded the tool beforehand. Every action file requires the tool for its
 # namespace, so the tool must finish loading before the action that started
 # the chain has defined its class.
 RSpec.describe "Evilution::MCP::InfoTool load order" do
-  lib_dir = File.expand_path("../../../../lib", __dir__)
-
-  def load_alone(lib_dir, feature, constant)
-    script = "require #{feature.dump}; print #{constant}.name"
-    Open3.capture3(RbConfig.ruby, "-I", lib_dir, "-e", script)
-  end
+  include FreshRubyProcess
 
   {
     "evilution/mcp/info_tool" => "Evilution::MCP::InfoTool",
@@ -24,9 +18,9 @@ RSpec.describe "Evilution::MCP::InfoTool load order" do
     "evilution/mcp/info_tool/actions/feedback" => "Evilution::MCP::InfoTool::Actions::Feedback"
   }.each do |feature, constant|
     it "loads #{feature} on its own and defines #{constant}" do
-      stdout, stderr, status = load_alone(lib_dir, feature, constant)
+      stdout, stderr, status = require_in_fresh_ruby(feature, constant)
 
-      expect([stdout, stderr, status.success?]).to eq([constant, "", true])
+      expect([stdout, stderr, status.success?]).to eq(["nil #{constant}", "", true])
     end
   end
 
@@ -34,7 +28,7 @@ RSpec.describe "Evilution::MCP::InfoTool load order" do
     script = <<~RUBY
       require "json"
       require "evilution/mcp/info_tool/actions/statuses"
-      source = File.join(#{lib_dir.dump}, "evilution/mcp/info_tool/actions/statuses.rb")
+      source = File.join(#{FreshRubyProcess::LIB_DIR.dump}, "evilution/mcp/info_tool/actions/statuses.rb")
       results = Evilution::MCP::InfoTool::VALID_ACTIONS.map do |action|
         response = Evilution::MCP::InfoTool.call(server_context: nil, action: action, files: [source], skip_config: true)
         error = JSON.parse(response.content.first[:text])["error"]
@@ -43,7 +37,7 @@ RSpec.describe "Evilution::MCP::InfoTool load order" do
       print results.join(",")
     RUBY
 
-    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I", lib_dir, "-e", script)
+    stdout, stderr, status = run_in_fresh_ruby(script)
 
     expect([stdout, stderr, status.success?]).to eq(["subjects,tests,environment,statuses,feedback", "", true])
   end

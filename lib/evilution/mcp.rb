@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+# version.rb defines the Evilution module, so any MCP file can be the first
+# one required.
+require_relative "version"
+
 module Evilution::MCP
   # Public contract version for the evilution MCP tool surface (input schemas,
   # output payload shapes, error envelope, action enumerations). Bumped only

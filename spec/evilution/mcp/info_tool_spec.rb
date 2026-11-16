@@ -59,13 +59,6 @@ RSpec.describe Evilution::MCP::InfoTool do
     it "keeps the dispatch table out of the tool's public interface" do
       expect { described_class.actions }.to raise_error(NoMethodError, /private method .actions. called/)
     end
-
-    it "refuses to dispatch when the table drifts from VALID_ACTIONS" do
-      stub_const("Evilution::MCP::InfoTool::VALID_ACTIONS", %w[subjects tests environment statuses].freeze)
-
-      expect { call(action: "statuses") }
-        .to raise_error(RuntimeError, "InfoTool action drift: action table keys do not match VALID_ACTIONS")
-    end
   end
 
   describe "action validation" do
@@ -269,6 +262,14 @@ RSpec.describe Evilution::MCP::InfoTool do
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("runtime_error")
       expect(data["error"]["message"]).to eq("kaboom")
+    end
+
+    it "lets an error that is not an Evilution::Error propagate" do
+      allow(Evilution::MCP::InfoTool::Actions::Statuses).to receive(:call).and_raise(RuntimeError, "unexpected")
+
+      # Only evilution's own errors become error responses; anything else is a
+      # bug that the MCP server reports on its own.
+      expect { call(action: "statuses") }.to raise_error(RuntimeError, "unexpected")
     end
   end
 

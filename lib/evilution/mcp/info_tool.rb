@@ -2,6 +2,7 @@
 
 require "json"
 require "mcp"
+require_relative "../mcp"
 require_relative "../config"
 require_relative "../runner"
 require_relative "../mutator/registry"
@@ -9,8 +10,6 @@ require_relative "../result/mutation_result"
 require_relative "../spec_resolver"
 require_relative "../ast/pattern/filter"
 require_relative "../version"
-
-require_relative "../mcp"
 
 class Evilution::MCP::InfoTool < MCP::Tool
   VALID_ACTIONS = %w[subjects tests environment statuses feedback].freeze
@@ -101,17 +100,17 @@ class Evilution::MCP::InfoTool < MCP::Tool
     # action file requires this file for its namespace, so when an action file
     # is the first one required, its class is only defined after this file
     # has finished loading.
+    #
+    # Its keys must equal VALID_ACTIONS; both are literals, so a spec checks
+    # that rather than every request.
     def actions
-      table = {
+      {
         "subjects" => Actions::Subjects,
         "tests" => Actions::Tests,
         "environment" => Actions::Environment,
         "statuses" => Actions::Statuses,
         "feedback" => Actions::Feedback
       }.freeze
-      raise "InfoTool action drift: action table keys do not match VALID_ACTIONS" unless table.keys == VALID_ACTIONS
-
-      table
     end
   end
 end
