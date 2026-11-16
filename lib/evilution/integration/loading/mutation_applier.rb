@@ -6,6 +6,7 @@ require_relative "constant_pinner"
 require_relative "concern_state_cleaner"
 require_relative "source_evaluator"
 require_relative "redefinition_recovery"
+require_relative "frozen_namespaces"
 require_relative "../../diagnostic"
 
 # Composes the load-time pipeline that applies a mutation's new source to the
@@ -27,7 +28,10 @@ require_relative "../../diagnostic"
 # as one that crashes a test is. When the original fails too, or there is none
 # to compare with, the failure says nothing about the mutant and stays an
 # error. A syntax error is never the mutant's doing in that sense: it means
-# the mutation was not valid Ruby to begin with.
+# the mutation was not valid Ruby to begin with. A mutant that froze a class
+# its file declares would make the original fail as well, on the class it
+# froze; that class is set aside for the original (FrozenNamespaces), which
+# then loads as it does in a process the mutant has not touched.
 class Evilution::Integration::Loading::MutationApplier
   def initialize(syntax_validator: Evilution::Integration::Loading::SyntaxValidator.new,
                  constant_pinner: Evilution::Integration::Loading::ConstantPinner.new,
@@ -42,16 +46,18 @@ class Evilution::Integration::Loading::MutationApplier
   end
 
   def call(mutation)
+    namespaces = Evilution::Integration::Loading::FrozenNamespaces::NONE
     eval_target = resolve_eval_target(mutation)
     syntax_error = @syntax_validator.call(eval_target)
     return syntax_error if syntax_error
 
+    namespaces = Evilution::Integration::Loading::FrozenNamespaces.taken(@constant_pinner.call(mutation.original_source))
     apply(mutation, eval_target)
     nil
   rescue SyntaxError => e
     failure_result(e, "syntax error in mutated source: #{e.message}")
   rescue ScriptError, StandardError => e
-    load_failure_result(mutation, e)
+    load_failure_result(mutation, e, namespaces)
   end
 
   # Fills, ahead of the first mutation, what applying one looks up on the
@@ -99,15 +105,17 @@ class Evilution::Integration::Loading::MutationApplier
     true
   end
 
-  def original_loads?(mutation)
-    evaluate_original(mutation, swallow_idempotency: false)
+  # `namespaces` are the file's classes as they were before the mutant was
+  # applied, so that one the mutant froze can be set aside.
+  def original_loads?(mutation, namespaces)
+    namespaces.recover { evaluate_original(mutation, swallow_idempotency: false) }
   rescue ScriptError, StandardError
     false
   end
 
-  def load_failure_result(mutation, error)
+  def load_failure_result(mutation, error, namespaces)
     message = "#{error.class}: #{error.message}"
-    return failure_result(error, message) unless original_loads?(mutation)
+    return failure_result(error, message) unless original_loads?(mutation, namespaces)
 
     failure_result(error, "load failed: #{message}").merge(load_crashed: true)
   end
@@ -119,7 +127,6 @@ class Evilution::Integration::Loading::MutationApplier
   end
 
   def apply(mutation, eval_target)
-    @constant_pinner.call(mutation.original_source)
     @concern_state_cleaner.call(mutation.file_path)
     mark_feature_loaded(mutation.file_path)
     @redefinition_recovery.call(mutation.original_source) do
