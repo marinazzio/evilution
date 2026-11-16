@@ -18,12 +18,17 @@ module Evilution::MCP::InfoTool::StatusGlossary
     {
       "status" => "survived",
       "meaning" => "No test failed when the mutation was applied — gap in coverage. " \
-                   "The test suite did not detect the behavioral change.",
+                   "The test suite did not detect the behavioral change. With probe_first, a survivor " \
+                   "carrying implied_by was not run: the subject's probe mutation (its body replaced " \
+                   "by a raise) failed no test, so no test reaches this code.",
       "counted_in_score" => true
     },
     {
       "status" => "timeout",
-      "meaning" => "Test run exceeded the configured per-mutation timeout. " \
+      "meaning" => "Test run exceeded the per-mutation time limit (time_limit, in seconds). " \
+                   "Left unset, the limit adapts to the baseline time of the mutation's spec files; " \
+                   "a timeout under a limit shorter than 30 seconds is re-run under 30 seconds, " \
+                   "and that run decides. " \
                    "Treated like survived for scoring (counted in the denominator); " \
                    "may indicate an infinite loop introduced by the mutation.",
       "counted_in_score" => true

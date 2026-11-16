@@ -13,7 +13,9 @@ RSpec.describe Evilution::CLI::Printers::Environment do
       verbose: false, quiet: false, progress: true,
       fail_fast: nil, min_score: 0.0, suggest_tests: false,
       save_session: false, target: nil, stop_on_kill: true,
-      skip_heredoc_literals: false, ignore_patterns: [], skip_sites: []
+      skip_heredoc_literals: false, ignore_patterns: [], skip_sites: [],
+      adaptive_timeout?: false, timeout_factor: 10, timeout_floor: 10, timeout_ceiling: 60,
+      killer_first: false, skip_uncovered: true, probe_first: false, copy_worker_databases: true
     )
   end
   let(:io) { StringIO.new }
@@ -44,6 +46,19 @@ RSpec.describe Evilution::CLI::Printers::Environment do
     expect(io.string).to include("isolation: auto")
     expect(io.string).to include("baseline: true")
     expect(io.string).to include("incremental: false")
+  end
+
+  it "prints the adaptive timeout's factor and bounds, with the fixed fallback, when no timeout is set" do
+    allow(config).to receive(:adaptive_timeout?).and_return(true)
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string).to include("timeout: adaptive (10 x baseline, 10-60 s; 30 s without a baseline time)")
+  end
+
+  it "prints the settings added since the environment listing was written" do
+    described_class.new(config, config_file: nil).render(io)
+    expect(io.string.lines.map(&:strip)).to include(
+      "killer_first: false", "skip_uncovered: true", "probe_first: false", "copy_worker_databases: true"
+    )
   end
 
   it "prints (disabled) when fail_fast is nil" do

@@ -142,7 +142,7 @@ class Evilution::MCP::MutateTool < MCP::Tool
                      "summary (omits killed/neutral/equivalent arrays; remaining timed_out/errors/unresolved " \
                      "entries shed `diff` and `error_backtrace`, and run and per-entry `timings` are dropped, " \
                      "to bound payload size; default), " \
-                     "minimal (summary + survived; also includes a trimmed sample of up to 3 errored " \
+                     "minimal (summary + survived + uncovered; also includes a trimmed sample of up to 3 errored " \
                      "entries with error_message and a 5-line backtrace head when errors > 0)"
       }
     }

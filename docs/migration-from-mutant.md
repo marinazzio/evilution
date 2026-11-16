@@ -15,7 +15,7 @@ precisely so you can line the two tools up and see the difference for yourself.
 
 | mutant | Evilution |
 | --- | --- |
-| `mutant run --use rspec -- 'MyApp::Foo*'` | `evilution run lib/my_app/ --target 'MyApp::Foo*'` |
+| `mutant run --use rspec -- 'MyApp::Foo*'` | `evilution run lib/my_app/**/*.rb --target 'MyApp::Foo*'` |
 | `mutant.yml` | `.evilution.yml` (run `evilution init` to scaffold) |
 | `mutant-rspec` / `mutant-minitest` gems | built in: `--integration rspec\|minitest\|test-unit` |
 | "mutation coverage" %, "alive" | "mutation score" 0.0–1.0, "survived" |
@@ -51,8 +51,9 @@ bundle exec mutant run --use rspec -- 'MyApp::Calculator#add'
 # evilution — point at the file, optionally filter to the method
 bundle exec evilution run lib/my_app/calculator.rb --target 'MyApp::Calculator#add'
 
-# whole directory, then filter by expression
-bundle exec evilution run lib/ --target 'MyApp::Calculator*'
+# every file of a directory (file arguments must be files, so let the shell
+# expand the glob; bash needs `shopt -s globstar`), then filter by expression
+bundle exec evilution run lib/**/*.rb --target 'MyApp::Calculator*'
 ```
 
 `--target` accepts the expression shapes you are used to, plus a source glob:
@@ -197,7 +198,7 @@ whether the same code is being killed:
 
 ```sh
 # produce an evilution report
-bundle exec evilution run lib/ --format json --save-session
+bundle exec evilution run --target 'source:lib/**/*.rb' --format json --save-session
 
 # line it up against your last mutant session JSON
 bundle exec evilution compare \
