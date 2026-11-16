@@ -5,6 +5,7 @@ require "stringio"
 require_relative "../coverage"
 require_relative "map"
 require_relative "recorder"
+require_relative "../integration/rspec/framework_loader"
 
 # Builds a per-example coverage Map by running the given spec files under
 # ::Coverage (lines mode) with the Recorder installed as an around(:each)
@@ -39,17 +40,46 @@ class Evilution::Coverage::MapBuilder
     write_io.binmode
     pid = fork do
       read_io.close
-      Marshal.dump(build_in_child.to_h, write_io)
+      Marshal.dump(child_payload, write_io)
       write_io.close
       exit!(0)
     end
     write_io.close
     payload = read_io.read
     read_io.close
-    Process.wait(pid)
-    # Trust boundary: payload is a Marshal dump this process's own forked child
-    # produced over a private pipe -- same rationale as Channel::Frame.
+    _, status = Process.wait2(pid)
+    unpack(payload, status)
+  end
+
+  # A child that fails sends its error back instead of dying with a backtrace:
+  # the caller falls back to lexical targeting and says why in one line, so
+  # only the first line of a message that runs to more (a SyntaxError's) goes.
+  #
+  # Nothing need have loaded RSpec in this process: under fork isolation the
+  # canary runs it in a child of its own, and without --preload neither does
+  # the project. Loading it here leaves the parent without it, as before.
+  def child_payload
+    Evilution::Integration::RSpec::FrameworkLoader.new.call
+    { map: build_in_child.to_h }
+  rescue StandardError, ScriptError => e
+    { error: "#{e.class}: #{e.message.lines.first.to_s.chomp}" }
+  end
+
+  def unpack(payload, status)
+    result = decode(payload)
+    raise Evilution::Error, "coverage map builder exited without a map (#{status})" unless result
+    raise Evilution::Error, result[:error] if result[:error]
+
+    result[:map]
+  end
+
+  # Nothing, or a dump cut short by a child killed while writing it, is no map.
+  # Trust boundary: payload is a Marshal dump this process's own forked child
+  # produced over a private pipe -- same rationale as Channel::Frame.
+  def decode(payload)
     Marshal.load(payload)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   # Runs entirely inside the forked child.

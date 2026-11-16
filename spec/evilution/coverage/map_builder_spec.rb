@@ -100,6 +100,69 @@ RSpec.describe Evilution::Coverage::MapBuilder do
     end
   end
 
+  # Under fork isolation nothing loads RSpec into the parent before the build
+  # (the canary runs it in a child), and without --preload neither does the
+  # project: the build's child loads it itself.
+  it "builds the map in a process that has not loaded RSpec" do
+    script = <<~RUBY
+      require "evilution"
+      require "evilution/coverage/map_builder"
+      abort "RSpec already loaded" if defined?(::RSpec)
+      map = Evilution::Coverage::MapBuilder.new(spec_files: [#{spec.inspect}], target_files: [#{target.inspect}]).call
+      line = File.readlines(#{target.inspect}).index { |l| l.include?("a + b") } + 1
+      puts map.built?(#{target.inspect})
+      puts map.examples_for(#{target.inspect}, line).size
+    RUBY
+    lib_dir = File.expand_path("../../../lib", __dir__)
+    # Run away from this project's .rspec, which requires its own spec helper.
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I", lib_dir, "-e", script, chdir: fixture_dir)
+
+    expect(status).to be_success, err
+    expect(out.lines.map(&:strip)).to eq(%w[true 1])
+    expect(err).to be_empty
+  end
+
+  # A build that cannot finish leaves targeting to the lexical filter; the
+  # reason must reach the one-line warning, not a backtrace on stderr.
+  describe "a build that fails in its child" do
+    it "raises Evilution::Error with the child's error, printing nothing" do
+      allow(Evilution::Coverage::Recorder).to receive(:new).and_raise(NameError, "uninitialized constant Boom")
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { expect { builder.call }.to raise_error(Evilution::Error, "NameError: uninitialized constant Boom") }
+        .to output("").to_stderr_from_any_process
+    end
+
+    # The reason ends up in a one-line warning; some messages (a SyntaxError's)
+    # run to many lines.
+    it "keeps only the first line of the child's error message" do
+      allow(Evilution::Coverage::Recorder).to receive(:new).and_raise(RuntimeError, "first line\nsecond line")
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { builder.call }.to raise_error(Evilution::Error, "RuntimeError: first line")
+    end
+
+    it "raises Evilution::Error naming the exit when the child sends nothing" do
+      allow(Evilution::Coverage::Recorder).to receive(:new) { exit!(3) }
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { builder.call }.to raise_error(Evilution::Error, /coverage map builder exited without a map \(.*exit 3\)/)
+    end
+
+    # Killed while writing a large map (the OOM killer, a signal): the parent
+    # reads a dump cut short, which is no map either.
+    it "raises Evilution::Error naming the exit when the child sends part of a map" do
+      allow(Marshal).to receive(:dump).and_wrap_original do |original, payload, io|
+        io.write(original.call(payload)[0, 8])
+        io.flush
+        exit!(9)
+      end
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { builder.call }.to raise_error(Evilution::Error, /coverage map builder exited without a map \(.*exit 9\)/)
+    end
+  end
+
   describe ".absolute_location" do
     it "expands a ./-relative example id against the root, keeping the id" do
       expect(described_class.absolute_location("./spec/a_spec.rb[1:2:1]", "/proj"))
