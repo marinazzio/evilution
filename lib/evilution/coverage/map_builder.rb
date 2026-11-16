@@ -52,7 +52,8 @@ class Evilution::Coverage::MapBuilder
   end
 
   # A child that fails sends its error back instead of dying with a backtrace:
-  # the caller falls back to lexical targeting and says why in one line.
+  # the caller falls back to lexical targeting and says why in one line, so
+  # only the first line of a message that runs to more (a SyntaxError's) goes.
   #
   # Nothing need have loaded RSpec in this process: under fork isolation the
   # canary runs it in a child of its own, and without --preload neither does
@@ -61,18 +62,24 @@ class Evilution::Coverage::MapBuilder
     Evilution::Integration::RSpec::FrameworkLoader.new.call
     { map: build_in_child.to_h }
   rescue StandardError, ScriptError => e
-    { error: "#{e.class}: #{e.message}" }
+    { error: "#{e.class}: #{e.message.lines.first.to_s.chomp}" }
   end
 
   def unpack(payload, status)
-    raise Evilution::Error, "coverage map builder exited without a map (#{status})" if payload.empty?
-
-    # Trust boundary: payload is a Marshal dump this process's own forked child
-    # produced over a private pipe -- same rationale as Channel::Frame.
-    result = Marshal.load(payload)
+    result = decode(payload)
+    raise Evilution::Error, "coverage map builder exited without a map (#{status})" unless result
     raise Evilution::Error, result[:error] if result[:error]
 
     result[:map]
+  end
+
+  # Nothing, or a dump cut short by a child killed while writing it, is no map.
+  # Trust boundary: payload is a Marshal dump this process's own forked child
+  # produced over a private pipe -- same rationale as Channel::Frame.
+  def decode(payload)
+    Marshal.load(payload)
+  rescue ArgumentError, TypeError
+    nil
   end
 
   # Runs entirely inside the forked child.

@@ -130,7 +130,16 @@ RSpec.describe Evilution::Coverage::MapBuilder do
       builder = described_class.new(spec_files: [spec], target_files: [target])
 
       expect { expect { builder.call }.to raise_error(Evilution::Error, "NameError: uninitialized constant Boom") }
-        .not_to output.to_stderr_from_any_process
+        .to output("").to_stderr_from_any_process
+    end
+
+    # The reason ends up in a one-line warning; some messages (a SyntaxError's)
+    # run to many lines.
+    it "keeps only the first line of the child's error message" do
+      allow(Evilution::Coverage::Recorder).to receive(:new).and_raise(RuntimeError, "first line\nsecond line")
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { builder.call }.to raise_error(Evilution::Error, "RuntimeError: first line")
     end
 
     it "raises Evilution::Error naming the exit when the child sends nothing" do
@@ -138,6 +147,19 @@ RSpec.describe Evilution::Coverage::MapBuilder do
       builder = described_class.new(spec_files: [spec], target_files: [target])
 
       expect { builder.call }.to raise_error(Evilution::Error, /coverage map builder exited without a map \(.*exit 3\)/)
+    end
+
+    # Killed while writing a large map (the OOM killer, a signal): the parent
+    # reads a dump cut short, which is no map either.
+    it "raises Evilution::Error naming the exit when the child sends part of a map" do
+      allow(Marshal).to receive(:dump).and_wrap_original do |original, payload, io|
+        io.write(original.call(payload)[0, 8])
+        io.flush
+        exit!(9)
+      end
+      builder = described_class.new(spec_files: [spec], target_files: [target])
+
+      expect { builder.call }.to raise_error(Evilution::Error, /coverage map builder exited without a map \(.*exit 9\)/)
     end
   end
 
