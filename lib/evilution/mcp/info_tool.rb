@@ -75,7 +75,9 @@ class Evilution::MCP::InfoTool < MCP::Tool
   class << self
     def call(server_context:, action: nil, files: nil, target: nil, spec: nil, integration: nil, skip_config: nil)
       return ResponseFormatter.error("config_error", "action is required") unless action
-      return ResponseFormatter.error("config_error", "unknown action: #{action}") unless ACTIONS.key?(action)
+
+      action_class = actions[action]
+      return ResponseFormatter.error("config_error", "unknown action: #{action}") unless action_class
 
       parsed_files = nil
       line_ranges = nil
@@ -85,12 +87,31 @@ class Evilution::MCP::InfoTool < MCP::Tool
         line_ranges = parsed.ranges
       end
 
-      ACTIONS[action].call(
+      action_class.call(
         files: parsed_files, line_ranges: line_ranges, target: target, spec: spec,
         integration: integration, skip_config: skip_config
       )
     rescue Evilution::Error => e
       ResponseFormatter.error_for(e)
+    end
+
+    private
+
+    # Built when a request is dispatched, not while this file loads: each
+    # action file requires this file for its namespace, so when an action file
+    # is the first one required, its class is only defined after this file
+    # has finished loading.
+    def actions
+      table = {
+        "subjects" => Actions::Subjects,
+        "tests" => Actions::Tests,
+        "environment" => Actions::Environment,
+        "statuses" => Actions::Statuses,
+        "feedback" => Actions::Feedback
+      }.freeze
+      raise "InfoTool action drift: action table keys do not match VALID_ACTIONS" unless table.keys == VALID_ACTIONS
+
+      table
     end
   end
 end
@@ -107,16 +128,3 @@ require_relative "info_tool/actions/tests"
 require_relative "info_tool/actions/environment"
 require_relative "info_tool/actions/statuses"
 require_relative "info_tool/actions/feedback"
-
-Evilution::MCP::InfoTool.const_set(:ACTIONS, {
-  "subjects" => Evilution::MCP::InfoTool::Actions::Subjects,
-  "tests" => Evilution::MCP::InfoTool::Actions::Tests,
-  "environment" => Evilution::MCP::InfoTool::Actions::Environment,
-  "statuses" => Evilution::MCP::InfoTool::Actions::Statuses,
-  "feedback" => Evilution::MCP::InfoTool::Actions::Feedback
-}.freeze)
-Evilution::MCP::InfoTool.send(:private_constant, :ACTIONS)
-
-unless Evilution::MCP::InfoTool.send(:const_get, :ACTIONS).keys == Evilution::MCP::InfoTool::VALID_ACTIONS
-  raise "InfoTool action drift: ACTIONS keys do not match VALID_ACTIONS"
-end
