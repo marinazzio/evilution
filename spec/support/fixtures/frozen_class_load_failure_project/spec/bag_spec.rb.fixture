@@ -1,0 +1,17 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "Bag" do
+  it "counts its items" do
+    expect(Bag.new([1, 2]).size).to eq(2)
+  end
+
+  it "knows the empty bag is empty" do
+    expect(Bag::EMPTY).to be_empty
+  end
+
+  it "knows a bag with items is not empty" do
+    expect(Bag.new([1])).not_to be_empty
+  end
+end

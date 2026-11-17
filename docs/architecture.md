@@ -270,7 +270,11 @@ class that owns it.
    A crash is a test that raised, or a mutated source that raised while it was
    loaded and whose original still loads (`MutationApplier` marks it
    `load_crashed` after evaluating the original); a load failure the original
-   shares stays an `:error`.
+   shares stays an `:error`. A mutant that froze a class its file declares
+   would fail the original too, on that class; `Loading::FrozenNamespaces`
+   sets such a class aside (removes its constant) so the original defines it
+   afresh for that check, then puts the frozen class back, unless the class
+   was frozen before the mutant was applied.
    A `NeutralizationPipeline` can reclassify results into `:neutral` — either
    because the tests failed on nothing but examples that were already failing
    at baseline (`Neutralizer::BaselineFailed`) or because the test process

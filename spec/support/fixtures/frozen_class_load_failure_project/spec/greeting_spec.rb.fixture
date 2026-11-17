@@ -1,0 +1,17 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "Greeting" do
+  it "greets by name" do
+    expect(Person.new("Ann").greet).to eq("Hello, Ann")
+  end
+
+  it "shouts the greeting" do
+    expect(Person.new("Ann").shout).to eq("HELLO, ANN!")
+  end
+
+  it "labels itself with its name" do
+    expect(Greeting::LABEL).to eq("Greeting")
+  end
+end

@@ -353,6 +353,15 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
         expect(result[:error]).to eq("load failed: NoMethodError: undefined method 'map' for nil")
       end
 
+      it "still checks the original when pinning the file's constants raises" do
+        evaluated = []
+        allow(pinner).to receive(:call).and_raise(LoadError, "cannot load such file -- autoloaded")
+
+        applier_with(evaluator_failing_on({}, evaluated)).call(restorable_mutation)
+
+        expect(evaluated).to eq(["ORIGINAL\n"])
+      end
+
       it "marks a LoadError the same way" do
         failing = evaluator_failing_on("MUTATED\n" => LoadError.new("cannot load such file -- nope"))
 
@@ -581,6 +590,87 @@ RSpec.describe Evilution::Integration::Loading::MutationApplier do
     it "restores the original over the loaded class" do
       expect { applier.restore(blank_label) }.not_to output.to_stderr
       expect(EkaxEnumModel.new).to be_pending
+    end
+  end
+
+  # A mutant that freezes the class its file declares makes the rest of the
+  # class body raise, and the original evaluated after it reopens the same
+  # frozen class.
+  describe "a mutant that freezes its own class while the file loads" do
+    let(:bag_source) do
+      <<~RUBY
+        class EkaxFrozenBag
+          def initialize(items)
+            @items = items
+          end
+
+          EMPTY = EkaxFrozenBag.new([].freeze).freeze
+
+          def size
+            @items.size
+          end
+        end
+      RUBY
+    end
+
+    let(:freezing) do
+      mutated = bag_source.sub("EkaxFrozenBag.new([].freeze).freeze", "EkaxFrozenBag.freeze")
+      double("Mutation", file_path: "/tmp/evilution_applier_nonexistent.rb", original_source: bag_source,
+                         mutated_source: mutated, eval_source: mutated, restore_source: bag_source)
+    end
+
+    let(:resizing) do
+      mutated = bag_source.sub("@items.size", "0")
+      double("Mutation", file_path: "/tmp/evilution_applier_nonexistent.rb", original_source: bag_source,
+                         mutated_source: mutated, eval_source: mutated, restore_source: bag_source)
+    end
+
+    before { eval(bag_source, TOPLEVEL_BINDING) } # rubocop:disable Security/Eval
+
+    after do
+      Object.send(:remove_const, :EkaxFrozenBag) if Object.const_defined?(:EkaxFrozenBag)
+    end
+
+    it "counts it as a crash of the load, the original loading in place of the frozen class" do
+      result = applier.call(freezing)
+
+      expect(result).to include(passed: false, load_crashed: true, error_class: "FrozenError")
+      # Ruby versions word the frozen receiver differently.
+      expect(result[:error]).to match(/\Aload failed: FrozenError: can't modify frozen ([Cc]lass|#<Class:EkaxFrozenBag>): EkaxFrozenBag\z/)
+    end
+
+    # Other files may hold the class, include the module or have added methods
+    # to it; a class the original defines afresh would have none of that.
+    it "puts the class the mutant froze back once the original has been checked" do
+      bag = EkaxFrozenBag
+
+      applier.call(freezing)
+
+      expect(Object.const_get(:EkaxFrozenBag, false)).to equal(bag)
+      expect(bag.frozen?).to be(true)
+      expect(EkaxFrozenBag.new([1, 2]).size).to eq(2)
+    end
+
+    # The class cannot be thawed, so in the same process the next mutant of
+    # the file hits it as the freezing one left it, and cannot be judged.
+    it "leaves the next mutant of the file an error" do
+      applier.call(freezing)
+
+      result = applier.call(resizing)
+
+      expect(result).to include(passed: false, error_class: "FrozenError")
+      expect(result.key?(:load_crashed)).to be(false)
+    end
+
+    it "leaves the failure an error when the class was frozen before the mutant" do
+      frozen = EkaxFrozenBag.freeze
+
+      result = applier.call(resizing)
+
+      expect(result).to include(passed: false, error_class: "FrozenError")
+      expect(result[:error]).to match(/\AFrozenError: can't modify frozen ([Cc]lass|#<Class:EkaxFrozenBag>): EkaxFrozenBag\z/)
+      expect(result.key?(:load_crashed)).to be(false)
+      expect(Object.const_get(:EkaxFrozenBag, false)).to equal(frozen)
     end
   end
 

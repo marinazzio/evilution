@@ -1,0 +1,21 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+
+RSpec.describe "Crate" do
+  it "counts its items" do
+    expect(Crate.new([1, 2]).size).to eq(2)
+  end
+
+  it "knows an empty crate is empty" do
+    expect(Crate.new([])).to be_empty
+  end
+
+  it "knows a crate with items is not empty" do
+    expect(Crate.new([1])).not_to be_empty
+  end
+
+  it "labels itself with its name" do
+    expect(Crate::LABEL).to eq("Crate")
+  end
+end
