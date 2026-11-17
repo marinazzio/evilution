@@ -2,13 +2,12 @@
 
 require "json"
 require "mcp"
+require_relative "../mcp"
 require_relative "../config"
 require_relative "../runner"
 require_relative "../reporter/json"
 require_relative "../spec_resolver"
 require_relative "../ast/skip_sites/presets"
-
-require_relative "../mcp"
 
 class Evilution::MCP::MutateTool < MCP::Tool
   tool_name "evilution-mutate"

@@ -2,10 +2,9 @@
 
 require "json"
 require "mcp"
+require_relative "../mcp"
 require_relative "../session/store"
 require_relative "../session/diff"
-
-require_relative "../mcp"
 
 class Evilution::MCP::SessionTool < MCP::Tool
   tool_name "evilution-session"
