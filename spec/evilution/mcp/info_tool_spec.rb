@@ -38,9 +38,26 @@ RSpec.describe Evilution::MCP::InfoTool do
       expect(described_class::VALID_ACTIONS).to be_frozen
     end
 
-    it "matches the dispatch ACTIONS table keys" do
-      actions = described_class.send(:const_get, :ACTIONS)
+    it "matches the dispatch table keys" do
+      actions = described_class.send(:actions)
       expect(actions.keys).to eq(described_class::VALID_ACTIONS)
+    end
+
+    it "maps each action to its action class in a frozen table" do
+      actions = described_class.send(:actions)
+
+      expect(actions).to eq(
+        "subjects" => Evilution::MCP::InfoTool::Actions::Subjects,
+        "tests" => Evilution::MCP::InfoTool::Actions::Tests,
+        "environment" => Evilution::MCP::InfoTool::Actions::Environment,
+        "statuses" => Evilution::MCP::InfoTool::Actions::Statuses,
+        "feedback" => Evilution::MCP::InfoTool::Actions::Feedback
+      )
+      expect(actions).to be_frozen
+    end
+
+    it "keeps the dispatch table out of the tool's public interface" do
+      expect { described_class.actions }.to raise_error(NoMethodError, /private method .actions. called/)
     end
   end
 
@@ -114,8 +131,8 @@ RSpec.describe Evilution::MCP::InfoTool do
       allow(Evilution::MCP::InfoTool::Actions::Statuses).to receive(:call).and_return(sentinel)
 
       # Kills statement_deletion / method_call_removal / method_body_replacement
-      # on the final dispatch line: if the `ACTIONS[action].call(...)` result is
-      # dropped, swapped for `ACTIONS[action]`, or the body returns nil/self,
+      # on the final dispatch line: if the `action_class.call(...)` result is
+      # dropped, swapped for `action_class`, or the body returns nil/self,
       # `call` would not hand back the action's own return value.
       expect(call(action: "statuses")).to be(sentinel)
     end
@@ -129,7 +146,7 @@ RSpec.describe Evilution::MCP::InfoTool do
       call(action: "environment", target: "Foo#bar", spec: ["spec/foo_spec.rb"],
            integration: "rspec", skip_config: true)
 
-      # Kills method_call_removal `ACTIONS[action].call` => `ACTIONS.call`:
+      # Kills method_call_removal on `action_class.call(...)`:
       # the action class itself must receive :call with every forwarded kwarg.
       expect(received).to eq(
         files: nil, line_ranges: nil, target: "Foo#bar", spec: ["spec/foo_spec.rb"],
@@ -245,6 +262,14 @@ RSpec.describe Evilution::MCP::InfoTool do
       data = parse_response(response)
       expect(data["error"]["type"]).to eq("runtime_error")
       expect(data["error"]["message"]).to eq("kaboom")
+    end
+
+    it "lets an error that is not an Evilution::Error propagate" do
+      allow(Evilution::MCP::InfoTool::Actions::Statuses).to receive(:call).and_raise(RuntimeError, "unexpected")
+
+      # Only evilution's own errors become error responses; anything else is a
+      # bug that the MCP server reports on its own.
+      expect { call(action: "statuses") }.to raise_error(RuntimeError, "unexpected")
     end
   end
 
