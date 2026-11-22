@@ -12,3 +12,4 @@ assignees: marinazzio
 - [ ] Update CHANGELOG
 - [ ] Update agent and user manuals
 - [ ] Perform stability run on real world repositories
+- [ ] Benchmark performance against the latest released version
