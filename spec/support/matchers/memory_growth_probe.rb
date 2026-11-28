@@ -11,19 +11,51 @@ require "evilution/memory"
 # round grows the process by no more than `settled_below_kb`, and only the
 # round after that is reported. A leak never settles: the rounds run out and
 # the reading still shows it.
+#
+# A round counts what the process grew by outside the pages of the GC heap,
+# and what the live objects on those pages grew by, not the pages themselves.
+# When a collection leaves the heap short of free slots, Ruby lets the heap
+# grow by a share of its size before it collects again, so the garbage of the
+# next passes lands on new pages and the process grows by that share without
+# keeping anything. How big the share is depends on how full the heap happened
+# to be, so counting it would make the same block read differently from one
+# run to the next. Objects the block keeps are still counted, whether they took
+# new pages or room the heap already had spare, and so is memory kept outside
+# the heap even in a round where objects that were live before it are freed:
+# their slots grow the heap's spare room but not its pages. Pages the heap
+# hands back are taken to have left the process, so they do not hide growth
+# elsewhere either. The cost is that a page the heap frees but the process
+# keeps reads as growth, and that what the process holds besides objects and
+# their pages, such as malloc'd memory of garbage, is still counted.
+#
+# The objects the last pass leaves behind can survive the first collection
+# after the passes: a stale reference to them may be left on the machine
+# stack, which Ruby scans conservatively. The next round's first collection
+# frees them, so each round would count one pass of garbage as live. The
+# reading after the passes is therefore taken twice and the second one kept;
+# the work of the first reading overwrites that stale reference.
 class MemoryGrowthProbe
   MAX_WARMUP_ROUNDS = 10
 
   DEFAULT_READER = -> { Evilution::Memory.rss_kb }
+  DEFAULT_HEAP_READER = lambda do
+    pages_bytes = GC.stat(:heap_allocated_pages) * GC::INTERNAL_CONSTANTS.fetch(:HEAP_PAGE_SIZE)
+    live_bytes = GC.stat_heap.each_value.sum do |heap|
+      (heap[:total_allocated_objects] - heap[:total_freed_objects]) * heap[:slot_size]
+    end
+    { pages_kb: pages_bytes / 1024, live_kb: live_bytes / 1024 }
+  end
   DEFAULT_COLLECTOR = lambda do
     GC.start
     GC.compact if GC.respond_to?(:compact)
   end
 
-  def initialize(iterations:, settled_below_kb:, reader: DEFAULT_READER, collector: DEFAULT_COLLECTOR)
+  def initialize(iterations:, settled_below_kb:, reader: DEFAULT_READER,
+                 heap_reader: DEFAULT_HEAP_READER, collector: DEFAULT_COLLECTOR)
     @iterations = iterations
     @settled_below_kb = settled_below_kb
     @reader = reader
+    @heap_reader = heap_reader
     @collector = collector
   end
 
@@ -38,11 +70,15 @@ class MemoryGrowthProbe
   def round(block)
     before = reading
     @iterations.times { block.call }
-    reading - before
+    reading
+    after = reading
+
+    grown_kb = ->(key) { after[key] - before[key] }
+    [grown_kb[:rss_kb] - grown_kb[:pages_kb], 0].max + [grown_kb[:live_kb], 0].max
   end
 
   def reading
     @collector.call
-    @reader.call
+    { rss_kb: @reader.call, **@heap_reader.call }
   end
 end
