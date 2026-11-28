@@ -31,7 +31,7 @@ Or standalone:
 gem install evilution
 ```
 
-Requires `prism >= 1.5, < 2`. Older Rails apps (e.g. Rails 7.1 pins `prism 0.19`) must upgrade prism — the gemspec constraint forces bundler to resolve a compatible 1.x version. If your app pins `prism 2.x`, bundler will reject the install until evilution widens its upper bound.
+Requires `prism >= 1.5, < 3`. Older Rails apps (e.g. Rails 7.1 pins `prism 0.19`) must upgrade prism — the gemspec constraint forces bundler to resolve a compatible 1.x or 2.x version.
 
 ### Installing on Rails 7.1 + Ruby 3.3
 
@@ -436,7 +436,7 @@ A skipped mutation is not run and not scored. It is counted in `summary.skipped`
 
 Use `--format json` for machine-readable output. The same shape is used for both stdout reports (`--format json`) and saved session files (`--save-session` → `.evilution/results/*.json`); session files add a small set of extra top-level fields described under [Session JSON files](#session-json-files) below.
 
-Every string in the JSON is valid UTF-8. Text that arrives tagged binary, such as a diff or a child process's error output, is read as UTF-8, and bytes that are not valid UTF-8 are replaced with U+FFFD. The same applies to session files and to the MCP `evilution-mutate` response and progress messages.
+Every string in the report is valid UTF-8. Text that arrives tagged binary, such as a diff or a child process's error output, is read as UTF-8, and bytes that are not valid UTF-8 are replaced with U+FFFD. The same applies to session files and to the successful MCP `evilution-mutate` response and its progress messages. Error payloads (from `run --format json` and from `evilution-mutate`) and `util mutation --format json` are written as they are.
 
 Schema:
 
