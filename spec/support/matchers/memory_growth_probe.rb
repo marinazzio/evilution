@@ -12,19 +12,28 @@ require "evilution/memory"
 # round after that is reported. A leak never settles: the rounds run out and
 # the reading still shows it.
 #
-# A round does not count the spare room the GC heap gains in it. When a
-# collection leaves the heap short of free slots, Ruby lets the heap grow by a
-# share of its size before it collects again, so the garbage of the next
-# passes lands on new pages and the process grows by that share without
+# A round counts what the process grew by outside the pages of the GC heap,
+# and what the live objects on those pages grew by, not the pages themselves.
+# When a collection leaves the heap short of free slots, Ruby lets the heap
+# grow by a share of its size before it collects again, so the garbage of the
+# next passes lands on new pages and the process grows by that share without
 # keeping anything. How big the share is depends on how full the heap happened
-# to be, so the same block reads differently from one run to the next. Spare
-# room the heap gives back is not credited to the round, since freed pages
-# need not leave the process.
+# to be, so counting it would make the same block read differently from one
+# run to the next. Objects the block keeps are still counted, whether they took
+# new pages or room the heap already had spare, and so is memory kept outside
+# the heap even in a round where objects that were live before it are freed:
+# their slots grow the heap's spare room but not its pages. Pages the heap
+# hands back are taken to have left the process, so they do not hide growth
+# elsewhere either. The cost is that a page the heap frees but the process
+# keeps reads as growth, and that what the process holds besides objects and
+# their pages, such as malloc'd memory of garbage, is still counted.
 #
-# Objects the block keeps are counted even when the process does not grow by
-# them, because they took room the heap already had spare: a round reports
-# whichever is larger, the growth of the process or of the live objects in the
-# GC heap.
+# The objects the last pass leaves behind can survive the first collection
+# after the passes: a stale reference to them may be left on the machine
+# stack, which Ruby scans conservatively. The next round's first collection
+# frees them, so each round would count one pass of garbage as live. The
+# reading after the passes is therefore taken twice and the second one kept;
+# the work of the first reading overwrites that stale reference.
 class MemoryGrowthProbe
   MAX_WARMUP_ROUNDS = 10
 
@@ -34,7 +43,7 @@ class MemoryGrowthProbe
     live_bytes = GC.stat_heap.each_value.sum do |heap|
       (heap[:total_allocated_objects] - heap[:total_freed_objects]) * heap[:slot_size]
     end
-    { live_kb: live_bytes / 1024, spare_kb: (pages_bytes - live_bytes) / 1024 }
+    { pages_kb: pages_bytes / 1024, live_kb: live_bytes / 1024 }
   end
   DEFAULT_COLLECTOR = lambda do
     GC.start
@@ -61,10 +70,11 @@ class MemoryGrowthProbe
   def round(block)
     before = reading
     @iterations.times { block.call }
+    reading
     after = reading
 
-    spare_gained_kb = [after[:spare_kb] - before[:spare_kb], 0].max
-    [after[:rss_kb] - before[:rss_kb] - spare_gained_kb, after[:live_kb] - before[:live_kb]].max
+    grown_kb = ->(key) { after[key] - before[key] }
+    [grown_kb[:rss_kb] - grown_kb[:pages_kb], 0].max + [grown_kb[:live_kb], 0].max
   end
 
   def reading
