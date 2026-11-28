@@ -70,6 +70,19 @@ RSpec.describe Evilution::Reporter::JSON do
       expect { JSON.parse(output) }.not_to raise_error
     end
 
+    it "writes a diff whose UTF-8 bytes arrived tagged binary as text" do
+      mut = double("Mutation",
+                   operator_name: "string_literal", file_path: "lib/greet.rb", line: 2,
+                   diff: "- \"こんにちは\"\n+ \"\"".b, unified_diff: nil,
+                   subject: double("Subject", name: "Greet#hello"))
+      result = Evilution::Result::MutationResult.new(mutation: mut, status: :killed, duration: 0.1)
+      binary_summary = Evilution::Result::Summary.new(results: [result], duration: 0.1)
+
+      json = nil
+      expect { json = reporter.call(binary_summary) }.not_to output.to_stderr
+      expect(JSON.parse(json)["killed"].first["diff"]).to eq("- \"こんにちは\"\n+ \"\"")
+    end
+
     it "includes the run's timings" do
       timed = Evilution::Result::Summary.new(
         results: [survived_result], duration: 0.6,

@@ -8,16 +8,18 @@ require_relative "../reporter"
 require_relative "../session/schema"
 
 class Evilution::Reporter::JSON
-  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new, timings: Timings.new)
+  def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new, timings: Timings.new,
+                 encoding_normalizer: EncodingNormalizer.new)
     suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
     @mutation_detail = MutationDetail.new(suggestion: suggestion, timings: timings)
     @subjects = subjects
     @baseline = baseline
     @timings = timings
+    @encoding_normalizer = encoding_normalizer
   end
 
   def call(summary)
-    ::JSON.generate(build_report(summary))
+    ::JSON.generate(@encoding_normalizer.call(build_report(summary)))
   end
 
   private
@@ -151,3 +153,4 @@ require_relative "json/subjects"
 require_relative "json/baseline"
 require_relative "json/timings"
 require_relative "json/mutation_detail"
+require_relative "json/encoding_normalizer"
