@@ -10,13 +10,13 @@ RSpec.describe Evilution::Session::Store do
 
   after { FileUtils.rm_rf(results_dir) }
 
-  def build_mutation(operator: "arithmetic_replacement", file: "lib/foo.rb", line: 5)
+  def build_mutation(operator: "arithmetic_replacement", file: "lib/foo.rb", line: 5, diff: "- a + b\n+ a - b")
     double(
       "Mutation",
       operator_name: operator,
       file_path: file,
       line: line,
-      diff: "- a + b\n+ a - b",
+      diff: diff,
       subject: double("Subject", name: "Foo#bar")
     )
   end
@@ -34,6 +34,18 @@ RSpec.describe Evilution::Session::Store do
   end
 
   describe "#save" do
+    it "saves a diff tagged binary with non-ASCII bytes and loads it back as the same text" do
+      # Diffs built from subprocess output arrive tagged BINARY.
+      diff = "- puts \"héllo\"\n+ puts \"wörld\"".b
+      summary = build_summary(results: [build_result(build_mutation(diff: diff), status: :survived)])
+
+      path = store.save(summary)
+
+      loaded_diff = store.load(path)["survived"].first["diff"]
+      expect(loaded_diff).to eq("- puts \"héllo\"\n+ puts \"wörld\"")
+      expect(loaded_diff.encoding).to eq(Encoding::UTF_8)
+    end
+
     it "creates a JSON file in the results directory" do
       summary = build_summary
 

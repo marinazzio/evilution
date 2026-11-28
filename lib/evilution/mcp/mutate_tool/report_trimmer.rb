@@ -6,6 +6,7 @@ require_relative "../../feedback"
 require_relative "../../feedback/detector"
 require_relative "../../feedback/messages"
 require_relative "../../feedback/setup_warning"
+require_relative "../../encoding_normalizer"
 
 module Evilution::MCP::MutateTool::ReportTrimmer
   # An uncovered mutation is a survivor no test executes, as actionable as one
@@ -30,6 +31,9 @@ module Evilution::MCP::MutateTool::ReportTrimmer
   ERROR_BACKTRACE_HEAD_LINES = 5
   ERROR_SAMPLE_KEYS = %w[operator file line error_message error_class].freeze
 
+  # Retags BINARY strings and scrubs invalid UTF-8 so JSON generation cannot fail on them.
+  ENCODING_NORMALIZER = Evilution::EncodingNormalizer.new
+
   def self.call(json_string, verbosity:, survived_results:, config:, enricher:, summary: nil, uncovered_results: [])
     data = ::JSON.parse(json_string)
     case verbosity
@@ -45,7 +49,7 @@ module Evilution::MCP::MutateTool::ReportTrimmer
     enricher.call(data, survived_results, config, uncovered_results: uncovered_results)
     embed_feedback(data, summary) unless verbosity == "minimal"
     embed_setup_warning(data, summary)
-    ::JSON.generate(data)
+    ::JSON.generate(ENCODING_NORMALIZER.call(data))
   end
 
   def self.apply_minimal(data)
