@@ -436,6 +436,8 @@ A skipped mutation is not run and not scored. It is counted in `summary.skipped`
 
 Use `--format json` for machine-readable output. The same shape is used for both stdout reports (`--format json`) and saved session files (`--save-session` → `.evilution/results/*.json`); session files add a small set of extra top-level fields described under [Session JSON files](#session-json-files) below.
 
+Every string in the JSON is valid UTF-8. Text that arrives tagged binary, such as a diff or a child process's error output, is read as UTF-8, and bytes that are not valid UTF-8 are replaced with U+FFFD. The same applies to session files and to the MCP `evilution-mutate` response and progress messages.
+
 Schema:
 
 ```json
