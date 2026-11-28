@@ -188,6 +188,16 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer do
                                      uncovered_results: uncovered)
     expect(captured).to be(uncovered)
   end
+
+  it "writes a binary non-ASCII string the enricher adds as its UTF-8 text" do
+    # Enrichers read spec files and subprocess output, which can arrive tagged BINARY.
+    enricher = ->(data, *_rest, **_opts) { data["survived"].first["suggestion"] = "it \"wörks\"".b }
+    json = JSON.generate({ "summary" => { "total" => 1 }, "survived" => [{ "operator" => "x" }] })
+
+    out = JSON.parse(described_class.call(json, verbosity: "full", survived_results: [], config: nil, enricher: enricher))
+
+    expect(out["survived"]).to eq([{ "operator" => "x", "suggestion" => "it \"wörks\"" }])
+  end
 end
 
 require "evilution/feedback"
@@ -308,9 +318,11 @@ RSpec.describe Evilution::MCP::MutateTool::ReportTrimmer, "minimal verbosity pre
   let(:config) { instance_double(Evilution::Config) }
 
   it "does NOT embed feedback fields when verbosity=minimal even on friction" do
+    # A verbosity parsed from a request is its own String, not this file's
+    # frozen literal, so the check has to compare by value.
     result = described_class.call(
       bare_report,
-      verbosity: "minimal",
+      verbosity: String.new("minimal"),
       survived_results: [],
       config: config,
       enricher: noop_enricher,

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-require "evilution/reporter/json"
+require "json"
+require "evilution/encoding_normalizer"
 
-RSpec.describe Evilution::Reporter::JSON::EncodingNormalizer do
+RSpec.describe Evilution::EncodingNormalizer do
   subject(:normalizer) { described_class.new }
 
   # Valid UTF-8 bytes tagged as BINARY, the way subprocess output and file reads
@@ -56,21 +57,54 @@ RSpec.describe Evilution::Reporter::JSON::EncodingNormalizer do
       end
     end
 
-    context "with a string not tagged binary" do
+    context "with a UTF-8 string holding invalid bytes" do
+      let(:invalid_utf8) { (+"bad \xFF\xFE end").force_encoding(Encoding::UTF_8) }
+
+      it "returns a copy with each invalid byte replaced by the replacement character" do
+        normalized = normalizer.call(invalid_utf8)
+
+        expect(normalized).to eq("bad \u{FFFD}\u{FFFD} end")
+        expect(normalized.encoding).to eq(Encoding::UTF_8)
+        expect(normalized).to be_valid_encoding
+        expect(normalized).not_to equal(invalid_utf8)
+      end
+
+      it "leaves the input string unchanged" do
+        bytes = invalid_utf8.bytes
+
+        normalizer.call(invalid_utf8)
+
+        expect(invalid_utf8.bytes).to eq(bytes)
+        expect(invalid_utf8.encoding).to eq(Encoding::UTF_8)
+        expect(invalid_utf8).not_to be_valid_encoding
+      end
+
+      it "copes with a frozen input" do
+        frozen = invalid_utf8.freeze
+
+        expect(normalizer.call(frozen)).to eq("bad \u{FFFD}\u{FFFD} end")
+      end
+
+      it "produces a string JSON.generate accepts" do
+        expect(JSON.parse(JSON.generate([normalizer.call(invalid_utf8)]))).to eq(["bad \u{FFFD}\u{FFFD} end"])
+      end
+    end
+
+    context "with a string neither binary nor invalid UTF-8" do
       it "returns the very same UTF-8 string" do
         string = "déjà vu"
 
         expect(normalizer.call(string)).to equal(string)
       end
 
-      it "leaves a UTF-8 string with invalid bytes as it is" do
-        string = (+"bad \xFF").force_encoding(Encoding::UTF_8)
+      it "leaves a string in another encoding as it is" do
+        string = "déjà".encode(Encoding::ISO_8859_1)
 
         expect(normalizer.call(string)).to equal(string)
       end
 
-      it "leaves a string in another encoding as it is" do
-        string = "abc".encode(Encoding::ISO_8859_1)
+      it "leaves a UTF-16LE string as it is" do
+        string = "déjà".encode(Encoding::UTF_16LE)
 
         expect(normalizer.call(string)).to equal(string)
       end
@@ -121,6 +155,13 @@ RSpec.describe Evilution::Reporter::JSON::EncodingNormalizer do
 
       it "produces a payload JSON.generate accepts" do
         expect(JSON.parse(JSON.generate(normalizer.call(payload)))["killed"].first["diff"]).to eq("あ")
+      end
+    end
+
+    context "with a binary key and a UTF-8 key that hold the same text" do
+      it "keeps one key, with the value of the later entry" do
+        expect(normalizer.call({ "あ" => "first", binary_utf8 => "second" })).to eq("あ" => "second")
+        expect(normalizer.call({ binary_utf8 => "first", "あ" => "second" })).to eq("あ" => "second")
       end
     end
   end

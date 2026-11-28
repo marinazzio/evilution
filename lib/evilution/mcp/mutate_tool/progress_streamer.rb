@@ -4,8 +4,12 @@ require "json"
 require_relative "../mutate_tool"
 require_relative "../../reporter/suggestion"
 require_relative "../../diagnostic"
+require_relative "../../encoding_normalizer"
 
 module Evilution::MCP::MutateTool::ProgressStreamer
+  # Retags BINARY strings and scrubs invalid UTF-8 so JSON generation cannot fail on them.
+  ENCODING_NORMALIZER = Evilution::EncodingNormalizer.new
+
   def self.build(server_context:, suggest_tests:, integration:)
     return nil unless suggest_tests && server_context.respond_to?(:report_progress)
 
@@ -20,7 +24,7 @@ module Evilution::MCP::MutateTool::ProgressStreamer
       begin
         survivor_index += 1
         detail = build_suggestion_detail(result.mutation, suggestion)
-        server_context.report_progress(survivor_index, message: ::JSON.generate(detail))
+        server_context.report_progress(survivor_index, message: ::JSON.generate(ENCODING_NORMALIZER.call(detail)))
       rescue StandardError => e
         Evilution::Diagnostic.warn("[evilution] progress stream disabled after error: #{e.class}: #{e.message}")
         disabled = true

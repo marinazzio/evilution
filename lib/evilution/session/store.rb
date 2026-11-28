@@ -6,10 +6,13 @@ require "time"
 require "fileutils"
 
 require_relative "../session"
+require_relative "../encoding_normalizer"
 require_relative "schema"
 
 class Evilution::Session::Store
   DEFAULT_DIR = ".evilution/results"
+  # Retags BINARY strings and scrubs invalid UTF-8 so JSON generation cannot fail on them.
+  ENCODING_NORMALIZER = Evilution::EncodingNormalizer.new
 
   def initialize(results_dir: DEFAULT_DIR)
     @results_dir = results_dir
@@ -19,7 +22,7 @@ class Evilution::Session::Store
     FileUtils.mkdir_p(@results_dir)
 
     now = Time.now
-    data = build_session_data(summary, now)
+    data = ENCODING_NORMALIZER.call(build_session_data(summary, now))
     filename = "#{format_timestamp(now)}-#{SecureRandom.hex(4)}.json"
     path = File.join(@results_dir, filename)
     atomic_write(path, JSON.pretty_generate(data))

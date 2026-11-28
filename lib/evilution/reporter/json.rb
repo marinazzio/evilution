@@ -6,10 +6,11 @@ require_relative "suggestion"
 
 require_relative "../reporter"
 require_relative "../session/schema"
+require_relative "../encoding_normalizer"
 
 class Evilution::Reporter::JSON
   def initialize(suggest_tests: false, integration: :rspec, subjects: Subjects.new, baseline: Baseline.new, timings: Timings.new,
-                 encoding_normalizer: EncodingNormalizer.new)
+                 encoding_normalizer: Evilution::EncodingNormalizer.new)
     suggestion = Evilution::Reporter::Suggestion.new(suggest_tests: suggest_tests, integration: integration)
     @mutation_detail = MutationDetail.new(suggestion: suggestion, timings: timings)
     @subjects = subjects
@@ -153,4 +154,3 @@ require_relative "json/subjects"
 require_relative "json/baseline"
 require_relative "json/timings"
 require_relative "json/mutation_detail"
-require_relative "json/encoding_normalizer"
