@@ -2,6 +2,22 @@
 
 Versioning policy: see [docs/versioning.md](docs/versioning.md).
 
+## [1.6.1] - 2026-11-28
+
+### Fixed
+
+- **JSON output is written whatever the encoding of the text in it** — a diff, error message or backtrace that reached the report tagged binary (`ASCII-8BIT`), or tagged UTF-8 but holding invalid bytes, made `JSON.generate` raise (binary text holding valid UTF-8 only warned before json 3.1), so no JSON report was written. Such strings are now read as UTF-8, with invalid bytes replaced by U+FFFD. Strings that are already valid UTF-8, or tagged with another encoding, are left as they are. This covers the `--format json` report, `--save-session` files, and the MCP `evilution-mutate` response and its progress messages; the MCP progress stream used to stop at the first such string, with a warning on stderr only (PR #1993, GH #1991)
+- **The memory budget specs no longer fail at random late in the suite** — on Ruby 4.0.7 CI, the mutation-generation budget read 15–25 MB of growth with nothing retained: a full GC can leave the heap room to grow before it collects again, so the next round's garbage landed on new heap pages. The probe now subtracts heap page growth from RSS growth and adds live-object growth, and new specs check that deliberate leaks, inside and outside the GC heap, are still caught. The 10 MB budget is unchanged (test-only) (PR #1994, GH #1895)
+
+### Changed
+
+- **Dependency bumps** — `mcp` 1.10.0 -> 1.12.0 (PR #1987 and the release update), `rubocop` 1.92.2 -> 1.93.0 (PR #1990 and the release update), `rubocop-ast` 1.51.0 -> 1.54.0 and `parser` 3.3.13.0 -> 3.3.14.0 (PR #1990), `json` 3.1.0 -> 3.2.0 (PR #1990 and the release update), `regexp_parser` 2.13.1 -> 2.13.4 (PR #1987 and the release update), `connection_pool` 3.0.2 -> 3.0.3 and `test-unit` 3.7.8 -> 3.7.9 (release update), `ruby/setup-ruby` 1.338.0 -> 1.343.0 (PR #1986), `rubygems/release-gem` 1.4.1 -> 1.4.2 (PR #1988)
+
+### Documentation
+
+- **Adaptive timeout: slow kills and what to tune** — a mutant that sends the code into deep recursion can take more than ten times its spec files' baseline to end in `SystemStackError` and is killed only by the 30 s re-run; the README now says so, and suggests raising `timeout_factor` or `timeout_floor`, or setting `timeout`, when many mutations show `adaptive_timeout` in their `timings`
+- **Prism requirement** — the README now says `prism >= 1.5, < 3`, as the gemspec has allowed since 1.6.0
+
 ## [1.6.0] - 2026-11-17
 
 This release is about wall time. A run now does less work per mutant: each kill check stops at the first failing example, the per-mutation timeout follows how long the mutation's specs took in the baseline, parallel workers stay up for the whole run instead of being started and stopped per batch, and each file is parsed once. Stopping at the first failure alone cut wall time by about a fifth on the benchmark corpus, with no kill lost. New opt-in switches go further: mutants on lines no test executes are reported `uncovered` without running, examples that killed nearby mutants run first, and log calls, error messages and `require` lines can be left unmutated. `--since REF` mutates only what changed since a git ref.
